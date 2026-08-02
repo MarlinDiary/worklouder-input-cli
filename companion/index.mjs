@@ -7,7 +7,11 @@ export {
   CONFIG_REVISION_ALGORITHM,
   CONFIG_SNAPSHOT_KIND,
   CONFIG_SNAPSHOT_SCHEMA_VERSION,
+  HOST_SETTINGS_KIND,
+  HOST_SETTINGS_REVISION_ALGORITHM,
+  HOST_SETTINGS_SCHEMA_VERSION,
   createInputMainAdapter,
+  hostSettingsRevision,
 } from "./input-main-adapter.mjs";
 export { installInputCompanionBridge } from "./input-main-integration.mjs";
 export { inspectInputCompanionBridge } from "./conformance.mjs";

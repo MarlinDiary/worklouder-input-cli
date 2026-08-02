@@ -4,7 +4,10 @@ import { EventEmitter } from "node:events";
 import { mkdtemp, readFile, stat } from "node:fs/promises";
 import { createConnection } from "node:net";
 import test from "node:test";
-import { createInputMainAdapter } from "./input-main-adapter.mjs";
+import {
+  createInputMainAdapter,
+  hostSettingsRevision,
+} from "./input-main-adapter.mjs";
 import { startInputCompanionBridge } from "./input-main-bridge.mjs";
 import { installInputCompanionBridge } from "./input-main-integration.mjs";
 
@@ -146,7 +149,10 @@ test("Input adapter maps the existing connected session", async () => {
   assert.equal(status.status.firmwareVersion, "v0.6.0");
   assert.equal(status.status.selectedLayerIndex, 2);
   assert.equal(files.files[0].relativePath, "keymap.json");
-  assert.equal(Buffer.from(read.dataBase64, "base64").toString(), keymap.toString());
+  assert.equal(
+    Buffer.from(read.dataBase64, "base64").toString(),
+    keymap.toString(),
+  );
 });
 
 test("Input adapter snapshots and validates a compare-and-swap revision", async () => {
@@ -243,10 +249,7 @@ test("Input adapter applies, replays, rejects stale CAS, and restores", async ()
   const baseline = await adapter.snapshotConfig({
     deviceId: "device-transaction",
   });
-  files.set(
-    "keymap.json",
-    Buffer.from('{"version":1,"layer":"candidate"}'),
-  );
+  files.set("keymap.json", Buffer.from('{"version":1,"layer":"candidate"}'));
   const candidate = await adapter.snapshotConfig({
     deviceId: "device-transaction",
   });
@@ -342,9 +345,13 @@ test("Input adapter automatically restores the pre-mutation snapshot", async () 
       },
     },
   });
-  const baseline = await adapter.snapshotConfig({ deviceId: "device-rollback" });
+  const baseline = await adapter.snapshotConfig({
+    deviceId: "device-rollback",
+  });
   files.set("keymap.json", Buffer.from('{"version":1,"layer":"target"}'));
-  const candidate = await adapter.snapshotConfig({ deviceId: "device-rollback" });
+  const candidate = await adapter.snapshotConfig({
+    deviceId: "device-rollback",
+  });
   replaceFileMap(
     files,
     baseline.files.map((file) => ({
@@ -360,11 +367,141 @@ test("Input adapter automatically restores the pre-mutation snapshot", async () 
       idempotencyKey: "apply-auto-rollback",
       config: candidate,
     }),
-    (error) =>
-      error.code === -32008 && error.data?.rollbackPerformed === true,
+    (error) => error.code === -32008 && error.data?.rollbackPerformed === true,
   );
   assert.deepEqual(operations, ["apply", "automatic-rollback"]);
-  const restored = await adapter.snapshotConfig({ deviceId: "device-rollback" });
+  const restored = await adapter.snapshotConfig({
+    deviceId: "device-rollback",
+  });
+  assert.equal(restored.revision, baseline.revision);
+});
+
+test("Input adapter applies, replays, rejects stale CAS, and restores host settings", async () => {
+  let settings = {
+    showedAnalyticsPopUp: true,
+    analyticsConsented: false,
+    smartActionCmdEnabled: false,
+  };
+  const replacements = [];
+  const adapter = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [] },
+    deviceKitVersion: "0.1.29",
+    hostSettingsAuthority: {
+      async readSettings() {
+        return { ...settings };
+      },
+      async replaceSettings(candidate) {
+        replacements.push({ ...candidate });
+        settings = { ...candidate };
+      },
+    },
+  });
+  const baseline = await adapter.snapshotHostSettings();
+  assert.equal(baseline.kind, "worklouder-input-host-settings");
+  assert.equal(baseline.settings.smartActionCmdEnabled, false);
+  assert.match(baseline.revision, /^[0-9a-f]{64}$/);
+
+  const candidate = structuredClone(baseline);
+  candidate.settings.smartActionCmdEnabled = true;
+  candidate.revision = hostSettingsRevision(candidate.settings);
+  const apply = await adapter.applyHostSettings({
+    expectedRevision: baseline.revision,
+    idempotencyKey: "host-settings-apply-1",
+    settings: candidate,
+  });
+  assert.equal(apply.changed, true);
+  assert.equal(apply.idempotentReplay, false);
+  assert.equal(apply.afterRevision, candidate.revision);
+  assert.deepEqual(replacements, [candidate.settings]);
+  assert.equal(settings.showedAnalyticsPopUp, true);
+  assert.equal(settings.analyticsConsented, false);
+
+  const replay = await adapter.applyHostSettings({
+    expectedRevision: baseline.revision,
+    idempotencyKey: "host-settings-apply-1",
+    settings: candidate,
+  });
+  assert.equal(replay.idempotentReplay, true);
+  assert.equal(replacements.length, 1);
+
+  await assert.rejects(
+    adapter.applyHostSettings({
+      expectedRevision: baseline.revision,
+      idempotencyKey: "host-settings-stale",
+      settings: candidate,
+    }),
+    (error) => error.code === -32005,
+  );
+  const restore = await adapter.restoreHostSettings({
+    expectedRevision: candidate.revision,
+    idempotencyKey: "host-settings-restore-1",
+    snapshot: baseline,
+  });
+  assert.equal(restore.changed, true);
+  assert.equal(restore.afterRevision, baseline.revision);
+  assert.equal(settings.smartActionCmdEnabled, false);
+  assert.equal(replacements.length, 2);
+
+  const noOp = await adapter.restoreHostSettings({
+    expectedRevision: baseline.revision,
+    idempotencyKey: "host-settings-restore-no-op",
+    snapshot: baseline,
+  });
+  assert.equal(noOp.changed, false);
+  assert.equal(replacements.length, 2);
+
+  const tampered = structuredClone(baseline);
+  tampered.settings.analyticsConsented = true;
+  await assert.rejects(
+    adapter.applyHostSettings({
+      expectedRevision: baseline.revision,
+      idempotencyKey: "host-settings-tampered",
+      settings: tampered,
+    }),
+    (error) => error.code === -32602,
+  );
+});
+
+test("Input adapter automatically restores host settings after failed readback", async () => {
+  const baselineSettings = {
+    showedAnalyticsPopUp: false,
+    analyticsConsented: true,
+    smartActionCmdEnabled: false,
+  };
+  let settings = { ...baselineSettings };
+  let replacementCount = 0;
+  const adapter = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [] },
+    deviceKitVersion: "0.1.29",
+    hostSettingsAuthority: {
+      async readSettings() {
+        return { ...settings };
+      },
+      async replaceSettings(candidate) {
+        replacementCount += 1;
+        settings =
+          replacementCount === 1
+            ? { ...candidate, analyticsConsented: false }
+            : { ...candidate };
+      },
+    },
+  });
+  const baseline = await adapter.snapshotHostSettings();
+  const candidate = structuredClone(baseline);
+  candidate.settings.smartActionCmdEnabled = true;
+  candidate.revision = hostSettingsRevision(candidate.settings);
+
+  await assert.rejects(
+    adapter.applyHostSettings({
+      expectedRevision: baseline.revision,
+      idempotencyKey: "host-settings-auto-rollback",
+      settings: candidate,
+    }),
+    (error) => error.code === -32008 && error.data?.rollbackPerformed === true,
+  );
+  assert.equal(replacementCount, 2);
+  assert.deepEqual(settings, baselineSettings);
+  const restored = await adapter.snapshotHostSettings();
   assert.equal(restored.revision, baseline.revision);
 });
 
@@ -406,11 +543,27 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
     },
   };
   const app = new FixtureApp();
+  const appSettings = {
+    showedAnalyticsPopUp: true,
+    analyticsConsented: false,
+    smartActionCmdEnabled: false,
+    toDTO() {
+      return {
+        showedAnalyticsPopUp: this.showedAnalyticsPopUp,
+        analyticsConsented: this.analyticsConsented,
+        smartActionCmdEnabled: this.smartActionCmdEnabled,
+      };
+    },
+  };
   const integration = await installInputCompanionBridge({
     app,
     services: {
       devicesCommManager: {
         getDevices: () => [device],
+      },
+      applicationService: {
+        getAppSettings: () => appSettings,
+        saveAppSettings: () => {},
       },
     },
     deviceKitVersion: "0.1.29-integration",
@@ -418,20 +571,21 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
   });
 
   assert.equal(integration.inputVersion, "0.18.0-integration");
-  assert.equal(
-    integration.socketPath,
-    root + "/worklouderctl-bridge-v1.sock",
-  );
-  assert.equal(
-    integration.tokenPath,
-    root + "/worklouderctl-bridge-v1.token",
-  );
+  assert.equal(integration.socketPath, root + "/worklouderctl-bridge-v1.sock");
+  assert.equal(integration.tokenPath, root + "/worklouderctl-bridge-v1.token");
   assert.equal((await stat(integration.socketPath)).mode & 0o777, 0o600);
   assert.equal((await stat(integration.tokenPath)).mode & 0o777, 0o600);
   assert.ok(integration.capabilities.includes("device.config.snapshot.v1"));
   assert.ok(integration.capabilities.includes("device.config.validate.v1"));
   assert.ok(!integration.capabilities.includes("device.config.apply.v1"));
   assert.ok(!integration.capabilities.includes("device.config.restore.v1"));
+  assert.ok(
+    integration.capabilities.includes("input.host-settings.snapshot.v1"),
+  );
+  assert.ok(integration.capabilities.includes("input.host-settings.apply.v1"));
+  assert.ok(
+    integration.capabilities.includes("input.host-settings.restore.v1"),
+  );
   assert.equal(app.listenerCount("before-quit"), 1);
   await integration.stop();
   assert.equal(app.listenerCount("before-quit"), 0);
@@ -471,9 +625,7 @@ function configDevice(id, files) {
 }
 
 function cloneFileMap(files) {
-  return new Map(
-    [...files].map(([path, bytes]) => [path, Buffer.from(bytes)]),
-  );
+  return new Map([...files].map(([path, bytes]) => [path, Buffer.from(bytes)]));
 }
 
 function replaceFileMap(target, files) {

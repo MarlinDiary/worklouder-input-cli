@@ -45,6 +45,14 @@ pub enum Command {
 
     /// Inspect or export Input-owned configuration.
     Input {
+        /// Override the Input Companion Bridge Unix socket path.
+        #[clap(long, value_parser)]
+        bridge_socket: Option<PathBuf>,
+
+        /// Override the Input Companion Bridge token file path.
+        #[clap(long, value_parser)]
+        bridge_token: Option<PathBuf>,
+
         #[clap(subcommand)]
         command: InputCommand,
     },
@@ -198,6 +206,76 @@ pub enum InputCommand {
     Config {
         #[clap(subcommand)]
         command: InputConfigCommand,
+    },
+
+    /// Inspect or change Input-owned host permission settings.
+    Permission {
+        #[clap(subcommand)]
+        command: InputPermissionCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum InputPermissionCommand {
+    /// Manage the host gate for command Smart Actions.
+    Command {
+        #[clap(subcommand)]
+        command: InputCommandPermissionCommand,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum InputCommandPermissionValue {
+    Enabled,
+    Disabled,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum InputCommandPermissionCommand {
+    /// Snapshot all Input host settings through the running Input bridge.
+    Snapshot {
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Read command permission from an offline host-settings snapshot.
+    Get {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Build an offline candidate while preserving both analytics settings.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(value_enum)]
+        value: InputCommandPermissionValue,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Apply a complete host-settings candidate with backup, CAS, and rollback.
+    Apply {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long, value_parser)]
+        backup: PathBuf,
+        #[clap(long)]
+        expected_revision: Option<String>,
+        #[clap(long)]
+        idempotency_key: Option<String>,
+    },
+
+    /// Restore a complete host-settings snapshot with a new backup.
+    Restore {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long, value_parser)]
+        backup: PathBuf,
+        #[clap(long)]
+        expected_revision: Option<String>,
+        #[clap(long)]
+        idempotency_key: Option<String>,
     },
 }
 

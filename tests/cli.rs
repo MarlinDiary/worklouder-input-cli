@@ -234,6 +234,7 @@ fn input_and_config_help_expose_read_only_workflow() {
     assert!(input_stdout.contains("inspect"));
     assert!(input_stdout.contains("export"));
     assert!(input_stdout.contains("config"));
+    assert!(input_stdout.contains("permission"));
 
     let input_config = binary()
         .args(["input", "config", "--help"])
@@ -242,6 +243,16 @@ fn input_and_config_help_expose_read_only_workflow() {
     let input_config_stdout = String::from_utf8(input_config.stdout).unwrap();
     assert!(input_config.status.success());
     assert!(input_config_stdout.contains("snapshot"));
+
+    let permission = binary()
+        .args(["input", "permission", "command", "--help"])
+        .output()
+        .unwrap();
+    let permission_stdout = String::from_utf8(permission.stdout).unwrap();
+    assert!(permission.status.success());
+    for command in ["snapshot", "get", "set", "apply", "restore"] {
+        assert!(permission_stdout.contains(command));
+    }
 
     let config = binary().args(["config", "--help"]).output().unwrap();
     let config_stdout = String::from_utf8(config.stdout).unwrap();

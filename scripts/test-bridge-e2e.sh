@@ -10,6 +10,8 @@ config_snapshot=$root/config-snapshot.json
 cache_support=$root/input-cache
 cache_snapshot=$root/config-cache-snapshot.json
 candidate_snapshot=$root/config-candidate.json
+host_settings_snapshot=$root/host-settings.json
+host_settings_enabled=$root/host-settings-enabled.json
 color_snapshot=$root/config-color.json
 control_snapshot=$root/config-control.json
 action_created_snapshot=$root/config-action-created.json
@@ -88,6 +90,9 @@ node "$repo/companion/conformance.mjs" \
   --require device.config.validate.v1 \
   --require device.config.apply.v1 \
   --require device.config.restore.v1 \
+  --require input.host-settings.snapshot.v1 \
+  --require input.host-settings.apply.v1 \
+  --require input.host-settings.restore.v1 \
   >"$root/node-conformance.json"
 "$bin" --json bridge --socket "$socket" --token "$token" status \
   >"$root/bridge-status.json"
@@ -105,6 +110,44 @@ node "$repo/companion/conformance.mjs" \
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config snapshot \
   --output "$config_snapshot" >"$root/config-snapshot-receipt.json"
+"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
+  permission command snapshot --output "$host_settings_snapshot" \
+  >"$root/host-settings-snapshot-receipt.json"
+"$bin" --json input permission command get --input "$host_settings_snapshot" \
+  >"$root/host-settings-get.json"
+"$bin" --json input permission command set --input "$host_settings_snapshot" \
+  enabled --output "$host_settings_enabled" \
+  >"$root/host-settings-set.json"
+host_settings_revision=$(python3 -c \
+  'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
+  "$host_settings_snapshot")
+host_settings_enabled_revision=$(python3 -c \
+  'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
+  "$host_settings_enabled")
+"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
+  permission command apply --input "$host_settings_enabled" \
+  --backup "$root/host-settings-pre-apply.json" \
+  --expected-revision "$host_settings_revision" \
+  --idempotency-key host-settings-apply-1 \
+  >"$root/host-settings-apply.json"
+"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
+  permission command apply --input "$host_settings_enabled" \
+  --backup "$root/host-settings-pre-apply.json" \
+  --expected-revision "$host_settings_revision" \
+  --idempotency-key host-settings-apply-1 \
+  >"$root/host-settings-apply-replay.json"
+"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
+  permission command snapshot --output "$root/host-settings-post-apply.json" \
+  >"$root/host-settings-post-apply-receipt.json"
+"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
+  permission command restore --input "$host_settings_snapshot" \
+  --backup "$root/host-settings-pre-restore.json" \
+  --expected-revision "$host_settings_enabled_revision" \
+  --idempotency-key host-settings-restore-1 \
+  >"$root/host-settings-restore.json"
+"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
+  permission command snapshot --output "$root/host-settings-post-restore.json" \
+  >"$root/host-settings-post-restore-receipt.json"
 mkdir -p "$cache_support/devices/fixture-device"
 cp "$export_dir/keymap.json" "$cache_support/devices/fixture-device/keymap.json"
 cp "$export_dir/smart_actions.json" \
@@ -457,6 +500,17 @@ post_apply = json.loads((root / "post-apply.json").read_text())
 pre_restore = json.loads((root / "pre-restore.json").read_text())
 restore = json.loads((root / "config-restore.json").read_text())
 post_restore = json.loads((root / "post-restore.json").read_text())
+host_settings = json.loads((root / "host-settings.json").read_text())
+host_settings_get = json.loads((root / "host-settings-get.json").read_text())
+host_settings_enabled = json.loads((root / "host-settings-enabled.json").read_text())
+host_settings_set = json.loads((root / "host-settings-set.json").read_text())
+host_settings_pre_apply = json.loads((root / "host-settings-pre-apply.json").read_text())
+host_settings_apply = json.loads((root / "host-settings-apply.json").read_text())
+host_settings_replay = json.loads((root / "host-settings-apply-replay.json").read_text())
+host_settings_post_apply = json.loads((root / "host-settings-post-apply.json").read_text())
+host_settings_pre_restore = json.loads((root / "host-settings-pre-restore.json").read_text())
+host_settings_restore = json.loads((root / "host-settings-restore.json").read_text())
+host_settings_post_restore = json.loads((root / "host-settings-post-restore.json").read_text())
 
 assert conformance["conformant"] is True
 assert conformance["protocolVersion"] == 1
@@ -468,6 +522,9 @@ assert "device.config.snapshot.v1" in bridge["capabilities"]
 assert "device.config.validate.v1" in bridge["capabilities"]
 assert "device.config.apply.v1" in bridge["capabilities"]
 assert "device.config.restore.v1" in bridge["capabilities"]
+assert "input.host-settings.snapshot.v1" in bridge["capabilities"]
+assert "input.host-settings.apply.v1" in bridge["capabilities"]
+assert "input.host-settings.restore.v1" in bridge["capabilities"]
 assert status["adapter"] == "input-companion-bridge-v1"
 assert status["status"]["selectedLayerIndex"] == 2
 assert len(files["files"]) == 2
@@ -954,6 +1011,31 @@ assert restore["afterRevision"] == snapshot["revision"]
 assert post_restore["revision"] == snapshot["revision"]
 assert payload(post_restore, "keymap.json") == payload(snapshot, "keymap.json")
 assert payload(post_restore, "smart_actions.json") == payload(snapshot, "smart_actions.json")
+assert host_settings["settings"] == {
+    "showedAnalyticsPopUp": True,
+    "analyticsConsented": False,
+    "smartActionCmdEnabled": False,
+}
+assert host_settings_get == host_settings
+assert host_settings_enabled["settings"] == {
+    "showedAnalyticsPopUp": True,
+    "analyticsConsented": False,
+    "smartActionCmdEnabled": True,
+}
+assert host_settings_set["changed"] is True
+assert host_settings_set["changedPaths"] == ["/settings/smartActionCmdEnabled"]
+assert host_settings_pre_apply == host_settings
+assert host_settings_apply["operation"] == "apply"
+assert host_settings_apply["changed"] is True
+assert host_settings_apply["beforeRevision"] == host_settings["revision"]
+assert host_settings_apply["afterRevision"] == host_settings_enabled["revision"]
+assert host_settings_replay["idempotentReplay"] is True
+assert host_settings_post_apply == host_settings_enabled
+assert host_settings_pre_restore == host_settings_enabled
+assert host_settings_restore["operation"] == "restore"
+assert host_settings_restore["changed"] is True
+assert host_settings_restore["afterRevision"] == host_settings["revision"]
+assert host_settings_post_restore == host_settings
 
 print("bridge_protocol=1")
 print("node_conformance=verified")
@@ -1005,4 +1087,8 @@ print("config_apply_readback=verified")
 print("config_idempotent_replay=verified")
 print("config_stale_cas_rejected=verified")
 print("config_restore_readback=verified")
+print("host_settings_snapshot_revision=verified")
+print("host_command_permission_candidate=verified")
+print("host_command_permission_sibling_preservation=verified")
+print("host_settings_apply_replay_restore=verified")
 PY

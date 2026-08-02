@@ -23,6 +23,8 @@ const MAX_TOKEN_BYTES: usize = 4096;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const CONFIG_SNAPSHOT_KIND: &str = "worklouder-input-config-snapshot";
 const CONFIG_REVISION_ALGORITHM: &str = "sha256:path-u32be-path-bytes-size-u64be-content-v1";
+const HOST_SETTINGS_KIND: &str = "worklouder-input-host-settings";
+const HOST_SETTINGS_REVISION_ALGORITHM: &str = "sha256:input-host-settings-three-booleans-v1";
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug)]
@@ -83,6 +85,58 @@ pub struct ConfigMutationReceipt {
     pub total_bytes: u64,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostSettings {
+    pub showed_analytics_pop_up: bool,
+    pub analytics_consented: bool,
+    pub smart_action_cmd_enabled: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostSettingsSnapshot {
+    pub schema_version: u64,
+    pub kind: String,
+    pub revision_algorithm: String,
+    pub revision: String,
+    pub settings: HostSettings,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostSettingsSnapshotReceipt {
+    pub output: PathBuf,
+    pub revision: String,
+    pub settings: HostSettings,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostSettingsCandidateReceipt {
+    pub output: PathBuf,
+    pub changed: bool,
+    pub changed_paths: Vec<String>,
+    pub before_revision: String,
+    pub after_revision: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostSettingsMutationReceipt {
+    pub backup: PathBuf,
+    pub schema_version: u64,
+    pub kind: String,
+    pub operation: String,
+    pub idempotency_key: String,
+    pub idempotent_replay: bool,
+    pub changed: bool,
+    pub rollback_performed: bool,
+    pub before_revision: String,
+    pub after_revision: String,
+    pub target_revision: String,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ConfigMutationResponse {
@@ -99,6 +153,21 @@ struct ConfigMutationResponse {
     target_revision: String,
     file_count: usize,
     total_bytes: u64,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct HostSettingsMutationResponse {
+    schema_version: u64,
+    kind: String,
+    operation: String,
+    idempotency_key: String,
+    idempotent_replay: bool,
+    changed: bool,
+    rollback_performed: bool,
+    before_revision: String,
+    after_revision: String,
+    target_revision: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -476,6 +545,178 @@ pub fn config_restore(
     )
 }
 
+pub fn host_settings_snapshot(
+    paths: &BridgePaths,
+    output: &Path,
+) -> Result<HostSettingsSnapshotReceipt> {
+    let mut client = BridgeClient::connect(paths)?;
+    let snapshot: HostSettingsSnapshot = client.call(
+        "input.host-settings.snapshot",
+        "input.host-settings.snapshot.v1",
+        json!({}),
+    )?;
+    validate_host_settings_snapshot(&snapshot)?;
+    write_atomic_json(output, &serde_json::to_value(&snapshot)?)?;
+    let reopened = read_host_settings_snapshot(output)?;
+    ensure!(
+        reopened.revision == snapshot.revision,
+        "published host settings snapshot readback differed"
+    );
+    Ok(HostSettingsSnapshotReceipt {
+        output: output.to_path_buf(),
+        revision: snapshot.revision,
+        settings: snapshot.settings,
+    })
+}
+
+pub fn host_settings_show(input: &Path) -> Result<HostSettingsSnapshot> {
+    read_host_settings_snapshot(input)
+}
+
+pub fn host_settings_command_candidate(
+    input: &Path,
+    enabled: bool,
+    output: &Path,
+) -> Result<HostSettingsCandidateReceipt> {
+    ensure!(input != output, "input and output paths must differ");
+    let mut snapshot = read_host_settings_snapshot(input)?;
+    let before_revision = snapshot.revision.clone();
+    let changed = snapshot.settings.smart_action_cmd_enabled != enabled;
+    snapshot.settings.smart_action_cmd_enabled = enabled;
+    snapshot.revision = host_settings_revision(&snapshot.settings)?;
+    validate_host_settings_snapshot(&snapshot)?;
+    write_atomic_json(output, &serde_json::to_value(&snapshot)?)?;
+    let reopened = read_host_settings_snapshot(output)?;
+    ensure!(
+        reopened.revision == snapshot.revision
+            && reopened.settings.smart_action_cmd_enabled == enabled,
+        "host settings candidate readback differed"
+    );
+    Ok(HostSettingsCandidateReceipt {
+        output: output.to_path_buf(),
+        changed,
+        changed_paths: if changed {
+            vec!["/settings/smartActionCmdEnabled".into()]
+        } else {
+            Vec::new()
+        },
+        before_revision,
+        after_revision: snapshot.revision,
+    })
+}
+
+pub fn host_settings_apply(
+    paths: &BridgePaths,
+    input: &Path,
+    backup: &Path,
+    expected_revision: Option<&str>,
+    idempotency_key: Option<&str>,
+) -> Result<HostSettingsMutationReceipt> {
+    host_settings_mutate(
+        paths,
+        "apply",
+        "input.host-settings.apply",
+        "input.host-settings.apply.v1",
+        "settings",
+        input,
+        backup,
+        expected_revision,
+        idempotency_key,
+    )
+}
+
+pub fn host_settings_restore(
+    paths: &BridgePaths,
+    input: &Path,
+    backup: &Path,
+    expected_revision: Option<&str>,
+    idempotency_key: Option<&str>,
+) -> Result<HostSettingsMutationReceipt> {
+    host_settings_mutate(
+        paths,
+        "restore",
+        "input.host-settings.restore",
+        "input.host-settings.restore.v1",
+        "snapshot",
+        input,
+        backup,
+        expected_revision,
+        idempotency_key,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn host_settings_mutate(
+    paths: &BridgePaths,
+    operation: &str,
+    method: &str,
+    capability: &str,
+    payload_field: &str,
+    input: &Path,
+    backup: &Path,
+    expected_revision: Option<&str>,
+    idempotency_key: Option<&str>,
+) -> Result<HostSettingsMutationReceipt> {
+    ensure!(input != backup, "input and backup paths must differ");
+    let candidate = read_host_settings_snapshot(input)?;
+    let backup_receipt = if backup.exists() {
+        let existing = read_host_settings_snapshot(backup)?;
+        HostSettingsSnapshotReceipt {
+            output: backup.to_path_buf(),
+            revision: existing.revision,
+            settings: existing.settings,
+        }
+    } else {
+        host_settings_snapshot(paths, backup)?
+    };
+    let expected = expected_revision.unwrap_or(&backup_receipt.revision);
+    ensure!(
+        is_sha256(expected),
+        "expected revision must be a SHA-256 digest"
+    );
+    ensure!(
+        backup_receipt.revision.eq_ignore_ascii_case(expected),
+        "host settings backup revision did not match expected revision"
+    );
+    let key = idempotency_key
+        .map(str::to_owned)
+        .unwrap_or_else(|| generated_idempotency_key(operation, &candidate.revision));
+    ensure!(
+        !key.is_empty() && key.len() <= 256 && !key.contains('\0'),
+        "idempotency key was invalid"
+    );
+    let mut params = json!({
+        "expectedRevision": expected,
+        "idempotencyKey": key,
+    });
+    params
+        .as_object_mut()
+        .context("host settings mutation params were not an object")?
+        .insert(payload_field.to_owned(), serde_json::to_value(&candidate)?);
+    let mut client = BridgeClient::connect(paths)?;
+    let response: HostSettingsMutationResponse = client.call(method, capability, params)?;
+    validate_host_settings_mutation_response(
+        &response,
+        operation,
+        &key,
+        expected,
+        &candidate.revision,
+    )?;
+    Ok(HostSettingsMutationReceipt {
+        backup: backup.to_path_buf(),
+        schema_version: response.schema_version,
+        kind: response.kind,
+        operation: response.operation,
+        idempotency_key: response.idempotency_key,
+        idempotent_replay: response.idempotent_replay,
+        changed: response.changed,
+        rollback_performed: response.rollback_performed,
+        before_revision: response.before_revision,
+        after_revision: response.after_revision,
+        target_revision: response.target_revision,
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn config_mutate(
     paths: &BridgePaths,
@@ -622,6 +863,100 @@ fn validate_mutation_response(
         "bridge reported rollback for a successful mutation"
     );
     Ok(())
+}
+
+fn validate_host_settings_mutation_response(
+    response: &HostSettingsMutationResponse,
+    operation: &str,
+    idempotency_key: &str,
+    expected_revision: &str,
+    target_revision: &str,
+) -> Result<()> {
+    ensure!(
+        response.schema_version == 1 && response.kind == "worklouder-input-host-settings-mutation",
+        "bridge returned an unknown host settings mutation result schema"
+    );
+    ensure!(
+        response.operation == operation,
+        "bridge returned the wrong host settings operation"
+    );
+    ensure!(
+        response.idempotency_key == idempotency_key,
+        "bridge returned the wrong host settings idempotency key"
+    );
+    ensure!(
+        response
+            .before_revision
+            .eq_ignore_ascii_case(expected_revision),
+        "host settings mutation began from an unexpected revision"
+    );
+    ensure!(
+        response.target_revision == target_revision && response.after_revision == target_revision,
+        "host settings mutation readback did not match the candidate revision"
+    );
+    ensure!(
+        response.changed
+            != response
+                .before_revision
+                .eq_ignore_ascii_case(&response.target_revision),
+        "bridge returned an inconsistent host settings changed flag"
+    );
+    ensure!(
+        !response.rollback_performed,
+        "bridge reported rollback for a successful host settings mutation"
+    );
+    Ok(())
+}
+
+fn read_host_settings_snapshot(input: &Path) -> Result<HostSettingsSnapshot> {
+    let metadata = fs::symlink_metadata(input).with_context(|| {
+        format!(
+            "failed to inspect host settings snapshot {}",
+            input.display()
+        )
+    })?;
+    ensure!(
+        metadata.file_type().is_file() && !metadata.file_type().is_symlink(),
+        "host settings snapshot must be a regular file"
+    );
+    let bytes = fs::read(input)
+        .with_context(|| format!("failed to read host settings snapshot {}", input.display()))?;
+    ensure!(
+        bytes.len() <= 1024 * 1024,
+        "host settings snapshot exceeded 1 MiB"
+    );
+    let snapshot: HostSettingsSnapshot = serde_json::from_slice(&bytes).with_context(|| {
+        format!(
+            "host settings snapshot was invalid JSON: {}",
+            input.display()
+        )
+    })?;
+    validate_host_settings_snapshot(&snapshot)?;
+    Ok(snapshot)
+}
+
+fn validate_host_settings_snapshot(snapshot: &HostSettingsSnapshot) -> Result<()> {
+    ensure!(
+        snapshot.schema_version == 1
+            && snapshot.kind == HOST_SETTINGS_KIND
+            && snapshot.revision_algorithm == HOST_SETTINGS_REVISION_ALGORITHM,
+        "host settings snapshot header was invalid"
+    );
+    ensure!(
+        snapshot.revision == host_settings_revision(&snapshot.settings)?,
+        "host settings snapshot revision did not match content"
+    );
+    Ok(())
+}
+
+fn host_settings_revision(settings: &HostSettings) -> Result<String> {
+    let mut bytes = b"worklouder-input-host-settings-revision-v1\0".to_vec();
+    bytes.extend([
+        u8::from(settings.showed_analytics_pop_up),
+        u8::from(settings.analytics_consented),
+        u8::from(settings.smart_action_cmd_enabled),
+    ]);
+    fsutil::sha256_bytes(&bytes)
 }
 
 fn read_config_snapshot(input: &Path) -> Result<(Value, ConfigSnapshotMetadata)> {
@@ -1061,6 +1396,22 @@ mod tests {
         })
     }
 
+    fn host_settings_hello() -> Value {
+        json!({
+            "protocolVersion": 1,
+            "bridgeVersion": "0.1.0-test",
+            "inputVersion": "0.18.0-test",
+            "sessionId": "fixture-session",
+            "capabilities": [
+                "bridge.handshake.v1",
+                "bridge.health.v1",
+                "input.host-settings.snapshot.v1",
+                "input.host-settings.apply.v1",
+                "input.host-settings.restore.v1"
+            ]
+        })
+    }
+
     #[test]
     fn bridge_handshake_is_authenticated_and_typed() {
         let (paths, server) = fixture(|method, _| match method {
@@ -1107,6 +1458,111 @@ mod tests {
         assert_eq!(report.status.selected_layer_index, Some(2));
         server.join().unwrap();
         fs::remove_dir_all(paths.socket.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn host_settings_snapshot_candidate_and_apply_are_strict() {
+        let root = PathBuf::from("/tmp").join(format!(
+            "wlb-host-settings-{}-{}",
+            std::process::id(),
+            NEXT_TEST.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&root).unwrap();
+        let snapshot_path = root.join("snapshot.json");
+        let candidate_path = root.join("candidate.json");
+        let backup_path = root.join("backup.json");
+        let settings = HostSettings {
+            showed_analytics_pop_up: true,
+            analytics_consented: false,
+            smart_action_cmd_enabled: false,
+        };
+        let revision = host_settings_revision(&settings).unwrap();
+        let snapshot = json!({
+            "schemaVersion": 1,
+            "kind": HOST_SETTINGS_KIND,
+            "revisionAlgorithm": HOST_SETTINGS_REVISION_ALGORITHM,
+            "revision": revision,
+            "settings": {
+                "showedAnalyticsPopUp": true,
+                "analyticsConsented": false,
+                "smartActionCmdEnabled": false
+            }
+        });
+        let snapshot_response = snapshot;
+        let (paths, server) = fixture(move |method, _| match method {
+            "bridge.hello" => host_settings_hello(),
+            "input.host-settings.snapshot" => snapshot_response.clone(),
+            other => panic!("unexpected method {other}"),
+        });
+        let receipt = host_settings_snapshot(&paths, &snapshot_path).unwrap();
+        assert_eq!(receipt.revision, revision);
+        assert!(!receipt.settings.smart_action_cmd_enabled);
+        server.join().unwrap();
+        fs::remove_dir_all(paths.socket.parent().unwrap()).unwrap();
+
+        let candidate =
+            host_settings_command_candidate(&snapshot_path, true, &candidate_path).unwrap();
+        assert!(candidate.changed);
+        assert_eq!(
+            candidate.changed_paths,
+            vec!["/settings/smartActionCmdEnabled"]
+        );
+        let candidate_snapshot = host_settings_show(&candidate_path).unwrap();
+        assert!(candidate_snapshot.settings.smart_action_cmd_enabled);
+        assert!(candidate_snapshot.settings.showed_analytics_pop_up);
+        assert!(!candidate_snapshot.settings.analytics_consented);
+        fs::copy(&snapshot_path, &backup_path).unwrap();
+
+        let expected = revision;
+        let target = candidate_snapshot.revision;
+        let expected_for_handler = expected.clone();
+        let target_for_handler = target.clone();
+        let (paths, server) = fixture(move |method, params| match method {
+            "bridge.hello" => host_settings_hello(),
+            "input.host-settings.apply" => {
+                assert_eq!(params["expectedRevision"], expected_for_handler);
+                assert_eq!(
+                    params["settings"]["settings"]["smartActionCmdEnabled"],
+                    true
+                );
+                json!({
+                    "schemaVersion": 1,
+                    "kind": "worklouder-input-host-settings-mutation",
+                    "operation": "apply",
+                    "idempotencyKey": "fixture-host-settings",
+                    "idempotentReplay": false,
+                    "changed": true,
+                    "rollbackPerformed": false,
+                    "beforeRevision": expected_for_handler,
+                    "afterRevision": target_for_handler,
+                    "targetRevision": target_for_handler
+                })
+            }
+            other => panic!("unexpected method {other}"),
+        });
+        let applied = host_settings_apply(
+            &paths,
+            &candidate_path,
+            &backup_path,
+            Some(&expected),
+            Some("fixture-host-settings"),
+        )
+        .unwrap();
+        assert!(applied.changed);
+        assert_eq!(applied.after_revision, target);
+        server.join().unwrap();
+        fs::remove_dir_all(paths.socket.parent().unwrap()).unwrap();
+
+        let mut tampered: Value =
+            serde_json::from_slice(&fs::read(&candidate_path).unwrap()).unwrap();
+        tampered["settings"]["analyticsConsented"] = Value::Bool(true);
+        fs::write(
+            root.join("tampered.json"),
+            serde_json::to_vec(&tampered).unwrap(),
+        )
+        .unwrap();
+        assert!(host_settings_show(&root.join("tampered.json")).is_err());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

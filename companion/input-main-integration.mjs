@@ -19,10 +19,19 @@ export async function installInputCompanionBridge({
     socketPath ?? join(userData, "worklouderctl-bridge-v1.sock");
   const resolvedToken =
     tokenPath ?? join(userData, "worklouderctl-bridge-v1.token");
+  const hostSettingsAuthority =
+    services.hostSettingsAuthority ??
+    (services.applicationService
+      ? applicationServiceHostSettingsAuthority(
+          services.applicationService,
+          services.analyticsService,
+        )
+      : undefined);
   const adapter = createInputMainAdapter({
     devicesCommManager: services.devicesCommManager,
     deviceKitVersion,
     configurationWriter: services.configurationWriter,
+    hostSettingsAuthority,
   });
   const bridge = await startInputCompanionBridge({
     adapter,
@@ -49,6 +58,54 @@ export async function installInputCompanionBridge({
   return {
     ...bridge,
     stop,
+  };
+}
+
+function applicationServiceHostSettingsAuthority(
+  applicationService,
+  analyticsService,
+) {
+  if (
+    typeof applicationService.getAppSettings !== "function" ||
+    typeof applicationService.saveAppSettings !== "function"
+  ) {
+    throw new TypeError(
+      "applicationService must provide getAppSettings and saveAppSettings",
+    );
+  }
+  const readModel = () => {
+    const model = applicationService.getAppSettings();
+    if (!model || typeof model !== "object") {
+      throw new Error("Input application settings were unavailable");
+    }
+    return model;
+  };
+  const toSettings = (model) => {
+    const dto = typeof model.toDTO === "function" ? model.toDTO() : model;
+    return {
+      showedAnalyticsPopUp: dto.showedAnalyticsPopUp,
+      analyticsConsented: dto.analyticsConsented,
+      smartActionCmdEnabled: dto.smartActionCmdEnabled,
+    };
+  };
+  return {
+    async readSettings() {
+      return toSettings(readModel());
+    },
+    async replaceSettings(settings) {
+      const model = readModel();
+      const previous = toSettings(model);
+      Object.assign(model, settings);
+      try {
+        await applicationService.saveAppSettings(model);
+        if (typeof analyticsService?.checkUserConsented === "function") {
+          await analyticsService.checkUserConsented();
+        }
+      } catch (error) {
+        Object.assign(model, previous);
+        throw error;
+      }
+    },
   };
 }
 

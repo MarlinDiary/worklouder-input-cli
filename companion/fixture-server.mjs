@@ -178,6 +178,12 @@ const files = new Map([
   ],
 ]);
 
+let hostSettings = {
+  showedAnalyticsPopUp: true,
+  analyticsConsented: false,
+  smartActionCmdEnabled: false,
+};
+
 const device = {
   id: "fixture-device",
   info: {
@@ -221,6 +227,14 @@ const adapter = createInputMainAdapter({
       for (const file of replacement) {
         files.set(file.relativePath, Buffer.from(file.bytes));
       }
+    },
+  },
+  hostSettingsAuthority: {
+    async readSettings() {
+      return { ...hostSettings };
+    },
+    async replaceSettings(settings) {
+      hostSettings = { ...settings };
     },
   },
 });

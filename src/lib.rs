@@ -23,11 +23,12 @@ use cli::{
     CodexJoystickDirection, CodexLightingAutoOff, CodexLightingAutoOffCommand,
     CodexLightingBrightnessCommand, CodexLightingCommand, CodexResetCommand, CodexRuntimeCommand,
     CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand,
-    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand,
-    LayerCommand, LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand,
-    LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect, LightingZone,
-    MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand,
-    SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand,
+    InputCommandPermissionCommand, InputCommandPermissionValue, InputConfigCommand,
+    InputPermissionCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
+    LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect,
+    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
+    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
     SmartActionType as CliSmartActionType, TierCommand,
 };
 use serde::Serialize;
@@ -60,7 +61,16 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Capability { command } => run_capability(command, cli.json, &mut out)?,
         Command::Doctor { strict } => run_doctor(strict, cli.json, &mut out)?,
         Command::Codex { command } => run_codex(command, cli.json, &mut out)?,
-        Command::Input { command } => run_input(command, cli.json, &mut out)?,
+        Command::Input {
+            bridge_socket,
+            bridge_token,
+            command,
+        } => run_input(
+            command,
+            bridge::paths(bridge_socket, bridge_token),
+            cli.json,
+            &mut out,
+        )?,
         Command::Device {
             transport,
             input_mode,
@@ -2583,7 +2593,12 @@ fn run_completion(shell: CompletionShell, mut out: impl Write) {
     clap_complete::generate(generator, &mut command, "worklouderctl", &mut out);
 }
 
-fn run_input(command: InputCommand, json: bool, mut out: impl Write) -> Result<()> {
+fn run_input(
+    command: InputCommand,
+    bridge_paths: bridge::BridgePaths,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
     match command {
         InputCommand::Inspect {
             device,
@@ -2660,6 +2675,123 @@ fn run_input(command: InputCommand, json: bool, mut out: impl Write) -> Result<(
                 }
             }
         },
+        InputCommand::Permission { command } => match command {
+            InputPermissionCommand::Command { command } => match command {
+                InputCommandPermissionCommand::Snapshot { output } => {
+                    let result = bridge::host_settings_snapshot(&bridge_paths, &output)?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(out, "Saved Input host settings to {}", output.display())?;
+                        writeln!(out, "revision={}", result.revision)?;
+                        writeln!(
+                            out,
+                            "command={}",
+                            if result.settings.smart_action_cmd_enabled {
+                                "enabled"
+                            } else {
+                                "disabled"
+                            }
+                        )?;
+                    }
+                }
+                InputCommandPermissionCommand::Get { input } => {
+                    let result = bridge::host_settings_show(&input)?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "{}",
+                            if result.settings.smart_action_cmd_enabled {
+                                "enabled"
+                            } else {
+                                "disabled"
+                            }
+                        )?;
+                        writeln!(out, "revision={}", result.revision)?;
+                    }
+                }
+                InputCommandPermissionCommand::Set {
+                    input,
+                    value,
+                    output,
+                } => {
+                    let enabled = match value {
+                        InputCommandPermissionValue::Enabled => true,
+                        InputCommandPermissionValue::Disabled => false,
+                    };
+                    let result = bridge::host_settings_command_candidate(&input, enabled, &output)?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "Candidate command permission: changed={} output={}",
+                            result.changed,
+                            result.output.display()
+                        )?;
+                        writeln!(out, "beforeRevision={}", result.before_revision)?;
+                        writeln!(out, "afterRevision={}", result.after_revision)?;
+                        for path in result.changed_paths {
+                            writeln!(out, "CHANGE\t{path}")?;
+                        }
+                    }
+                }
+                InputCommandPermissionCommand::Apply {
+                    input,
+                    backup,
+                    expected_revision,
+                    idempotency_key,
+                } => {
+                    let result = bridge::host_settings_apply(
+                        &bridge_paths,
+                        &input,
+                        &backup,
+                        expected_revision.as_deref(),
+                        idempotency_key.as_deref(),
+                    )?;
+                    write_input_host_settings_mutation(result, json, &mut out)?;
+                }
+                InputCommandPermissionCommand::Restore {
+                    input,
+                    backup,
+                    expected_revision,
+                    idempotency_key,
+                } => {
+                    let result = bridge::host_settings_restore(
+                        &bridge_paths,
+                        &input,
+                        &backup,
+                        expected_revision.as_deref(),
+                        idempotency_key.as_deref(),
+                    )?;
+                    write_input_host_settings_mutation(result, json, &mut out)?;
+                }
+            },
+        },
+    }
+    Ok(())
+}
+
+fn write_input_host_settings_mutation(
+    result: bridge::HostSettingsMutationReceipt,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    if json {
+        write_json(&mut out, &result)?;
+    } else {
+        writeln!(
+            out,
+            "Input host settings {}: changed={} replay={} backup={}",
+            result.operation,
+            result.changed,
+            result.idempotent_replay,
+            result.backup.display()
+        )?;
+        writeln!(out, "beforeRevision={}", result.before_revision)?;
+        writeln!(out, "afterRevision={}", result.after_revision)?;
     }
     Ok(())
 }

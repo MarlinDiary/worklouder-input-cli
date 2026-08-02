@@ -19,21 +19,29 @@ const METHOD_DEFINITIONS = new Map([
   ["device.status", ["device.status.v1", "getDeviceStatus"]],
   ["device.files.list", ["device.files.list.v1", "listFiles"]],
   ["device.files.read", ["device.files.read.v1", "readFile"]],
-  [
-    "device.config.snapshot",
-    ["device.config.snapshot.v1", "snapshotConfig"],
-  ],
-  [
-    "device.config.validate",
-    ["device.config.validate.v1", "validateConfig"],
-  ],
+  ["device.config.snapshot", ["device.config.snapshot.v1", "snapshotConfig"]],
+  ["device.config.validate", ["device.config.validate.v1", "validateConfig"]],
   ["device.config.apply", ["device.config.apply.v1", "applyConfig"]],
   ["device.config.restore", ["device.config.restore.v1", "restoreConfig"]],
+  [
+    "input.host-settings.snapshot",
+    ["input.host-settings.snapshot.v1", "snapshotHostSettings"],
+  ],
+  [
+    "input.host-settings.apply",
+    ["input.host-settings.apply.v1", "applyHostSettings"],
+  ],
+  [
+    "input.host-settings.restore",
+    ["input.host-settings.restore.v1", "restoreHostSettings"],
+  ],
 ]);
 
 const MUTATION_METHODS = new Set([
   "device.config.apply",
   "device.config.restore",
+  "input.host-settings.apply",
+  "input.host-settings.restore",
 ]);
 
 export class BridgeError extends Error {
@@ -65,7 +73,9 @@ export async function startInputCompanionBridge({
     "bridge.handshake.v1",
     "bridge.health.v1",
     ...[...METHOD_DEFINITIONS.values()]
-      .filter(([, adapterMethod]) => typeof adapter[adapterMethod] === "function")
+      .filter(
+        ([, adapterMethod]) => typeof adapter[adapterMethod] === "function",
+      )
       .map(([capability]) => capability),
   ];
   const sessionId = randomBytes(16).toString("hex");
@@ -323,6 +333,19 @@ function constantTimeEqual(left, right) {
 }
 
 function validateMutationParams(method, params) {
+  if (method.startsWith("input.host-settings.")) {
+    validateRevisionAndIdempotency(params);
+    const payload =
+      method === "input.host-settings.apply" ? "settings" : "snapshot";
+    if (
+      !params[payload] ||
+      typeof params[payload] !== "object" ||
+      Array.isArray(params[payload])
+    ) {
+      throw new BridgeError(-32602, payload + " is required");
+    }
+    return;
+  }
   if (
     typeof params.deviceId !== "string" ||
     params.deviceId.length === 0 ||
@@ -331,6 +354,18 @@ function validateMutationParams(method, params) {
   ) {
     throw new BridgeError(-32602, "deviceId is invalid");
   }
+  validateRevisionAndIdempotency(params);
+  const payload = method === "device.config.apply" ? "config" : "snapshot";
+  if (
+    !params[payload] ||
+    typeof params[payload] !== "object" ||
+    Array.isArray(params[payload])
+  ) {
+    throw new BridgeError(-32602, payload + " is required");
+  }
+}
+
+function validateRevisionAndIdempotency(params) {
   if (
     typeof params.expectedRevision !== "string" ||
     !/^[0-9a-f]{64}$/i.test(params.expectedRevision)
@@ -344,14 +379,6 @@ function validateMutationParams(method, params) {
     params.idempotencyKey.includes("\0")
   ) {
     throw new BridgeError(-32602, "idempotencyKey is invalid");
-  }
-  const payload = method === "device.config.apply" ? "config" : "snapshot";
-  if (
-    !params[payload] ||
-    typeof params[payload] !== "object" ||
-    Array.isArray(params[payload])
-  ) {
-    throw new BridgeError(-32602, payload + " is required");
   }
 }
 

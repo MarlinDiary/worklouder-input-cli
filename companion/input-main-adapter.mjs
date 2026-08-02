@@ -5,6 +5,10 @@ export const CONFIG_SNAPSHOT_SCHEMA_VERSION = 1;
 export const CONFIG_SNAPSHOT_KIND = "worklouder-input-config-snapshot";
 export const CONFIG_REVISION_ALGORITHM =
   "sha256:path-u32be-path-bytes-size-u64be-content-v1";
+export const HOST_SETTINGS_SCHEMA_VERSION = 1;
+export const HOST_SETTINGS_KIND = "worklouder-input-host-settings";
+export const HOST_SETTINGS_REVISION_ALGORITHM =
+  "sha256:input-host-settings-three-booleans-v1";
 
 const MAX_CONFIG_FILES = 4096;
 const MAX_CONFIG_FILE_BYTES = 16 * 1024 * 1024;
@@ -14,6 +18,7 @@ export function createInputMainAdapter({
   devicesCommManager,
   deviceKitVersion,
   configurationWriter,
+  hostSettingsAuthority,
 }) {
   if (
     !devicesCommManager ||
@@ -33,7 +38,18 @@ export function createInputMainAdapter({
       "configurationWriter.replaceConfiguration must be a function",
     );
   }
+  if (
+    hostSettingsAuthority !== undefined &&
+    (!hostSettingsAuthority ||
+      typeof hostSettingsAuthority.readSettings !== "function" ||
+      typeof hostSettingsAuthority.replaceSettings !== "function")
+  ) {
+    throw new TypeError(
+      "hostSettingsAuthority must provide readSettings and replaceSettings",
+    );
+  }
   const idempotencyCache = new Map();
+  const hostSettingsIdempotencyCache = new Map();
 
   const selectDevice = (deviceId) => {
     const devices = devicesCommManager
@@ -66,10 +82,7 @@ export function createInputMainAdapter({
       device.rpcService.getFirmwareVersion(),
       device.rpcService.getDeviceStatus(),
     ]);
-    if (
-      status.firmwareVersion &&
-      status.firmwareVersion !== firmwareVersion
-    ) {
+    if (status.firmwareVersion && status.firmwareVersion !== firmwareVersion) {
       throw new BridgeError(
         -32008,
         "sys.version and device.status firmware versions differed",
@@ -147,7 +160,10 @@ export function createInputMainAdapter({
       await device.rpcService.getFileList({ recursive: true }),
     );
     if (listingIdentity(listed) !== listingIdentity(secondListing)) {
-      throw new BridgeError(-32006, "device configuration changed during snapshot");
+      throw new BridgeError(
+        -32006,
+        "device configuration changed during snapshot",
+      );
     }
     return {
       schemaVersion: CONFIG_SNAPSHOT_SCHEMA_VERSION,
@@ -171,7 +187,10 @@ export function createInputMainAdapter({
     const expected = safeSha256(expectedRevision, "expected revision");
     const device = selectDevice(deviceId);
     if (String(device.id) !== target.deviceId) {
-      throw new BridgeError(-32602, "configuration deviceId did not match request");
+      throw new BridgeError(
+        -32602,
+        "configuration deviceId did not match request",
+      );
     }
     const requestDigest = mutationRequestDigest({
       operation,
@@ -253,18 +272,142 @@ export function createInputMainAdapter({
           );
         }
       } catch (rollbackError) {
-        throw new BridgeError(-32008, "configuration mutation and rollback failed", {
-          operation,
-          beforeRevision: before.revision,
-          targetRevision: target.revision,
-          rollbackRevision,
-          mutationError: errorMessage(mutationError),
-          rollbackError: errorMessage(rollbackError),
-        });
+        throw new BridgeError(
+          -32008,
+          "configuration mutation and rollback failed",
+          {
+            operation,
+            beforeRevision: before.revision,
+            targetRevision: target.revision,
+            rollbackRevision,
+            mutationError: errorMessage(mutationError),
+            rollbackError: errorMessage(rollbackError),
+          },
+        );
       }
       throw new BridgeError(
         -32008,
         "configuration mutation failed and was rolled back",
+        {
+          operation,
+          beforeRevision: before.revision,
+          targetRevision: target.revision,
+          rollbackRevision,
+          rollbackPerformed: true,
+          mutationError: errorMessage(mutationError),
+        },
+      );
+    }
+  };
+
+  const captureHostSettings = async () => {
+    const settings = normalizeHostSettings(
+      await hostSettingsAuthority.readSettings(),
+    );
+    return hostSettingsSnapshot(settings);
+  };
+
+  const runHostSettingsMutation = async ({
+    operation,
+    expectedRevision,
+    idempotencyKey,
+    candidate,
+  }) => {
+    const target = validateHostSettingsSnapshot(candidate);
+    const expected = safeSha256(expectedRevision, "expected revision");
+    const requestDigest = mutationRequestDigest({
+      operation: `host-settings-${operation}`,
+      deviceId: "input-host-settings",
+      expectedRevision: expected,
+      targetRevision: target.revision,
+    });
+    const cached = hostSettingsIdempotencyCache.get(idempotencyKey);
+    if (cached) {
+      if (cached.requestDigest !== requestDigest) {
+        throw new BridgeError(
+          -32602,
+          "idempotency key was reused with a different mutation",
+        );
+      }
+      return { ...cached.result, idempotentReplay: true };
+    }
+
+    const before = await captureHostSettings();
+    if (before.revision !== expected) {
+      throw new BridgeError(-32005, "host settings revision conflict", {
+        expectedRevision: expected,
+        liveRevision: before.revision,
+      });
+    }
+    if (before.revision === target.revision) {
+      const result = hostSettingsMutationResult({
+        operation,
+        idempotencyKey,
+        beforeRevision: before.revision,
+        afterRevision: before.revision,
+        targetRevision: target.revision,
+        changed: false,
+      });
+      cacheMutation(
+        hostSettingsIdempotencyCache,
+        idempotencyKey,
+        requestDigest,
+        result,
+      );
+      return result;
+    }
+
+    try {
+      await hostSettingsAuthority.replaceSettings({ ...target.settings });
+      const after = await captureHostSettings();
+      if (after.revision !== target.revision) {
+        throw new Error(
+          `host settings readback revision ${after.revision} did not match ${target.revision}`,
+        );
+      }
+      const result = hostSettingsMutationResult({
+        operation,
+        idempotencyKey,
+        beforeRevision: before.revision,
+        afterRevision: after.revision,
+        targetRevision: target.revision,
+        changed: true,
+      });
+      cacheMutation(
+        hostSettingsIdempotencyCache,
+        idempotencyKey,
+        requestDigest,
+        result,
+      );
+      return result;
+    } catch (mutationError) {
+      let rollbackRevision = null;
+      try {
+        await hostSettingsAuthority.replaceSettings({ ...before.settings });
+        const restored = await captureHostSettings();
+        rollbackRevision = restored.revision;
+        if (rollbackRevision !== before.revision) {
+          throw new Error(
+            `host settings rollback revision ${rollbackRevision} did not match ${before.revision}`,
+          );
+        }
+      } catch (rollbackError) {
+        throw new BridgeError(
+          -32008,
+          "host settings mutation and rollback failed",
+          {
+            operation,
+            beforeRevision: before.revision,
+            targetRevision: target.revision,
+            rollbackRevision,
+            mutationError: errorMessage(mutationError),
+            rollbackError: errorMessage(rollbackError),
+          },
+        );
+      }
+      throw new BridgeError(
+        -32008,
+        "host settings mutation failed and was rolled back",
         {
           operation,
           beforeRevision: before.revision,
@@ -346,14 +489,20 @@ export function createInputMainAdapter({
         deviceId !== undefined &&
         String(deviceId) !== validation.deviceId
       ) {
-        throw new BridgeError(-32602, "snapshot deviceId did not match request");
+        throw new BridgeError(
+          -32602,
+          "snapshot deviceId did not match request",
+        );
       }
       let liveRevision = null;
       if (expectedRevision !== null && expectedRevision !== undefined) {
         const expected = safeSha256(expectedRevision, "expected revision");
         const live = await captureConfigSnapshot(selectDevice(deviceId));
         liveRevision = live.revision;
-        if (live.deviceId !== validation.deviceId || liveRevision !== expected) {
+        if (
+          live.deviceId !== validation.deviceId ||
+          liveRevision !== expected
+        ) {
           throw new BridgeError(-32005, "device revision conflict", {
             expectedRevision: expected,
             liveRevision,
@@ -401,6 +550,31 @@ export function createInputMainAdapter({
         candidate: snapshot,
       });
   }
+  if (hostSettingsAuthority) {
+    adapter.snapshotHostSettings = async () => captureHostSettings();
+    adapter.applyHostSettings = async ({
+      expectedRevision,
+      idempotencyKey,
+      settings,
+    }) =>
+      runHostSettingsMutation({
+        operation: "apply",
+        expectedRevision,
+        idempotencyKey,
+        candidate: settings,
+      });
+    adapter.restoreHostSettings = async ({
+      expectedRevision,
+      idempotencyKey,
+      snapshot,
+    }) =>
+      runHostSettingsMutation({
+        operation: "restore",
+        expectedRevision,
+        idempotencyKey,
+        candidate: snapshot,
+      });
+  }
   return adapter;
 }
 
@@ -442,6 +616,92 @@ function mutationResult({
     targetRevision: target.revision,
     fileCount: target.fileCount,
     totalBytes: target.totalBytes,
+  };
+}
+
+function hostSettingsSnapshot(settings) {
+  const normalized = normalizeHostSettings(settings);
+  return {
+    schemaVersion: HOST_SETTINGS_SCHEMA_VERSION,
+    kind: HOST_SETTINGS_KIND,
+    revisionAlgorithm: HOST_SETTINGS_REVISION_ALGORITHM,
+    revision: hostSettingsRevision(normalized),
+    settings: normalized,
+  };
+}
+
+function validateHostSettingsSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    throw new BridgeError(-32602, "host settings snapshot must be an object");
+  }
+  if (
+    snapshot.schemaVersion !== HOST_SETTINGS_SCHEMA_VERSION ||
+    snapshot.kind !== HOST_SETTINGS_KIND ||
+    snapshot.revisionAlgorithm !== HOST_SETTINGS_REVISION_ALGORITHM
+  ) {
+    throw new BridgeError(-32602, "host settings snapshot header was invalid");
+  }
+  const settings = normalizeHostSettings(snapshot.settings, -32602);
+  const revision = hostSettingsRevision(settings);
+  if (safeSha256(snapshot.revision, "host settings revision") !== revision) {
+    throw new BridgeError(
+      -32602,
+      "host settings revision did not match content",
+    );
+  }
+  return { revision, settings };
+}
+
+function normalizeHostSettings(settings, code = -32008) {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+    throw new BridgeError(code, "Input returned invalid host settings");
+  }
+  const normalized = {};
+  for (const field of [
+    "showedAnalyticsPopUp",
+    "analyticsConsented",
+    "smartActionCmdEnabled",
+  ]) {
+    if (typeof settings[field] !== "boolean") {
+      throw new BridgeError(code, `host settings ${field} was not boolean`);
+    }
+    normalized[field] = settings[field];
+  }
+  return normalized;
+}
+
+export function hostSettingsRevision(settings) {
+  return createHash("sha256")
+    .update("worklouder-input-host-settings-revision-v1\0", "utf8")
+    .update(
+      Buffer.from([
+        settings.showedAnalyticsPopUp ? 1 : 0,
+        settings.analyticsConsented ? 1 : 0,
+        settings.smartActionCmdEnabled ? 1 : 0,
+      ]),
+    )
+    .digest("hex");
+}
+
+function hostSettingsMutationResult({
+  operation,
+  idempotencyKey,
+  beforeRevision,
+  afterRevision,
+  targetRevision,
+  changed,
+}) {
+  return {
+    schemaVersion: 1,
+    kind: "worklouder-input-host-settings-mutation",
+    operation,
+    idempotencyKey,
+    idempotentReplay: false,
+    changed,
+    rollbackPerformed: false,
+    beforeRevision,
+    afterRevision,
+    targetRevision,
   };
 }
 
@@ -545,11 +805,17 @@ function validateConfigSnapshot(snapshot) {
     }
     const deviceChecksumSha1 = safeSha1(file.deviceChecksumSha1, -32602);
     if (createHash("sha1").update(bytes).digest("hex") !== deviceChecksumSha1) {
-      throw new BridgeError(-32602, "snapshot file SHA-1 did not match content");
+      throw new BridgeError(
+        -32602,
+        "snapshot file SHA-1 did not match content",
+      );
     }
     const sha256 = safeSha256(file.sha256, "snapshot file SHA-256");
     if (createHash("sha256").update(bytes).digest("hex") !== sha256) {
-      throw new BridgeError(-32602, "snapshot file SHA-256 did not match content");
+      throw new BridgeError(
+        -32602,
+        "snapshot file SHA-256 did not match content",
+      );
     }
     return { relativePath, bytes };
   });
