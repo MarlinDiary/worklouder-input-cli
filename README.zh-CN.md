@@ -9,8 +9,9 @@
 > **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
 > provider 诊断、Codex Micro 设置检查/导出、Input 只读检查/原字节导出、
 > live device status/files、双哈希验证导出、带 revision 的 bridge snapshot、
-> live CAS 校验、离线 profile/layer/AppSense/control/Action/Smart Action candidate 生成、fixture 验证的
-> apply/restore transaction、结构化 diff、JSON 输出和 shell completion。
+> live CAS 校验、离线 profile/layer/AppSense/control/Action/Smart Action candidate
+> 生成、fixture 验证的 Input/Codex apply/restore transaction、六个 Codex Agent
+> Key assignment 的 live snapshot、结构化 diff、JSON 输出和 shell completion。
 > 尚未发布打包版本；bridge transaction 已通过隔离 writer fixture
 > 验证，真实设备写入仍以 Input writer adapter 与硬件 rollback 验证为启用条件。
 
@@ -57,6 +58,11 @@ worklouderctl doctor [--strict]
 worklouderctl codex doctor [--strict]
 worklouderctl codex inspect
 worklouderctl codex export --output CODEX_SNAPSHOT.json
+worklouderctl codex bridge inspect
+worklouderctl codex config snapshot --output CODEX_SNAPSHOT.json
+worklouderctl codex config apply --input CODEX_CANDIDATE.json --backup CODEX_BEFORE.json
+worklouderctl codex config restore --input CODEX_BEFORE.json --backup CODEX_CURRENT.json
+worklouderctl codex agent-key assignments
 worklouderctl codex agent-source get --input CODEX_SNAPSHOT.json
 worklouderctl codex agent-source set --input CODEX_SNAPSHOT.json priority --output CODEX_CANDIDATE.json
 worklouderctl codex agent-key tap-mode get --input CODEX_SNAPSHOT.json
@@ -143,8 +149,19 @@ snapshot；两者都不会序列化其他 Codex 设置。
 `codex agent-source`、`codex agent-key tap-mode` 与 `codex command-key` 是严格的
 Tier 1 离线 editor：核对内嵌 frozen definitions，重算 effective settings 与
 recursive-key-sorted revision，保留未知 `codex-micro-*` 值，原子发布并重新打开。
-receipt 中的 `expectedSourceSha256` 供后续 Codex `settings-write` CAS transaction
+receipt 中的 `expectedSourceSha256` 供 Codex `settings-write` CAS transaction
 使用；candidate 生成阶段保持源 TOML 与 Codex runtime state 原样。
+`codex config apply/restore` 通过认证的 Codex Companion Bridge 消费这些
+candidate，执行 source SHA + canonical settings revision 双 CAS、complete explicit
+settings replacement、explicit/effective exact readback、immutable backup、
+session idempotency 和 automatic rollback。`codex agent-key assignments` 会校验
+六个 live slots 以及 command、Skill、task、keycap 和 empty assignment shape。
+
+仓库已经包含 Codex main-process reference adapter 和 Electron integration。
+静态检查确认 Codex 26.727.51351 内部有 `settings-read`、`settings-write` 与
+global-state handlers，但当前 release 还没有发布外部 socket。因此 live mutation
+仍由 integration capability gate 控制；现有 E2E 证据来自隔离的同契约 fixture。
+详见 [Codex Companion Bridge](docs/codex-companion-bridge.md)。
 
 `input inspect` 同样全程只读；`input export` 把源文件原字节复制到原子发布的
 目录，并在 `manifest.json` 记录 size 与 SHA-256。它不会暂停 Input，也不会
@@ -301,13 +318,13 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 `files`、双哈希 `export`、byte-exact semantic cache snapshot、Companion Bridge v1
 contract/client/reference server、
 revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
-Input 自动恢复，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
+Input 自动恢复、Codex Companion Bridge settings snapshot/CAS/apply/restore/rollback
+与六键 Agent assignment snapshot，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
 与 per-layer lighting、AppSense linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线 candidate 生成，keys、
 encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
 list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
-release 集成、可安装 binary、Homebrew formula、
-Codex live settings bridge 写入与完整写入命令将在对应 transaction 和真实硬件
-readback 验证后发布。
+release 集成、Codex released-app bridge 集成、可安装 binary 与 Homebrew formula
+仍在后续里程碑中。
 
 配置边界已经确定：**Tier 1 使用 Codex 的设置模型与运行时；Tier 2 及以上
 使用 Input 的设置模型与运行时；CLI 对两边都提供完整配置能力。** 详见

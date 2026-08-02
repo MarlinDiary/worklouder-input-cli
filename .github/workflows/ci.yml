@@ -37,7 +37,9 @@ jobs:
         run: cargo test --locked
       - name: Lint
         run: cargo clippy --all-targets -- -D warnings
-      - name: Test Input Companion Bridge reference server
-        run: node --test companion/input-main-bridge.test.mjs
-      - name: Test bridge CLI end to end
+      - name: Test companion bridge reference servers
+        run: npm test --prefix companion
+      - name: Test Input bridge CLI end to end
         run: ./scripts/test-bridge-e2e.sh
+      - name: Test Codex bridge CLI end to end
+        run: ./scripts/test-codex-bridge-e2e.sh

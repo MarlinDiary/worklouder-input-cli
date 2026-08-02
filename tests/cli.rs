@@ -60,6 +60,8 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("tier"));
     assert!(stdout.contains("capability"));
     assert!(stdout.contains("doctor"));
+    assert!(stdout.contains("bridge"));
+    assert!(stdout.contains("config"));
     assert!(stdout.contains("codex"));
     assert!(stdout.contains("device"));
     assert!(stdout.contains("input"));
@@ -315,12 +317,33 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
     let stdout = String::from_utf8(codex.stdout).unwrap();
 
     assert!(codex.status.success());
+    assert!(stdout.contains("bridge"));
+    assert!(stdout.contains("config"));
     assert!(stdout.contains("doctor"));
     assert!(stdout.contains("inspect"));
     assert!(stdout.contains("export"));
     assert!(stdout.contains("agent-source"));
     assert!(stdout.contains("agent-key"));
     assert!(stdout.contains("command-key"));
+
+    let config = binary()
+        .args(["codex", "config", "--help"])
+        .output()
+        .unwrap();
+    let config_stdout = String::from_utf8(config.stdout).unwrap();
+    assert!(config.status.success());
+    assert!(config_stdout.contains("snapshot"));
+    assert!(config_stdout.contains("apply"));
+    assert!(config_stdout.contains("restore"));
+
+    let agent_key = binary()
+        .args(["codex", "agent-key", "--help"])
+        .output()
+        .unwrap();
+    let agent_key_stdout = String::from_utf8(agent_key.stdout).unwrap();
+    assert!(agent_key.status.success());
+    assert!(agent_key_stdout.contains("assignments"));
+    assert!(agent_key_stdout.contains("tap-mode"));
 }
 
 #[test]

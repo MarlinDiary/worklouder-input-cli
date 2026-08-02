@@ -44,15 +44,18 @@ The roadmap prioritizes evidence and configuration safety over command count.
 ## M2 — Codex-native configuration beta
 
 - [x] Exact Codex 26.727.51351 read contract and settings-schema adapter
-- [ ] `settings-read` and `settings-write` bridge client
+- [x] `settings-read` and `settings-write` bridge client/reference integration
+- [ ] Integrate the Codex Companion Bridge into a released Codex build
 - [x] Agent source and single-tap behavior offline candidates
-- [ ] Six Agent Key task/command/Skill assignments
+- [x] Six Agent Key task/command/Skill/keycap assignment snapshot and validation
+- [ ] Six Agent Key assignment mutation commands
 - [x] Six Command Key slots get/set/reset offline candidates
 - [ ] voice mode
 - [ ] dial modes and custom gestures
 - [ ] joystick directions and Skills
 - [ ] global brightness and auto-off
-- [ ] Codex settings backup, diff, apply, readback, and rollback
+- [x] Codex settings backup, apply, readback, restore, and automatic rollback fixture
+- [ ] Codex settings structural diff command
 
 ## M3 — Input semantic configuration beta
 
@@ -77,7 +80,8 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Input cache read adapter with bridge-equivalent semantic snapshot/revision
 - [ ] Input database adapter
 - [ ] Input process coordination
-- [ ] Codex process and settings-bridge coordination
+- [x] Codex settings-bridge protocol, client, and reference process integration
+- [ ] Released Codex process integration
 - [ ] Private backup catalog
 - [ ] Plan/apply conflict detection
 - [ ] Exact readback and checksum verification

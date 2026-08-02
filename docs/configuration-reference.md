@@ -22,8 +22,10 @@ transactions. The implemented `codex-config-toml-read-v1` adapter reads the
 `codex-micro-` prefix, and preserves unknown prefixed keys. It hashes the source
 before and after capture, recursively fills inherited defaults, and excludes
 all unrelated Codex configuration from its output. Offline mutation still
-requires separate round-trip and restart fixtures. Raw Chromium LevelDB
-mutation is not part of the configuration path.
+uses the same frozen definitions. The Codex Companion Bridge now supplies the
+online snapshot/CAS/apply/restore client and reference main-process integration;
+the released Codex build still needs to install that external listener. Raw
+Chromium LevelDB mutation is not part of the configuration path.
 
 The current read and offline-candidate command surface is:
 
@@ -31,6 +33,11 @@ The current read and offline-candidate command surface is:
 worklouderctl codex doctor [--strict] [--config PATH] [--app PATH]
 worklouderctl codex inspect [--config PATH] [--app PATH]
 worklouderctl codex export --output FILE [--config PATH] [--app PATH]
+worklouderctl codex bridge [--socket PATH] [--token PATH] inspect
+worklouderctl codex config [--socket PATH] [--token PATH] snapshot --output FILE
+worklouderctl codex config [--socket PATH] [--token PATH] apply --input CANDIDATE.json --backup BEFORE.json
+worklouderctl codex config [--socket PATH] [--token PATH] restore --input BEFORE.json --backup CURRENT.json
+worklouderctl codex agent-key assignments [--socket PATH] [--token PATH]
 worklouderctl codex agent-source get --input SNAPSHOT.json
 worklouderctl codex agent-source set --input SNAPSHOT.json VALUE --output CANDIDATE.json
 worklouderctl codex agent-key tap-mode get --input SNAPSHOT.json
@@ -48,7 +55,9 @@ hashes canonical explicit settings with `codex-settings-revision-v1`, and
 publishes/reopens a complete candidate. Command Key updates preserve the
 current keycap when omitted, keep command and Skill representations mutually
 exclusive, and reset from the frozen slot default. The source TOML SHA-256 is
-retained as the future online transaction's CAS value.
+retained as the online transaction's source CAS value. The bridge also compares
+the canonical settings revision, performs complete explicit-setting replacement,
+and verifies exact explicit/effective readback before reporting success.
 
 ### Persisted setting keys
 

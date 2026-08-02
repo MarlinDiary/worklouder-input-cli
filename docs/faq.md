@@ -13,8 +13,10 @@ surface exposed by both GUIs.
 
 WorkLouderCTL is being built for that role. The source-built CLI already reads
 Codex settings, Input cache state, and live Codex Micro status/files through
-Input 0.18.0's bundled provider. Packaged releases and mutation commands are
-later milestones.
+Input 0.18.0's bundled provider. It also generates strict offline candidates
+and runs authenticated Codex/Input apply/readback/restore/rollback transactions
+against isolated reference writers. Packaged releases and released-app writer
+integration are later milestones.
 
 ## What does full-configuration parity mean?
 
@@ -54,8 +56,8 @@ metadata. The CLI configures every tier through its corresponding authority.
 
 ## Can an AI agent configure Codex Micro?
 
-Yes, through the planned deterministic JSON contract. Human and agent clients
-will share one transaction engine: inspect, plan, diff, apply, verify, and
+Yes, through the deterministic JSON contract. Human and agent clients share
+the same transaction model: inspect, plan, diff, apply, verify, and
 rollback. There will be no separate unverified AI write path.
 
 ## How will WorkLouderCTL protect an existing layout?
@@ -87,11 +89,21 @@ Until a released Input build includes that bridge, the direct compatibility
 transport keeps `require-closed` as its default. Its explicit `restart` mode
 performs the older graceful quit/read/reopen cycle.
 
+## How can the CLI coexist with Codex while it is open?
+
+The Codex Companion Bridge keeps the running Codex main process authoritative.
+It delegates settings/global-state reads to Codex and advertises settings writes
+only when Codex injects exact complete-setting replacement. The CLI performs
+source-SHA and settings-revision CAS, immutable backup, exact readback, restore,
+and rollback over a private authenticated Unix socket. The current Codex release
+contains the internal handlers but has not yet installed this external listener;
+the repository includes the reference integration and complete fixture E2E.
+
 ## Will it support Smart Actions?
 
-Smart Actions are part of the planned model, including app, URL, text, and
-command actions, groups, references, explicit command permission, device-file
-serialization, and Input database/cache synchronization.
+Smart Action text, command, URL, and app definitions, groups, references,
+bindings, and delete cascades are implemented as strict offline candidates.
+Released Input writer and database synchronization remain separate milestones.
 
 ## Will it support Linux and Windows?
 

@@ -13,7 +13,8 @@ not a public support guarantee.
 | --- | ---: | --- |
 | Device | Work Louder Codex Micro | Initial target |
 | Host OS | macOS | Initial target |
-| Codex app | 26.727.51351 | Exact Tier 1 settings read adapter verified |
+| Codex app | 26.727.51351 | Exact Tier 1 settings read/offline candidate adapter verified; external bridge integration pending |
+| Codex Companion Bridge | Protocol v1 | Settings snapshot/CAS/apply/restore/rollback and six Agent Key snapshot fixture verified |
 | Work Louder Input | 0.17.3 | Earlier schema fixture |
 | Work Louder Input | 0.18.0 | Exact bundled-kit live read adapter verified |
 | Input Companion Bridge | Protocol v1 | Snapshot/CAS/apply/replay/restore/rollback fixture conformance verified; released Input writer pending |
@@ -29,7 +30,19 @@ For Codex 26.727.51351, `codex-config-toml-read-v1` has live read-only evidence:
 the five explicit Codex Micro settings validated, inherited layout defaults
 were reconstructed, an atomic typed snapshot was reopened, and the source
 `config.toml` SHA-256 was identical before and after. This claim does not cover
-Codex settings mutation.
+Codex settings mutation. Static inspection found the internal `settings-read`,
+`settings-write`, `get-global-state`, and `set-global-state` handlers, while the
+released build did not expose an external listener.
+
+The isolated Codex Companion Bridge v1 fixture has cross-language evidence for
+authenticated capability negotiation, frozen-definition settings snapshot,
+source-SHA plus canonical-settings CAS, immutable backup, complete explicit-set
+apply, exact explicit/effective readback, idempotent replay, stale-CAS rejection,
+explicit restore, automatic rollback after corrupt readback, and all six Agent
+Key assignment slots. Its E2E path verifies `recent -> custom -> recent` and an
+exact baseline source SHA-256 after restore. This is bridge transaction evidence;
+released-Codex mutation begins when Codex installs the reference integration and
+supplies its exact settings replacer.
 
 For Input 0.18.0 and Codex Micro firmware v0.6.0,
 `input-bundled-device-kit-read-v1` has live read-only evidence over HID: the CLI

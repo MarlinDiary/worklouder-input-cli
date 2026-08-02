@@ -15,25 +15,41 @@ actions, and Input host actions to the currently installed Codex/Input builds.
 
 Provider selection follows this order:
 
-1. use the running Input app through the versioned
+1. use the running Codex app for Tier 1 through the versioned
+   [Codex Companion Bridge](codex-companion-bridge.md);
+2. use the running Input app through the versioned
    [Input Companion Bridge](companion-bridge.md);
-2. use the exact installed app's bundled device kit where a headless provider
+3. use the exact installed app's bundled device kit where a headless provider
    entry point is verified;
-3. use coordinated file adapters only for state that the app itself persists;
-4. preserve new/unknown fields and expose them through raw inspect/export;
-5. disable typed writes for a changed schema until its adapter fixtures pass.
+4. use coordinated file adapters only for state that the app itself persists;
+5. preserve new/unknown fields and expose them through raw inspect/export;
+6. disable typed writes for a changed schema until its adapter fixtures pass.
 
 This keeps firmware, transport fixes, new device support, and runtime behavior
 with the upstream applications while the CLI owns planning, validation, diff,
 automation, verification, and rollback.
 
-The bridge is the target transport for both reads and writes. It exposes an
+Each bridge is the target transport for its authority. It exposes an
 allowlisted JSON-RPC surface over a private Unix socket and dispatches through
-Input's existing service container. The CLI negotiates named capabilities, so
-Input can update its internal device kit and GUI without exposing those
+the owning application's existing services. The CLI negotiates named
+capabilities, so Codex/Input can update internal implementations and GUIs without exposing those
 implementation details as the public automation API.
 
-## Implemented Companion Bridge path
+## Implemented Codex Companion Bridge path
+
+The `codex-companion-bridge-v1` client authenticates to the running Codex main
+process over a user-only Unix socket. Its snapshot adapter delegates to Codex's
+`settings-read` and `get-global-state` handlers, validates the exact frozen
+definitions and all six Agent Key slots, and produces offline-editor-compatible
+snapshots. When Codex injects complete explicit-setting replacement, the bridge
+advertises apply/restore and serializes source-SHA plus settings-revision CAS,
+immutable backup, exact explicit/effective readback, idempotency, restore, and
+automatic rollback. The cross-language fixture verifies `recent -> custom ->
+recent` and exact source SHA recovery. Codex 26.727.51351 contains the internal
+handlers but does not yet ship the external listener, leaving released-app
+integration as the next upstream milestone.
+
+## Implemented Input Companion Bridge path
 
 The `input-companion-bridge-v1` client authenticates to the running Input main
 process over a user-only Unix socket. The reference server advertises exact

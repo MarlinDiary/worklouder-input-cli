@@ -23,13 +23,16 @@
 > `worklouderctl` binary with provider diagnostics, Codex Micro settings
 > inspection/export, Input inspection/exact-byte export, validation, structural
 > diff, live device status/file reads, verified device export, revisioned bridge
-> snapshots/CAS validation, offline profile/layer/AppSense/control/Action/Smart Action candidate generation,
-> fixture-verified apply/restore transactions, JSON output, and shell completions.
+> snapshots/CAS validation, offline profile/layer/AppSense/control/Action/Smart
+> Action candidate generation, fixture-verified Input and Codex apply/restore
+> transactions, live Codex Agent Key assignment snapshots, JSON output, and
+> shell completions.
 > There is no packaged release yet.
 > The bridge transaction engine now verifies backup, apply, idempotent retry,
 > readback, restore, and automatic rollback against an isolated writer fixture.
-> Installed-device mutation remains gated on a released, hardware-verified
-> Input writer adapter.
+> Released-app mutation remains gated on Codex/Input integrations that supply
+> verified complete-set writers; hardware mutation additionally requires exact
+> device rollback evidence.
 
 ## The short answer
 
@@ -87,6 +90,11 @@ worklouderctl doctor [--strict]
 worklouderctl codex doctor [--strict]
 worklouderctl codex inspect
 worklouderctl codex export --output CODEX_SNAPSHOT.json
+worklouderctl codex bridge inspect
+worklouderctl codex config snapshot --output CODEX_SNAPSHOT.json
+worklouderctl codex config apply --input CODEX_CANDIDATE.json --backup CODEX_BEFORE.json
+worklouderctl codex config restore --input CODEX_BEFORE.json --backup CODEX_CURRENT.json
+worklouderctl codex agent-key assignments
 worklouderctl codex agent-source get --input CODEX_SNAPSHOT.json
 worklouderctl codex agent-source set --input CODEX_SNAPSHOT.json priority --output CODEX_CANDIDATE.json
 worklouderctl codex agent-key tap-mode get --input CODEX_SNAPSHOT.json
@@ -179,9 +187,22 @@ snapshot. Neither command serializes unrelated Codex settings.
 strict offline Tier 1 editors. They validate the embedded frozen definitions,
 recompute effective settings and a recursive-key-sorted revision, preserve
 unknown `codex-micro-*` values, publish atomically, and reopen the result. Each
-receipt carries `expectedSourceSha256` for the future Codex `settings-write`
-CAS transaction; candidate generation leaves the source TOML and Codex runtime
-state unchanged.
+receipt carries `expectedSourceSha256` for the Codex `settings-write` CAS
+transaction; candidate generation leaves the source TOML and Codex runtime
+state unchanged. `codex config apply/restore` consumes those candidates through
+the authenticated Codex Companion Bridge with source-SHA and canonical
+settings-revision CAS, complete explicit-setting replacement, exact
+explicit/effective readback, immutable backup, session idempotency, and
+automatic rollback. `codex agent-key assignments` validates all six live slots
+and the command, Skill, task, keycap, and empty assignment shapes.
+
+The repository ships the reference Codex main-process adapter and Electron
+integration. The inspected Codex 26.727.51351 release exposes its internal
+`settings-read`, `settings-write`, and global-state handlers to its renderer but
+does not publish the external socket. Live mutations therefore remain behind
+the integration capability gate; the current end-to-end evidence uses the
+isolated same-contract fixture. See the
+[Codex Companion Bridge protocol](docs/codex-companion-bridge.md).
 
 `input inspect` is also read-only. `input export` copies the exact source bytes
 into an atomically published directory and records each file's size and SHA-256
@@ -302,6 +323,7 @@ cross-language Rust CLI conformance test:
 ```console
 node --test companion/input-main-bridge.test.mjs
 ./scripts/test-bridge-e2e.sh
+./scripts/test-codex-bridge-e2e.sh
 ```
 
 ## Additional planned mutation commands
@@ -388,14 +410,14 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Provider `doctor` and Input `inspect`/exact-byte `export`/semantic cache snapshot | Complete |
 | Bundle `validate` and structural `diff` | Complete |
 | Codex settings contract and TOML `doctor`/`inspect`/`export` | Complete |
-| Codex Agent source/tap mode and Command Key offline candidates | Complete; bridge apply pending |
+| Codex Agent source/tap mode and Command Key offline candidates | Complete; Codex bridge apply/restore fixture verified |
 | Input 0.18.0 live `device status`/`files`/verified `export` | Complete |
 | Read-only Input process coordination and automatic reopen | Complete |
 | Companion Bridge v1 contract, CLI client, and reference server | Complete |
 | Bridge config snapshot, deterministic revision, and live CAS preflight | Complete |
 | Bridge apply/restore transaction and automatic rollback fixture | Complete |
 | Companion Bridge integration in a released Input build | Upstream integration pending |
-| Codex live settings-bridge write client | Planned |
+| Codex Companion Bridge client/reference integration | Complete; released Codex integration pending |
 | Semantic profile/layer candidates | Full lifecycle, selection, ordering, color, and lighting candidate-verified; combined profile-create/layer-create/lighting apply/readback/restore fixture-verified |
 | Semantic physical controls | List/show/set for keys, encoder gestures, and existing joystick sectors; candidate/apply/restore fixture-verified |
 | Semantic Actions | List/show/create/rename/delete and event add/set/delete/move; cascade/apply/restore fixture-verified |
@@ -445,6 +467,7 @@ Read the complete [FAQ](docs/faq.md).
 - [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)
 - [Input live device read contract](docs/research/2026-08-02-input-live-read-contract.md)
 - [Input Companion Bridge protocol](docs/companion-bridge.md)
+- [Codex Companion Bridge protocol](docs/codex-companion-bridge.md)
 - [Frequently asked questions](docs/faq.md)
 - [Compatibility and support policy](docs/compatibility.md)
 - [Companion architecture](docs/architecture.md)

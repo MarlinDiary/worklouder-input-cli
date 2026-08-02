@@ -23,10 +23,10 @@ parity contract.
 
 | GUI surface | Configuration coverage | Planned command family | Current status |
 | --- | --- | --- | --- |
-| Agent source | pinned, recent, priority, custom | `codex agent-source get/set` | strict offline candidate verified; bridge apply pending |
-| Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key get/set/clear` | researched |
-| Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | strict offline candidate verified; bridge apply pending |
-| Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; bridge apply pending |
+| Agent source | pinned, recent, priority, custom | `codex agent-source get/set` | strict candidate plus bridge `recent -> custom -> recent` apply/readback/restore fixture verified |
+| Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key assignments`, future set/clear | six-slot bridge snapshot and every assignment shape verified; mutation pending |
+| Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | strict offline candidate verified; generic complete-settings bridge transaction verified |
+| Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; generic complete-settings bridge transaction verified |
 | Voice button | push-to-talk, Voice Chat | `codex voice get/set` | researched |
 | Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | researched |
 | Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | researched |
@@ -34,15 +34,19 @@ parity contract.
 | Lighting brightness | integer 0–100 | `codex lighting brightness get/set` | researched |
 | Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | researched |
 | Layout reset | installed-build default layout | `codex reset layout` | researched |
-| Full object | export, validate, diff, apply, restore | `codex export/diff/apply/restore` | adapter-pending |
+| Full object | export, validate, diff, apply, restore | `codex config snapshot/apply/restore`, future diff | authenticated snapshot/CAS/apply/readback/restore/rollback fixture verified; released Codex integration and diff pending |
 
 ### Tier 1 adapter
 
-Codex 26.727.51351 exposes `settings-read` and `settings-write` via the native
-`vscode://codex/` bridge. The renderer sends partial setting updates and then
-invalidates `get-settings`. The adapter must preserve every unmodified setting,
-validate the Codex Micro schema, coordinate the running app, and confirm that
-the runtime reloaded the new value.
+Codex 26.727.51351 exposes `settings-read`, `settings-write`, and global-state
+handlers via the native `vscode://codex/` bridge. The reference Codex Companion
+Bridge delegates to those handlers, freezes the settings and Agent Key schemas,
+and advertises writes only with injected complete explicit-setting replacement.
+Its transaction preserves every unmodified setting, compares source and
+canonical settings revisions, verifies exact explicit/effective readback, and
+restores the pre-mutation snapshot after any failure. The inspected released
+Codex build does not publish the external Unix socket, so released integration
+remains separate from fixture transaction evidence.
 
 ## Tier 2 — Input device configuration
 

@@ -50,6 +50,9 @@ physical control is visible there. It uses a versioned Codex settings adapter:
 worklouderctl codex inspect
 worklouderctl codex doctor
 worklouderctl codex export
+worklouderctl codex bridge inspect
+worklouderctl codex config snapshot|apply|restore
+worklouderctl codex agent-key assignments
 worklouderctl codex diff CONFIG
 worklouderctl codex agent-source get|set --input SNAPSHOT
 worklouderctl codex agent-key get|set|clear AG00
@@ -63,10 +66,12 @@ worklouderctl codex apply CONFIG
 worklouderctl codex restore BACKUP_ID
 ```
 
-The inspected Codex build exposes `settings-read` and `settings-write` through
-its native settings bridge. The adapter uses that validated bridge when Codex
-is running and a separately verified storage adapter for coordinated offline
-transactions. Direct Chromium LevelDB editing is excluded from the design.
+The inspected Codex build exposes `settings-read`, `settings-write`, and
+global-state handlers through its native renderer bridge. The authenticated
+Codex Companion Bridge reference integration delegates to those authorities;
+the released build does not yet publish its external Unix socket. The CLI also
+uses a separately verified storage adapter for offline snapshot/candidate
+generation. Direct Chromium LevelDB editing is excluded from the design.
 
 ## Tier 2 — Input device configuration
 

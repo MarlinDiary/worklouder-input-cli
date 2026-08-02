@@ -2,7 +2,7 @@
 
 > WorkLouderCTL is an unofficial, open-source full-configuration CLI being built for Codex, Work Louder Input, and Codex Micro. It targets complete configuration-GUI parity with safe inspection, diff, backup, verified apply, synchronization, and rollback for humans, scripts, and AI agents.
 
-Important: the project is currently a source alpha. The repository builds a working `worklouderctl` binary with read-only Codex/Input inspection, live Codex Micro status/files, and verified exports, but there is no packaged release yet. Mutation examples describe the target interface.
+Important: the project is currently a source alpha. The repository builds a working `worklouderctl` binary with Codex/Input inspection, offline semantic candidate editors, authenticated Codex/Input bridge clients, fixture-verified apply/readback/restore/rollback, live Codex Micro status/files, and verified exports, but there is no packaged release yet.
 
 ## Core documentation
 
@@ -15,6 +15,7 @@ Important: the project is currently a source alpha. The repository builds a work
 - [2026-08-02 audit](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/research/2026-08-02-codex-micro-audit.md): frozen app, firmware, state, protocol, and rollback evidence
 - [Compatibility](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/compatibility.md): version and evidence policy
 - [Architecture](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/architecture.md): device, cache, database, transaction, and rollback model
+- [Codex Companion Bridge](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/codex-companion-bridge.md): authenticated Tier 1 settings and Agent Key transaction protocol
 - [Roadmap](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/roadmap.md): implementation milestones
 
 ## Canonical facts
@@ -31,12 +32,13 @@ Important: the project is currently a source alpha. The repository builds a work
 - Non-goal: implementing a replacement hardware driver or firmware protocol
 - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
 - Current maturity: source alpha; read paths and isolated bridge apply/restore transaction conformance implemented; no packaged release
-- Current Codex commands: `codex doctor`, `codex inspect`, and atomic typed `codex export`
-- Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, and `codex command-key` provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; live `settings-write` apply remains pending
+- Current Codex commands: `codex doctor/inspect/export`, `codex bridge inspect`, `codex config snapshot/apply/restore`, and six-slot `codex agent-key assignments`
+- Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, and `codex command-key` provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; the Codex Companion Bridge fixture verifies complete settings apply/readback/restore/rollback while released-Codex integration remains pending
 - Input cache command: `input config snapshot` captures `keymap.json` plus optional `smart_actions.json` byte-for-byte, excludes host-only state, and emits a bridge-revision-equivalent semantic snapshot without controlling the Input GUI or device transport
 - Primary device transport: authenticated Input Companion Bridge v1 over a private Unix socket; Rust client, one-call Input-main integration, release conformance command, and cross-language tests are implemented
 - Bridge config commands: deterministic byte-exact snapshot/validate plus capability-gated apply/restore with immutable CLI backup, CAS, session idempotency, full readback, and automatic rollback
 - Released Input integration: pending; Input 0.18.0 has no external bridge transport
+- Released Codex integration: pending; Codex 26.727.51351 has internal settings/global-state handlers but no external bridge listener
 - Direct compatibility transport: `device status`, `device files`, and dual-hash atomic `device export` through Input 0.18.0's bundled device kit with `require-closed` or explicit `restart`
 - Safety model: inspect, plan, diff, backup, conflict check, apply, readback, checksum verification, synchronize, rollback
 - Agent model: deterministic JSON over the same transaction engine as the human CLI

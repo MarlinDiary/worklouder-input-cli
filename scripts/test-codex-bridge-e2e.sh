@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+REPO="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+cd "$REPO"
 ROOT="$(mktemp -d "${TMPDIR:-/tmp}/worklouderctl-codex-e2e.XXXXXX")"
-BIN="${WORKLOUDERCTL_BIN:-./target/release/worklouderctl}"
+if [[ -n "${WORKLOUDERCTL_BIN:-}" ]]; then
+  BIN="$WORKLOUDERCTL_BIN"
+else
+  cargo build --locked
+  BIN="$REPO/target/debug/worklouderctl"
+fi
 SOCKET="$ROOT/bridge.sock"
 TOKEN="$ROOT/bridge.token"
 SERVER_PID=""

@@ -252,7 +252,7 @@ pub fn inspect(config_path: &Path, app_path: &Path) -> Result<Snapshot> {
         schema_version: SNAPSHOT_SCHEMA_VERSION,
         kind: SNAPSHOT_KIND.into(),
         adapter: contract.storage.adapter,
-        contract_app_version: contract.app_version.clone(),
+        contract_app_version: contract.app_version,
         installed_app_version,
         source_path: config_path.to_path_buf(),
         source_sha256: source_after,
