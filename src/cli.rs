@@ -16,6 +16,40 @@ pub struct Cli {
 pub enum Command {
     /// Print CLI version information.
     Version,
+
+    /// Inspect the configuration authority tiers.
+    Tier {
+        #[clap(subcommand)]
+        command: TierCommand,
+    },
+
+    /// Inspect capabilities covered by the CLI contract.
+    Capability {
+        #[clap(subcommand)]
+        command: CapabilityCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum TierCommand {
+    /// List all configuration tiers.
+    List,
+
+    /// Explain one configuration tier.
+    Explain {
+        /// Tier number (1 through 4).
+        id: u8,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CapabilityCommand {
+    /// List capabilities, optionally filtered by tier.
+    List {
+        /// Only show capabilities owned by this tier.
+        #[clap(long)]
+        tier: Option<u8>,
+    },
 }
 
 pub fn parse_from<I, T>(args: I) -> Cli
