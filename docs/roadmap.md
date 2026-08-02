@@ -34,6 +34,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] One-call Input main-process integration and release conformance command
 - [x] Cross-language bridge status/files/export conformance test
 - [x] Revisioned config snapshot and live compare-and-swap validation
+- [x] Fixture-verified bridge apply/restore, idempotent retry, and auto rollback
 - [ ] Integrate the bridge adapter into an official Input release
 - [x] Structural `validate` and `diff`
 - [x] JSON output

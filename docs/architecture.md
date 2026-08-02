@@ -41,10 +41,15 @@ capabilities and serializes all device operations through an injected Input
 service adapter. Status, file list, file read, exact-byte export, device SHA-1,
 host SHA-256, typed readback, atomic publication, revisioned configuration
 snapshots, and live compare-and-swap validation pass a cross-language
-conformance test. The repository also packages a one-call Electron main-process
-integration and a read-only release conformance command. Input 0.18.0 does not
-yet ship this server, so released-app integration remains a separate upstream
-milestone.
+conformance test. The same fixture verifies immutable pre-mutation backup,
+apply, session-scoped idempotent replay, stale-revision rejection, complete
+readback, restore, and automatic rollback after a failed readback. Write
+capabilities appear only when Input injects a verified complete-set
+`configurationWriter`; read-only integrations do not advertise them. The
+repository also packages a one-call Electron main-process integration and a
+read-only release conformance command. Input 0.18.0 does not yet ship this
+server or writer, so released-app integration and hardware rollback remain a
+separate upstream milestone.
 
 ## Implemented direct compatibility path
 

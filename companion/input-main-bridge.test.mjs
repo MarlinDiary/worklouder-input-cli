@@ -283,6 +283,16 @@ test("Input adapter applies, replays, rejects stale CAS, and restores", async ()
     adapter.applyConfig({
       deviceId: "device-transaction",
       expectedRevision: baseline.revision,
+      idempotencyKey: "apply-transaction-1",
+      config: baseline,
+    }),
+    (error) => error.code === -32602,
+  );
+
+  await assert.rejects(
+    adapter.applyConfig({
+      deviceId: "device-transaction",
+      expectedRevision: baseline.revision,
       idempotencyKey: "apply-stale-revision",
       config: candidate,
     }),
@@ -301,6 +311,14 @@ test("Input adapter applies, replays, rejects stale CAS, and restores", async ()
     deviceId: "device-transaction",
   });
   assert.equal(restored.revision, baseline.revision);
+  const noOp = await adapter.restoreConfig({
+    deviceId: "device-transaction",
+    expectedRevision: baseline.revision,
+    idempotencyKey: "restore-no-op",
+    snapshot: baseline,
+  });
+  assert.equal(noOp.changed, false);
+  assert.deepEqual(writerCalls, ["apply", "restore"]);
 });
 
 test("Input adapter automatically restores the pre-mutation snapshot", async () => {

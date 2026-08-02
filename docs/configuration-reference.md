@@ -119,6 +119,10 @@ worklouderctl device --transport bridge files [--path PATH] [--recursive]
 worklouderctl device --transport bridge export --output DIRECTORY
 worklouderctl device --transport bridge config snapshot --output SNAPSHOT.json
 worklouderctl device --transport bridge config validate --input SNAPSHOT.json
+worklouderctl device --transport bridge config apply \
+  --input CANDIDATE.json --backup PRE_APPLY.json
+worklouderctl device --transport bridge config restore \
+  --input ORIGINAL.json --backup PRE_RESTORE.json
 ```
 
 Input owns the connected session and serializes requests through its existing
@@ -130,6 +134,13 @@ and `config diff`. The config snapshot command adds exact base64 content and a
 deterministic full-configuration revision. Validation recomputes sizes, both
 digests, and the revision; `--expected-revision` enables a live read-only
 compare-and-swap preflight.
+
+Apply and restore use the same complete snapshot envelope. The CLI creates or
+reopens an immutable pre-mutation backup, while Input owns serialized CAS,
+idempotency, complete-set replacement, readback, and automatic rollback. These
+mutation behaviors pass the isolated cross-language writer fixture; an
+installed Input version must advertise the corresponding capabilities before
+the commands run against a device.
 
 Input 0.18.0 does not yet ship the bridge. The verified direct compatibility
 path remains available as:

@@ -9,9 +9,9 @@
 > **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
 > provider 诊断、Codex Micro 设置检查/导出、Input 只读检查/原字节导出、
 > live device status/files、双哈希验证导出、带 revision 的 bridge snapshot、
-> live CAS 校验、结构化 diff、JSON 输出和 shell
-> completion。尚未发布打包版本；配置
-> 写入会等 provider transaction 与 rollback 完整验证后再开放。
+> live CAS 校验、fixture 验证的 apply/restore transaction、结构化 diff、JSON 输出和 shell
+> completion。尚未发布打包版本；bridge transaction 已通过隔离 writer fixture
+> 验证，真实设备写入仍以 Input writer adapter 与硬件 rollback 验证为启用条件。
 
 ## 简单来说，它是什么？
 
@@ -64,6 +64,8 @@ worklouderctl device --transport bridge files --recursive
 worklouderctl device --transport bridge export --output DEVICE_BACKUP
 worklouderctl device --transport bridge config snapshot --output CONFIG.json
 worklouderctl device --transport bridge config validate --input CONFIG.json
+worklouderctl device --transport bridge config apply --input CONFIG.json --backup BEFORE.json
+worklouderctl device --transport bridge config restore --input BEFORE.json --backup CURRENT.json
 worklouderctl device --transport direct --input-mode require-closed status
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
@@ -95,6 +97,10 @@ typed manifest 和文件后，再原子发布目录。
 bridge 专用的 `device config snapshot` 还会保存精确 base64 字节和确定性
 revision；`device config validate` 会重算 size、双哈希与 revision，配合
 `--expected-revision REVISION` 可对 live device 做只读 CAS 预检。
+`device config apply/restore` 会创建或复用 immutable backup，并由 Input 执行
+CAS、session-scoped idempotency、完整 revision readback 与 automatic rollback。
+只有运行中的 Input 注入已验证 writer 时，bridge 才会公布这两个写能力；当前
+跨语言证据来自隔离 reference writer。
 
 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
 adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
@@ -152,10 +158,11 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 
 ## 当前进度
 
-仓库目前处于只读 source-alpha 阶段。Codex TOML read adapter 的
+仓库目前处于 transaction source-alpha 阶段。Codex TOML read adapter 的
 `doctor`、`inspect`、`export`，以及 Input 0.18.0 live device 的 `status`、
 `files`、双哈希 `export`、Companion Bridge v1 contract/client/reference server、
-revisioned config snapshot、live CAS 预检和 Input 自动恢复已经实现；Input
+revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
+Input 自动恢复已经实现；Input
 release 集成、可安装 binary、Homebrew formula、
 Codex live settings bridge 写入与完整写入命令将在对应 transaction 和真实硬件
 readback 验证后发布。

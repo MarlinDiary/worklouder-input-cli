@@ -103,7 +103,8 @@
         "expectedRevision",
         "idempotencyKey",
         "config"
-      ]
+      ],
+      "resultKind": "worklouder-input-config-mutation"
     },
     {
       "name": "device.config.restore",
@@ -114,7 +115,8 @@
         "expectedRevision",
         "idempotencyKey",
         "snapshot"
-      ]
+      ],
+      "resultKind": "worklouder-input-config-mutation"
     }
   ],
   "errors": {
@@ -131,9 +133,35 @@
     "serializedByInput": true,
     "compareAndSwapRevision": true,
     "idempotencyRequired": true,
+    "idempotencyScope": "Input-process-session",
+    "idempotencyConflict": "same key with different operation, device, expected revision, or target revision is invalid",
     "snapshotBeforeApply": true,
     "readbackAfterApply": true,
     "rollbackOnFailure": true
+  },
+  "mutationResult": {
+    "schemaVersion": 1,
+    "kind": "worklouder-input-config-mutation",
+    "fields": [
+      "operation",
+      "idempotencyKey",
+      "idempotentReplay",
+      "changed",
+      "rollbackPerformed",
+      "deviceId",
+      "beforeRevision",
+      "afterRevision",
+      "targetRevision",
+      "fileCount",
+      "totalBytes"
+    ]
+  },
+  "configurationWriter": {
+    "capabilityAdvertisement": "apply and restore are advertised only when replaceConfiguration is injected",
+    "replaceSemantics": "complete configuration file set",
+    "requiredOwnership": "Input existing device queue and state synchronization",
+    "requiredReadback": "device.config.snapshot revision must equal target revision",
+    "automaticRollback": "replace complete pre-mutation snapshot and verify its revision"
   },
   "configurationSnapshots": {
     "schemaVersion": 1,

@@ -78,6 +78,11 @@ The Input Companion Bridge keeps Input as the only owner of the device session.
 CLI requests enter Input through a private authenticated Unix socket and use
 the same service container and serialized device queue as GUI requests.
 
+Write capabilities are advertised only when that Input version injects a
+verified complete-configuration writer. The CLI then takes an immutable backup
+and Input performs CAS, idempotent apply, full readback, and automatic rollback
+inside the same serialized bridge session.
+
 Until a released Input build includes that bridge, the direct compatibility
 transport keeps `require-closed` as its default. Its explicit `restart` mode
 performs the older graceful quit/read/reopen cycle.

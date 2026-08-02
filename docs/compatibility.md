@@ -16,7 +16,7 @@ not a public support guarantee.
 | Codex app | 26.727.51351 | Exact Tier 1 settings read adapter verified |
 | Work Louder Input | 0.17.3 | Earlier schema fixture |
 | Work Louder Input | 0.18.0 | Exact bundled-kit live read adapter verified |
-| Input Companion Bridge | Protocol v1 | Client/reference server, revisioned snapshot, and live CAS conformance verified; released Input integration pending |
+| Input Companion Bridge | Protocol v1 | Snapshot/CAS/apply/replay/restore/rollback fixture conformance verified; released Input writer pending |
 | Codex Micro firmware | v0.6.0 | Live status/files/export read boundary verified |
 | USB | Observed | Release verification pending |
 | Bluetooth | Observed | Live read boundary verified; mutation pending |
@@ -76,6 +76,11 @@ The current isolated cross-language fixture additionally verifies exact base64
 snapshot bytes, device SHA-1, host SHA-256, an independently recomputed
 deterministic revision, and a live compare-and-swap preflight. This is bridge
 contract evidence rather than a released Input 0.18.0 capability claim.
+The fixture writer also verifies complete apply readback, idempotent replay
+without a second write, stale-CAS rejection, explicit restore, and automatic
+rollback after a corrupt readback. These are transaction-engine claims; they do
+not extend the Input 0.18.0 hardware boundary until an exact writer adapter and
+real-device restore test pass.
 
 ## Adding support
 

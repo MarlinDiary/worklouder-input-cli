@@ -23,10 +23,12 @@
 > `worklouderctl` binary with provider diagnostics, Codex Micro settings
 > inspection/export, Input inspection/exact-byte export, validation, structural
 > diff, live device status/file reads, verified device export, revisioned bridge
-> snapshots/CAS validation, JSON output, and
+> snapshots/CAS validation, fixture-verified apply/restore transactions, JSON output, and
 > shell completions. There is no packaged release yet.
-> Configuration mutation remains gated until its provider transactions and
-> rollback are verified.
+> The bridge transaction engine now verifies backup, apply, idempotent retry,
+> readback, restore, and automatic rollback against an isolated writer fixture.
+> Installed-device mutation remains gated on a released, hardware-verified
+> Input writer adapter.
 
 ## The short answer
 
@@ -92,6 +94,8 @@ worklouderctl device --transport bridge files --recursive
 worklouderctl device --transport bridge export --output DEVICE_BACKUP
 worklouderctl device --transport bridge config snapshot --output CONFIG.json
 worklouderctl device --transport bridge config validate --input CONFIG.json
+worklouderctl device --transport bridge config apply --input CONFIG.json --backup BEFORE.json
+worklouderctl device --transport bridge config restore --input BEFORE.json --backup CURRENT.json
 worklouderctl device --transport direct --input-mode require-closed status
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
@@ -127,6 +131,11 @@ The bridge-only `device config snapshot` command additionally records exact
 base64 bytes and a deterministic revision. `device config validate` recomputes
 every size and digest; `--expected-revision REVISION` also checks the current
 live revision as a read-only compare-and-swap preflight.
+`device config apply/restore` create or reopen immutable backups and route a
+complete-set transaction through Input with CAS, session-scoped idempotency,
+full revision readback, and automatic rollback. These commands are advertised
+only when the running Input version supplies a verified configuration writer;
+the current cross-language evidence uses the isolated reference writer.
 
 The repository includes an executable Input-main reference server, a service
 adapter for the Input 0.18.0 service shape, authentication tests, and a
@@ -226,10 +235,11 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Read-only Input process coordination and automatic reopen | Complete |
 | Companion Bridge v1 contract, CLI client, and reference server | Complete |
 | Bridge config snapshot, deterministic revision, and live CAS preflight | Complete |
+| Bridge apply/restore transaction and automatic rollback fixture | Complete |
 | Companion Bridge integration in a released Input build | Upstream integration pending |
 | Codex live settings-bridge write client | Planned |
 | Semantic profile/layer/control commands | Planned |
-| Verified device mutation and rollback | Planned |
+| Real-device mutation and rollback | Planned |
 | Input cache/database and Smart Actions synchronization | Planned |
 | Signed macOS release and Homebrew installation | Planned |
 

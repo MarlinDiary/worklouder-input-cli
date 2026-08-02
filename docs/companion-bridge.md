@@ -128,6 +128,33 @@ authority fails to synchronize.
 This makes the GUI and CLI two clients of the same transaction owner rather
 than two independent writers.
 
+The CLI always captures or reopens an immutable pre-mutation backup before it
+sends a mutation. Repeating the exact command with the same backup and
+idempotency key returns the cached Input-session result without a second write.
+Reusing the key with a different operation, device, expected revision, or
+target revision is rejected.
+
+```sh
+worklouderctl device config apply \
+  --input candidate.json --backup pre-apply.json \
+  --expected-revision REVISION --idempotency-key RETRY_KEY
+
+worklouderctl device config restore \
+  --input original.json --backup pre-restore.json \
+  --expected-revision CURRENT_REVISION --idempotency-key RESTORE_KEY
+```
+
+Input advertises these methods only when its version adapter injects a
+`configurationWriter.replaceConfiguration` implementation. The writer must
+replace the complete file set through Input's own serialized queue and finish
+its state synchronization before returning. The bridge then performs a fresh
+full snapshot and revision readback. A writer/readback failure triggers a full
+pre-mutation restore plus another revision readback.
+
+The reference writer and cross-language fixture verify this transaction model.
+Enabling it for an installed Input release remains a separate version-adapter
+and real-device rollback milestone.
+
 ## Update compatibility
 
 Protocol and application versions are independent:

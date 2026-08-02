@@ -17,6 +17,12 @@ const companionBridge = await installInputCompanionBridge({
   app,
   services: {
     devicesCommManager,
+    configurationWriter: {
+      async replaceConfiguration({ device, files, operation, targetRevision }) {
+        // Route the complete file set through Input's existing queue and
+        // synchronize every Input-owned state authority before returning.
+      },
+    },
   },
   deviceKitVersion: DEVICE_KIT_VERSION,
   bridgeVersion: "0.1.0",
@@ -34,6 +40,18 @@ uses the same `info`, `isConnected()`, and `rpcService` object already consumed
 by Input's main-process handlers. No minified class names or packaged offsets
 cross this integration boundary.
 
+`configurationWriter` is optional. When it is absent, the bridge advertises
+only read, snapshot, and validation capabilities. When present, it must replace
+the complete configuration file set through Input's existing serialized device
+queue and finish any cache/database synchronization before returning. Only then
+does the bridge advertise `device.config.apply.v1` and
+`device.config.restore.v1`.
+
+The reference adapter owns the surrounding transaction: validate every byte
+and digest, capture a pre-mutation snapshot, compare the live revision, invoke
+the writer, read back the complete revision, and automatically restore and
+verify the pre-mutation snapshot after any writer or readback failure.
+
 ## Release conformance
 
 Once the main process has installed the bridge, verify authentication,
@@ -43,7 +61,9 @@ permissions, protocol, session identity, health, and required capabilities:
 node companion/conformance.mjs \
   --require device.status.v1 \
   --require device.files.list.v1 \
-  --require device.files.read.v1
+  --require device.files.read.v1 \
+  --require device.config.apply.v1 \
+  --require device.config.restore.v1
 ```
 
 Nonstandard paths can be supplied with `--socket` and `--token`, or with
@@ -60,4 +80,6 @@ npm --prefix companion test
 The first command checks server, adapter, lifecycle, authentication, and path
 ownership. The second starts an isolated fixture and verifies the Node
 conformance command plus the Rust CLI handshake, live status, file list, exact
-export, and dual-hash readback.
+export, dual-hash readback, apply, idempotent replay, stale-revision rejection,
+restore, and final revision recovery. All mutation conformance runs against the
+isolated fixture writer.

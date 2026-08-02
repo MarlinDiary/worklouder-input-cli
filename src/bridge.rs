@@ -606,6 +606,13 @@ fn validate_mutation_response(
         "bridge mutation readback did not match the candidate revision"
     );
     ensure!(
+        response.changed
+            != response
+                .before_revision
+                .eq_ignore_ascii_case(&response.target_revision),
+        "bridge returned an inconsistent changed flag"
+    );
+    ensure!(
         response.file_count == candidate.file_count
             && response.total_bytes == candidate.total_bytes,
         "bridge mutation result did not match candidate metadata"
