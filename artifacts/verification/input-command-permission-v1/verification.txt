@@ -182,10 +182,10 @@ The isolated rollback execution is appended after the artifact commit.
 Isolated rollback execution
 ---------------------------
 Artifact commit:
-  fe10284
+  55ba557
 Command:
   artifacts/verification/input-command-permission-v1/rollback.sh \
-    /tmp/worklouderctl-input-command-permission-v1.mceNKK/rollback-worktree.3GsvbH
+    /tmp/worklouderctl-input-command-permission-v1.VA1IAC/current-rollback-worktree.oq5oTG
 Literal output:
   rollback=verified
   base=2b2a6e275a799c1e79cc89a9025e4b7bcbfc1b62
