@@ -37,3 +37,7 @@ jobs:
         run: cargo test --locked
       - name: Lint
         run: cargo clippy --all-targets -- -D warnings
+      - name: Test Input Companion Bridge reference server
+        run: node --test companion/input-main-bridge.test.mjs
+      - name: Test bridge CLI end to end
+        run: ./scripts/test-bridge-e2e.sh

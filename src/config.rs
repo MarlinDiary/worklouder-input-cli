@@ -1,3 +1,4 @@
+use crate::bridge::ADAPTER as BRIDGE_ADAPTER;
 use crate::device::{self, ADAPTER as DEVICE_ADAPTER, EXPORT_KIND as DEVICE_EXPORT_KIND};
 use crate::fsutil;
 use crate::input::{self, BUNDLE_KIND, BUNDLE_SCHEMA_VERSION};
@@ -204,9 +205,9 @@ fn validate_device_bundle(bundle: &Path) -> Result<ValidationReport> {
         },
         ValidationCheck {
             id: "manifest.adapter".into(),
-            valid: manifest.adapter == DEVICE_ADAPTER,
+            valid: manifest.adapter == DEVICE_ADAPTER || manifest.adapter == BRIDGE_ADAPTER,
             summary: format!(
-                "adapter is {} (expected {DEVICE_ADAPTER})",
+                "adapter is {} (expected {DEVICE_ADAPTER} or {BRIDGE_ADAPTER})",
                 manifest.adapter
             ),
         },
