@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worklouderctl.dev/schemas/release-archive-v1.schema.json",
+  "title": "WorkLouderCTL release archive manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "version", "target", "signatureState", "files"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "worklouderctl-release-archive" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
+    "target": { "enum": ["aarch64-apple-darwin", "x86_64-apple-darwin"] },
+    "signatureState": { "enum": ["unsigned", "apple-development", "developer-id", "developer-id-notarized"] },
+    "files": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": { "$ref": "#/$defs/file" }
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size", "sha256", "mode"],
+      "properties": {
+        "path": {
+          "enum": [
+            "bin/worklouderctl",
+            "completions/worklouderctl.bash",
+            "completions/_worklouderctl",
+            "completions/worklouderctl.fish",
+            "LICENSE",
+            "README.md"
+          ]
+        },
+        "size": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "mode": { "enum": ["0644", "0755"] }
+      }
+    }
+  }
+}

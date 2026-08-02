@@ -11,6 +11,7 @@ worklouderctl --json schema show backup-inspection-v1
 worklouderctl --json schema show command-envelope-v1
 worklouderctl --json schema show configuration-v1
 worklouderctl --json schema show input-operations-v1
+worklouderctl --json schema show release-archive-v1
 worklouderctl --json schema show transaction-v1
 worklouderctl --json schema show error-v1
 ```
@@ -28,6 +29,7 @@ use JSON Schema Draft 2020-12.
 | `transaction-v1` | coordinated plan, transaction receipt, and private backup catalog |
 | `error-v1` | typed JSON error written to stderr |
 | `input-operations-v1` | Input permission/firmware status, immutable firmware/reset/recovery plans, verified receipts, and sanitized diagnostic log bundle |
+| `release-archive-v1` | deterministic macOS archive target, signature state, file modes, sizes, and SHA-256 records |
 
 Schemas are additive within a version. A field removal, changed meaning, or
 stricter accepted value creates a new registry name and `$id`. Unknown

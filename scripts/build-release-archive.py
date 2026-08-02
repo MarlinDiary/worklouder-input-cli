@@ -48,6 +48,8 @@ def main():
         default="unsigned",
     )
     args = parser.parse_args()
+    if args.target not in {"aarch64-apple-darwin", "x86_64-apple-darwin"}:
+        raise SystemExit("release target was unsupported")
 
     repo = Path(__file__).resolve().parent.parent
     cargo = (repo / "Cargo.toml").read_text()
@@ -65,6 +67,29 @@ def main():
     expected = f"worklouderctl {version}\n"
     if reported.stdout != expected or reported.stderr:
         raise SystemExit("binary version output did not match Cargo.toml")
+    if args.signature_state != "unsigned":
+        subprocess.run(
+            ["codesign", "--verify", "--strict", "--verbose=2", str(binary)],
+            check=True,
+        )
+        signature = subprocess.run(
+            ["codesign", "-d", "--verbose=4", str(binary)],
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        expected_authority = (
+            "Authority=Apple Development:"
+            if args.signature_state == "apple-development"
+            else "Authority=Developer ID Application:"
+        )
+        if expected_authority not in signature.stderr:
+            raise SystemExit("binary signing authority did not match signature state")
+    if args.signature_state == "developer-id-notarized":
+        subprocess.run(
+            ["spctl", "--assess", "--type", "execute", "--verbose=4", str(binary)],
+            check=True,
+        )
 
     root = f"worklouderctl-v{version}-{args.target}"
     sources = [

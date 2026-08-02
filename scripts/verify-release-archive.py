@@ -59,7 +59,10 @@ def main():
             raise SystemExit("archive root or file inventory was invalid")
         manifest = json.loads(archive.extractfile(by_relative["manifest.json"]).read())
         if (
-            manifest.get("schemaVersion") != 1
+            set(manifest)
+            != {"schemaVersion", "kind", "version", "target", "signatureState", "files"}
+            or not isinstance(manifest.get("files"), list)
+            or manifest.get("schemaVersion") != 1
             or manifest.get("kind") != "worklouderctl-release-archive"
             or manifest.get("signatureState")
             not in {
@@ -72,8 +75,15 @@ def main():
             raise SystemExit("release manifest header was invalid")
         if args.expected_target and manifest.get("target") != args.expected_target:
             raise SystemExit("release target differed from expectation")
-        records = {record["path"]: record for record in manifest.get("files", [])}
-        if set(records) != set(EXPECTED_PATHS):
+        records = {record["path"]: record for record in manifest["files"]}
+        if (
+            len(records) != len(manifest["files"])
+            or set(records) != set(EXPECTED_PATHS)
+            or any(
+                set(record) != {"path", "size", "sha256", "mode"}
+                for record in manifest["files"]
+            )
+        ):
             raise SystemExit("release manifest inventory was invalid")
         for relative, expected_mode in EXPECTED_PATHS.items():
             member = by_relative[relative]

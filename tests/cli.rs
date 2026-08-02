@@ -205,6 +205,7 @@ fn schemas_are_discoverable_and_machine_readable() {
             "configuration-v1",
             "error-v1",
             "input-operations-v1",
+            "release-archive-v1",
             "transaction-v1",
         ]
     );

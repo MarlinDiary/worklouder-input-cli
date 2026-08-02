@@ -61,9 +61,6 @@ jobs:
           test -n "$CERTIFICATE_P12_BASE64"
           test -n "$CERTIFICATE_PASSWORD"
           test -n "$SIGNING_IDENTITY"
-          matches=$(security find-identity -v -p codesigning | \
-            grep -F 'Developer ID Application' | grep -F -c "$SIGNING_IDENTITY" || true)
-          test "$matches" -eq 1
           keychain="$RUNNER_TEMP/worklouderctl-signing.keychain-db"
           password=$(openssl rand -hex 24)
           security create-keychain -p "$password" "$keychain"
@@ -82,6 +79,9 @@ jobs:
           security list-keychains -d user -s "$keychain" login.keychain-db
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$password" "$keychain"
+          matches=$(security find-identity -v -p codesigning "$keychain" | \
+            grep -F 'Developer ID Application' | grep -F -c "$SIGNING_IDENTITY" || true)
+          test "$matches" -eq 1
           codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" \
             "target/${{ matrix.target }}/release/worklouderctl"
           codesign --verify --strict --verbose=2 \

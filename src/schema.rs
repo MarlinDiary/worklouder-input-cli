@@ -10,6 +10,7 @@ const COMPATIBILITY_MATRIX: &str =
 const CONFIGURATION: &str = include_str!("../spec/schemas/configuration-v1.schema.json");
 const ERROR: &str = include_str!("../spec/schemas/error-v1.schema.json");
 const INPUT_OPERATIONS: &str = include_str!("../spec/schemas/input-operations-v1.schema.json");
+const RELEASE_ARCHIVE: &str = include_str!("../spec/schemas/release-archive-v1.schema.json");
 const TRANSACTION: &str = include_str!("../spec/schemas/transaction-v1.schema.json");
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -84,6 +85,14 @@ const ENTRIES: &[SchemaEntry] = &[
     },
     SchemaEntry {
         summary: SchemaSummary {
+            name: "release-archive-v1",
+            id: "https://worklouderctl.dev/schemas/release-archive-v1.schema.json",
+            description: "Deterministic macOS release archive manifest and signature state",
+        },
+        source: RELEASE_ARCHIVE,
+    },
+    SchemaEntry {
+        summary: SchemaSummary {
             name: "transaction-v1",
             id: "https://worklouderctl.dev/schemas/transaction-v1.schema.json",
             description: "Coordinated plan, receipt, and private backup catalog",
@@ -127,7 +136,7 @@ mod tests {
     #[test]
     fn registry_is_sorted_and_every_document_reopens() {
         let summaries = list();
-        assert_eq!(summaries.len(), 8);
+        assert_eq!(summaries.len(), 9);
         let names = summaries
             .iter()
             .map(|summary| summary.name)
