@@ -130,6 +130,32 @@ pub struct JoystickSectorEntry {
     pub a2: f64,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RadialMenuShow {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub profile_id: u64,
+    pub profile_name: String,
+    pub layer_id: u64,
+    pub layer_name: String,
+    pub sectors: Vec<RadialMenuSectorEntry>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RadialMenuSectorEntry {
+    pub index: usize,
+    pub assignment: String,
+    pub assignment_kind: &'static str,
+    pub label: String,
+    pub color: Option<String>,
+    pub icon: Option<String>,
+    pub a1: f64,
+    pub a2: f64,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum LightingZone {
     Backlight,
@@ -877,6 +903,45 @@ pub fn layer_joystick_show(
         layer_id,
         mode: object_string(joystick, "type", "layer joystick")?.to_owned(),
         sectors: joystick_sector_entries(joystick)?,
+    })
+}
+
+pub fn radial_menu_show(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+) -> Result<RadialMenuShow> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let profile = find_profile(&snapshot.keymap, selected_id)?;
+    let (_, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let layer = profile_layers(profile)?
+        .get(layer_index)
+        .context("layer disappeared during radial-menu lookup")?;
+    let joystick = layer_joystick(layer)?;
+    let mut sectors = Vec::new();
+    for sector in joystick_sector_entries(joystick)? {
+        let (label, color, icon) = radial_assignment_display(&snapshot, &sector.assignment)?;
+        sectors.push(RadialMenuSectorEntry {
+            index: sector.index,
+            assignment: sector.assignment,
+            assignment_kind: sector.assignment_kind,
+            label,
+            color,
+            icon,
+            a1: sector.a1,
+            a2: sector.a2,
+        });
+    }
+    Ok(RadialMenuShow {
+        schema_version: 1,
+        kind: "worklouderctl-radial-menu",
+        revision: snapshot.revision,
+        profile_id: selected_id,
+        profile_name: object_string(profile, "name", "profile")?.to_owned(),
+        layer_id,
+        layer_name: object_string(layer, "name", "layer")?.to_owned(),
+        sectors,
     })
 }
 
@@ -6071,6 +6136,43 @@ fn assignment_kind(token: &str) -> Result<&'static str> {
     }
 }
 
+fn radial_assignment_display(
+    snapshot: &SemanticSnapshot,
+    token: &str,
+) -> Result<(String, Option<String>, Option<String>)> {
+    match assignment_kind(token)? {
+        "action" => {
+            let id = reference_id(token, "KA_A")?.context("radial Action id was missing")?;
+            radial_resource_display(find_action(&snapshot.keymap, id)?, "Action")
+        }
+        "multiAction" => {
+            let id = reference_id(token, "KA_M")?.context("radial Multi Action id was missing")?;
+            radial_resource_display(find_multi_action(&snapshot.keymap, id)?, "Multi Action")
+        }
+        "smartAction" => {
+            let id = reference_id(token, "SA_")?.context("radial Smart Action id was missing")?;
+            radial_resource_display(
+                find_smart_action(snapshot.smart_actions()?, id)?,
+                "Smart Action",
+            )
+        }
+        "vendor" => Ok(("1".into(), None, None)),
+        "basic" | "internal" => Ok((token.to_owned(), None, None)),
+        kind => bail!("radial assignment kind {kind} was not supported"),
+    }
+}
+
+fn radial_resource_display(
+    resource: &Value,
+    kind: &str,
+) -> Result<(String, Option<String>, Option<String>)> {
+    Ok((
+        object_string(resource, "name", kind)?.to_owned(),
+        normalized_color_value(resource.get("color"))?,
+        optional_string(resource, "icon", kind)?.map(str::to_owned),
+    ))
+}
+
 fn for_each_assignment(layer: &Value, mut visit: impl FnMut(&str) -> Result<()>) -> Result<()> {
     let layout = match layer.get("layout") {
         Some(layout) => layout,
@@ -7833,6 +7935,13 @@ mod tests {
         assert_eq!(shown.mode, "RADIAL");
         assert_eq!(shown.sectors.len(), 2);
         assert_eq!(shown.sectors[0].assignment, "KA_A3");
+        let radial = radial_menu_show(&source, None, 0).unwrap();
+        assert_eq!(radial.profile_name, "Alpha");
+        assert_eq!(radial.layer_name, "Base");
+        assert_eq!(radial.sectors[0].label, "Fixture Action");
+        assert_eq!(radial.sectors[0].assignment_kind, "action");
+        assert_eq!(radial.sectors[1].label, "Fixture Multi");
+        assert_eq!(radial.sectors[1].assignment_kind, "multiAction");
 
         let receipt = layer_joystick_sector_add(&source, None, 0, 1, &added).unwrap();
         assert_eq!(

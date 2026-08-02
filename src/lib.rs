@@ -29,7 +29,7 @@ use cli::{
     LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand, LayerJoystickSectorCommand,
     LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
     MultiActionGroupCommand, MultiActionGroupMemberCommand, PresetCommand, ProfileCommand,
-    SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+    RadialCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
     SmartActionType as CliSmartActionType, TierCommand,
 };
 use serde::Serialize;
@@ -105,6 +105,7 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::SmartAction { command } => run_smart_action(command, cli.json, &mut out)?,
         Command::CheatSheet { command } => run_cheat_sheet(command, cli.json, &mut out)?,
         Command::Preset { command } => run_preset(command, cli.json, &mut out)?,
+        Command::Radial { command } => run_radial(command, cli.json, &mut out)?,
         Command::Appsense { command } => run_appsense(command, cli.json, &mut out)?,
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
@@ -188,6 +189,40 @@ fn run_preset(command: PresetCommand, json: bool, mut out: impl Write) -> Result
         } => {
             let result = semantic::preset_install(&input, &catalog, id, profile, &output)?;
             write_candidate_result(result, json, &mut out)?;
+        }
+    }
+    Ok(())
+}
+
+fn run_radial(command: RadialCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        RadialCommand::Show {
+            input,
+            profile,
+            layer,
+        } => {
+            let result = semantic::radial_menu_show(&input, profile, layer)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "profile={}\t{}\nlayer={}\t{}",
+                    result.profile_id, result.profile_name, result.layer_id, result.layer_name
+                )?;
+                for sector in result.sectors {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}\t{}\ta1={}\ta2={}",
+                        sector.index,
+                        sector.assignment_kind,
+                        sector.assignment,
+                        sector.label,
+                        sector.a1,
+                        sector.a2
+                    )?;
+                }
+            }
         }
     }
     Ok(())

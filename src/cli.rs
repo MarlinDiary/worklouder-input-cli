@@ -151,6 +151,12 @@ pub enum Command {
         command: PresetCommand,
     },
 
+    /// Inspect the Input-hosted joystick radial menu without opening its window.
+    Radial {
+        #[clap(subcommand)]
+        command: RadialCommand,
+    },
+
     /// Inspect or edit AppSense linked applications in an offline snapshot.
     Appsense {
         #[clap(subcommand)]
@@ -1671,6 +1677,19 @@ pub enum PresetCommand {
         profile: Option<u64>,
         #[clap(long, value_parser)]
         output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum RadialCommand {
+    /// Show radial sectors with the Action, Multi Action, or Smart Action labels Input resolves.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        layer: u64,
     },
 }
 
