@@ -1,0 +1,1035 @@
+diff --git a/README.md b/README.md
+index c21013d..d7c05e2 100644
+--- a/README.md
++++ b/README.md
+@@ -89,6 +89,7 @@ worklouderctl codex inspect
+ worklouderctl codex export --output CODEX_SNAPSHOT.json
+ worklouderctl input inspect [--device DEVICE_ID]
+ worklouderctl input export --output BACKUP_DIRECTORY
++worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
+ worklouderctl bridge status
+ worklouderctl device --transport bridge status
+ worklouderctl device --transport bridge files --recursive
+@@ -170,6 +171,10 @@ snapshot. Neither command serializes unrelated Codex settings.
+ `input inspect` is also read-only. `input export` copies the exact source bytes
+ into an atomically published directory and records each file's size and SHA-256
+ in `manifest.json`. It does not pause Input or write the device.
++`input config snapshot` reads the current Input cache without launching or
++controlling Input, captures `keymap.json` plus optional `smart_actions.json`
++byte-for-byte, excludes host-only `input_storage.json`, and publishes the same
++validated snapshot/revision core consumed by every offline semantic editor.
+ 
+ The primary `device` transport is the
+ [Input Companion Bridge](docs/companion-bridge.md). It authenticates over a
+@@ -185,10 +190,10 @@ driver. `--input-mode require-closed` reports contention. The explicit
+ the read; it never force-terminates Input.
+ `device export` verifies the device SHA-1 and host SHA-256 for every file,
+ reopens the typed manifest and files, and atomically publishes the directory.
+-The bridge-only `device config snapshot` command additionally records exact
+-base64 bytes and a deterministic revision. `device config validate` recomputes
+-every size and digest; `--expected-revision REVISION` also checks the current
+-live revision as a read-only compare-and-swap preflight.
++The live `device config snapshot` command adds bridge/device metadata around
++the same exact base64 bytes and deterministic revision core. `device config
++validate` recomputes every size and digest; `--expected-revision REVISION` also
++checks the current live revision as a read-only compare-and-swap preflight.
+ `device config apply/restore` create or reopen immutable backups and route a
+ complete-set transaction through Input with CAS, session-scoped idempotency,
+ full revision readback, and automatic rollback. These commands are advertised
+@@ -205,7 +210,7 @@ the revision, publishes atomically, and reopens the result. It does not contact
+ Input or the device. Apply it through the guarded bridge transaction:
+ 
+ ```console
+-worklouderctl device --transport bridge config snapshot --output before.json
++worklouderctl input config snapshot --output before.json
+ worklouderctl layer color --input before.json --profile 0 --id 1 \
+   --color '#EDF6FF' --output candidate.json
+ worklouderctl device --transport bridge config apply \
+@@ -213,6 +218,9 @@ worklouderctl device --transport bridge config apply \
+   --expected-revision REVISION --idempotency-key layer-color-1
+ ```
+ 
++The apply-side live CAS compares `REVISION` with a fresh bridge snapshot, so a
++cache snapshot that became stale is detected before the first device write.
++
+ Profile and layer lifecycle commands follow the frozen Input 0.18.0 Codex
+ Micro model: at most six profiles and six layers, maximum-ID-plus-one object
+ allocation, and a zero-based persisted `activeProfileId` index even though CLI
+@@ -361,7 +369,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
+ | SEO/AIO and product documentation foundation | Complete |
+ | Sanitized research fixtures and schema model | Planned |
+ | Rust CLI foundation, tier/capability contract, and JSON output | Complete |
+-| Provider `doctor` and Input `inspect`/exact-byte `export` | Complete |
++| Provider `doctor` and Input `inspect`/exact-byte `export`/semantic cache snapshot | Complete |
+ | Bundle `validate` and structural `diff` | Complete |
+ | Codex settings contract and TOML `doctor`/`inspect`/`export` | Complete |
+ | Input 0.18.0 live `device status`/`files`/verified `export` | Complete |
+@@ -376,7 +384,8 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
+ | Semantic Actions | List/show/create/rename/delete and event add/set/delete/move; cascade/apply/restore fixture-verified |
+ | Real-device mutation and rollback | Planned |
+ | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
+-| Input cache/database synchronization | Planned |
++| Input cache read adapter | Complete; byte-exact bridge-equivalent semantic snapshot |
++| Input database synchronization | Planned |
+ | Signed macOS release and Homebrew installation | Planned |
+ 
+ ## Frequently asked questions
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 5480296..88e988a 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -59,6 +59,7 @@ worklouderctl codex inspect
+ worklouderctl codex export --output CODEX_SNAPSHOT.json
+ worklouderctl input inspect [--device DEVICE_ID]
+ worklouderctl input export --output BACKUP_DIRECTORY
++worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
+ worklouderctl bridge status
+ worklouderctl device --transport bridge status
+ worklouderctl device --transport bridge files --recursive
+@@ -135,6 +136,9 @@ snapshot；两者都不会序列化其他 Codex 设置。
+ `input inspect` 同样全程只读；`input export` 把源文件原字节复制到原子发布的
+ 目录，并在 `manifest.json` 记录 size 与 SHA-256。它不会暂停 Input，也不会
+ 写入设备。
++`input config snapshot` 直接读取当前 Input cache，全程保持 Input 与 GUI 现状，
++逐字节捕获 `keymap.json` 和可选的 `smart_actions.json`，排除仅属于 host 的
++`input_storage.json`，并发布供全部离线 semantic editor 使用的标准 snapshot/revision。
+ 
+ `device` 的首选 transport 是
+ [Input Companion Bridge](docs/companion-bridge.md)：CLI 通过私有 Unix socket
+@@ -148,9 +152,9 @@ kit，不附带第二套 driver。`--input-mode require-closed` 只报告占用
+ 且不执行 force-kill。
+ `device export` 对每个文件核对 device SHA-1 与 host SHA-256，重新读取
+ typed manifest 和文件后，再原子发布目录。
+-bridge 专用的 `device config snapshot` 还会保存精确 base64 字节和确定性
+-revision；`device config validate` 会重算 size、双哈希与 revision，配合
+-`--expected-revision REVISION` 可对 live device 做只读 CAS 预检。
++live `device config snapshot` 会在相同的精确 base64 字节和确定性 revision core
++外补充 bridge/device metadata；`device config validate` 会重算 size、双哈希与
++revision，配合 `--expected-revision REVISION` 可对 live device 做只读 CAS 预检。
+ `device config apply/restore` 会创建或复用 immutable backup，并由 Input 执行
+ CAS、session-scoped idempotency、完整 revision readback 与 automatic rollback。
+ 只有运行中的 Input 注入已验证 writer 时，bridge 才会公布这两个写能力；当前
+@@ -163,6 +167,18 @@ size、SHA-1、SHA-256、canonical base64、safe path、keymap ID 与完整 revi
+ 受影响的哈希与 revision，原子发布并重新打开 candidate。这个阶段不连接 Input
+ 或设备；candidate 再交给现有 `device config apply` transaction。
+ 
++```console
++worklouderctl input config snapshot --output before.json
++worklouderctl layer color --input before.json --profile 0 --id 1 \
++  --color '#EDF6FF' --output candidate.json
++worklouderctl device --transport bridge config apply \
++  --input candidate.json --backup pre-apply.json \
++  --expected-revision REVISION --idempotency-key layer-color-1
++```
++
++apply 侧的 live CAS 会用新 bridge snapshot 核对 `REVISION`，在首次 device write
++前识别已经过期的 cache snapshot。
++
+ Profile 与 layer 生命周期遵循冻结的 Input 0.18.0 Codex Micro 模型：最多六个
+ profile、每个 profile 最多六层，object ID 使用 maximum-ID-plus-one 分配；存储字段
+ `activeProfileId` 实际是 zero-based index，而 CLI 参数与输出使用稳定 object ID。
+@@ -268,7 +284,8 @@ WorkLouderCTL 是 **Full-configuration CLI**：
+ 
+ 仓库目前处于 transaction source-alpha 阶段。Codex TOML read adapter 的
+ `doctor`、`inspect`、`export`，以及 Input 0.18.0 live device 的 `status`、
+-`files`、双哈希 `export`、Companion Bridge v1 contract/client/reference server、
++`files`、双哈希 `export`、byte-exact semantic cache snapshot、Companion Bridge v1
++contract/client/reference server、
+ revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
+ Input 自动恢复，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
+ 与 per-layer lighting、AppSense linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线 candidate 生成，keys、
+diff --git a/docs/companion-bridge.md b/docs/companion-bridge.md
+index c86d12b..013612d 100644
+--- a/docs/companion-bridge.md
++++ b/docs/companion-bridge.md
+@@ -106,12 +106,19 @@ Protocol v1 bounds a snapshot at 4,096 files, 16 MiB per file, and 32 MiB of
+ decoded content; request and response lines are each capped at 64 MiB.
+ 
+ ```sh
++worklouderctl input config snapshot --output config-snapshot.json
+ worklouderctl device config snapshot --output config-snapshot.json
+ worklouderctl device config validate --input config-snapshot.json
+ worklouderctl device config validate --input config-snapshot.json \
+   --expected-revision REVISION
+ ```
+ 
++The first command reads Input's current cache with no bridge/device transport
++and emits the standard semantic snapshot. The live bridge command may add
++device/runtime metadata; for identical cached/device bytes, both share the same
++`deviceId`, files, hashes, and revision. A later bridge apply still performs a
++fresh CAS check against the live device revision.
++
+ ## Offline semantic candidates
+ 
+ WorkLouderCTL can turn a valid complete snapshot into a complete profile/layer
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index 9366fd9..eb775ca 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -60,7 +60,7 @@ the runtime reloaded the new value.
+ | Underglow | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
+ | AppSense links | list/show, application identity, link, update, unlink | `appsense` | candidate and current-cache schema verified; fixture apply/readback/restore verified; live focus transition tracked separately |
+ | Presets | inspect, preview, install | `preset` | researched |
+-| Full object | export, snapshot, validate, diff, apply, restore | `device export`, `device config snapshot/validate/apply/restore` | transaction fixture verified; released writer pending |
++| Full object | cache capture, export, snapshot, validate, diff, apply, restore | `input config snapshot`, `device export`, `device config snapshot/validate/apply/restore` | cache adapter is byte-exact and revision-equivalent to the bridge core; transaction fixture verified; released writer pending |
+ 
+ ## Tier 3 — Input host configuration
+ 
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index e46f01d..67bef07 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -107,6 +107,24 @@ and 1 hour.
+ 
+ ## Tier 2: Input device configuration
+ 
++### Implemented Input cache snapshot
++
++The read-only cache adapter exposes the current semantic configuration without
++opening a device transport or changing the Input process/GUI state:
++
++```console
++worklouderctl input config snapshot --output SNAPSHOT.json [--device DEVICE_ID]
++```
++
++It selects the requested or sole cached device, captures regular
++`keymap.json` and optional `smart_actions.json` files byte-for-byte, rejects
++symlink sources, and excludes host-only `input_storage.json`. Before atomic
++publication it verifies source stability, SHA-1, SHA-256, canonical base64,
++semantic JSON, safe paths, and the full deterministic revision; it then reopens
++the result and rereads the sources. The snapshot core (`deviceId`, files, and
++revision) matches a bridge snapshot of the same bytes and feeds every offline
++semantic command directly.
++
+ ### Implemented live read surface
+ 
+ The primary transport uses the authenticated Input Companion Bridge. The CLI
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index d747466..0253efa 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -21,6 +21,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] `worklouderctl doctor`
+ - [x] `worklouderctl input inspect`
+ - [x] `worklouderctl input export`
++- [x] `worklouderctl input config snapshot`
+ - [x] `worklouderctl codex doctor`
+ - [x] `worklouderctl codex inspect`
+ - [x] `worklouderctl codex export`
+@@ -72,7 +73,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ ## M4 — Full cross-authority transaction
+ 
+ - [x] Smart Actions and groups (offline candidate and current-cache format verified)
+-- [ ] Input cache adapter
++- [x] Input cache read adapter with bridge-equivalent semantic snapshot/revision
+ - [ ] Input database adapter
+ - [ ] Input process coordination
+ - [ ] Codex process and settings-bridge coordination
+diff --git a/llms.txt b/llms.txt
+index 61e8d82..bc257ac 100644
+--- a/llms.txt
++++ b/llms.txt
+@@ -32,6 +32,7 @@ Important: the project is currently a source alpha. The repository builds a work
+ - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
+ - Current maturity: source alpha; read paths and isolated bridge apply/restore transaction conformance implemented; no packaged release
+ - Current Codex commands: `codex doctor`, `codex inspect`, and atomic typed `codex export`
++- Input cache command: `input config snapshot` captures `keymap.json` plus optional `smart_actions.json` byte-for-byte, excludes host-only state, and emits a bridge-revision-equivalent semantic snapshot without controlling the Input GUI or device transport
+ - Primary device transport: authenticated Input Companion Bridge v1 over a private Unix socket; Rust client, one-call Input-main integration, release conformance command, and cross-language tests are implemented
+ - Bridge config commands: deterministic byte-exact snapshot/validate plus capability-gated apply/restore with immutable CLI backup, CAS, session idempotency, full readback, and automatic rollback
+ - Released Input integration: pending; Input 0.18.0 has no external bridge transport
+diff --git a/scripts/test-bridge-e2e.sh b/scripts/test-bridge-e2e.sh
+index 24eca88..dcf7241 100755
+--- a/scripts/test-bridge-e2e.sh
++++ b/scripts/test-bridge-e2e.sh
+@@ -7,6 +7,8 @@ socket=$root/bridge.sock
+ token=$root/bridge.token
+ export_dir=$root/export
+ config_snapshot=$root/config-snapshot.json
++cache_support=$root/input-cache
++cache_snapshot=$root/config-cache-snapshot.json
+ candidate_snapshot=$root/config-candidate.json
+ color_snapshot=$root/config-color.json
+ control_snapshot=$root/config-control.json
+@@ -103,6 +105,18 @@ node "$repo/companion/conformance.mjs" \
+ "$bin" --json device --transport bridge \
+   --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+   --output "$config_snapshot" >"$root/config-snapshot-receipt.json"
++mkdir -p "$cache_support/devices/fixture-device"
++cp "$export_dir/keymap.json" "$cache_support/devices/fixture-device/keymap.json"
++cp "$export_dir/smart_actions.json" \
++  "$cache_support/devices/fixture-device/smart_actions.json"
++printf '%s\n' '{"hostOnly":true}' >"$cache_support/input_storage.json"
++"$bin" --json input config snapshot --support-root "$cache_support" \
++  --device fixture-device --output "$cache_snapshot" \
++  >"$root/config-cache-snapshot-receipt.json"
++"$bin" --json profile list --input "$cache_snapshot" \
++  >"$root/cache-profile-list.json"
++"$bin" --json smart-action list --input "$cache_snapshot" \
++  >"$root/cache-smart-action-list.json"
+ revision=$(python3 -c \
+   'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
+   "$config_snapshot")
+@@ -317,6 +331,14 @@ files = json.loads((root / "device-files.json").read_text())
+ manifest = json.loads((root / "export" / "manifest.json").read_text())
+ validation = json.loads((root / "export-validation.json").read_text())
+ snapshot = json.loads((root / "config-snapshot.json").read_text())
++cache_snapshot = json.loads((root / "config-cache-snapshot.json").read_text())
++cache_snapshot_receipt = json.loads(
++    (root / "config-cache-snapshot-receipt.json").read_text()
++)
++cache_profile_list = json.loads((root / "cache-profile-list.json").read_text())
++cache_smart_action_list = json.loads(
++    (root / "cache-smart-action-list.json").read_text()
++)
+ snapshot_receipt = json.loads(
+     (root / "config-snapshot-receipt.json").read_text()
+ )
+@@ -476,6 +498,20 @@ for record in sorted(snapshot["files"], key=lambda item: item["relativePath"].en
+ assert revision_hash.hexdigest() == snapshot["revision"]
+ assert snapshot_receipt["revision"] == snapshot["revision"]
+ assert snapshot_receipt["fileCount"] == 2
++assert cache_snapshot["schemaVersion"] == snapshot["schemaVersion"]
++assert cache_snapshot["kind"] == snapshot["kind"]
++assert cache_snapshot["revisionAlgorithm"] == snapshot["revisionAlgorithm"]
++assert cache_snapshot["deviceId"] == snapshot["deviceId"]
++assert cache_snapshot["revision"] == snapshot["revision"]
++assert cache_snapshot["files"] == snapshot["files"]
++assert cache_snapshot_receipt["adapter"] == "input-cache-v1"
++assert cache_snapshot_receipt["revision"] == snapshot["revision"]
++assert cache_snapshot_receipt["fileCount"] == 2
++assert cache_profile_list["revision"] == snapshot["revision"]
++assert cache_smart_action_list["smartActions"] == []
++assert [item["relativePath"] for item in cache_snapshot["files"]] == [
++    "keymap.json", "smart_actions.json",
++]
+ assert bridge_validation["valid"] is True
+ assert bridge_validation["revision"] == snapshot["revision"]
+ assert bridge_validation["liveRevision"] == snapshot["revision"]
+@@ -927,6 +963,8 @@ print("exported_files=2")
+ print("sha1_sha256_readback=verified")
+ print("config_validation=verified")
+ print("config_snapshot_revision=verified")
++print("input_cache_snapshot_revision=verified")
++print("input_cache_semantic_consumers=verified")
+ print("semantic_profile_list=verified")
+ print("semantic_profile_show=verified")
+ print("semantic_layer_list=verified")
+diff --git a/spec/input-cache-snapshot-v1.json b/spec/input-cache-snapshot-v1.json
+new file mode 100644
+index 0000000..b85f9f3
+--- /dev/null
++++ b/spec/input-cache-snapshot-v1.json
+@@ -0,0 +1,47 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouder-input-cache-snapshot-adapter",
++  "inputBaselineVersion": "0.18.0",
++  "command": "worklouderctl input config snapshot",
++  "sourceAuthority": {
++    "root": "Input application support directory",
++    "deviceSelection": "explicit device id or the only cached device directory",
++    "requiredFiles": ["devices/<deviceId>/keymap.json"],
++    "optionalFiles": ["devices/<deviceId>/smart_actions.json"],
++    "excludedFiles": ["input_storage.json"],
++    "processInteraction": "none",
++    "deviceInteraction": "none"
++  },
++  "output": {
++    "schemaVersion": 1,
++    "kind": "worklouder-input-config-snapshot",
++    "revisionAlgorithm": "sha256:path-u32be-path-bytes-size-u64be-content-v1",
++    "normalizedPaths": ["keymap.json", "smart_actions.json"],
++    "fileRecordFields": [
++      "relativePath",
++      "size",
++      "deviceChecksumSha1",
++      "sha256",
++      "dataBase64"
++    ],
++    "compatibleConsumers": [
++      "profile",
++      "layer",
++      "appsense",
++      "control",
++      "action",
++      "multi-action",
++      "smart-action",
++      "device config validate/apply/restore"
++    ]
++  },
++  "integrity": {
++    "preserveExactSourceBytes": true,
++    "rejectSymlinkSourceFiles": true,
++    "readSourceAgainBeforePublish": true,
++    "readSourceAgainAfterPublish": true,
++    "validateSemanticSnapshotBeforePublish": true,
++    "atomicallyPublishAndReopen": true,
++    "destinationMustNotExist": true
++  }
++}
+diff --git a/src/cli.rs b/src/cli.rs
+index dd1ed63..28202c8 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -193,6 +193,30 @@ pub enum InputCommand {
+         #[clap(long, value_parser)]
+         support_root: Option<PathBuf>,
+     },
++
++    /// Build standard semantic snapshots from Input's cached device files.
++    Config {
++        #[clap(subcommand)]
++        command: InputConfigCommand,
++    },
++}
++
++#[derive(Debug, Subcommand)]
++pub enum InputConfigCommand {
++    /// Save a revisioned, byte-exact snapshot without contacting Input or the device.
++    Snapshot {
++        /// Destination JSON file. It must not already exist.
++        #[clap(long, value_parser)]
++        output: PathBuf,
++
++        /// Select a cached device ID. Required when multiple devices exist.
++        #[clap(long)]
++        device: Option<String>,
++
++        /// Override Input's application support directory.
++        #[clap(long, value_parser)]
++        support_root: Option<PathBuf>,
++    },
+ }
+ 
+ #[derive(Debug, Subcommand)]
+diff --git a/src/input.rs b/src/input.rs
+index 4f471c8..e9edd59 100644
+--- a/src/input.rs
++++ b/src/input.rs
+@@ -1,5 +1,5 @@
+-use crate::fsutil;
+-use anyhow::{bail, Context, Result};
++use crate::{fsutil, semantic};
++use anyhow::{bail, ensure, Context, Result};
+ use serde::{Deserialize, Serialize};
+ use serde_json::Value;
+ use std::env;
+@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
+ 
+ pub const BUNDLE_KIND: &str = "worklouder-input-export";
+ pub const BUNDLE_SCHEMA_VERSION: u8 = 1;
++const CACHE_SNAPSHOT_SPEC_JSON: &str = include_str!("../spec/input-cache-snapshot-v1.json");
+ 
+ #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+ #[serde(rename_all = "camelCase")]
+@@ -50,6 +51,38 @@ pub struct ExportResult {
+     pub manifest: Manifest,
+ }
+ 
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct CacheSnapshotReceipt {
++    pub schema_version: u8,
++    pub kind: &'static str,
++    pub adapter: &'static str,
++    pub output: PathBuf,
++    pub device_id: String,
++    pub revision: String,
++    pub file_count: usize,
++    pub total_bytes: u64,
++    pub source_files: Vec<CacheSnapshotSource>,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct CacheSnapshotSource {
++    pub relative_path: String,
++    pub size: u64,
++    pub device_checksum_sha1: String,
++    pub sha256: String,
++}
++
++struct CapturedConfigFile {
++    source_relative_path: String,
++    snapshot_relative_path: String,
++    source: PathBuf,
++    bytes: Vec<u8>,
++    device_checksum_sha1: String,
++    sha256: String,
++}
++
+ pub fn support_root(override_path: Option<PathBuf>) -> PathBuf {
+     override_path
+         .or_else(|| env::var_os("WORKLOUDERCTL_INPUT_SUPPORT_ROOT").map(PathBuf::from))
+@@ -168,6 +201,68 @@ pub fn export(root: &Path, requested_device: Option<&str>, output: &Path) -> Res
+     result
+ }
+ 
++pub fn config_snapshot(
++    root: &Path,
++    requested_device: Option<&str>,
++    output: &Path,
++) -> Result<CacheSnapshotReceipt> {
++    validate_cache_snapshot_spec()?;
++    ensure!(
++        !output.exists(),
++        "configuration snapshot destination already exists: {}",
++        output.display()
++    );
++    let device_id = select_device(root, requested_device)?;
++    let sources = device_config_source_files(root, &device_id)?;
++    let captured = sources
++        .into_iter()
++        .map(|(source_relative_path, snapshot_relative_path, source)| {
++            capture_config_file(source_relative_path, snapshot_relative_path, source)
++        })
++        .collect::<Result<Vec<_>>>()?;
++    verify_captured_sources(&captured)?;
++    let snapshot_files = captured
++        .iter()
++        .map(|file| (file.snapshot_relative_path.clone(), file.bytes.clone()))
++        .collect::<Vec<_>>();
++    let snapshot = semantic::build_config_snapshot(&device_id, &snapshot_files)?;
++    semantic::publish_config_snapshot(output, &snapshot)?;
++    if let Err(error) = verify_captured_sources(&captured) {
++        let _ = fs::remove_file(output);
++        return Err(error.context("Input cache changed before snapshot publication completed"));
++    }
++    let revision = snapshot
++        .get("revision")
++        .and_then(Value::as_str)
++        .context("configuration snapshot revision disappeared")?
++        .to_owned();
++    let total_bytes = captured.iter().try_fold(0_u64, |total, file| {
++        total
++            .checked_add(file.bytes.len() as u64)
++            .context("configuration snapshot size overflowed")
++    })?;
++    let source_files = captured
++        .into_iter()
++        .map(|file| CacheSnapshotSource {
++            relative_path: file.source_relative_path,
++            size: file.bytes.len() as u64,
++            device_checksum_sha1: file.device_checksum_sha1,
++            sha256: file.sha256,
++        })
++        .collect::<Vec<_>>();
++    Ok(CacheSnapshotReceipt {
++        schema_version: 1,
++        kind: "worklouder-input-cache-snapshot",
++        adapter: "input-cache-v1",
++        output: output.to_path_buf(),
++        device_id,
++        revision,
++        file_count: source_files.len(),
++        total_bytes,
++        source_files,
++    })
++}
++
+ pub fn read_manifest(bundle: &Path) -> Result<Manifest> {
+     let path = bundle.join("manifest.json");
+     serde_json::from_slice(
+@@ -231,6 +326,102 @@ fn source_files(root: &Path, device_id: &str) -> Result<Vec<(String, PathBuf)>>
+     Ok(files)
+ }
+ 
++fn device_config_source_files(
++    root: &Path,
++    device_id: &str,
++) -> Result<Vec<(String, String, PathBuf)>> {
++    let device_root = root.join("devices").join(device_id);
++    let keymap = device_root.join("keymap.json");
++    if !keymap.is_file() {
++        bail!("required keymap is missing at {}", keymap.display());
++    }
++    let mut files = vec![(
++        format!("devices/{device_id}/keymap.json"),
++        "keymap.json".into(),
++        keymap,
++    )];
++    let smart_actions = device_root.join("smart_actions.json");
++    if smart_actions.exists() {
++        files.push((
++            format!("devices/{device_id}/smart_actions.json"),
++            "smart_actions.json".into(),
++            smart_actions,
++        ));
++    }
++    Ok(files)
++}
++
++fn capture_config_file(
++    source_relative_path: String,
++    snapshot_relative_path: String,
++    source: PathBuf,
++) -> Result<CapturedConfigFile> {
++    let metadata = fs::symlink_metadata(&source)
++        .with_context(|| format!("failed to inspect Input cache at {}", source.display()))?;
++    ensure!(
++        metadata.file_type().is_file(),
++        "Input cache source is not a regular file: {}",
++        source.display()
++    );
++    let bytes = fs::read(&source)
++        .with_context(|| format!("failed to read Input cache at {}", source.display()))?;
++    Ok(CapturedConfigFile {
++        source_relative_path,
++        snapshot_relative_path,
++        source,
++        device_checksum_sha1: fsutil::sha1_bytes(&bytes)?,
++        sha256: fsutil::sha256_bytes(&bytes)?,
++        bytes,
++    })
++}
++
++fn verify_captured_sources(files: &[CapturedConfigFile]) -> Result<()> {
++    for file in files {
++        let metadata = fs::symlink_metadata(&file.source).with_context(|| {
++            format!(
++                "failed to re-inspect Input cache at {}",
++                file.source.display()
++            )
++        })?;
++        ensure!(
++            metadata.file_type().is_file(),
++            "Input cache source stopped being a regular file: {}",
++            file.source.display()
++        );
++        let reopened = fs::read(&file.source).with_context(|| {
++            format!("failed to re-read Input cache at {}", file.source.display())
++        })?;
++        ensure!(
++            reopened == file.bytes,
++            "{} changed while the snapshot was being captured",
++            file.source.display()
++        );
++    }
++    Ok(())
++}
++
++fn validate_cache_snapshot_spec() -> Result<()> {
++    let spec: Value = serde_json::from_str(CACHE_SNAPSHOT_SPEC_JSON)
++        .context("embedded Input cache snapshot adapter spec was invalid")?;
++    ensure!(
++        spec.get("schemaVersion").and_then(Value::as_u64) == Some(1)
++            && spec.get("kind").and_then(Value::as_str)
++                == Some("worklouder-input-cache-snapshot-adapter")
++            && spec
++                .get("output")
++                .and_then(|value| value.get("kind"))
++                .and_then(Value::as_str)
++                == Some("worklouder-input-config-snapshot")
++            && spec
++                .get("output")
++                .and_then(|value| value.get("revisionAlgorithm"))
++                .and_then(Value::as_str)
++                == Some("sha256:path-u32be-path-bytes-size-u64be-content-v1"),
++        "embedded Input cache snapshot adapter identity was invalid"
++    );
++    Ok(())
++}
++
+ fn inspect_file(relative_path: &str, source: &Path) -> Result<FileSummary> {
+     let bytes = fs::read(source)
+         .with_context(|| format!("failed to read Input state at {}", source.display()))?;
+@@ -253,6 +444,7 @@ fn inspect_file(relative_path: &str, source: &Path) -> Result<FileSummary> {
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++    use serde_json::json;
+     use std::time::{SystemTime, UNIX_EPOCH};
+ 
+     fn fixture_root() -> PathBuf {
+@@ -266,6 +458,33 @@ mod tests {
+         ))
+     }
+ 
++    fn valid_keymap_bytes() -> Vec<u8> {
++        serde_json::to_vec(&json!({
++            "version": 1,
++            "activeProfileId": 0,
++            "linkedApps": [],
++            "macros": [],
++            "macrosGroups": [],
++            "multiActions": [],
++            "multiActionsGroups": [],
++            "profiles": [{
++                "id": 0,
++                "name": "Fixture",
++                "layers": [{
++                    "id": 0,
++                    "name": "Base",
++                    "color": 0,
++                    "layout": {
++                        "keymap": [["KC_NONE"]],
++                        "encoders": [],
++                        "joystick": {"type": "VENDOR", "sectors": []}
++                    }
++                }]
++            }]
++        }))
++        .unwrap()
++    }
++
+     #[test]
+     fn export_preserves_exact_source_bytes() {
+         let fixture = fixture_root();
+@@ -288,4 +507,116 @@ mod tests {
+         assert_eq!(read_manifest(&output).unwrap(), result.manifest);
+         fs::remove_dir_all(fixture).unwrap();
+     }
++
++    #[test]
++    fn cache_snapshot_is_semantic_deterministic_and_excludes_host_storage() {
++        let fixture = fixture_root();
++        let root = fixture.join("support");
++        let device = root.join("devices/33632");
++        fs::create_dir_all(&device).unwrap();
++        let keymap = valid_keymap_bytes();
++        let smart = br#"{"version":1,"smartActions":{},"future":{"kept":true}}"#;
++        fs::write(device.join("keymap.json"), &keymap).unwrap();
++        fs::write(device.join("smart_actions.json"), smart).unwrap();
++        fs::write(root.join("input_storage.json"), b"{\"hostOnly\":1}\n").unwrap();
++        let first = fixture.join("first.json");
++        let second = fixture.join("second.json");
++
++        let receipt = config_snapshot(&root, None, &first).unwrap();
++        assert_eq!(receipt.adapter, "input-cache-v1");
++        assert_eq!(receipt.device_id, "33632");
++        assert_eq!(receipt.file_count, 2);
++        assert_eq!(receipt.total_bytes, (keymap.len() + smart.len()) as u64);
++        assert_eq!(
++            receipt
++                .source_files
++                .iter()
++                .map(|file| file.relative_path.as_str())
++                .collect::<Vec<_>>(),
++            vec![
++                "devices/33632/keymap.json",
++                "devices/33632/smart_actions.json"
++            ]
++        );
++        assert_eq!(
++            receipt.source_files[0].sha256,
++            fsutil::sha256_bytes(&keymap).unwrap()
++        );
++        assert_eq!(
++            receipt.source_files[1].device_checksum_sha1,
++            fsutil::sha1_bytes(smart).unwrap()
++        );
++
++        let document: Value = serde_json::from_slice(&fs::read(&first).unwrap()).unwrap();
++        assert_eq!(document["kind"], "worklouder-input-config-snapshot");
++        assert_eq!(document["deviceId"], "33632");
++        assert_eq!(
++            document["files"]
++                .as_array()
++                .unwrap()
++                .iter()
++                .map(|file| file["relativePath"].as_str().unwrap())
++                .collect::<Vec<_>>(),
++            vec!["keymap.json", "smart_actions.json"]
++        );
++        assert!(semantic::profile_list(&first).is_ok());
++        assert!(semantic::smart_action_list(&first).is_ok());
++
++        fs::write(root.join("input_storage.json"), b"{\"hostOnly\":2}\n").unwrap();
++        let repeated = config_snapshot(&root, Some("33632"), &second).unwrap();
++        assert_eq!(receipt.revision, repeated.revision);
++        assert_eq!(fs::read(&first).unwrap(), fs::read(&second).unwrap());
++
++        let error = config_snapshot(&root, None, &first)
++            .unwrap_err()
++            .to_string();
++        assert!(error.contains("already exists"));
++        fs::remove_dir_all(fixture).unwrap();
++    }
++
++    #[test]
++    fn cache_snapshot_rejects_invalid_or_symlinked_sources_before_publish() {
++        let fixture = fixture_root();
++        let root = fixture.join("support");
++        let device = root.join("devices/33632");
++        fs::create_dir_all(&device).unwrap();
++        let output = fixture.join("snapshot.json");
++        fs::write(device.join("keymap.json"), b"{}\n").unwrap();
++        let error = config_snapshot(&root, None, &output)
++            .unwrap_err()
++            .to_string();
++        assert!(error.contains("keymap.json"));
++        assert!(!output.exists());
++
++        fs::write(device.join("keymap.json"), valid_keymap_bytes()).unwrap();
++        let target = fixture.join("smart-target.json");
++        fs::write(&target, b"{\"version\":1,\"smartActions\":{}}").unwrap();
++        std::os::unix::fs::symlink(&target, device.join("smart_actions.json")).unwrap();
++        let error = config_snapshot(&root, None, &output)
++            .unwrap_err()
++            .to_string();
++        assert!(error.contains("regular file"));
++        assert!(!output.exists());
++        fs::remove_dir_all(fixture).unwrap();
++    }
++
++    #[test]
++    fn cache_snapshot_requires_device_selection_when_multiple_caches_exist() {
++        let fixture = fixture_root();
++        let root = fixture.join("support");
++        for id in ["33632", "other"] {
++            let device = root.join("devices").join(id);
++            fs::create_dir_all(&device).unwrap();
++            fs::write(device.join("keymap.json"), valid_keymap_bytes()).unwrap();
++        }
++        let output = fixture.join("snapshot.json");
++        let error = config_snapshot(&root, None, &output)
++            .unwrap_err()
++            .to_string();
++        assert!(error.contains("multiple cached Input devices"));
++        let receipt = config_snapshot(&root, Some("33632"), &output).unwrap();
++        assert_eq!(receipt.device_id, "33632");
++        assert_eq!(receipt.file_count, 1);
++        fs::remove_dir_all(fixture).unwrap();
++    }
+ }
+diff --git a/src/lib.rs b/src/lib.rs
+index 48a2ae9..1cd963f 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -15,9 +15,9 @@ use cli::{
+     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
+     AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexCommand, Command, CompletionShell,
+     ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
+-    InputCommand, LayerCommand, LayerLightingCommand, LightingEffect, LightingZone,
+-    MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand,
+-    SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
++    InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand, LightingEffect,
++    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
++    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+     SmartActionType as CliSmartActionType, TierCommand,
+ };
+ use serde::Serialize;
+@@ -1713,6 +1713,28 @@ fn run_input(command: InputCommand, json: bool, mut out: impl Write) -> Result<(
+                 }
+             }
+         }
++        InputCommand::Config { command } => match command {
++            InputConfigCommand::Snapshot {
++                output,
++                device,
++                support_root,
++            } => {
++                let root = input::support_root(support_root);
++                let result = input::config_snapshot(&root, device.as_deref(), &output)?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "Saved {} cached configuration file(s) for device {} to {}",
++                        result.file_count,
++                        result.device_id,
++                        result.output.display()
++                    )?;
++                    writeln!(out, "revision={}", result.revision)?;
++                }
++            }
++        },
+     }
+     Ok(())
+ }
+diff --git a/src/semantic.rs b/src/semantic.rs
+index 9a0e60c..8ac6092 100644
+--- a/src/semantic.rs
++++ b/src/semantic.rs
+@@ -5414,6 +5414,48 @@ fn update_file_record(record: &mut Map<String, Value>, bytes: &[u8]) -> Result<(
+     Ok(())
+ }
+ 
++pub(crate) fn build_config_snapshot(device_id: &str, files: &[(String, Vec<u8>)]) -> Result<Value> {
++    ensure!(
++        !device_id.is_empty(),
++        "configuration snapshot deviceId was empty"
++    );
++    ensure!(
++        !files.is_empty(),
++        "configuration snapshot contained no files"
++    );
++    let mut records = Vec::with_capacity(files.len());
++    let mut bytes = Vec::with_capacity(files.len());
++    for (path, payload) in files {
++        device::safe_relative_path(path)?;
++        let mut record = Map::new();
++        record.insert("relativePath".into(), Value::String(path.clone()));
++        update_file_record(&mut record, payload)?;
++        records.push(Value::Object(record));
++        bytes.push(payload.clone());
++    }
++    let revision = compute_revision(&records, &bytes)?;
++    let snapshot = serde_json::json!({
++        "schemaVersion": SNAPSHOT_SCHEMA_VERSION,
++        "kind": SNAPSHOT_KIND,
++        "revisionAlgorithm": REVISION_ALGORITHM,
++        "revision": revision,
++        "deviceId": device_id,
++        "files": records,
++    });
++    SemanticSnapshot::validate(snapshot.clone())?;
++    Ok(snapshot)
++}
++
++pub(crate) fn publish_config_snapshot(output: &Path, snapshot: &Value) -> Result<()> {
++    SemanticSnapshot::validate(snapshot.clone())?;
++    write_atomic_json(output, snapshot)?;
++    if let Err(error) = SemanticSnapshot::read(output) {
++        let _ = fs::remove_file(output);
++        return Err(error.context("published configuration snapshot semantic readback failed"));
++    }
++    Ok(())
++}
++
+ fn compute_revision(files: &[Value], bytes: &[Vec<u8>]) -> Result<String> {
+     ensure!(
+         files.len() == bytes.len(),
+diff --git a/tests/cli.rs b/tests/cli.rs
+index 385bb59..20c0db6 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -22,6 +22,33 @@ fn fixture_root() -> PathBuf {
+     ))
+ }
+ 
++fn semantic_keymap_bytes() -> Vec<u8> {
++    serde_json::to_vec(&serde_json::json!({
++        "version": 1,
++        "activeProfileId": 0,
++        "linkedApps": [],
++        "macros": [],
++        "macrosGroups": [],
++        "multiActions": [],
++        "multiActionsGroups": [],
++        "profiles": [{
++            "id": 0,
++            "name": "CLI Fixture",
++            "layers": [{
++                "id": 0,
++                "name": "Base",
++                "color": 0,
++                "layout": {
++                    "keymap": [["KC_NONE"]],
++                    "encoders": [],
++                    "joystick": {"type": "VENDOR", "sectors": []}
++                }
++            }]
++        }]
++    }))
++    .unwrap()
++}
++
+ #[test]
+ fn help_lists_the_binary_and_version_command() {
+     let output = binary().arg("--help").output().unwrap();
+@@ -184,6 +211,15 @@ fn input_and_config_help_expose_read_only_workflow() {
+     assert!(input.status.success());
+     assert!(input_stdout.contains("inspect"));
+     assert!(input_stdout.contains("export"));
++    assert!(input_stdout.contains("config"));
++
++    let input_config = binary()
++        .args(["input", "config", "--help"])
++        .output()
++        .unwrap();
++    let input_config_stdout = String::from_utf8(input_config.stdout).unwrap();
++    assert!(input_config.status.success());
++    assert!(input_config_stdout.contains("snapshot"));
+ 
+     let config = binary().args(["config", "--help"]).output().unwrap();
+     let config_stdout = String::from_utf8(config.stdout).unwrap();
+@@ -192,6 +228,87 @@ fn input_and_config_help_expose_read_only_workflow() {
+     assert!(config_stdout.contains("diff"));
+ }
+ 
++#[test]
++fn input_cache_snapshot_runs_into_semantic_candidates_end_to_end() {
++    let root = fixture_root();
++    let support = root.join("support");
++    let device = support.join("devices/33632");
++    let snapshot = root.join("snapshot.json");
++    let candidate = root.join("candidate.json");
++    fs::create_dir_all(&device).unwrap();
++    let keymap = semantic_keymap_bytes();
++    let smart_actions = b"{\"version\":1,\"smartActions\":{}}";
++    fs::write(device.join("keymap.json"), &keymap).unwrap();
++    fs::write(device.join("smart_actions.json"), smart_actions).unwrap();
++    fs::write(support.join("input_storage.json"), b"{\"hostOnly\":true}").unwrap();
++    let keymap_before = worklouderctl::fsutil::sha256_bytes(&keymap).unwrap();
++    let smart_before = worklouderctl::fsutil::sha256_bytes(smart_actions).unwrap();
++
++    let captured = binary()
++        .args(["--json", "input", "config", "snapshot", "--support-root"])
++        .arg(&support)
++        .arg("--output")
++        .arg(&snapshot)
++        .output()
++        .unwrap();
++    assert!(
++        captured.status.success(),
++        "{}",
++        String::from_utf8_lossy(&captured.stderr)
++    );
++    let receipt: serde_json::Value = serde_json::from_slice(&captured.stdout).unwrap();
++    assert_eq!(receipt["adapter"], "input-cache-v1");
++    assert_eq!(receipt["deviceId"], "33632");
++    assert_eq!(receipt["fileCount"], 2);
++    assert_eq!(receipt["sourceFiles"][0]["sha256"], keymap_before);
++    assert_eq!(receipt["sourceFiles"][1]["sha256"], smart_before);
++
++    let document: serde_json::Value =
++        serde_json::from_slice(&fs::read(&snapshot).unwrap()).unwrap();
++    assert_eq!(document["kind"], "worklouder-input-config-snapshot");
++    assert_eq!(document["files"].as_array().unwrap().len(), 2);
++    assert!(document["files"]
++        .as_array()
++        .unwrap()
++        .iter()
++        .all(|file| file["relativePath"] != "input_storage.json"));
++
++    let profiles = binary()
++        .args(["--json", "profile", "list", "--input"])
++        .arg(&snapshot)
++        .output()
++        .unwrap();
++    assert!(profiles.status.success());
++    let profiles: serde_json::Value = serde_json::from_slice(&profiles.stdout).unwrap();
++    assert_eq!(profiles["profiles"][0]["name"], "CLI Fixture");
++
++    let created = binary()
++        .args(["--json", "smart-action", "create", "--input"])
++        .arg(&snapshot)
++        .args(["--name", "CLI Text", "--type", "text", "--text", "hello"])
++        .arg("--output")
++        .arg(&candidate)
++        .output()
++        .unwrap();
++    assert!(created.status.success());
++    let created: serde_json::Value = serde_json::from_slice(&created.stdout).unwrap();
++    assert_eq!(created["resourceId"], 1);
++    assert_eq!(
++        created["changedPaths"],
++        serde_json::json!(["/smart_actions.json/smartActions/SA_1"])
++    );
++
++    assert_eq!(
++        worklouderctl::fsutil::sha256(&device.join("keymap.json")).unwrap(),
++        keymap_before
++    );
++    assert_eq!(
++        worklouderctl::fsutil::sha256(&device.join("smart_actions.json")).unwrap(),
++        smart_before
++    );
++    fs::remove_dir_all(root).unwrap();
++}
++
+ #[test]
+ fn codex_help_exposes_read_only_workflow() {
+     let codex = binary().args(["codex", "--help"]).output().unwrap();

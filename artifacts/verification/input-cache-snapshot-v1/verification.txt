@@ -1,0 +1,195 @@
+WorkLouderCTL Input cache snapshot v1 verification record
+=========================================================
+
+Scope
+-----
+Base commit: 63882cf5923a5c8a9ef200e1fae215e36009793e
+Feature commit: 1ab943362d49500dbbeb12ddf732fc9f9feef01c
+Feature commits:
+  08b96dc spec: freeze Input cache snapshot adapter
+  b8bc049 feat: snapshot Input cache for semantic editing
+  05c7a77 test: compare cache and bridge snapshots
+  1ab9433 docs: document Input cache snapshot workflow
+Changed CLI branch: input config snapshot
+Changed snapshot fields: deviceId, revision, files[].relativePath, size,
+deviceChecksumSha1, sha256, contentBase64.
+Source authority: Work Louder Input Application Support cache.
+Input GUI/device interaction during the current-cache probe: none. The Input app
+executable was not invoked. Candidate and fixture outputs were written under /tmp.
+
+Functional baseline-red
+-----------------------
+Input: binary built from base commit before the command was implemented.
+Command:
+  ./target/release/worklouderctl input config snapshot --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'config' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl input [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
+
+Modified behavior: current Input cache to semantic snapshot
+----------------------------------------------------------
+Input files:
+  ~/Library/Application Support/input/devices/33632/keymap.json
+  ~/Library/Application Support/input/devices/33632/smart_actions.json
+Command:
+  ./target/release/worklouderctl --json input config snapshot \
+    --device 33632 --output /tmp/worklouder-input-cache-final.doeAfa/baseline.json
+Literal output:
+{"schemaVersion":1,"kind":"worklouder-input-cache-snapshot","adapter":"input-cache-v1","output":"/tmp/worklouder-input-cache-final.doeAfa/baseline.json","deviceId":"33632","revision":"62a1c5449921478a6c2f97e13dfd943bf02f68269b3455fc8aab8c64b7efe075","fileCount":2,"totalBytes":3335,"sourceFiles":[{"relativePath":"devices/33632/keymap.json","size":3294,"deviceChecksumSha1":"b06f68b953688a8b16384e389c9ec7a91bfe1b11","sha256":"803779884034f0268339f3b227b550db043068403e5024cc5270bc229467a6c6"},{"relativePath":"devices/33632/smart_actions.json","size":41,"deviceChecksumSha1":"a99ff018aabf9a0436eaa0984d982567b8f55b04","sha256":"1db5d3ba2dfd678bde8d2dfe24167d28d1a5f94a849abaf8851722313bdce5c1"}]}
+Exit status: 0
+
+Source cache baseline and post-probe hashes
+-------------------------------------------
+Command:
+  shasum -a 256 "$HOME/Library/Application Support/input/devices/33632/keymap.json" \
+    "$HOME/Library/Application Support/input/devices/33632/smart_actions.json"
+Baseline literal output:
+  803779884034f0268339f3b227b550db043068403e5024cc5270bc229467a6c6  .../keymap.json
+  1db5d3ba2dfd678bde8d2dfe24167d28d1a5f94a849abaf8851722313bdce5c1  .../smart_actions.json
+Post-probe literal output:
+  803779884034f0268339f3b227b550db043068403e5024cc5270bc229467a6c6  .../keymap.json
+  1db5d3ba2dfd678bde8d2dfe24167d28d1a5f94a849abaf8851722313bdce5c1  .../smart_actions.json
+Comparison command:
+  cmp source-before.sha256 source-after.sha256
+Literal output: (empty)
+Exit status: 0
+
+Modified behavior: semantic consumers
+--------------------------------------
+Command:
+  worklouderctl --json profile list --input baseline.json
+Literal output:
+{"schemaVersion":1,"kind":"worklouderctl-profile-list","revision":"62a1c5449921478a6c2f97e13dfd943bf02f68269b3455fc8aab8c64b7efe075","activeProfileIndex":0,"activeProfileId":0,"profiles":[{"id":0,"name":"Default","layerCount":2,"active":true}]}
+Exit status: 0
+
+Command:
+  worklouderctl --json smart-action create --input baseline.json \
+    --name 'Cache proof' --type text --text verified --output candidate.json
+Literal output:
+{"schemaVersion":1,"kind":"worklouderctl-config-candidate","operation":"smart-action-create","output":"/tmp/worklouder-input-cache-final.doeAfa/candidate.json","changed":true,"changedPaths":["/smart_actions.json/smartActions/SA_1"],"beforeRevision":"62a1c5449921478a6c2f97e13dfd943bf02f68269b3455fc8aab8c64b7efe075","afterRevision":"fde675c5fde994527509662837e2277e12b5ae9d3e1597ee851ad3a2b3f34e80","resourceId":1}
+Exit status: 0
+
+Command:
+  worklouderctl --json smart-action show --input candidate.json --id 1
+Literal output:
+{"schemaVersion":1,"kind":"worklouderctl-smart-action","revision":"fde675c5fde994527509662837e2277e12b5ae9d3e1597ee851ad3a2b3f34e80","smartAction":{"id":1,"name":"Cache proof","actionType":"TEXT_STEP","payload":{"text":"verified"},"physicalReferenceCount":0,"groupIds":[],"requiresCommandPermission":false}}
+Exit status: 0
+
+Host-only cache exclusion and determinism
+-----------------------------------------
+Fixture input: the same two device cache files plus input_storage.json.
+Commands:
+  worklouderctl --json input config snapshot --support-root fixture \
+    --device 33632 --output fixture-one.json
+  printf 'host-state-two-with-different-bytes\n' > fixture/input_storage.json
+  worklouderctl --json input config snapshot --support-root fixture \
+    --device 33632 --output fixture-two.json
+Comparison: both snapshots have identical files and revision.
+Literal assertions:
+  CACHE_SNAPSHOT_REVISION=62a1c5449921478a6c2f97e13dfd943bf02f68269b3455fc8aab8c64b7efe075
+  CACHE_FILE_COUNT=2
+  PROFILE_COUNT=1
+  INITIAL_SMART_ACTION_COUNT=0
+  CANDIDATE_ID=1
+  CANDIDATE_TEXT=verified
+  INPUT_STORAGE_EXCLUDED=true
+  SOURCE_HASHES_UNCHANGED=true
+  CURRENT_CACHE_E2E=PASS
+Exit status: 0
+
+Bridge equivalence and transaction regression
+---------------------------------------------
+Command:
+  ./scripts/test-bridge-e2e.sh
+Literal relevant output:
+  config_snapshot_revision=verified
+  input_cache_snapshot_revision=verified
+  input_cache_semantic_consumers=verified
+  semantic_smart_action_typed_crud=verified
+  semantic_smart_action_group_crud=verified
+  semantic_smart_action_binding_cascade=verified
+  semantic_smart_action_apply_readback_restore=verified
+  config_apply_readback=verified
+  config_restore_readback=verified
+Exit status: 0
+
+Automated quality gates
+-----------------------
+Command: cargo fmt --check
+Literal output: (empty)
+Exit status: 0
+
+Command: cargo test --locked
+Literal result:
+  48 passed; 0 failed (library)
+  12 passed; 0 failed (CLI integration)
+  0 failed (doc tests)
+Exit status: 0
+
+Command: cargo clippy --all-targets -- -D warnings
+Literal result:
+  Finished dev [unoptimized + debuginfo] target(s)
+Exit status: 0
+
+Command: cargo +1.61.0 test --offline --locked
+Literal result:
+  48 passed; 0 failed (library)
+  12 passed; 0 failed (CLI integration)
+  0 failed (doc tests)
+Exit status: 0
+
+Command: node --test companion/input-main-bridge.test.mjs
+Literal result:
+  tests 7
+  pass 7
+  fail 0
+Exit status: 0
+
+Command: cargo build --release --locked
+Literal result:
+  Finished release [optimized] target(s)
+Exit status: 0
+
+Modified artifact
+-----------------
+Path: target/release/worklouderctl
+SHA-256: 8911b2012b4a1cadfae9cb7870227843a363e8413d9a955a37f8ae9c6105029a
+Command: ./target/release/worklouderctl version
+Literal output: worklouderctl 0.1.0
+Exit status: 0
+Command: ./target/release/worklouderctl input config snapshot --help
+Literal first lines:
+  worklouderctl-input-config-snapshot 0.1.0
+  Save a revisioned, byte-exact snapshot without contacting Input or the device
+Exit status: 0
+
+Patch
+-----
+Path: artifacts/verification/input-cache-snapshot-v1/input-cache-snapshot.patch
+SHA-256: 13fa4f98b7103a4c5425cf9bb4dff615da3ae3a99eb3e3e059171a8f8dd9a97f
+Command:
+  git apply --check --reverse artifacts/verification/input-cache-snapshot-v1/input-cache-snapshot.patch
+Literal output: (empty)
+Exit status: 0
+
+Rollback
+--------
+Path: artifacts/verification/input-cache-snapshot-v1/rollback.sh
+SHA-256: 9b529c06be1b783d645cd7f012f7e3b4c643df7f4e3a67149f62f9db726a5fd6
+The isolated-worktree execution result is appended after the artifact commit.
+Isolated worktree command:
+  artifacts/verification/input-cache-snapshot-v1/rollback.sh WORKTREE
+Literal output:
+  rollback=verified
+  base=63882cf5923a5c8a9ef200e1fae215e36009793e
+Exit status: 0
+Postcondition command:
+  git -C WORKTREE diff --quiet 63882cf5923a5c8a9ef200e1fae215e36009793e -- . \
+    ':(exclude)artifacts/verification/input-cache-snapshot-v1'
+Postcondition exit status: 0
