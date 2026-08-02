@@ -1,0 +1,160 @@
+WorkLouderCTL Codex dial v1 verification record
+===============================================
+
+Scope
+-----
+Base commit: 68534b6874ddfda5fb5be5157e49b1aeff2865c7
+Feature commit: a80557386f6175adcc29103ded7ee97f7ec5274d
+Feature commits:
+  ced1e10 spec: freeze Codex dial behavior
+  53d4ce8 feat: add Codex dial candidates
+  a805573 docs: publish Codex dial workflow
+Changed branches:
+  codex dial mode get/set
+  codex dial gesture get/set/clear
+Changed fields:
+  /settings/codex-micro-layout/encoderMode
+  /settings/codex-micro-layout/encoder/{left,right,click,longPress}
+Source settings, GUI, bridge, device, and runtime mutation: none
+
+Released behavior contract
+--------------------------
+Exact Codex 26.727.51351 static inspection shows four modes:
+  composer-navigation, reasoning, conversation-scroll, custom
+Mode selection preserves the gesture mapping. The settings UI exposes the
+custom editor only for custom mode. Runtime custom actions are consumed only in
+that mode; non-custom long press opens Codex Micro settings. Gesture values are
+command, Skill, or null.
+
+Preserved original artifact and baseline-red
+--------------------------------------------
+Source commit: 68534b6874ddfda5fb5be5157e49b1aeff2865c7
+Build command:
+  cargo build --release --locked --manifest-path BASE_WORKTREE/Cargo.toml
+Path:
+  /tmp/worklouderctl-codex-dial-v1.lQRKnc/original/worklouderctl
+SHA-256:
+  9b62c06c0ee0d52b93aef52909ce65d876c10b5a8d28e01ff152dc9b3e8e8c92
+Command:
+  ORIGINAL_BIN codex dial --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'dial' which wasn't expected, or isn't valid in this context
+Exit status: 2
+
+Modified release E2E
+--------------------
+Input:
+  /tmp/worklouderctl-codex-dial-v1.lQRKnc/e2e/config.toml
+Literal input:
+  [desktop]
+  codex-micro-agent-source = "recent"
+  codex-micro-future = "preserved"
+Source SHA-256 before and after:
+  774fd6612a603c9e959f78fcbb6345d80837aecdb72e2d18abbef128d89cda5c
+
+Commands:
+  MODIFIED_BIN --json codex export --config E2E/config.toml \
+    --app E2E/missing.app --output E2E/baseline.json
+  MODIFIED_BIN --json codex dial mode set --input E2E/baseline.json \
+    custom --output E2E/custom.json
+  MODIFIED_BIN --json codex dial gesture set --input E2E/custom.json \
+    left --command navigateBack --output E2E/command.json
+  MODIFIED_BIN --json codex dial gesture set --input E2E/command.json \
+    right --skill-name Review --skill-path /tmp/review/SKILL.md \
+    --output E2E/skill.json
+  MODIFIED_BIN --json codex dial gesture get --input E2E/skill.json right
+  MODIFIED_BIN --json codex dial gesture clear --input E2E/skill.json \
+    left --output E2E/cleared.json
+Exit status: 0 for all commands
+
+Literal mode receipt:
+  changedPaths=["/settings/codex-micro-layout/encoderMode"]
+  beforeRevision=b4ada82ceb161b08536cc50532b93c9a70c741d88108c925c8244e3c5c6f95a9
+  afterRevision=5d8cf7d1c8de9400a5e87f1ebc89380310d72e4b19cbe38073fd7269864c32e2
+Literal command receipt:
+  changedPaths=["/settings/codex-micro-layout/encoder/left"]
+  beforeRevision=5d8cf7d1c8de9400a5e87f1ebc89380310d72e4b19cbe38073fd7269864c32e2
+  afterRevision=00630d2a1760c0b14cb49acdd39c1e52b001e1c5c02b9d7358cca51830c38eb4
+Literal Skill readback:
+  gesture=right
+  assignmentType=skill
+  skillName=Review
+  skillPath=/tmp/review/SKILL.md
+  inherited=false
+Literal clear receipt:
+  changedPaths=["/settings/codex-micro-layout/encoder/left"]
+  beforeRevision=f4581c595a5d60d769eaf246f6c0a7e3a9759d92e3141f8108817cd00e566c9d
+  afterRevision=2bc6d7597ae7070ce6a3b19aabb869da95d1af6ba9f2b7f5dcaaf3371931dd4b
+Literal assertions:
+  assertions=pass
+  source bytes unchanged
+  right Skill preserved after left clear
+  unknown codex-micro-future preserved
+
+Inactive-mode rejection
+-----------------------
+Command:
+  MODIFIED_BIN codex dial gesture set --input E2E/baseline.json left \
+    --command navigateBack --output E2E/inactive.json
+Literal stderr:
+  error: dial gesture edits require encoder mode custom
+Exit status: 1
+Output file created: false
+
+Automated quality gates
+-----------------------
+Command: cargo fmt --all -- --check
+Exit status: 0
+Command: cargo clippy --locked --all-targets -- -D warnings
+Literal result: Finished dev
+Exit status: 0
+Command: cargo test --locked
+Literal result:
+  62 passed; 0 failed (library)
+  16 passed; 0 failed (CLI integration)
+  0 failed (binary and doc tests)
+Exit status: 0
+Command: cargo build --release --locked
+Literal result: Finished release
+Exit status: 0
+
+Tested boundaries:
+  all four modes and four gestures
+  mode change preserves mapping
+  command and Skill assignments
+  clear changes one leaf
+  non-custom edits rejected
+  invalid mode/gesture/assignment rejected
+  unknown fields and source hash preserved
+  atomic publish and final reopen
+
+Modified artifact
+-----------------
+Path:
+  target/release/worklouderctl
+Preserved copy:
+  /tmp/worklouderctl-codex-dial-v1.lQRKnc/modified/worklouderctl
+SHA-256:
+  635984fca42bcbe5e255bae2a3b5669b4c02d2ba863ab3cc3f69549c3fa2a54f
+Reopen/execute command:
+  ./target/release/worklouderctl codex dial --help
+Exit status: 0
+
+Patch
+-----
+Path:
+  artifacts/verification/codex-dial-v1/codex-dial.patch
+SHA-256:
+  49a4a51a14ad85f6d19e099e2fb15a886b9fea7202f9792daaeef033106f3e36
+Command:
+  git apply --check --reverse artifacts/verification/codex-dial-v1/codex-dial.patch
+Exit status: 0
+
+Rollback
+--------
+Path:
+  artifacts/verification/codex-dial-v1/rollback.sh
+SHA-256:
+  7027e2d4652e295074343ae95d22d21be43b0cf114d8efa0184eadfa941b1b5b
+The isolated rollback execution is appended after the artifact commit.

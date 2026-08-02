@@ -1,0 +1,1113 @@
+diff --git a/README.md b/README.md
+index 5da0bed..3b27778 100644
+--- a/README.md
++++ b/README.md
+@@ -108,6 +108,12 @@ worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled -
+ worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
+ worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
+ worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
++worklouderctl codex dial mode get --input CODEX_SNAPSHOT.json
++worklouderctl codex dial mode set --input CODEX_SNAPSHOT.json custom --output CODEX_DIAL.json
++worklouderctl codex dial gesture set --input CODEX_DIAL.json left --command navigateBack --output CODEX_DIAL_LEFT.json
++worklouderctl codex dial gesture set --input CODEX_DIAL_LEFT.json right --skill-name Review --skill-path /PATH/TO/SKILL.md --output CODEX_DIAL_RIGHT.json
++worklouderctl codex dial gesture get --input CODEX_DIAL_RIGHT.json right
++worklouderctl codex dial gesture clear --input CODEX_DIAL_RIGHT.json left --output CODEX_DIAL_CLEARED.json
+ worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
+ worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
+@@ -199,7 +205,7 @@ effective view. `codex export` atomically publishes and reopens a typed JSON
+ snapshot. Neither command serializes unrelated Codex settings.
+ 
+ `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`,
+-`codex lighting`, and `codex voice` are strict offline Tier 1 editors. They
++`codex dial`, `codex lighting`, and `codex voice` are strict offline Tier 1 editors. They
+ validate the embedded frozen definitions,
+ recompute effective settings and a recursive-key-sorted revision, preserve
+ unknown `codex-micro-*` values, publish atomically, and reopen the result. Each
+@@ -217,6 +223,13 @@ six-slot readback, stale-CAS rejection, and automatic rollback. Assignment
+ storage and the `codex-micro-agent-source=custom` setting remain independently
+ controlled, so applying assignments never changes source ordering implicitly.
+ 
++`codex dial mode get/set` covers composer navigation, reasoning effort,
++conversation scrolling, and custom mode without rewriting gesture mappings.
++In custom mode, `dial gesture get/set/clear` edits exactly one of `left`,
++`right`, `click`, or `long-press` as a command, Skill, or empty mapping. Gesture
++edits reject inactive non-custom snapshots, preserve the other three gestures
++and unknown layout fields, and leave the source settings bytes unchanged.
++
+ `codex config diff BASE.json CANDIDATE.json` validates both frozen-contract
+ snapshots and compares only their explicit `settings`. Transport metadata,
+ warnings, definitions, and the derived effective view are excluded, while
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index b6336fe..5c5740a 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -77,6 +77,12 @@ worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled -
+ worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
+ worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
+ worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
++worklouderctl codex dial mode get --input CODEX_SNAPSHOT.json
++worklouderctl codex dial mode set --input CODEX_SNAPSHOT.json custom --output CODEX_DIAL.json
++worklouderctl codex dial gesture set --input CODEX_DIAL.json left --command navigateBack --output CODEX_DIAL_LEFT.json
++worklouderctl codex dial gesture set --input CODEX_DIAL_LEFT.json right --skill-name Review --skill-path /PATH/TO/SKILL.md --output CODEX_DIAL_RIGHT.json
++worklouderctl codex dial gesture get --input CODEX_DIAL_RIGHT.json right
++worklouderctl codex dial gesture clear --input CODEX_DIAL_RIGHT.json left --output CODEX_DIAL_CLEARED.json
+ worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
+ worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
+@@ -163,7 +169,7 @@ view 中递归补齐继承的默认值。`codex export` 原子发布并重新打
+ snapshot；两者都不会序列化其他 Codex 设置。
+ 
+ `codex agent-source`、`codex agent-key tap-mode`、`codex command-key`、
+-`codex lighting` 与 `codex voice` 是严格的
++`codex dial`、`codex lighting` 与 `codex voice` 是严格的
+ Tier 1 离线 editor：核对内嵌 frozen definitions，重算 effective settings 与
+ recursive-key-sorted revision，保留未知 `codex-micro-*` 值，原子发布并重新打开。
+ receipt 中的 `expectedSourceSha256` 供 Codex `settings-write` CAS transaction
+@@ -179,6 +185,12 @@ readback、stale-CAS rejection 与 automatic rollback。assignment storage 和
+ `codex-micro-agent-source=custom` 是两个独立 authority，因此 assignment transaction
+ 不会隐式改变 source ordering。
+ 
++`codex dial mode get/set` 覆盖 composer navigation、reasoning effort、
++conversation scrolling 与 custom mode，并且不重写 gesture mappings。进入 custom
++mode 后，`dial gesture get/set/clear` 可以把 `left`、`right`、`click` 或
++`long-press` 中的一个设为 command、Skill 或 empty。gesture edit 会拒绝非 custom
++snapshot，同时保留另外三个 gestures、未知 layout fields 与源 settings 原字节。
++
+ `codex config diff BASE.json CANDIDATE.json` 会先校验两个 frozen-contract
+ snapshot，再只比较 explicit `settings`。transport metadata、warnings、definitions
+ 与派生的 effective view 不进入差异，但未知 settings 仍会完整显示。human output
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index 31a4e74..cd3ca19 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -28,8 +28,8 @@ parity contract.
+ | Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | strict offline candidate verified; generic complete-settings bridge transaction verified |
+ | Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; generic complete-settings bridge transaction verified |
+ | Voice button | push-to-talk, Voice Chat | `codex voice get/set` | strict offline candidate plus `push-to-talk -> realtime -> push-to-talk` bridge apply/readback/restore fixture verified |
+-| Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | researched |
+-| Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | researched |
++| Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | strict candidate verified; mode changes preserve custom gesture mappings |
++| Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | command/Skill/empty custom-mode candidates, one-leaf paths, preservation, and source immutability verified |
+ | Joystick | up, right, down, left command/Skill/empty | `codex joystick get/set/clear` | researched |
+ | Lighting brightness | integer 0–100 | `codex lighting brightness get/set` | strict offline candidate plus `100 -> 37 -> 100` bridge apply/readback/restore fixture verified |
+ | Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | strict offline candidate plus `3-minutes -> 10-minutes -> 3-minutes` bridge apply/readback/restore fixture verified |
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index 9c4eeb9..81093a0 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -57,6 +57,12 @@ worklouderctl codex command-key set --input SNAPSHOT.json SLOT \
+   [--keycap KEYCAP] [--command COMMAND_ID | --skill-name NAME --skill-path PATH | --clear-action] \
+   --output CANDIDATE.json
+ worklouderctl codex command-key reset --input SNAPSHOT.json SLOT --output CANDIDATE.json
++worklouderctl codex dial mode get --input SNAPSHOT.json
++worklouderctl codex dial mode set --input SNAPSHOT.json composer-navigation|reasoning|conversation-scroll|custom --output CANDIDATE.json
++worklouderctl codex dial gesture get --input SNAPSHOT.json left|right|click|long-press
++worklouderctl codex dial gesture set --input SNAPSHOT.json GESTURE \
++  [--command COMMAND_ID | --skill-name NAME --skill-path PATH] --output CANDIDATE.json
++worklouderctl codex dial gesture clear --input SNAPSHOT.json GESTURE --output CANDIDATE.json
+ worklouderctl codex lighting brightness get --input SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input SNAPSHOT.json VALUE --output CANDIDATE.json
+ worklouderctl codex lighting auto-off get --input SNAPSHOT.json
+@@ -137,6 +143,11 @@ signals. The observed default Command Keycaps are `FAST`, `APPR`, `REJ`,
+ - Custom dial and joystick assignments: Codex command, skill, or empty.
+ - Long-pressing the dial opens Codex Micro settings.
+ 
++The gesture editor is active only in `custom` mode. Mode changes retain all
++gesture mappings. In custom mode, each gesture stores a command object, Skill
++object, or `null`; outside custom mode the built-in runtime behavior remains
++authoritative.
++
+ ### Codex command/keycap catalog
+ 
+ The inspected build contains 38 keycap identifiers:
+diff --git a/docs/research/2026-08-02-codex-dial-contract.md b/docs/research/2026-08-02-codex-dial-contract.md
+new file mode 100644
+index 0000000..14be526
+--- /dev/null
++++ b/docs/research/2026-08-02-codex-dial-contract.md
+@@ -0,0 +1,30 @@
++# Codex dial candidate contract (Codex 26.727.51351)
++
++The frozen Codex layout stores the dial in two independent fields:
++
++- `encoderMode`: `composer-navigation`, `reasoning`, `conversation-scroll`, or
++  `custom`;
++- `encoder`: `left`, `right`, `click`, and `longPress`, each holding a command,
++  Skill, or `null`.
++
++## Released behavior
++
++The inspected Codex bundle changes `encoderMode` without rewriting the encoder
++mapping. Its settings UI exposes the action editor only when the selected mode
++is `custom`. At runtime, left/right rotation uses custom mappings only in that
++mode. Click and long press likewise invoke the custom mapping only in custom
++mode; otherwise click retains the selected built-in mode behavior and long
++press opens Codex Micro settings.
++
++## CLI contract
++
++`codex dial mode get/set` reads or changes only `encoderMode` and preserves all
++four gesture mappings. `codex dial gesture get` reports the effective command,
++Skill, or empty mapping. `gesture set/clear` requires effective mode `custom`,
++changes one gesture leaf, preserves the other three gestures and unknown layout
++fields, validates the complete layout, recomputes effective settings and the
++canonical settings revision, and atomically publishes/reopens the candidate.
++
++Candidate generation is file-only. Applying the complete candidate remains a
++separate Codex Companion Bridge transaction with source/revision CAS, readback,
++automatic rollback, and explicit restore.
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 8e08fd9..7b10e03 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -51,7 +51,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Six Agent Key offline get/set/clear plus bridge apply/restore transaction
+ - [x] Six Command Key slots get/set/reset offline candidates
+ - [x] voice mode
+-- [ ] dial modes and custom gestures
++- [x] dial modes and command/Skill/empty custom gestures
+ - [ ] joystick directions and Skills
+ - [x] global brightness and auto-off
+ - [x] Codex settings backup, apply, readback, restore, and automatic rollback fixture
+diff --git a/docs/tier-model.md b/docs/tier-model.md
+index d4c99c1..436837a 100644
+--- a/docs/tier-model.md
++++ b/docs/tier-model.md
+@@ -61,7 +61,8 @@ worklouderctl codex agent-source get|set --input SNAPSHOT
+ worklouderctl codex agent-key get|set|clear AG00
+ worklouderctl codex agent-key tap-mode get|set --input SNAPSHOT
+ worklouderctl codex command-key get|set|reset --input SNAPSHOT ACT06
+-worklouderctl codex dial get|set|reset
++worklouderctl codex dial mode get|set --input SNAPSHOT
++worklouderctl codex dial gesture get|set|clear --input SNAPSHOT GESTURE
+ worklouderctl codex joystick get|set|reset
+ worklouderctl codex voice get|set --input SNAPSHOT
+ worklouderctl codex lighting brightness get|set --input SNAPSHOT
+diff --git a/spec/codex-settings-26.727.51351.json b/spec/codex-settings-26.727.51351.json
+index 019f3eb..e0b21f8 100644
+--- a/spec/codex-settings-26.727.51351.json
++++ b/spec/codex-settings-26.727.51351.json
+@@ -174,6 +174,12 @@
+       "conversation-scroll",
+       "custom"
+     ],
++    "encoderGestures": [
++      "left",
++      "right",
++      "click",
++      "longPress"
++    ],
+     "voiceButtonModes": [
+       "push-to-talk",
+       "realtime"
+diff --git a/spec/codex-settings-candidate-v1.json b/spec/codex-settings-candidate-v1.json
+index b0f3355..6fd9f34 100644
+--- a/spec/codex-settings-candidate-v1.json
++++ b/spec/codex-settings-candidate-v1.json
+@@ -50,6 +50,32 @@
+       "command": "codex command-key reset --input SNAPSHOT.json SLOT --output CANDIDATE.json",
+       "source": "frozen layout default for the selected slot"
+     },
++    "dialModeGet": {
++      "command": "codex dial mode get --input SNAPSHOT.json",
++      "values": [
++        "composer-navigation",
++        "reasoning",
++        "conversation-scroll",
++        "custom"
++      ]
++    },
++    "dialModeSet": {
++      "command": "codex dial mode set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
++      "changedPath": "/settings/codex-micro-layout/encoderMode"
++    },
++    "dialGestureGet": {
++      "command": "codex dial gesture get --input SNAPSHOT.json GESTURE"
++    },
++    "dialGestureSet": {
++      "command": "codex dial gesture set --input SNAPSHOT.json GESTURE [--command COMMAND_ID | --skill-name NAME --skill-path PATH] --output CANDIDATE.json",
++      "changedPathTemplate": "/settings/codex-micro-layout/encoder/{gesture}",
++      "requiresMode": "custom"
++    },
++    "dialGestureClear": {
++      "command": "codex dial gesture clear --input SNAPSHOT.json GESTURE --output CANDIDATE.json",
++      "value": null,
++      "requiresMode": "custom"
++    },
+     "lightingBrightnessGet": {
+       "command": "codex lighting brightness get --input SNAPSHOT.json",
+       "type": "integer",
+@@ -113,6 +139,17 @@
+     "clearActionPreservesKeycap": true,
+     "commandAndActionAreMutuallyExclusive": true
+   },
++  "dialRules": {
++    "modeChangePreservesGestureMapping": true,
++    "customGestureEditorRequiresCustomMode": true,
++    "gestureActionTypes": [
++      "command",
++      "skill",
++      "empty"
++    ],
++    "longPressUsesCustomActionOnlyInCustomMode": true,
++    "nonCustomLongPressOpensCodexMicroSettings": true
++  },
+   "candidateBoundary": {
+     "contactsCodex": false,
+     "contactsInput": false,
+diff --git a/src/cli.rs b/src/cli.rs
+index e92b662..f1c8664 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -454,6 +454,12 @@ pub enum CodexCommand {
+         command: CodexCommandKeyCommand,
+     },
+ 
++    /// Inspect or edit Codex-native dial behavior in an offline snapshot.
++    Dial {
++        #[clap(subcommand)]
++        command: CodexDialCommand,
++    },
++
+     /// Inspect or edit Codex-native global lighting in an offline snapshot.
+     Lighting {
+         #[clap(subcommand)]
+@@ -789,6 +795,96 @@ pub enum CodexCommandKeyCommand {
+     },
+ }
+ 
++#[derive(Debug, Subcommand)]
++pub enum CodexDialCommand {
++    /// Inspect or edit the built-in/custom dial mode.
++    Mode {
++        #[clap(subcommand)]
++        command: CodexDialModeCommand,
++    },
++
++    /// Inspect or edit one custom dial gesture.
++    Gesture {
++        #[clap(subcommand)]
++        command: CodexDialGestureCommand,
++    },
++}
++
++#[derive(Clone, Copy, Debug, ValueEnum)]
++pub enum CodexDialMode {
++    ComposerNavigation,
++    Reasoning,
++    ConversationScroll,
++    Custom,
++}
++
++#[derive(Clone, Copy, Debug, ValueEnum)]
++pub enum CodexDialGesture {
++    Left,
++    Right,
++    Click,
++    LongPress,
++}
++
++#[derive(Debug, Subcommand)]
++pub enum CodexDialModeCommand {
++    /// Read the effective dial mode.
++    Get {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++    },
++
++    /// Write an offline candidate with a new dial mode.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(value_enum)]
++        value: CodexDialMode,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++}
++
++#[derive(Debug, Subcommand)]
++pub enum CodexDialGestureCommand {
++    /// Read one effective custom dial gesture assignment.
++    Get {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(value_enum)]
++        gesture: CodexDialGesture,
++    },
++
++    /// Assign one command or Skill while the dial mode is custom.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(value_enum)]
++        gesture: CodexDialGesture,
++        /// Assign a Codex command ID.
++        #[clap(long)]
++        command: Option<String>,
++        /// Assign a Skill display name; pair with --skill-path.
++        #[clap(long)]
++        skill_name: Option<String>,
++        /// Assign a Skill path; pair with --skill-name.
++        #[clap(long)]
++        skill_path: Option<String>,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Clear one custom dial gesture while preserving the other gestures.
++    Clear {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(value_enum)]
++        gesture: CodexDialGesture,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++}
++
+ #[derive(Debug, Subcommand)]
+ pub enum ConfigCommand {
+     /// Validate an export bundle or JSON configuration file.
+diff --git a/src/codex.rs b/src/codex.rs
+index 7c9eff6..ee1281e 100644
+--- a/src/codex.rs
++++ b/src/codex.rs
+@@ -50,6 +50,7 @@ struct LayoutContract {
+     slots: Vec<String>,
+     keycaps: Vec<String>,
+     encoder_modes: Vec<String>,
++    encoder_gestures: Vec<String>,
+     voice_button_modes: Vec<String>,
+ }
+ 
+@@ -148,6 +149,47 @@ pub struct VoiceModeView {
+     pub inherited: bool,
+ }
+ 
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct DialModeView {
++    pub schema_version: u8,
++    pub kind: &'static str,
++    pub revision: String,
++    pub value: String,
++    pub inherited: bool,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct DialGestureView {
++    pub schema_version: u8,
++    pub kind: &'static str,
++    pub revision: String,
++    pub gesture: String,
++    pub assignment_type: String,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub command_id: Option<String>,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub skill_name: Option<String>,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub skill_path: Option<String>,
++    pub inherited: bool,
++}
++
++#[derive(Clone, Copy, Debug)]
++pub struct DialGestureUpdate<'a> {
++    pub command: Option<&'a str>,
++    pub skill_name: Option<&'a str>,
++    pub skill_path: Option<&'a str>,
++}
++
++struct ParsedActionView {
++    assignment_type: String,
++    command_id: Option<String>,
++    skill_name: Option<String>,
++    skill_path: Option<String>,
++}
++
+ #[derive(Debug, Serialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct CommandKeyView {
+@@ -645,6 +687,167 @@ pub fn voice_mode_set(input: &Path, value: &str, output: &Path) -> Result<Candid
+     )
+ }
+ 
++pub fn dial_mode_get(input: &Path) -> Result<DialModeView> {
++    let snapshot = read_snapshot(input)?;
++    let field = "encoderMode";
++    let value = effective_layout(&snapshot)?
++        .get(field)
++        .and_then(Value::as_str)
++        .context("effective layout.encoderMode was missing")?;
++    let inherited = snapshot
++        .settings
++        .get("codex-micro-layout")
++        .and_then(Value::as_object)
++        .map_or(true, |layout| !layout.contains_key(field));
++    Ok(DialModeView {
++        schema_version: 1,
++        kind: "worklouderctl-codex-dial-mode",
++        revision: settings_revision(&snapshot.settings)?,
++        value: value.to_owned(),
++        inherited,
++    })
++}
++
++pub fn dial_mode_set(input: &Path, value: &str, output: &Path) -> Result<CandidateReceipt> {
++    let mut snapshot = read_snapshot(input)?;
++    let contract = load_contract()?;
++    ensure!(
++        contract
++            .layout
++            .encoder_modes
++            .iter()
++            .any(|candidate| candidate == value),
++        "dial mode must be one of {}",
++        contract.layout.encoder_modes.join(", ")
++    );
++    let before_revision = settings_revision(&snapshot.settings)?;
++    let current = effective_layout(&snapshot)?
++        .get("encoderMode")
++        .and_then(Value::as_str)
++        .context("effective layout.encoderMode was missing")?;
++    let changed = current != value;
++    if changed {
++        let mut layout = editable_layout(&snapshot, &contract)?;
++        layout.insert("encoderMode".into(), Value::String(value.to_owned()));
++        validate_layout(&Value::Object(layout.clone()), &contract.layout)?;
++        snapshot
++            .settings
++            .insert("codex-micro-layout".into(), Value::Object(layout));
++        refresh_effective_settings(&mut snapshot, &contract)?;
++    }
++    publish_candidate(
++        snapshot,
++        output,
++        "codex-dial-mode-set",
++        before_revision,
++        changed
++            .then(|| "/settings/codex-micro-layout/encoderMode".into())
++            .into_iter()
++            .collect(),
++    )
++}
++
++pub fn dial_gesture_get(input: &Path, gesture: &str) -> Result<DialGestureView> {
++    let snapshot = read_snapshot(input)?;
++    let contract = load_contract()?;
++    validate_dial_gesture(gesture, &contract)?;
++    let action = effective_layout(&snapshot)?
++        .get("encoder")
++        .and_then(Value::as_object)
++        .and_then(|encoder| encoder.get(gesture))
++        .with_context(|| format!("effective layout.encoder.{gesture} was missing"))?;
++    let action = nullable_action_view(action, &format!("layout.encoder.{gesture}"))?;
++    let inherited = snapshot
++        .settings
++        .get("codex-micro-layout")
++        .and_then(Value::as_object)
++        .and_then(|layout| layout.get("encoder"))
++        .and_then(Value::as_object)
++        .map_or(true, |encoder| !encoder.contains_key(gesture));
++    Ok(DialGestureView {
++        schema_version: 1,
++        kind: "worklouderctl-codex-dial-gesture",
++        revision: settings_revision(&snapshot.settings)?,
++        gesture: gesture.to_owned(),
++        assignment_type: action.assignment_type,
++        command_id: action.command_id,
++        skill_name: action.skill_name,
++        skill_path: action.skill_path,
++        inherited,
++    })
++}
++
++pub fn dial_gesture_set(
++    input: &Path,
++    gesture: &str,
++    update: DialGestureUpdate<'_>,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    let action = dial_gesture_action(update)?;
++    dial_gesture_write(input, gesture, action, "codex-dial-gesture-set", output)
++}
++
++pub fn dial_gesture_clear(input: &Path, gesture: &str, output: &Path) -> Result<CandidateReceipt> {
++    dial_gesture_write(
++        input,
++        gesture,
++        Value::Null,
++        "codex-dial-gesture-clear",
++        output,
++    )
++}
++
++fn dial_gesture_write(
++    input: &Path,
++    gesture: &str,
++    action: Value,
++    operation: &'static str,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    let mut snapshot = read_snapshot(input)?;
++    let contract = load_contract()?;
++    validate_dial_gesture(gesture, &contract)?;
++    ensure!(
++        effective_layout(&snapshot)?
++            .get("encoderMode")
++            .and_then(Value::as_str)
++            == Some("custom"),
++        "dial gesture edits require encoder mode custom"
++    );
++    validate_nullable_action(&action, &format!("layout.encoder.{gesture}"))?;
++    let before_revision = settings_revision(&snapshot.settings)?;
++    let before_action = effective_layout(&snapshot)?
++        .get("encoder")
++        .and_then(Value::as_object)
++        .and_then(|encoder| encoder.get(gesture))
++        .with_context(|| format!("effective layout.encoder.{gesture} was missing"))?
++        .clone();
++    let changed = before_action != action;
++    if changed {
++        let mut layout = editable_layout(&snapshot, &contract)?;
++        layout
++            .get_mut("encoder")
++            .and_then(Value::as_object_mut)
++            .context("layout.encoder was missing")?
++            .insert(gesture.to_owned(), action);
++        validate_layout(&Value::Object(layout.clone()), &contract.layout)?;
++        snapshot
++            .settings
++            .insert("codex-micro-layout".into(), Value::Object(layout));
++        refresh_effective_settings(&mut snapshot, &contract)?;
++    }
++    publish_candidate(
++        snapshot,
++        output,
++        operation,
++        before_revision,
++        changed
++            .then(|| format!("/settings/codex-micro-layout/encoder/{gesture}"))
++            .into_iter()
++            .collect(),
++    )
++}
++
+ pub fn command_key_get(input: &Path, slot: &str) -> Result<CommandKeyView> {
+     let snapshot = read_snapshot(input)?;
+     command_key_view(&snapshot, slot)
+@@ -872,6 +1075,97 @@ fn command_key_slot<'a>(layout: &'a Map<String, Value>, slot: &str) -> Result<&'
+         .with_context(|| format!("Command Key slot {slot} was missing"))
+ }
+ 
++fn editable_layout(snapshot: &Snapshot, contract: &Contract) -> Result<Map<String, Value>> {
++    if let Some(layout) = snapshot
++        .settings
++        .get("codex-micro-layout")
++        .and_then(Value::as_object)
++    {
++        return Ok(layout.clone());
++    }
++    contract
++        .definitions
++        .get("codex-micro-layout")
++        .context("frozen layout definition was missing")?
++        .default
++        .as_object()
++        .cloned()
++        .context("frozen layout default was invalid")
++}
++
++fn validate_dial_gesture(gesture: &str, contract: &Contract) -> Result<()> {
++    ensure!(
++        contract
++            .layout
++            .encoder_gestures
++            .iter()
++            .any(|candidate| candidate == gesture),
++        "dial gesture must be one of {}",
++        contract.layout.encoder_gestures.join(", ")
++    );
++    Ok(())
++}
++
++fn dial_gesture_action(update: DialGestureUpdate<'_>) -> Result<Value> {
++    let skill_requested = update.skill_name.is_some() || update.skill_path.is_some();
++    let assignment_count = usize::from(update.command.is_some()) + usize::from(skill_requested);
++    ensure!(
++        assignment_count == 1,
++        "select exactly one dial gesture assignment: --command or --skill-name with --skill-path"
++    );
++    if let Some(command_id) = update.command {
++        ensure!(!command_id.trim().is_empty(), "--command must be non-empty");
++        return Ok(serde_json::json!({
++            "type": "command",
++            "commandId": command_id,
++        }));
++    }
++    let skill_name = update.skill_name.context("--skill-name is required")?;
++    let skill_path = update.skill_path.context("--skill-path is required")?;
++    ensure!(
++        !skill_name.trim().is_empty(),
++        "--skill-name must be non-empty"
++    );
++    ensure!(
++        !skill_path.trim().is_empty(),
++        "--skill-path must be non-empty"
++    );
++    Ok(serde_json::json!({
++        "type": "skill",
++        "skillName": skill_name,
++        "skillPath": skill_path,
++    }))
++}
++
++fn nullable_action_view(value: &Value, path: &str) -> Result<ParsedActionView> {
++    if value.is_null() {
++        return Ok(ParsedActionView {
++            assignment_type: "empty".into(),
++            command_id: None,
++            skill_name: None,
++            skill_path: None,
++        });
++    }
++    let action = value
++        .as_object()
++        .with_context(|| format!("{path} must be an object or null"))?;
++    match nonempty_string_field(action, "type", path)? {
++        "command" => Ok(ParsedActionView {
++            assignment_type: "command".into(),
++            command_id: Some(nonempty_string_field(action, "commandId", path)?.to_owned()),
++            skill_name: None,
++            skill_path: None,
++        }),
++        "skill" => Ok(ParsedActionView {
++            assignment_type: "skill".into(),
++            command_id: None,
++            skill_name: Some(nonempty_string_field(action, "skillName", path)?.to_owned()),
++            skill_path: Some(nonempty_string_field(action, "skillPath", path)?.to_owned()),
++        }),
++        action_type => bail!("{path}.type has unknown action type {action_type}"),
++    }
++}
++
+ pub fn read_snapshot(path: &Path) -> Result<Snapshot> {
+     let metadata = fs::symlink_metadata(path)
+         .with_context(|| format!("failed to inspect Codex snapshot {}", path.display()))?;
+@@ -1678,6 +1972,147 @@ mod tests {
+         fs::remove_dir_all(root).unwrap();
+     }
+ 
++    #[test]
++    fn dial_candidates_preserve_mapping_and_require_custom_mode_for_gestures() {
++        let root = fixture_root();
++        fs::create_dir_all(&root).unwrap();
++        let config = root.join("config.toml");
++        let snapshot_path = root.join("snapshot.json");
++        let custom_path = root.join("custom.json");
++        let command_path = root.join("command.json");
++        let skill_path = root.join("skill.json");
++        let cleared_path = root.join("cleared.json");
++        let scroll_path = root.join("scroll.json");
++        fs::write(&config, b"[desktop]\ncodex-micro-future = \"preserved\"\n").unwrap();
++        let source_sha = fsutil::sha256(&config).unwrap();
++        let mut snapshot = export(&config, &root.join("missing.app"), &snapshot_path).unwrap();
++        let default_view = dial_gesture_get(&snapshot_path, "left").unwrap();
++        assert_eq!(default_view.assignment_type, "empty");
++        assert!(default_view.inherited);
++
++        let contract = load_contract().unwrap();
++        let mut layout = contract.definitions["codex-micro-layout"]
++            .default
++            .as_object()
++            .unwrap()
++            .clone();
++        layout.insert("encoderMode".into(), Value::String("reasoning".into()));
++        layout.insert(
++            "futureDialMetadata".into(),
++            serde_json::json!({"preserved": true}),
++        );
++        snapshot
++            .settings
++            .insert("codex-micro-layout".into(), Value::Object(layout));
++        refresh_effective_settings(&mut snapshot, &contract).unwrap();
++        let mut bytes = serde_json::to_vec_pretty(&snapshot).unwrap();
++        bytes.push(b'\n');
++        fs::write(&snapshot_path, bytes).unwrap();
++
++        let mode = dial_mode_get(&snapshot_path).unwrap();
++        assert_eq!(mode.value, "reasoning");
++        assert!(!mode.inherited);
++        let inactive = dial_gesture_set(
++            &snapshot_path,
++            "left",
++            DialGestureUpdate {
++                command: Some("navigateBack"),
++                skill_name: None,
++                skill_path: None,
++            },
++            &root.join("inactive.json"),
++        )
++        .unwrap_err();
++        assert!(inactive.to_string().contains("require encoder mode custom"));
++
++        let custom = dial_mode_set(&snapshot_path, "custom", &custom_path).unwrap();
++        assert_eq!(
++            custom.changed_paths,
++            vec!["/settings/codex-micro-layout/encoderMode"]
++        );
++        let custom_snapshot = read_snapshot(&custom_path).unwrap();
++        assert_eq!(
++            custom_snapshot.settings["codex-micro-layout"]["futureDialMetadata"]["preserved"],
++            true
++        );
++        assert!(custom_snapshot.settings["codex-micro-layout"]["encoder"]["right"].is_null());
++
++        let command = dial_gesture_set(
++            &custom_path,
++            "left",
++            DialGestureUpdate {
++                command: Some("navigateBack"),
++                skill_name: None,
++                skill_path: None,
++            },
++            &command_path,
++        )
++        .unwrap();
++        assert_eq!(
++            command.changed_paths,
++            vec!["/settings/codex-micro-layout/encoder/left"]
++        );
++        let command_view = dial_gesture_get(&command_path, "left").unwrap();
++        assert_eq!(command_view.assignment_type, "command");
++        assert_eq!(command_view.command_id.as_deref(), Some("navigateBack"));
++        assert!(!command_view.inherited);
++
++        dial_gesture_set(
++            &command_path,
++            "right",
++            DialGestureUpdate {
++                command: None,
++                skill_name: Some("Review"),
++                skill_path: Some("/tmp/review/SKILL.md"),
++            },
++            &skill_path,
++        )
++        .unwrap();
++        let skill_view = dial_gesture_get(&skill_path, "right").unwrap();
++        assert_eq!(skill_view.assignment_type, "skill");
++        assert_eq!(skill_view.skill_name.as_deref(), Some("Review"));
++        assert_eq!(
++            skill_view.skill_path.as_deref(),
++            Some("/tmp/review/SKILL.md")
++        );
++
++        dial_gesture_clear(&skill_path, "left", &cleared_path).unwrap();
++        let cleared = dial_gesture_get(&cleared_path, "left").unwrap();
++        assert_eq!(cleared.assignment_type, "empty");
++        assert!(!cleared.inherited);
++        assert_eq!(
++            dial_gesture_get(&cleared_path, "right")
++                .unwrap()
++                .assignment_type,
++            "skill"
++        );
++
++        dial_mode_set(&cleared_path, "conversation-scroll", &scroll_path).unwrap();
++        assert_eq!(
++            dial_gesture_get(&scroll_path, "right")
++                .unwrap()
++                .assignment_type,
++            "skill"
++        );
++        assert_eq!(
++            read_snapshot(&scroll_path).unwrap().settings["codex-micro-future"],
++            "preserved"
++        );
++        assert_eq!(fsutil::sha256(&config).unwrap(), source_sha);
++
++        let invalid_mode =
++            dial_mode_set(&scroll_path, "spin", &root.join("spin.json")).unwrap_err();
++        assert!(invalid_mode
++            .to_string()
++            .contains("dial mode must be one of"));
++        let invalid_gesture = dial_gesture_get(&scroll_path, "doubleClick").unwrap_err();
++        assert!(invalid_gesture
++            .to_string()
++            .contains("dial gesture must be one of"));
++
++        fs::remove_dir_all(root).unwrap();
++    }
++
+     #[test]
+     fn export_is_atomic_and_typed_readback_matches() {
+         let root = fixture_root();
+diff --git a/src/lib.rs b/src/lib.rs
+index 64c307f..2eeacc8 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -18,7 +18,8 @@ use cli::{
+     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
+     AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
+     CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand,
+-    CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexLightingAutoOff,
++    CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexDialCommand, CodexDialGesture,
++    CodexDialGestureCommand, CodexDialMode, CodexDialModeCommand, CodexLightingAutoOff,
+     CodexLightingAutoOffCommand, CodexLightingBrightnessCommand, CodexLightingCommand,
+     CodexRuntimeCommand, CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell,
+     ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
+@@ -2069,6 +2070,84 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
+                 &mut out,
+             )?,
+         },
++        CodexCommand::Dial { command } => match command {
++            CodexDialCommand::Mode { command } => match command {
++                CodexDialModeCommand::Get { input } => {
++                    let result = codex::dial_mode_get(&input)?;
++                    if json {
++                        write_json(&mut out, &result)?;
++                    } else {
++                        writeln!(
++                            out,
++                            "dial-mode={}\tinherited={}",
++                            result.value, result.inherited
++                        )?;
++                        writeln!(out, "revision={}", result.revision)?;
++                    }
++                }
++                CodexDialModeCommand::Set {
++                    input,
++                    value,
++                    output,
++                } => write_codex_candidate_result(
++                    codex::dial_mode_set(&input, codex_dial_mode_value(value), &output)?,
++                    json,
++                    &mut out,
++                )?,
++            },
++            CodexDialCommand::Gesture { command } => match command {
++                CodexDialGestureCommand::Get { input, gesture } => {
++                    let result =
++                        codex::dial_gesture_get(&input, codex_dial_gesture_value(gesture))?;
++                    if json {
++                        write_json(&mut out, &result)?;
++                    } else {
++                        writeln!(
++                            out,
++                            "dial-gesture={}\ttype={}\tinherited={}",
++                            result.gesture, result.assignment_type, result.inherited
++                        )?;
++                        if let Some(value) = result.command_id {
++                            writeln!(out, "command={value}")?;
++                        }
++                        if let (Some(name), Some(path)) = (result.skill_name, result.skill_path) {
++                            writeln!(out, "skill={name}\t{path}")?;
++                        }
++                        writeln!(out, "revision={}", result.revision)?;
++                    }
++                }
++                CodexDialGestureCommand::Set {
++                    input,
++                    gesture,
++                    command,
++                    skill_name,
++                    skill_path,
++                    output,
++                } => write_codex_candidate_result(
++                    codex::dial_gesture_set(
++                        &input,
++                        codex_dial_gesture_value(gesture),
++                        codex::DialGestureUpdate {
++                            command: command.as_deref(),
++                            skill_name: skill_name.as_deref(),
++                            skill_path: skill_path.as_deref(),
++                        },
++                        &output,
++                    )?,
++                    json,
++                    &mut out,
++                )?,
++                CodexDialGestureCommand::Clear {
++                    input,
++                    gesture,
++                    output,
++                } => write_codex_candidate_result(
++                    codex::dial_gesture_clear(&input, codex_dial_gesture_value(gesture), &output)?,
++                    json,
++                    &mut out,
++                )?,
++            },
++        },
+         CodexCommand::Lighting { command } => match command {
+             CodexLightingCommand::Brightness { command } => match command {
+                 CodexLightingBrightnessCommand::Get { input } => {
+@@ -2305,6 +2384,24 @@ fn codex_voice_mode_value(value: CodexVoiceMode) -> &'static str {
+     }
+ }
+ 
++fn codex_dial_mode_value(value: CodexDialMode) -> &'static str {
++    match value {
++        CodexDialMode::ComposerNavigation => "composer-navigation",
++        CodexDialMode::Reasoning => "reasoning",
++        CodexDialMode::ConversationScroll => "conversation-scroll",
++        CodexDialMode::Custom => "custom",
++    }
++}
++
++fn codex_dial_gesture_value(value: CodexDialGesture) -> &'static str {
++    match value {
++        CodexDialGesture::Left => "left",
++        CodexDialGesture::Right => "right",
++        CodexDialGesture::Click => "click",
++        CodexDialGesture::LongPress => "longPress",
++    }
++}
++
+ fn write_codex_candidate_result(
+     result: codex::CandidateReceipt,
+     json: bool,
+diff --git a/tests/cli.rs b/tests/cli.rs
+index cfcb95d..52b3e96 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -325,6 +325,7 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
+     assert!(stdout.contains("agent-source"));
+     assert!(stdout.contains("agent-key"));
+     assert!(stdout.contains("command-key"));
++    assert!(stdout.contains("dial"));
+     assert!(stdout.contains("lighting"));
+     assert!(stdout.contains("voice"));
+ 
+@@ -458,6 +459,130 @@ fn codex_settings_diff_runs_end_to_end_without_opening_a_bridge() {
+     fs::remove_dir_all(root).unwrap();
+ }
+ 
++#[test]
++fn codex_dial_candidates_run_end_to_end_without_writing_source() {
++    let root = fixture_root();
++    fs::create_dir_all(&root).unwrap();
++    let config = root.join("config.toml");
++    let snapshot = root.join("snapshot.json");
++    let custom = root.join("custom.json");
++    let command = root.join("command.json");
++    let skill = root.join("skill.json");
++    let cleared = root.join("cleared.json");
++    fs::write(
++        &config,
++        b"[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
++    )
++    .unwrap();
++    let source_sha = worklouderctl::fsutil::sha256(&config).unwrap();
++
++    let export = binary()
++        .args(["codex", "export", "--config"])
++        .arg(&config)
++        .arg("--app")
++        .arg(root.join("missing.app"))
++        .arg("--output")
++        .arg(&snapshot)
++        .output()
++        .unwrap();
++    assert!(export.status.success());
++
++    let inactive = binary()
++        .args(["codex", "dial", "gesture", "set", "--input"])
++        .arg(&snapshot)
++        .args(["left", "--command", "navigateBack", "--output"])
++        .arg(root.join("inactive.json"))
++        .output()
++        .unwrap();
++    assert_eq!(inactive.status.code(), Some(1));
++    assert!(String::from_utf8_lossy(&inactive.stderr).contains("require encoder mode custom"));
++
++    let mode = binary()
++        .args(["--json", "codex", "dial", "mode", "set", "--input"])
++        .arg(&snapshot)
++        .arg("custom")
++        .arg("--output")
++        .arg(&custom)
++        .output()
++        .unwrap();
++    assert!(mode.status.success());
++    let mode: serde_json::Value = serde_json::from_slice(&mode.stdout).unwrap();
++    assert_eq!(
++        mode["changedPaths"],
++        serde_json::json!(["/settings/codex-micro-layout/encoderMode"])
++    );
++
++    let set_command = binary()
++        .args(["--json", "codex", "dial", "gesture", "set", "--input"])
++        .arg(&custom)
++        .args(["left", "--command", "navigateBack", "--output"])
++        .arg(&command)
++        .output()
++        .unwrap();
++    assert!(set_command.status.success());
++    let set_command: serde_json::Value = serde_json::from_slice(&set_command.stdout).unwrap();
++    assert_eq!(
++        set_command["changedPaths"],
++        serde_json::json!(["/settings/codex-micro-layout/encoder/left"])
++    );
++
++    let set_skill = binary()
++        .args(["codex", "dial", "gesture", "set", "--input"])
++        .arg(&command)
++        .args([
++            "right",
++            "--skill-name",
++            "Review",
++            "--skill-path",
++            "/tmp/review/SKILL.md",
++            "--output",
++        ])
++        .arg(&skill)
++        .output()
++        .unwrap();
++    assert!(set_skill.status.success());
++
++    let get = binary()
++        .args(["--json", "codex", "dial", "gesture", "get", "--input"])
++        .arg(&skill)
++        .arg("right")
++        .output()
++        .unwrap();
++    assert!(get.status.success());
++    let get: serde_json::Value = serde_json::from_slice(&get.stdout).unwrap();
++    assert_eq!(get["assignmentType"], "skill");
++    assert_eq!(get["skillName"], "Review");
++    assert_eq!(get["skillPath"], "/tmp/review/SKILL.md");
++
++    let clear = binary()
++        .args(["--json", "codex", "dial", "gesture", "clear", "--input"])
++        .arg(&skill)
++        .arg("left")
++        .arg("--output")
++        .arg(&cleared)
++        .output()
++        .unwrap();
++    assert!(clear.status.success());
++    let clear: serde_json::Value = serde_json::from_slice(&clear.stdout).unwrap();
++    assert_eq!(
++        clear["changedPaths"],
++        serde_json::json!(["/settings/codex-micro-layout/encoder/left"])
++    );
++
++    let cleared_view = binary()
++        .args(["--json", "codex", "dial", "gesture", "get", "--input"])
++        .arg(&cleared)
++        .arg("left")
++        .output()
++        .unwrap();
++    assert!(cleared_view.status.success());
++    let cleared_view: serde_json::Value = serde_json::from_slice(&cleared_view.stdout).unwrap();
++    assert_eq!(cleared_view["assignmentType"], "empty");
++    assert_eq!(worklouderctl::fsutil::sha256(&config).unwrap(), source_sha);
++
++    fs::remove_dir_all(root).unwrap();
++}
++
+ #[test]
+ fn device_help_exposes_live_read_workflow() {
+     let device = binary().args(["device", "--help"]).output().unwrap();
