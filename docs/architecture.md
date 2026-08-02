@@ -119,6 +119,18 @@ Updating only one authority risks stale GUI state or a later overwrite. The
 transaction engine therefore snapshots, validates, writes, verifies, and
 synchronizes them as one operation.
 
+## Provider lifecycle command
+
+`worklouderctl provider` exposes exact-release bridge installation and device
+ownership as one typed CLI family rather than requiring direct invocation of
+repository scripts. Its embedded runtime is only an orchestrator: it verifies
+the installed app versions and hashes, attaches to their loopback inspectors,
+delegates to the existing Codex/Input services, closes the inspector, and
+validates the returned JSON. It contains no HID driver, firmware protocol, or
+host-action implementation. Handoffs retain the existing serialized lock,
+single-owner invariant, automatic reacquisition rollback, and hidden Input
+launch path.
+
 ## Architecture layers
 
 ```text

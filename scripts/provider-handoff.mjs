@@ -153,7 +153,14 @@ if (mode === "status-input") {
   }
 }
 
-  return result;
+  const scopedProvider = mode.endsWith("-codex")
+    ? "codex"
+    : mode.endsWith("-input")
+      ? "input"
+      : null;
+  return scopedProvider && result.provider == null
+    ? { ...result, provider: scopedProvider }
+    : result;
 }
 
 async function inputAction(action) {

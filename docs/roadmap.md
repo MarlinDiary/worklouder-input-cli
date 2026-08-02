@@ -105,6 +105,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Machine-readable compatibility matrix and Cargo-version gate for every release
 - [x] Strict backup inspection and schema migration assessment tools
 - [x] Shell-free agent JSON envelope over the same parser, typed statuses, and transaction core
+- [x] First-class embedded provider lifecycle CLI for bridge install/remove and bidirectional ownership handoff
 
 ## M6 — Delegated Input operations
 

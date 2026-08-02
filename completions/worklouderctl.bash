@@ -12,6 +12,9 @@ _worklouderctl() {
             "$1")
                 cmd="worklouderctl"
                 ;;
+            acquire)
+                cmd+="__acquire"
+                ;;
             action)
                 cmd+="__action"
                 ;;
@@ -144,6 +147,9 @@ _worklouderctl() {
             group)
                 cmd+="__group"
                 ;;
+            handoff)
+                cmd+="__handoff"
+                ;;
             help)
                 cmd+="__help"
                 ;;
@@ -210,6 +216,9 @@ _worklouderctl() {
             profile)
                 cmd+="__profile"
                 ;;
+            provider)
+                cmd+="__provider"
+                ;;
             radial)
                 cmd+="__radial"
                 ;;
@@ -218,6 +227,9 @@ _worklouderctl() {
                 ;;
             recovery)
                 cmd+="__recovery"
+                ;;
+            release)
+                cmd+="__release"
                 ;;
             remove)
                 cmd+="__remove"
@@ -295,7 +307,7 @@ _worklouderctl() {
 
     case "${cmd}" in
         worklouderctl)
-            opts="-h -V --help --version --json version tier capability compatibility doctor codex input device bridge config schema backup agent transaction profile layer control action multi-action smart-action cheat-sheet preset radial appsense completion help"
+            opts="-h -V --help --version --json version tier capability compatibility doctor provider codex input device bridge config schema backup agent transaction profile layer control action multi-action smart-action cheat-sheet preset radial appsense completion help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -5543,6 +5555,126 @@ _worklouderctl() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__provider)
+            opts="-h -V --runtime-dir --node --help --version --json status handoff acquire release install remove help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --runtime-dir)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --node)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__provider__acquire)
+            opts="-h -V --help --version --json codex input"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__provider__handoff)
+            opts="-h -V --help --version --json codex input"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__provider__help)
+            opts="--json <SUBCOMMAND>..."
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__provider__install)
+            opts="-h -V --help --version --json codex input"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__provider__release)
+            opts="-h -V --help --version --json codex input"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__provider__remove)
+            opts="-h -V --help --version --json codex input"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__provider__status)
+            opts="-h -V --help --version --json codex input"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
                 *)
                     COMPREPLY=()
                     ;;

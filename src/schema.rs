@@ -11,6 +11,7 @@ const CONFIGURATION: &str = include_str!("../spec/schemas/configuration-v1.schem
 const DOCTOR_REPORT: &str = include_str!("../spec/schemas/doctor-report-v1.schema.json");
 const ERROR: &str = include_str!("../spec/schemas/error-v1.schema.json");
 const INPUT_OPERATIONS: &str = include_str!("../spec/schemas/input-operations-v1.schema.json");
+const PROVIDER_LIFECYCLE: &str = include_str!("../spec/schemas/provider-lifecycle-v1.schema.json");
 const RELEASE_ARCHIVE: &str = include_str!("../spec/schemas/release-archive-v1.schema.json");
 const TRANSACTION: &str = include_str!("../spec/schemas/transaction-v1.schema.json");
 
@@ -94,6 +95,14 @@ const ENTRIES: &[SchemaEntry] = &[
     },
     SchemaEntry {
         summary: SchemaSummary {
+            name: "provider-lifecycle-v1",
+            id: "https://worklouderctl.dev/schemas/provider-lifecycle-v1.schema.json",
+            description: "Exact-release provider install, status, ownership, and release results",
+        },
+        source: PROVIDER_LIFECYCLE,
+    },
+    SchemaEntry {
+        summary: SchemaSummary {
             name: "release-archive-v1",
             id: "https://worklouderctl.dev/schemas/release-archive-v1.schema.json",
             description: "Deterministic macOS release archive manifest and signature state",
@@ -145,7 +154,7 @@ mod tests {
     #[test]
     fn registry_is_sorted_and_every_document_reopens() {
         let summaries = list();
-        assert_eq!(summaries.len(), 10);
+        assert_eq!(summaries.len(), 11);
         let names = summaries
             .iter()
             .map(|summary| summary.name)

@@ -43,6 +43,20 @@ pub enum Command {
         strict: bool,
     },
 
+    /// Install, inspect, and hand off the exact-release provider integrations.
+    Provider {
+        /// Override the private directory used for the embedded provider runtime.
+        #[clap(long, value_parser)]
+        runtime_dir: Option<PathBuf>,
+
+        /// Override the Node.js executable used by the embedded provider runtime.
+        #[clap(long, value_parser)]
+        node: Option<PathBuf>,
+
+        #[clap(subcommand)]
+        command: ProviderCommand,
+    },
+
     /// Inspect or export Codex-owned Codex Micro settings.
     Codex {
         #[clap(subcommand)]
@@ -236,6 +250,61 @@ pub enum CompatibilityCommand {
 
     /// Verify that the running Cargo version has exactly one valid entry.
     Verify,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ProviderCommand {
+    /// Inspect both providers or one exact provider without changing ownership.
+    Status {
+        /// Limit the status read to one provider.
+        #[clap(value_enum)]
+        provider: Option<ProviderTarget>,
+    },
+
+    /// Transfer physical-device ownership and roll back automatically on failure.
+    Handoff {
+        #[clap(value_enum)]
+        provider: ProviderTarget,
+    },
+
+    /// Acquire one provider without coordinating release of the other provider.
+    Acquire {
+        #[clap(value_enum)]
+        provider: ProviderTarget,
+    },
+
+    /// Release one provider while keeping its host-only bridge available.
+    Release {
+        #[clap(value_enum)]
+        provider: ProviderTarget,
+    },
+
+    /// Install the authenticated bridge into one already-running exact release.
+    Install {
+        #[clap(value_enum)]
+        provider: ProviderTarget,
+    },
+
+    /// Remove the authenticated bridge from one already-running exact release.
+    Remove {
+        #[clap(value_enum)]
+        provider: ProviderTarget,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum ProviderTarget {
+    Codex,
+    Input,
+}
+
+impl ProviderTarget {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Codex => "codex",
+            Self::Input => "input",
+        }
+    }
 }
 
 #[derive(Debug, Subcommand)]

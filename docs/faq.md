@@ -26,6 +26,19 @@ inferring write support from installed/running apps. The JSON field
 advertise all required apply and restore capabilities. A plain `doctor` remains
 read-only and reports an unavailable bridge as a warning.
 
+The provider lifecycle is also available through the binary:
+
+```sh
+worklouderctl provider install codex
+worklouderctl provider handoff input
+worklouderctl provider handoff codex
+worklouderctl doctor --strict
+```
+
+These commands keep Input hidden during ownership changes and preserve the
+Codex/Input runtime boundary; they replace direct use of the repository's Node
+helper entrypoints.
+
 ## What does full-configuration parity mean?
 
 Every setting available in the Codex Micro page or Input's Codex Micro views

@@ -104,6 +104,12 @@ worklouderctl tier list
 worklouderctl tier explain 1
 worklouderctl capability list --tier 2
 worklouderctl doctor [--strict]
+worklouderctl provider status [codex|input]
+worklouderctl provider install codex|input
+worklouderctl provider handoff codex|input
+worklouderctl provider acquire codex|input
+worklouderctl provider release codex|input
+worklouderctl provider remove codex|input
 worklouderctl codex doctor [--strict]
 worklouderctl codex inspect
 worklouderctl codex export --output CODEX_SNAPSHOT.json
@@ -246,6 +252,7 @@ worklouderctl config diff BASE CANDIDATE
 worklouderctl --json input inspect
 worklouderctl --json schema list
 worklouderctl --json schema show configuration-v1
+worklouderctl --json schema show provider-lifecycle-v1
 worklouderctl --json backup inspect --input APPLY_RECEIPT.json
 worklouderctl --json backup migration-plan --input BACKUP_DIRECTORY
 worklouderctl --json agent validate --input COMMAND_ENVELOPE.json
@@ -257,6 +264,16 @@ Generated Bash, Zsh, and Fish scripts are checked into [`completions/`](completi
 The exhaustive [command reference](docs/command-reference.md) is generated from
 the same Clap command tree. `./scripts/verify-cli-assets.sh` regenerates and
 compares all four artifacts.
+
+`provider install/status/handoff/acquire/release/remove` makes the exact-release
+Codex/Input lifecycle a first-class CLI contract. The binary materializes its
+embedded, hash-gated JavaScript integration under a private mode-0700 runtime
+directory, invokes Node.js directly without a shell, validates the helper's
+bounded JSON action and provider identity, and emits
+`worklouderctl-provider-lifecycle`. `handoff input` starts Input as a hidden
+user-scoped provider, installs its authenticated bridge, and releases Codex;
+`handoff codex` releases Input and restores Codex HID/joystick ownership. The
+runtime still delegates every device and host action to the installed apps.
 
 `codex inspect` reads only the five `codex-micro-*` settings from the
 `[desktop]` table in Codex's `config.toml`, validates them against the frozen

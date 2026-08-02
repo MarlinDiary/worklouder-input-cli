@@ -60,6 +60,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("tier"));
     assert!(stdout.contains("capability"));
     assert!(stdout.contains("doctor"));
+    assert!(stdout.contains("provider"));
     assert!(stdout.contains("bridge"));
     assert!(stdout.contains("config"));
     assert!(stdout.contains("schema"));
@@ -80,6 +81,75 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("preset"));
     assert!(stdout.contains("radial"));
     assert!(stdout.contains("completion"));
+}
+
+#[test]
+fn provider_lifecycle_is_a_first_class_shell_free_cli_command() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = fixture_root();
+    fs::create_dir_all(&root).unwrap();
+    let runtime = root.join("runtime");
+    let fake_node = root.join("node");
+    fs::write(
+        &fake_node,
+        br##"#!/bin/sh
+mode=${2:-install}
+case "$mode" in
+  status) printf '%s\n' '{"action":"status","input":{"available":false},"codex":{"action":"status"}}' ;;
+  input) printf '%s\n' '{"action":"handoff","provider":"input","idempotent":false}' ;;
+  *) printf '%s\n' '{"action":"install","provider":"codex","installed":true}' ;;
+esac
+"##,
+    )
+    .unwrap();
+    fs::set_permissions(&fake_node, fs::Permissions::from_mode(0o700)).unwrap();
+
+    let status = binary()
+        .args(["--json", "provider", "--runtime-dir"])
+        .arg(&runtime)
+        .arg("--node")
+        .arg(&fake_node)
+        .arg("status")
+        .output()
+        .unwrap();
+    assert!(
+        status.status.success(),
+        "{}",
+        String::from_utf8_lossy(&status.stderr)
+    );
+    let status: serde_json::Value = serde_json::from_slice(&status.stdout).unwrap();
+    assert_eq!(status["kind"], "worklouderctl-provider-lifecycle");
+    assert_eq!(status["operation"], "status");
+    assert_eq!(status["runtimeVersion"], 1);
+    assert_eq!(status["delegated"], true);
+    assert_eq!(status["result"]["action"], "status");
+
+    let handoff = binary()
+        .args(["--json", "provider", "--runtime-dir"])
+        .arg(&runtime)
+        .arg("--node")
+        .arg(&fake_node)
+        .args(["handoff", "input"])
+        .output()
+        .unwrap();
+    assert!(handoff.status.success());
+    let handoff: serde_json::Value = serde_json::from_slice(&handoff.stdout).unwrap();
+    assert_eq!(handoff["operation"], "handoff-input");
+    assert_eq!(handoff["provider"], "input");
+    assert_eq!(handoff["result"]["provider"], "input");
+
+    assert!(runtime.join("scripts/provider-handoff.mjs").is_file());
+    assert!(runtime
+        .join("companion/input-live-overlay-v3.mjs")
+        .is_file());
+    assert!(runtime
+        .join("companion/input-main-integration-v3.mjs")
+        .is_file());
+    assert!(runtime
+        .join("companion/codex-main-integration.mjs")
+        .is_file());
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -206,6 +276,7 @@ fn schemas_are_discoverable_and_machine_readable() {
             "doctor-report-v1",
             "error-v1",
             "input-operations-v1",
+            "provider-lifecycle-v1",
             "release-archive-v1",
             "transaction-v1",
         ]

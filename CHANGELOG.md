@@ -22,6 +22,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Authenticated Codex and Input Companion Bridge contracts, reference adapters,
   exact-release live overlays, and coordinated provider handoff without
   activating or navigating either GUI.
+- First-class `worklouderctl provider` commands that materialize the private
+  embedded exact-release runtime and delegate bridge install/remove plus
+  status/acquire/release/handoff without a shell.
 - Four-authority transactions with immutable backups, revision gates,
   idempotency keys, postflight verification, automatic reverse rollback, and
   manual restore.

@@ -184,6 +184,95 @@ _arguments "${_arguments_options[@]}" \
 '--json[Emit machine-readable JSON when the command supports it]' \
 && ret=0
 ;;
+(provider)
+_arguments "${_arguments_options[@]}" \
+'*--runtime-dir=[Override the private directory used for the embedded provider runtime]:RUNTIME_DIR:_files' \
+'*--node=[Override the Node.js executable used by the embedded provider runtime]:NODE:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__provider_commands" \
+"*::: :->provider" \
+&& ret=0
+
+    case $state in
+    (provider)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-provider-command-$line[1]:"
+        case $line[1] in
+            (status)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'::provider -- Limit the status read to one provider:(codex input)' \
+&& ret=0
+;;
+(handoff)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':provider:(codex input)' \
+&& ret=0
+;;
+(acquire)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':provider:(codex input)' \
+&& ret=0
+;;
+(release)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':provider:(codex input)' \
+&& ret=0
+;;
+(install)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':provider:(codex input)' \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':provider:(codex input)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (codex)
 _arguments "${_arguments_options[@]}" \
 '-h[Print help information]' \
@@ -3701,6 +3790,7 @@ _worklouderctl_commands() {
 'capability:Inspect capabilities covered by the CLI contract' \
 'compatibility:Inspect the release-gated application, bridge, and firmware matrix' \
 'doctor:Diagnose provider health and authenticated configuration readiness' \
+'provider:Install, inspect, and hand off the exact-release provider integrations' \
 'codex:Inspect or export Codex-owned Codex Micro settings' \
 'input:Inspect or export Input-owned configuration' \
 'device:Read live Codex Micro state through Input or its compatibility provider' \
@@ -3724,6 +3814,11 @@ _worklouderctl_commands() {
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'worklouderctl commands' commands "$@"
+}
+(( $+functions[_worklouderctl__provider__acquire_commands] )) ||
+_worklouderctl__provider__acquire_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl provider acquire commands' commands "$@"
 }
 (( $+functions[_worklouderctl__action_commands] )) ||
 _worklouderctl__action_commands() {
@@ -4358,6 +4453,11 @@ _worklouderctl__smart-action__group_commands() {
     )
     _describe -t commands 'worklouderctl smart-action group commands' commands "$@"
 }
+(( $+functions[_worklouderctl__provider__handoff_commands] )) ||
+_worklouderctl__provider__handoff_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl provider handoff commands' commands "$@"
+}
 (( $+functions[_worklouderctl__action__event__help_commands] )) ||
 _worklouderctl__action__event__help_commands() {
     local commands; commands=()
@@ -4618,6 +4718,11 @@ _worklouderctl__profile__help_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl profile help commands' commands "$@"
 }
+(( $+functions[_worklouderctl__provider__help_commands] )) ||
+_worklouderctl__provider__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl provider help commands' commands "$@"
+}
 (( $+functions[_worklouderctl__radial__help_commands] )) ||
 _worklouderctl__radial__help_commands() {
     local commands; commands=()
@@ -4694,6 +4799,11 @@ _worklouderctl__input__inspect_commands() {
 _worklouderctl__preset__install_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl preset install commands' commands "$@"
+}
+(( $+functions[_worklouderctl__provider__install_commands] )) ||
+_worklouderctl__provider__install_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl provider install commands' commands "$@"
 }
 (( $+functions[_worklouderctl__codex__joystick_commands] )) ||
 _worklouderctl__codex__joystick_commands() {
@@ -5004,6 +5114,19 @@ _worklouderctl__profile_commands() {
     )
     _describe -t commands 'worklouderctl profile commands' commands "$@"
 }
+(( $+functions[_worklouderctl__provider_commands] )) ||
+_worklouderctl__provider_commands() {
+    local commands; commands=(
+'status:Inspect both providers or one exact provider without changing ownership' \
+'handoff:Transfer physical-device ownership and roll back automatically on failure' \
+'acquire:Acquire one provider without coordinating release of the other provider' \
+'release:Release one provider while keeping its host-only bridge available' \
+'install:Install the authenticated bridge into one already-running exact release' \
+'remove:Remove the authenticated bridge from one already-running exact release' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl provider commands' commands "$@"
+}
 (( $+functions[_worklouderctl__radial_commands] )) ||
 _worklouderctl__radial_commands() {
     local commands; commands=(
@@ -5026,6 +5149,11 @@ _worklouderctl__input__recovery_commands() {
     )
     _describe -t commands 'worklouderctl input recovery commands' commands "$@"
 }
+(( $+functions[_worklouderctl__provider__release_commands] )) ||
+_worklouderctl__provider__release_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl provider release commands' commands "$@"
+}
 (( $+functions[_worklouderctl__action__group__member__remove_commands] )) ||
 _worklouderctl__action__group__member__remove_commands() {
     local commands; commands=()
@@ -5035,6 +5163,11 @@ _worklouderctl__action__group__member__remove_commands() {
 _worklouderctl__multi-action__group__member__remove_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl multi-action group member remove commands' commands "$@"
+}
+(( $+functions[_worklouderctl__provider__remove_commands] )) ||
+_worklouderctl__provider__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl provider remove commands' commands "$@"
 }
 (( $+functions[_worklouderctl__smart-action__group__member__remove_commands] )) ||
 _worklouderctl__smart-action__group__member__remove_commands() {
@@ -5382,6 +5515,11 @@ _worklouderctl__codex__runtime__status_commands() {
 _worklouderctl__device__status_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl device status commands' commands "$@"
+}
+(( $+functions[_worklouderctl__provider__status_commands] )) ||
+_worklouderctl__provider__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl provider status commands' commands "$@"
 }
 (( $+functions[_worklouderctl__codex__agent-key__tap-mode_commands] )) ||
 _worklouderctl__codex__agent-key__tap-mode_commands() {

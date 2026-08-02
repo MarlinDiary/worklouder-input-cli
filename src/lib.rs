@@ -14,6 +14,7 @@ pub mod doctor;
 pub mod exit_status;
 pub mod fsutil;
 pub mod input;
+pub mod provider;
 pub mod schema;
 pub mod semantic;
 pub mod transaction;
@@ -36,9 +37,9 @@ use cli::{
     InputRecoveryCommand, InputResetCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
     LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect,
     LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
-    PresetCommand, ProfileCommand, RadialCommand, SchemaCommand, SmartActionCommand,
-    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
-    TierCommand, TransactionCommand,
+    PresetCommand, ProfileCommand, ProviderCommand, ProviderTarget, RadialCommand, SchemaCommand,
+    SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+    SmartActionType as CliSmartActionType, TierCommand, TransactionCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -71,6 +72,11 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Capability { command } => run_capability(command, cli.json, &mut out)?,
         Command::Compatibility { command } => run_compatibility(command, cli.json, &mut out)?,
         Command::Doctor { strict } => run_doctor(strict, cli.json, &mut out)?,
+        Command::Provider {
+            runtime_dir,
+            node,
+            command,
+        } => run_provider(command, runtime_dir, node, cli.json, &mut out)?,
         Command::Codex { command } => run_codex(command, cli.json, &mut out)?,
         Command::Input {
             bridge_socket,
@@ -124,6 +130,37 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
+    Ok(())
+}
+
+fn run_provider(
+    command: ProviderCommand,
+    runtime_dir: Option<PathBuf>,
+    node: Option<PathBuf>,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    let target = |value: ProviderTarget| match value {
+        ProviderTarget::Codex => provider::Target::Codex,
+        ProviderTarget::Input => provider::Target::Input,
+    };
+    let operation = match command {
+        ProviderCommand::Status { provider } => provider::Operation::Status(provider.map(target)),
+        ProviderCommand::Handoff { provider } => provider::Operation::Handoff(target(provider)),
+        ProviderCommand::Acquire { provider } => provider::Operation::Acquire(target(provider)),
+        ProviderCommand::Release { provider } => provider::Operation::Release(target(provider)),
+        ProviderCommand::Install { provider } => provider::Operation::Install(target(provider)),
+        ProviderCommand::Remove { provider } => provider::Operation::Remove(target(provider)),
+    };
+    let report = provider::execute(operation, runtime_dir, node)?;
+    if json {
+        write_json(&mut out, &report)?;
+    } else {
+        writeln!(out, "operation={}", report.operation)?;
+        writeln!(out, "provider={}", report.provider.unwrap_or("all"))?;
+        writeln!(out, "delegated={}", report.delegated)?;
+        writeln!(out, "result={}", serde_json::to_string(&report.result)?)?;
+    }
     Ok(())
 }
 

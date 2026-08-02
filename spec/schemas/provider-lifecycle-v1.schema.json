@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worklouderctl.dev/schemas/provider-lifecycle-v1.schema.json",
+  "title": "WorkLouderCTL provider lifecycle result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "runtimeVersion",
+    "operation",
+    "delegated",
+    "result"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "worklouderctl-provider-lifecycle" },
+    "runtimeVersion": { "const": 1 },
+    "operation": {
+      "enum": [
+        "status",
+        "status-codex",
+        "status-input",
+        "handoff-codex",
+        "handoff-input",
+        "acquire-codex",
+        "acquire-input",
+        "release-codex",
+        "release-input",
+        "install-codex",
+        "install-input",
+        "remove-codex",
+        "remove-input"
+      ]
+    },
+    "provider": {
+      "enum": ["codex", "input"]
+    },
+    "delegated": { "const": true },
+    "result": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {
+          "enum": ["status", "handoff", "acquire", "release", "install", "remove"]
+        }
+      }
+    }
+  }
+}

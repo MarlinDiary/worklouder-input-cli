@@ -38,15 +38,22 @@ For the currently frozen Codex and Input releases, the repository contains
 no-restart installers and an explicit device-owner handoff:
 
 ```sh
-node scripts/install-codex-live-bridge.mjs
-node scripts/install-input-live-bridge.mjs
-node scripts/provider-handoff.mjs status
-node scripts/provider-handoff.mjs input # Input owns device configuration
-node scripts/provider-handoff.mjs codex # Codex owns hardware actions
-node scripts/provider-handoff.mjs status-codex # inspect one running provider
-node scripts/provider-handoff.mjs acquire-codex # recover Codex while Input is stopped
-node scripts/provider-handoff.mjs release-codex # release Codex before starting Input
+worklouderctl provider install codex
+worklouderctl provider handoff input # Input owns device configuration
+worklouderctl provider handoff codex # Codex owns hardware actions
+worklouderctl provider status
+worklouderctl provider status codex # inspect one running provider
+worklouderctl provider acquire codex # recover Codex while Input is stopped
+worklouderctl provider release codex # release Codex before starting Input
 ```
+
+These commands materialize the same checked-in exact-release helpers from the
+binary into `~/Library/Application Support/worklouderctl/provider-runtime-v1`
+with directory mode `0700` and file mode `0600`. `--runtime-dir` and `--node`
+provide explicit test/runtime overrides; `WORKLOUDERCTL_PROVIDER_RUNTIME` and
+`WORKLOUDERCTL_NODE` are their environment equivalents. The CLI invokes Node
+directly without a shell and rejects non-JSON, oversized, wrong-action, or
+wrong-provider helper responses.
 
 The two applications can stay open, but only one provider owns the physical
 HID session at a time. Host-only bridge methods remain available while the
