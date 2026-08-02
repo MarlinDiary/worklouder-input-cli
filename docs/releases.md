@@ -5,10 +5,10 @@ Apple Silicon and Intel Macs. A release archive contains the CLI, generated
 Bash/Zsh/Fish completions, the license, the README, and a machine-readable
 manifest with the SHA-256 and mode of every file.
 
-The packaging pipeline is complete and fixture-verified. The repository is
-still a **source alpha** until the first version tag is signed, notarized, and
-published. Do not interpret a local unsigned or ad-hoc build as an official
-signed release.
+The packaging pipeline is complete and fixture-verified. Source builds and
+local packages are available now; the first public version tag will add signed,
+notarized distribution. A local unsigned or ad-hoc build remains distinct from
+an official signed release.
 
 The same tagged release also contains a deterministic Companion Bridge `.tgz`
 integration kit. That package lets Codex/Input maintainers install the exact

@@ -5,13 +5,13 @@ Input CLI, Codex Micro configuration, and AI-assisted macropad automation.
 
 ## What is WorkLouderCTL?
 
-WorkLouderCTL is a source-alpha, open-source full-configuration CLI for Codex,
+WorkLouderCTL is an open-source full-configuration CLI for Codex,
 Work Louder Input, and Codex Micro. It targets every Codex Micro configuration
 surface exposed by both GUIs.
 
 ## Is there a CLI for Work Louder Input?
 
-WorkLouderCTL is being built for that role. The source-built CLI already reads
+WorkLouderCTL fills that role. The source-built CLI reads
 Codex settings, Input cache state, and live Codex Micro status/files through
 Input 0.18.0's bundled provider. It also generates strict offline candidates
 and runs authenticated Codex/Input apply/readback/restore/rollback transactions
@@ -61,11 +61,12 @@ installed providers instead of maintaining a second driver stack. The CLI owns
 configuration automation and verification while upstream owns device/runtime
 evolution.
 
-## Which device will be supported first?
+## Which target is currently verified?
 
-Work Louder Codex Micro on macOS is the first target. Codex 26.727.51351,
-Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0 are the initial research
-fixtures. They are not yet a release support guarantee.
+Work Louder Codex Micro on macOS is the verified target. Codex 26.727.51351 and
+Input 0.18.0 completed the live provider transaction boundary; Input
+0.17.3/0.18.0 and Codex Micro firmware v0.6.0 remain the sanitized fixture
+boundary. New versions enter capability discovery before writes are enabled.
 
 ## Which Codex Micro controls are in scope?
 
@@ -88,7 +89,7 @@ fields and the bridge fixture restores the exact baseline mode and source hash.
 
 Yes, through the deterministic JSON contract. Human and agent clients share
 the same transaction model: inspect, plan, diff, apply, verify, and
-rollback. There will be no separate unverified AI write path.
+rollback. There is no separate unverified AI write path.
 
 ## Can it configure all six Codex Agent Keys?
 
@@ -145,14 +146,14 @@ external listener. The version- and hash-gated live overlay installs the same
 contract without focusing the GUI; settings and Agent Keys have completed live
 apply/readback/exact-restore transactions on Codex `26.727.51351`.
 
-## Will it support Smart Actions?
+## Does it support Smart Actions?
 
 Smart Action text, command, URL, and app definitions, groups, references,
 bindings, and delete cascades are implemented as strict offline candidates.
 The released Input `0.18.0` overlay has live-validated its complete negotiated
 configuration transaction, including the provider-owned database writer.
 
-## Will it support Linux and Windows?
+## What about Linux and Windows?
 
 macOS is first because Input coordination and hardware evidence already exist
 there. Linux and Windows will follow transport and state-adapter milestones

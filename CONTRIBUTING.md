@@ -1,11 +1,12 @@
 # Contributing to WorkLouderCTL
 
-WorkLouderCTL is currently a source alpha with fixture and exact-release live
-provider evidence. Contributions should strengthen the evidence, compatibility
-model, transaction safety, provider integration, packaging, or command contract
-without claiming support beyond the tested boundary.
+WorkLouderCTL has reached configuration parity for its verified Codex Micro
+boundary, with fixture and exact-release live-provider evidence. Contributions
+should strengthen the evidence, compatibility model, transaction safety,
+provider integration, packaging, or command contract while keeping every claim
+inside its tested boundary.
 
-## Good early contributions
+## Good contributions
 
 - sanitized Input and device fixtures;
 - schema and reference-validation tests;

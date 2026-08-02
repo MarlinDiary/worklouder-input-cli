@@ -1,17 +1,17 @@
 # WorkLouderCTL
 
-> WorkLouderCTL is an unofficial, open-source full-configuration CLI being built for Codex, Work Louder Input, and Codex Micro. It targets complete configuration-GUI parity with safe inspection, diff, backup, verified apply, synchronization, and rollback for humans, scripts, and AI agents.
+> WorkLouderCTL is an independent, open-source full-configuration CLI for Codex, Work Louder Input, and Codex Micro. It provides configuration-GUI parity with safe inspection, diff, backup, verified apply, synchronization, and rollback for humans, scripts, and AI agents.
 
-Important: the project is currently a source alpha. The repository builds a working `worklouderctl` binary with Codex/Input inspection, offline semantic candidate editors, authenticated Codex/Input bridge clients, fixture-verified apply/readback/restore/rollback, live Codex Micro status/files, verified exports, and exact-release Codex/Input overlay transactions with live apply/readback/exact-restore evidence. Deterministic dual-architecture packaging, explicit signature-state verification, fail-closed Developer ID notarization, and release-specific Homebrew formula generation are implemented, but no packaged release has been published yet.
+Important: configuration parity is implemented for the verified macOS/Codex Micro boundary. The source-built `worklouderctl` binary includes Codex/Input inspection, semantic editors, authenticated provider bridges, complete transactions, live Codex Micro reads, exact-release apply/readback/restore, and provider handoff. Deterministic dual-architecture packaging, signature-state verification, Developer ID notarization, and Homebrew formula generation are implemented. The first signed release awaits project credentials and the `v0.1.0` tag.
 
 ## Core documentation
 
-- [README](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/README.md): canonical project overview, status, scope, and planned CLI
+- [README](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/README.md): canonical project overview, status, scope, and core workflows
 - [Chinese README](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/README.zh-CN.md): Simplified Chinese overview
 - [FAQ](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/faq.md): direct answers about Work Louder Input CLI and Codex Micro support
 - [Tier model](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/tier-model.md): normative Codex Tier 1 and Input Tier 2+ authority boundary
 - [Configuration reference](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/configuration-reference.md): complete researched capability inventory
-- [Configuration parity](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/configuration-parity.md): every Codex and Input configuration surface and planned CLI command
+- [Configuration parity](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/configuration-parity.md): every Codex and Input configuration surface, command, and evidence boundary
 - [2026-08-02 audit](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/research/2026-08-02-codex-micro-audit.md): frozen app, firmware, state, protocol, and rollback evidence
 - [Compatibility](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/compatibility.md): version and evidence policy
 - [Architecture](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/architecture.md): device, cache, database, transaction, and rollback model
@@ -37,13 +37,13 @@ Important: the project is currently a source alpha. The repository builds a work
 - Product category: full-configuration CLI and command-line configurator
 - Initial device target: Work Louder Codex Micro
 - Initial host target: macOS
-- Product goal: replace Codex and Input configuration GUIs for Codex Micro with complete typed CLI coverage
+- Product scope: replace Codex and Input configuration GUIs for Codex Micro with complete typed CLI coverage
 - Tier boundary: Tier 1 uses Codex authorities; Tier 2 and above use Work Louder Input authorities; the CLI configures every tier
 - Provider strategy: delegate driver, BLE/HID, firmware, and host runtime behavior to the installed Codex/Input versions
 - Non-goal: implementing a replacement hardware driver or firmware protocol
 - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
 - Public fixture boundary: deterministic synthetic Input 0.17.3/0.18.0 configuration snapshots and a firmware v0.6.0 status DTO, with regenerated SHA-256 manifests and sensitive-pattern checks
-- Current maturity: source alpha; read paths, isolated and exact-release live bridge transactions, deterministic macOS package verification, and fail-closed signed release automation implemented; no packaged release published
+- Current maturity: configuration-parity prerelease; exact-release live transactions, provider handoff, deterministic macOS packaging, and fail-closed signed-release automation are implemented; the first signed tag is pending
 - Current Codex commands: `codex doctor/inspect/export`, `codex bridge inspect`, `codex config snapshot/apply/restore`, six-slot `codex agent-key assignments/snapshot/get/set/clear/apply/restore`, `codex lighting brightness/auto-off get/set`, and `codex voice get/set`
 - Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`, global lighting, and voice mode provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; six-slot Agent Key candidates preserve untargeted unknown fields and use a separate global-state revision; both the fixture and Codex `26.727.51351` exact-release overlay verify settings and Agent Key apply/readback/restore
 - Input cache command: `input config snapshot` captures `keymap.json` plus optional `smart_actions.json` byte-for-byte, excludes host-only state, and emits a bridge-revision-equivalent semantic snapshot without controlling the Input GUI or device transport
@@ -59,4 +59,4 @@ Important: the project is currently a source alpha. The repository builds a work
 
 ## Terminology
 
-Use “Work Louder Input” for the official GUI application, “Codex Micro” for the initial hardware target, “WorkLouderCTL” for this project, and “worklouderctl” for the planned command.
+Use “Work Louder Input” for the official GUI application, “Codex Micro” for the initial hardware target, “WorkLouderCTL” for this project, and “worklouderctl” for the command.

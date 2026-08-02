@@ -1,577 +1,268 @@
-# WorkLouderCTL：Work Louder Input 与 Codex Micro 的 CLI
+# WorkLouderCTL：Codex Micro 全配置 CLI
 
-**覆盖 Codex App 与 Work Louder Input 全部配置能力的开源 CLI。**
+<p align="center">
+  <strong>使用一个确定性、适合 Agent 调用的 CLI 配置 Codex Micro 与 Work Louder Input。</strong>
+</p>
 
-[English](README.md) · [常见问题](docs/faq.md) ·
-[兼容性](docs/compatibility.md) · [架构](docs/architecture.md) ·
-[发行](docs/releases.md) · [变更记录](CHANGELOG.md) ·
-[路线图](docs/roadmap.md)
+<p align="center">
+  <a href="README.md">English</a> ·
+  <a href="docs/command-reference.md">命令参考</a> ·
+  <a href="docs/configuration-parity.md">配置覆盖矩阵</a> ·
+  <a href="docs/compatibility.md">兼容性</a> ·
+  <a href="docs/architecture.md">架构</a> ·
+  <a href="docs/releases.md">发布</a>
+</p>
 
-> **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
-> provider 诊断、Codex Micro 设置检查/导出、Input 只读检查/原字节导出、
-> live device status/files、双哈希验证导出、带 revision 的 bridge snapshot、
-> live CAS 校验、离线 profile/layer/AppSense/control/Action/Smart Action candidate
-> 生成、fixture 验证的 Input/Codex apply/restore transaction、六个 Codex Agent
-> Key assignment 的 snapshot/get/set/clear/apply/restore、结构化 diff、JSON 输出和
-> shell completion。
-> 双架构 deterministic archive、明确的 signature-state verification、
-> fail-closed Developer ID/notarization workflow 与 Homebrew formula generation
-> 已实现并完成本地验证，但尚未发布正式打包版本；详见
-> [macOS 发行指南](docs/releases.md)。除隔离 writer fixture 外，exact-release
-> Codex/Input overlay 已在真实 Codex Micro 上完成四 authority 的
-> apply/readback/exact-restore 和双向 provider handoff 验证；Input `0.18.0` 未协商的
-> optional authority 继续 fail-closed。
+<p align="center">
+  <a href="https://github.com/MarlinDiary/worklouder-input-cli/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MarlinDiary/worklouder-input-cli/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="状态：配置功能完整" src="https://img.shields.io/badge/status-configuration%20parity-0F766E">
+  <img alt="平台：macOS" src="https://img.shields.io/badge/platform-macOS-111827">
+  <img alt="许可证：MIT" src="https://img.shields.io/badge/license-MIT-22C55E">
+</p>
 
-## 简单来说，它是什么？
+WorkLouderCTL 使用类型化命令行接口替代 **Codex** 与 **Work Louder Input**
+中的 Codex Micro 配置流程。它覆盖四个配置层级：Codex 原生控制、设备布局、
+Input 主机动作，以及由 Input 执行的设备操作。
 
-如果你正在搜索以下问题：
+Codex 和 Input 继续负责 HID/BLE、固件、AppSense、Smart Actions 与 Codex
+原生运行时行为。WorkLouderCTL 提供可复现的配置层：读取、计划、对比、写入、
+验证和回滚。
 
-- Work Louder Input 有没有 CLI？
-- 如何通过命令行配置 Codex Micro？
-- AI Agent 能否安全修改 Work Louder Input 配置？
-- 如何备份和恢复 Codex Micro 的 profiles、layers 和 keymap？
+> [!NOTE]
+> 当前已在经过验证的 macOS/Codex Micro 边界内实现完整配置覆盖。Codex
+> `26.727.51351` 与 Input `0.18.0` 已通过真实设备写入、读回、精确恢复以及
+> 双向 provider handoff。源码安装现在即可使用；首个签名与公证版本等待项目
+> 发布凭据和版本标签。
 
-WorkLouderCTL 就是为这些场景设计的。
+## 功能覆盖
 
-产品目标是让 GUI 对“配置”变为可选：Tier 1 通过 Codex settings adapter
-完整读写，Tier 2 及以上通过 Input/device adapters 完整读写。Codex 和 Input
-仍可作为 Codex-aware actions、AppSense、Smart Actions 与动态灯光的运行时。
-CLI 不实现新的键盘 driver、BLE/HID stack、firmware protocol 或 host-action
-runtime，而是调用当前已安装的 Codex/Input provider，从而继续获得上游更新。
+| 范围 | 能力 |
+| --- | --- |
+| **Codex 配置** | Agent source、六个 Agent Keys、六个 Command Keys、点击行为、语音模式、旋钮、摇杆、全局灯光、布局重置、运行时诊断与恢复 |
+| **Input 设备配置** | Profile、六层 Layer、按键矩阵、Encoder、径向摇杆、Actions、Multi Actions、分组、Preset、背光、底光和 Layer 元数据 |
+| **Input 主机配置** | Smart Actions、Smart Action 分组、AppSense 链接与运行时检查、Cheat Sheet、Radial Menu 检查和 Command 权限 |
+| **Input 设备操作** | 设备与固件状态、权限、脱敏日志、固件计划，以及委托给 Input 的升级、重置和恢复流程 |
+| **事务** | 不可变备份、精确 diff、revision CAS、幂等重试、读回、postflight、自动逆序回滚和手动恢复 |
+| **自动化** | 稳定 JSON、JSON Schema、无 shell Agent envelope，以及 Bash/Zsh/Fish completion |
 
-```text
-读取当前状态 → 生成计划与 diff → 备份 → 写入 → readback 验证 → 同步 Input → 恢复或完成
-```
+逐项验收结果参见[配置覆盖矩阵](docs/configuration-parity.md)。
 
-## 构建和使用当前 CLI
+## 从源码安装
 
-最低 Rust 版本为 1.61：
+需要：
+
+- macOS
+- Rust 1.61 或更新版本
+- 已安装 Codex 与 Work Louder Input
+- Node.js 22 或更新版本，用于内嵌 provider runtime 的 global WebSocket API
 
 ```console
 git clone https://github.com/MarlinDiary/worklouder-input-cli.git
 cd worklouder-input-cli
 cargo build --release --locked
-./target/release/worklouderctl doctor
+./target/release/worklouderctl version
 ```
 
-[macOS 发行指南](docs/releases.md)记录了 deterministic local archive、
-checksum/signature verification、tagged Developer ID notarization 与生成的
-Homebrew formula。首个 signed tag 发布前，仍以以上 source build 为公开安装方式。
-
-`worklouderctl doctor` 会区分 provider 的可读健康状态和完整配置就绪状态。
-只有 Codex 与 Input runtime 都提供经过认证、且包含全部 apply/restore capability
-的 bridge 时，JSON 才会报告 `configurationReady: true`。bridge 缺失、不可连接或
-capability 不完整时，`doctor --strict` 会以非零状态退出；普通 `doctor` 仍只读输出
-诊断与 warning，不会写入任一 provider。
-
-当前已经实现：
+安装认证 provider integration，并检查当前电脑：
 
 ```console
-worklouderctl version
-worklouderctl tier list
-worklouderctl tier explain 1
-worklouderctl capability list --tier 2
-worklouderctl doctor [--strict]
-worklouderctl codex doctor [--strict]
-worklouderctl codex inspect
-worklouderctl codex export --output CODEX_SNAPSHOT.json
-worklouderctl codex bridge inspect
-worklouderctl codex config snapshot --output CODEX_SNAPSHOT.json
-worklouderctl codex config apply --input CODEX_CANDIDATE.json --backup CODEX_BEFORE.json
-worklouderctl codex config restore --input CODEX_BEFORE.json --backup CODEX_CURRENT.json
-worklouderctl codex agent-key assignments
-worklouderctl codex agent-key snapshot --output AGENT_KEYS.json
-worklouderctl codex agent-key get --input AGENT_KEYS.json AG00
-worklouderctl codex agent-key set --input AGENT_KEYS.json AG01 --command COMMAND_ID --output AGENT_CANDIDATE.json
-worklouderctl codex agent-key clear --input AGENT_CANDIDATE.json AG00 --output AGENT_CLEARED.json
-worklouderctl codex agent-key apply --input AGENT_CLEARED.json --backup AGENT_BEFORE.json
-worklouderctl codex agent-key restore --input AGENT_BEFORE.json --backup AGENT_CURRENT.json
-worklouderctl codex agent-source get --input CODEX_SNAPSHOT.json
-worklouderctl codex agent-source set --input CODEX_SNAPSHOT.json priority --output CODEX_CANDIDATE.json
-worklouderctl codex agent-key tap-mode get --input CODEX_SNAPSHOT.json
-worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled --output CODEX_CANDIDATE.json
-worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
-worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
-worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
-worklouderctl codex dial mode get --input CODEX_SNAPSHOT.json
-worklouderctl codex dial mode set --input CODEX_SNAPSHOT.json custom --output CODEX_DIAL.json
-worklouderctl codex dial gesture set --input CODEX_DIAL.json left --command navigateBack --output CODEX_DIAL_LEFT.json
-worklouderctl codex dial gesture set --input CODEX_DIAL_LEFT.json right --skill-name Review --skill-path /PATH/TO/SKILL.md --output CODEX_DIAL_RIGHT.json
-worklouderctl codex dial gesture get --input CODEX_DIAL_RIGHT.json right
-worklouderctl codex dial gesture clear --input CODEX_DIAL_RIGHT.json left --output CODEX_DIAL_CLEARED.json
-worklouderctl codex joystick get --input CODEX_SNAPSHOT.json up
-worklouderctl codex joystick set --input CODEX_SNAPSHOT.json up --skill-name Plan --skill-path /PATH/TO/SKILL.md --output CODEX_JOYSTICK_UP.json
-worklouderctl codex joystick set --input CODEX_JOYSTICK_UP.json right --command navigateForward --output CODEX_JOYSTICK_RIGHT.json
-worklouderctl codex joystick clear --input CODEX_JOYSTICK_RIGHT.json down --output CODEX_JOYSTICK_CLEARED.json
-worklouderctl codex reset layout --input CODEX_JOYSTICK_CLEARED.json --output CODEX_LAYOUT_DEFAULT.json
-worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
-worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
-worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
-worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
-worklouderctl codex lighting auto-off set --input CODEX_BRIGHTNESS.json 10-minutes --output CODEX_LIGHTING.json
-worklouderctl codex voice get --input CODEX_LIGHTING.json
-worklouderctl codex voice set --input CODEX_LIGHTING.json realtime --output CODEX_VOICE.json
-worklouderctl codex runtime status
-worklouderctl codex runtime recover [--timeout-seconds 15]
-worklouderctl input inspect [--device DEVICE_ID]
-worklouderctl input export --output BACKUP_DIRECTORY
-worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
-worklouderctl input permission command snapshot --output HOST_SETTINGS.json
-worklouderctl input permission command get --input HOST_SETTINGS.json
-worklouderctl input permission command set --input HOST_SETTINGS.json enabled --output HOST_SETTINGS_ENABLED.json
-worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json
-worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
-worklouderctl input permissions [--device DEVICE_ID]
-worklouderctl input firmware check [--device DEVICE_ID]
-worklouderctl input firmware plan --output FIRMWARE_PLAN.json [--device DEVICE_ID]
-worklouderctl input firmware update --plan FIRMWARE_PLAN.json --backup FIRMWARE_CONFIG_BEFORE.json --receipt FIRMWARE_UPDATE.json --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
-worklouderctl input reset plan --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json [--device DEVICE_ID]
-worklouderctl input reset apply --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json --backup RESET_BEFORE.json --receipt RESET_RECEIPT.json --expected-revision CONFIG_REVISION --idempotency-key RESET_KEY
-worklouderctl input recovery plan --backup CONFIG_BEFORE_RECOVERY.json --plan RECOVERY_PLAN.json
-worklouderctl input recovery apply --plan RECOVERY_PLAN.json --backup CONFIG_BEFORE_RECOVERY.json --receipt RECOVERY_RECEIPT.json --idempotency-key RECOVERY_KEY
-worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
-worklouderctl input preset snapshot --output PRESET_CATALOG.json
-worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
-worklouderctl preset show --catalog PRESET_CATALOG.json --id PRESET_ID
-worklouderctl preset preview --catalog PRESET_CATALOG.json --id PRESET_ID --output PREVIEW.png
-worklouderctl preset install --input CONFIG.json --catalog PRESET_CATALOG.json --id PRESET_ID --profile PROFILE_ID --output CANDIDATE.json
-worklouderctl cheat-sheet catalog
-worklouderctl cheat-sheet bindings --input CONFIG.json --layer LAYER_ID
-worklouderctl cheat-sheet bind --input CONFIG.json --layer LAYER_ID --control key:0:0 toggle --output CANDIDATE.json
-worklouderctl radial show --input CONFIG.json --profile PROFILE_ID --layer LAYER_ID
-worklouderctl bridge status
-worklouderctl device --transport bridge status
-worklouderctl device --transport bridge files --recursive
-worklouderctl device --transport bridge export --output DEVICE_BACKUP
-worklouderctl device --transport bridge config snapshot --output CONFIG.json
-worklouderctl device --transport bridge config validate --input CONFIG.json
-worklouderctl device --transport bridge config apply --input CONFIG.json --backup BEFORE.json
-worklouderctl device --transport bridge config restore --input BEFORE.json --backup CURRENT.json
-worklouderctl profile list --input CONFIG.json
-worklouderctl profile show --input CONFIG.json --id PROFILE_ID
-worklouderctl profile create --input CONFIG.json --name NAME --output CANDIDATE.json
-worklouderctl profile duplicate --input CONFIG.json --id PROFILE_ID --name NAME --output CANDIDATE.json
-worklouderctl profile delete --input CONFIG.json --id PROFILE_ID --output CANDIDATE.json
-worklouderctl profile select --input CONFIG.json --id PROFILE_ID --output CANDIDATE.json
-worklouderctl profile rename --input CONFIG.json --id PROFILE_ID --name NAME --output CANDIDATE.json
-worklouderctl layer list --input CONFIG.json [--profile PROFILE_ID]
-worklouderctl layer show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
-worklouderctl layer create --input CONFIG.json [--profile PROFILE_ID] --name NAME --output CANDIDATE.json
-worklouderctl layer duplicate --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --name NAME --output CANDIDATE.json
-worklouderctl layer delete --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --output CANDIDATE.json
-worklouderctl layer move --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --to INDEX --output CANDIDATE.json
-worklouderctl layer rename --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --name NAME --output CANDIDATE.json
-worklouderctl layer color --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --color '#RRGGBB' --output CANDIDATE.json
-worklouderctl layer lighting show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
-worklouderctl layer lighting set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --zone backlight --effect breath --brightness 0.5 --color '#RRGGBB' [--apply-to-all] --output CANDIDATE.json
-worklouderctl layer joystick show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
-worklouderctl layer joystick mode set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID radial --output CANDIDATE.json
-worklouderctl layer joystick sector add --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --index INDEX --output CANDIDATE.json
-worklouderctl layer joystick sector delete --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --index INDEX --output CANDIDATE.json
-worklouderctl appsense list --input CONFIG.json
-worklouderctl appsense show --input CONFIG.json --id APP_ID
-worklouderctl appsense link --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --name NAME [--process BUNDLE_ID] [--path APP_PATH] --output CANDIDATE.json
-worklouderctl appsense set --input CONFIG.json --id APP_ID [--name NAME] [--process BUNDLE_ID|--clear-process] [--path APP_PATH|--clear-path] --output CANDIDATE.json
-worklouderctl appsense unlink --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --output CANDIDATE.json
-worklouderctl control list --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID
-worklouderctl control show --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control key:ROW:COLUMN
-worklouderctl control set --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control encoder:INDEX:press --assignment KC_MUTE --output CANDIDATE.json
-worklouderctl action list --input CONFIG.json
-worklouderctl action show --input CONFIG.json --id ACTION_ID
-worklouderctl action create --input CONFIG.json --name NAME --output CANDIDATE.json
-worklouderctl action rename --input CONFIG.json --id ACTION_ID --name NAME --output CANDIDATE.json
-worklouderctl action event add --input CONFIG.json --id ACTION_ID --assignment KC_C --type press --delay 0 --output CANDIDATE.json
-worklouderctl action event set --input CONFIG.json --id ACTION_ID --index 0 --assignment KC_C --type click --delay 200 --output CANDIDATE.json
-worklouderctl action event delete --input CONFIG.json --id ACTION_ID --index 0 --output CANDIDATE.json
-worklouderctl action event move --input CONFIG.json --id ACTION_ID --from 1 --to 0 --output CANDIDATE.json
-worklouderctl action delete --input CONFIG.json --id ACTION_ID --output CANDIDATE.json
-worklouderctl action group list --input CONFIG.json
-worklouderctl action group create --input CONFIG.json --name NAME --action ACTION_ID --output CANDIDATE.json
-worklouderctl action group member move --input CONFIG.json --id GROUP_ID --from 1 --to 0 --output CANDIDATE.json
-worklouderctl action group delete --input CONFIG.json --id GROUP_ID [--keep-members] --output CANDIDATE.json
-worklouderctl multi-action list --input CONFIG.json
-worklouderctl multi-action show --input CONFIG.json --id MULTI_ACTION_ID
-worklouderctl multi-action create --input CONFIG.json --name NAME --output CANDIDATE.json
-worklouderctl multi-action set --input CONFIG.json --id MULTI_ACTION_ID --tap KC_A --double-tap KC_B --hold KC_C --tap-hold KC_D --tapping-term 250 --output CANDIDATE.json
-worklouderctl multi-action delete --input CONFIG.json --id MULTI_ACTION_ID --output CANDIDATE.json
-worklouderctl multi-action group create --input CONFIG.json --name NAME --multi-action MULTI_ACTION_ID --output CANDIDATE.json
-worklouderctl multi-action group delete --input CONFIG.json --id GROUP_ID [--keep-members] --output CANDIDATE.json
-worklouderctl smart-action list --input CONFIG.json
-worklouderctl smart-action show --input CONFIG.json --id SMART_ACTION_ID
-worklouderctl smart-action create --input CONFIG.json --name NAME --type text --text TEXT --output CANDIDATE.json
-worklouderctl smart-action set --input CONFIG.json --id SMART_ACTION_ID --type url --url URL --output CANDIDATE.json
-worklouderctl smart-action delete --input CONFIG.json --id SMART_ACTION_ID --output CANDIDATE.json
-worklouderctl smart-action group create --input CONFIG.json --name NAME --smart-action SMART_ACTION_ID --output CANDIDATE.json
-worklouderctl smart-action group member move --input CONFIG.json --id GROUP_ID --from 1 --to 0 --output CANDIDATE.json
-worklouderctl smart-action group delete --input CONFIG.json --id GROUP_ID --output CANDIDATE.json
-worklouderctl device --transport direct --input-mode require-closed status
-worklouderctl config validate BACKUP_DIRECTORY
-worklouderctl config diff BASE CANDIDATE
-worklouderctl --json input inspect
-worklouderctl completion bash|zsh|fish
+./target/release/worklouderctl provider install codex
+./target/release/worklouderctl provider install input
+./target/release/worklouderctl provider handoff codex
+./target/release/worklouderctl doctor --strict
 ```
 
-`codex inspect` 只读取 Codex `config.toml` 中 `[desktop]` 表的五个
-`codex-micro-*` 设置，按照 Codex 26.727.51351 的冻结契约校验，并在 effective
-view 中递归补齐继承的默认值。`codex export` 原子发布并重新打开 typed JSON
-snapshot；两者都不会序列化其他 Codex 设置。
+当 `configurationReady: true` 时，两个 provider bridge 都已经为当前安装版本
+提供完整的 apply 和 restore 能力。
 
-`codex agent-source`、`codex agent-key tap-mode`、`codex command-key`、
-`codex dial`、`codex joystick`、`codex reset`、`codex lighting` 与 `codex voice` 是严格的
-Tier 1 离线 editor：核对内嵌 frozen definitions，重算 effective settings 与
-recursive-key-sorted revision，保留未知 `codex-micro-*` 值，原子发布并重新打开。
-receipt 中的 `expectedSourceSha256` 供 Codex `settings-write` CAS transaction
-使用；candidate 生成阶段保持源 TOML 与 Codex runtime state 原样。
-`codex config apply/restore` 通过认证的 Codex Companion Bridge 消费这些
-candidate，执行 source SHA + canonical settings revision 双 CAS、complete explicit
-settings replacement、explicit/effective exact readback、immutable backup、
-session idempotency 和 automatic rollback。`codex agent-key
-snapshot/get/set/clear` 会校验六个 slots 以及 command、Skill、task、keycap 和 empty
-assignment shape，并保留未修改 slot 的未知字段。`codex agent-key apply/restore`
-使用独立的 global-state revision CAS、immutable backup、session idempotency、exact
-readback、stale-CAS rejection 与 automatic rollback。assignment storage 和
-`codex-micro-agent-source=custom` 是两个独立 authority，因此 assignment transaction
-不会隐式改变 source ordering。
+双架构确定性压缩包、签名检查、公证 workflow 与 Homebrew formula 均已实现。
+本地打包和签名发布边界参见[发布指南](docs/releases.md)。
 
-`codex dial mode get/set` 覆盖 composer navigation、reasoning effort、
-conversation scrolling 与 custom mode，并且不重写 gesture mappings。进入 custom
-mode 后，`dial gesture get/set/clear` 可以把 `left`、`right`、`click` 或
-`long-press` 中的一个设为 command、Skill 或 empty。gesture edit 会拒绝非 custom
-snapshot，同时保留另外三个 gestures、未知 layout fields 与源 settings 原字节。
+## 核心工作流
 
-`codex joystick get/set/clear` 覆盖 `up`、`right`、`down` 与 `left`。每个
-direction 都可以保存 Codex command、Skill 或 empty mapping。每次 candidate 只改变
-一个 `analogStick` leaf，并保留另外三个 directions、未知 layout fields 与源
-settings 原字节。
-
-`codex reset layout` 与 released reset call path 一致：把完整
-`codex-micro-layout` 替换为当前 installed-build 的精确默认值。Command Keys、
-joystick、dial 与 voice-button fields 回到 frozen defaults；Agent Key assignments、
-Agent source、lighting、未知 sibling settings 与源 settings 原字节保持不变。
-
-`codex config diff BASE.json CANDIDATE.json` 会先校验两个 frozen-contract
-snapshot，再只比较 explicit `settings`。transport metadata、warnings、definitions
-与派生的 effective view 不进入差异，但未知 settings 仍会完整显示。human output
-按确定顺序列出 JSON Pointer paths；`--json` 还包含 typed before/after values 和
-两侧 canonical settings revisions。该命令只读文件，不打开 bridge 或 app。
-
-`codex runtime status` 是 released app 的 Tier 1 liveness probe：先核对冻结的 Codex
-版本与 bundle hashes，再经 loopback 附加到 Codex main process，读取唯一的
-`CodexMicroService`。完整健康条件为 `connected`、comm/API 对象存在、connection/
-topology Promises 已结束，以及 `v.oai.hid` 和 `v.oai.rad` subscriptions 都存在。
-`codex runtime recover` 会在不关闭 Input 窗口的情况下短暂暂停 Input process，只重启
-这个 Codex service，确认完整健康状态后恢复 Input，并持续检查 post-resume stability
-window。整个过程不重写 Codex settings、Input caches、device keymap、firmware 或任一
-app bundle。loopback Inspector 使用后关闭，并为同一 Codex process 的下一次 CLI
-调用布置 one-shot reattach handler；Codex bundle 变化后必须先冻结并验证新 contract。
-
-仓库已经包含 Codex main-process reference adapter 和 Electron integration。
-静态检查确认 Codex 26.727.51351 内部有 `settings-read`、`settings-write` 与
-global-state handlers，但当前 release 还没有发布外部 socket。因此 live mutation
-仍由 integration capability gate 控制；现有 E2E 证据来自隔离的同契约 fixture。
-详见 [Codex Companion Bridge](docs/codex-companion-bridge.md)。
-
-`input inspect` 同样全程只读；`input export` 把源文件原字节复制到原子发布的
-目录，并在 `manifest.json` 记录 size 与 SHA-256。它不会暂停 Input，也不会
-写入设备。
-`input config snapshot` 直接读取当前 Input cache，全程保持 Input 与 GUI 现状，
-逐字节捕获 `keymap.json` 和可选的 `smart_actions.json`，排除仅属于 host 的
-`input_storage.json`，并发布供全部离线 semantic editor 使用的标准 snapshot/revision。
-
-`device` 的首选 transport 是
-[Input Companion Bridge](docs/companion-bridge.md)：CLI 通过私有 Unix socket
-认证，由正在运行的 Input main process 使用现有 device session 执行请求。
-`--transport auto` 会在 socket 和 token 出现后优先选择 bridge。
-
-目前已发布的 Input 0.18.0 尚未包含 bridge，因此
-`--transport direct` 保留为只读兼容路径：它复用已安装 Input 内置的 device
-kit，不附带第二套 driver。`--input-mode require-closed` 只报告占用状态；
-显式选择 `--input-mode restart` 才会请求 Input 优雅退出并在读取后重新打开，
-且不执行 force-kill。
-`device export` 对每个文件核对 device SHA-1 与 host SHA-256，重新读取
-typed manifest 和文件后，再原子发布目录。
-live `device config snapshot` 会在相同的精确 base64 字节和确定性 revision core
-外补充 bridge/device metadata；`device config validate` 会重算 size、双哈希与
-revision，配合 `--expected-revision REVISION` 可对 live device 做只读 CAS 预检。
-`device config apply/restore` 会创建或复用 immutable backup，并由 Input 执行
-CAS、session-scoped idempotency、完整 revision readback 与 automatic rollback。
-只有运行中的 Input 注入已验证 writer 时，bridge 才会公布这两个写能力；当前
-跨语言证据来自隔离 reference writer。
-
-`profile`、`layer`、`appsense`、`control`、`action`、`multi-action` 与
-`smart-action` 是离线 semantic editor：先严格验证 snapshot 内每个
-size、SHA-1、SHA-256、canonical base64、safe path、keymap ID 与完整 revision，
-再只修改请求的 semantic field，保留未知 JSON 字段和其他文件的原字节，重算
-受影响的哈希与 revision，原子发布并重新打开 candidate。这个阶段不连接 Input
-或设备；candidate 再交给现有 `device config apply` transaction。
+### 检查 provider 与设备状态
 
 ```console
-worklouderctl input config snapshot --output before.json
-worklouderctl layer color --input before.json --profile 0 --id 1 \
-  --color '#EDF6FF' --output candidate.json
-worklouderctl device --transport bridge config apply \
-  --input candidate.json --backup pre-apply.json \
-  --expected-revision REVISION --idempotency-key layer-color-1
+worklouderctl provider status
+worklouderctl doctor --strict
+worklouderctl device status
+worklouderctl device files
 ```
 
-apply 侧的 live CAS 会用新 bridge snapshot 核对 `REVISION`，在首次 device write
-前识别已经过期的 cache snapshot。
+### 切换设备所有权
 
-Profile 与 layer 生命周期遵循冻结的 Input 0.18.0 Codex Micro 模型：最多六个
-profile、每个 profile 最多六层，object ID 使用 maximum-ID-plus-one 分配；存储字段
-`activeProfileId` 实际是 zero-based index，而 CLI 参数与输出使用稳定 object ID。
-含 `KV_OAI_*` 的 Codex protected layer 固定在第一层，不参与 duplicate、delete、
-move，也不作为直接 lighting target。普通 layer duplicate 会移除 `linkedAppId`，新 layer 会复制
-最后一层的 lights。backlight/underglow 支持 `off`、`solid`、`snake`、`rainbow`、
-`breath`、`gradient`，brightness/speed/magic 范围为 `0..1`，并支持 24-bit color
-与按 zone 的 `--apply-to-all`。
-
-`layer joystick show/mode/sector` 与 Input 0.18.0 released radial editor
-一致：开放当前可编辑的 `RADIAL` mode，在需要时写入观察到的双 sector 默认值，
-新增 `KC_NONE` sector，严格限制为 2–8 个，并以固定 45 度首 sector 的算法重算
-全部 `a1`/`a2` 边界。assignment 仍通过
-`control set --control joystick:INDEX` 修改。
-
-`appsense` 管理 Input 0.18.0 的 `linkedApps` 记录与 layer 的 `linkedAppId`。
-新 ID 遵循 Input 的 first-missing-nonnegative 规则；macOS 的 `process` 是 bundle
-identifier，并且 `process`/`path` 至少一个非空。`list/show` 会返回所有
-profile/layer bindings；link、字段更新和 unlink candidate 使用同一套完整 snapshot
-校验，并已进入 fixture apply/readback/restore transaction。焦点观察与实时 layer
-切换继续由 Input 和 device firmware 执行，其行为验证与配置对等状态分开记录。
-
-物理 control 使用稳定 ID：`key:ROW:COLUMN`、
-`encoder:INDEX:ccw|cw|press`、`joystick:SECTOR`。`control set` 校验冻结的
-Input 0.18.0 assignment grammar，支持 `KC_*`、`KI_*` 以及已存在的
-`KA_A<ID>` Action / `KA_M<ID>` Multi Action 引用。现有 `KV_*` vendor token
-按 read-only 类型读取和保留；可写 assignment 来自 catalog 与有效引用。引用发生变化时，candidate
-会按照 Input 的顺序同步 `macrosUsed` 与 `multiActionsUsed`，再完成全 snapshot
-rehash、原子发布和 reopen readback。
-
-`action` 已冻结 Input 0.18.0 的 Action 模型：ID 采用相同的 last-ID-plus-one
-分配规则；event 保留有序的 `release(0)`、`press(1)`、`click(2)` 与
-`0..9999 ms` delay；新 Action 使用 Input 默认的 `KC_NONE` press event。
-删除采用完整 cascade，同步处理 layer controls、其他 Action events、Multi Action
-branches、groups 与 profile `macrosUsed`，每个被移除的引用落为 `KC_NONE`。
-
-`action group` 与 `multi-action group` 已覆盖 list/show/create、name/color/tags
-更新、有序 member add/remove/move 和 delete。默认 group delete 与 Input 0.18.0
-一致：只属于该 stored group 的 member 会连同完整引用 cascade 一起删除；共享 member
-保留。`--keep-members` 只移除 group container。Group ID 按实际观察到的
-maximum-ID-plus-one 规则分配。
-
-`multi-action` 已覆盖 `tap`、`double-tap`、`hold`、`tap-hold` 四个 assignment，
-以及 name、color、icon、tapping term。新 Multi Action 使用四个 `KC_NONE` 与
-`250 ms` 默认值；删除时同步清理 physical controls、Action events、嵌套 Multi
-Action、groups 和 profile usage 引用。
-
-`smart-action` 已覆盖 Input 0.18.0 的 `TEXT_STEP`、`CMD_STEP`、`URL_STEP`
-与 `APP_STEP`，包括 typed payload、color/icon、物理 `SA_<ID>` binding 和 stored
-groups。Action ID 按 maximum-ID-plus-one 分配并从 1 开始；group ID 从 0 开始，
-允许空 group。删除 Smart Action 会把物理引用清为 `KC_NONE`、移除 group
-membership，并保留 group container。只修改 Smart Action 的 candidate 会保持
-`keymap.json` 原字节不变。Command action 会显式报告 `requiresCommandPermission`；
-Input 的 `smartActionCmdEnabled` host permission 不会被 definition CRUD 隐式修改。
-`input permission command` 会 snapshot 三个完整的 Input host-setting boolean，
-只修改 command gate；bridge transaction 保留 analytics siblings，并覆盖 revision
-CAS、idempotency、完整 DTO readback 与失败后的自动 rollback。
+同一时间只有一个 provider 持有 Codex Micro session：
 
 ```console
-worklouderctl input permission command snapshot --output host-settings.json
-worklouderctl input permission command get --input host-settings.json
-worklouderctl input permission command set --input host-settings.json enabled \
-  --output host-settings-enabled.json
-worklouderctl input permission command apply \
-  --input host-settings-enabled.json --backup host-settings-before-apply.json \
-  --expected-revision REVISION --idempotency-key enable-command-actions
-worklouderctl input permission command restore \
-  --input host-settings.json --backup host-settings-before-restore.json \
-  --expected-revision CURRENT_REVISION --idempotency-key restore-command-actions
+worklouderctl provider handoff input
+worklouderctl device status
+worklouderctl provider handoff codex
 ```
 
-CLI 不直接写 `input_storage.json`；持久化与 command execution 继续由 Input 负责。
+Handoff 期间，Input 以隐藏的用户级 provider 运行。CLI 通过私有认证 socket
+通信，并验证返回结果中的 provider 与 action identity。
 
-`cheat-sheet catalog/bindings/bind` 为 Input 0.18.0 released behavior 提供四个
-明确名称：`show`、`hold`、`hide`、`toggle`，并精确映射到
-`KI_CS_SHOW`、`KI_CS_SHOW_TMP`、`KI_CS_HIDE`、`KI_CS_TOGGLE`。`bind` 只修改
-完整 offline snapshot 中的一个 physical control，保留未知字段与其他原字节，再
-使用既有 device apply/readback/restore transaction。生成 candidate 时不会打开或
-关闭 Input window。
-
-`input preset snapshot` 通过 companion authority 读取 Input 按“saved preset 在前、
-bundled default 在后”合并的 catalog。`preset list/show` 不输出大型图片 payload，
-`preset preview` 会对有界 PNG/JPEG/WebP 做 decode、原子写入和 reopen 校验；
-`preset install` 则在完整 offline candidate 中复现 Input 0.18.0 的
-Action/Multi Action/group 去重、ID 分配、`KA_`/`KM_` 引用重映射、preset tag
-传播和 layer append。hash-pinned renderer chunk 内全部 17 个 bundled default 均已
-成功生成严格有效 candidate，fixture apply/readback/restore 也已通过。实时选中 layer
-仍属于 Input renderer/runtime state，不会被虚构成持久化字段。
-
-`radial show` 会解析 Input radial overlay 使用的有序 joystick sector，以及所引用
-Action/Multi Action/Smart Action 的名称、颜色和图标，并按全部 released Input
-language 使用精确的 macOS HID primary label 解析 `KC_*`/`KI_*`。overlay runtime
-继续由 Input 负责；sector 修改复用已验证的 `layer joystick`、`control set` 和完整
-transaction。
-
-`appsense test` 通过 `input.appsense.runtime.v1` 读取 Input 每秒一次的 focus
-collector、最后一次转发给 firmware 的应用 identity、已注册 device，以及 device
-报告的 profile/layer index；它只等待并校验状态，不切换应用或操作 GUI。正向状态和
-timeout 的 typed conflict 已由 fixture 验证，released Input 集成与真实 A/B focus
-transition 仍是 compatibility gate。
-
-`input permissions` 读取 Input 自己的 platform permission check：macOS 对应 released
-`WLPermissions` 的 Input Monitoring 结果（不会虚构一个 Accessibility 结果），Linux
-对应 selected HID path 的读写权限。`input firmware check` 把 release 选择完全委派给已安装
-Input 的 `DeviceFlashService`，不会执行 flash。`input firmware plan` 还会冻结 release、
-完整 configuration revision、USB gate，以及 backup/download/bootloader/flash/reconnect/
-restore/postflight 七个阶段，但仍不执行 mutation。`input firmware update` 只接受 ready
-且未漂移的 plan，先保存完整 configuration backup，
-再把七阶段整体委派给注入的 Input-owned high-level authority；CLI 外围提供 15 分钟 timeout、
-session idempotency、firmware/config exact postflight、原子 receipt readback 与 typed
-recovery-required error，但不实现 programmer 或 firmware downgrade。`input logs collect`
-从 Input 的 5,000 条
-内存 log ring 读取有界后缀，先在 Input 内遮蔽 home path、email 与 credential-shaped
-值，再原子发布并 reopen 一个 `0700` bundle；其中 JSON/text 与 SHA-256 manifest 均为
-`0600`。
-
-`input reset plan` 只在 Input 注入自己的精确 device/layout/version default factory 时
-出现；它冻结当前 Input version、device identity、layout version、firmware、source
-revision 和完整 candidate。`input reset apply` 会在写入前再次核对 Input version，随后
-完全复用现有 configuration CAS/backup/readback/automatic-rollback transaction。receipt
-与原始 backup 都会严格 reopen；精确回滚继续使用普通的 `device config restore`。CLI
-不会复制 Input renderer 的 reset flow。
-
-`input recovery plan` 使用正常 device 进入 bootloader 之前保存的完整 configuration
-snapshot，并让 Input-owned authority 提供当前 bootloader identity 与 Input-selected
-release。plan 会冻结 Input/device-kit version、device identity、release 和完整 backup
-revision，但不会执行 flash。`input recovery apply` 把 programmer 与 reconnect 整体委派
-给 Input，再通过既有完整 configuration transaction 精确恢复 backup；成功必须同时满足
-target firmware 和原 configuration revision 的 exact postflight。相同 idempotency key
-可以重放已验证结果，原子写入并 reopen 的 receipt 可由 `backup inspect` 再次检查。CLI
-不实现 driver、bootloader transport、programmer 或 firmware downgrade。详见
-[Input-owned bootloader recovery guide](docs/input-bootloader-recovery.md)。
-
-仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
-adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
+### 备份、修改并应用 Input 配置
 
 ```console
-node --test companion/input-main-bridge.test.mjs
-./scripts/test-bridge-e2e.sh
+worklouderctl provider handoff input
+worklouderctl device config snapshot --output before.json
+
+worklouderctl profile create \
+  --input before.json --name "Development" --output candidate.json
+worklouderctl config diff before.json candidate.json
+
+worklouderctl device config apply \
+  --input candidate.json \
+  --backup pre-apply.json \
+  --expected-revision REVISION \
+  --idempotency-key development-profile-v1
 ```
 
-## 当前跨 authority 写入流程
+每个语义编辑命令都会生成新的 candidate 文件。只有显式事务写入才会改变实时配置。
 
-离线 editor 生成 immutable candidate；随后由统一 transaction 把所有变化绑定到
-同一个 plan、backup、receipt 与 rollback boundary：
+### 配置 Codex 原生控制
 
 ```console
-worklouderctl codex agent-source set --input codex.json priority --output codex-priority.json
-worklouderctl codex command-key set --input codex-priority.json ACT06 \
-  --command toggleFastMode --output codex-fast.json
-worklouderctl codex joystick set --input codex-fast.json --output codex-final.json \
-  up --skill-name Plan --skill-path /PATH/TO/SKILL.md
+worklouderctl codex config snapshot --output codex-before.json
+
+worklouderctl codex voice set \
+  --input codex-before.json realtime --output codex-voice.json
+worklouderctl codex lighting brightness set \
+  --input codex-voice.json 80 --output codex-candidate.json
+worklouderctl codex config diff codex-before.json codex-candidate.json
+
+worklouderctl codex config apply \
+  --input codex-candidate.json --backup codex-pre-apply.json
+```
+
+同一命令族还覆盖 Agent Keys、Command Keys、旋钮手势、摇杆方向、语音、
+全局灯光和完整布局重置。
+
+### 四 authority 协调事务
+
+```console
 worklouderctl transaction plan \
   --codex-settings-base codex-before.json \
-  --codex-settings-candidate codex-final.json \
+  --codex-settings-candidate codex-after.json \
+  --codex-agent-keys-base agent-before.json \
+  --codex-agent-keys-candidate agent-after.json \
   --input-config-base input-before.json \
-  --input-config-candidate input-final.json \
-  --output transaction-plan.json
-worklouderctl transaction apply --plan transaction-plan.json \
-  --backup-dir apply-backup --receipt apply-receipt.json \
-  --idempotency-key APPLY_KEY
-worklouderctl backup inspect --input apply-receipt.json
-worklouderctl transaction restore --apply-receipt apply-receipt.json \
-  --backup-dir restore-backup --receipt restore-receipt.json \
-  --idempotency-key RESTORE_KEY
+  --input-config-candidate input-after.json \
+  --input-host-settings-base host-before.json \
+  --input-host-settings-candidate host-after.json \
+  --output plan.json
+
+worklouderctl transaction apply \
+  --plan plan.json \
+  --backup-dir backups \
+  --receipt receipt.json \
+  --idempotency-key workspace-layout-v1
 ```
 
-当 installed provider 发布标准 private bridge location 时可以省略 socket/token
-参数；四个 authority 的完整输入、preflight、readback 与 rollback 见
-[transaction 指南](docs/transactions.md)。
+事务引擎会预检所有 authority，按依赖顺序写入，验证完整 post-state，并在步骤
+失败后逆序恢复已经完成的写入。
 
-## 目标功能
+## AI 与自动化
 
-- profiles 与六层 layouts；
-- Codex Agent Keys、Command Keys、voice、dial、joystick、Skills 与全局灯光；
-- 所有按键、旋钮和摇杆方向；
-- keycodes、Actions、Multi Actions 与 Smart Actions；
-- linked apps 与 AppSense；
-- backlight、underglow、颜色与灯光效果；
-- device、Input cache 与 Input database 的统一备份；
-- plan-first 写入、精确 readback、checksum 与自动 rollback；
-- 稳定 JSON 输出，方便 AI Agent 调用。
+人工脚本和 AI Agent 使用同一套 parser 与 transaction core。
+`worklouderctl agent` 接收无 shell 的 JSON envelope，验证预期退出状态，并返回
+有界 stdout/stderr 与类型化结果。
 
-## 第一阶段兼容目标
+```console
+worklouderctl --json capability list
+worklouderctl --json schema list
+worklouderctl --json agent validate --input command.json
+worklouderctl --json agent execute --input command.json > result.json
+```
 
-- 设备：Work Louder Codex Micro
-- 系统：macOS
-- Codex 检查基线：Codex 26.727.51351
-- Input schema fixtures：Work Louder Input 0.17.3 与 0.18.0
-- firmware fixture：Codex Micro v0.6.0
+所有客户端共享同一条 mutation 路径：snapshot、candidate、diff、apply、readback、
+rollback。
 
-以上是当前研究基线；正式支持范围会通过版本适配器、fixtures 和真实硬件 readback 明确记录。
+## 架构
 
-仓库中的 [`fixtures/`](fixtures/) 为确定性、已脱敏的 synthetic 最小样例；
-`./scripts/verify-sanitized-fixtures.sh` 会重新生成全部文件、复算 manifest SHA-256、
-扫描敏感模式，并通过 CLI 语义解析器重新打开两个 Input snapshot。
+```mermaid
+flowchart LR
+    Client["用户 / 脚本 / AI Agent"] --> CLI["worklouderctl"]
+    CLI --> CodexBridge["认证 Codex bridge"]
+    CLI --> InputBridge["认证 Input bridge"]
+    CodexBridge --> Codex["已安装 Codex runtime"]
+    InputBridge --> Input["已安装 Input runtime"]
+    Codex --> Device["Codex Micro"]
+    Input --> Device
+```
 
-仓库也发布由同一 Clap command tree 确定性生成的 Bash、Zsh、Fish 补全文件与
-[完整命令参考](docs/command-reference.md)；`./scripts/verify-cli-assets.sh` 会重新生成并比较。
+这种分工保留上游 transport、firmware 与 runtime 更新，同时让配置变得确定、
+可审查。Provider adapter 受版本与 hash gate 约束；检测到新 build 时，CLI 会先
+完成检查和 capability discovery，再启用 mutation。
 
-## 与 Codex 和 Input 的关系
+## 安全模型
 
-WorkLouderCTL 是 **Full-configuration CLI**：
+每次受保护写入都遵循同一份契约：
 
-- CLI 覆盖 Codex 与 Input 针对 Codex Micro 的全部配置项；
-- Codex/Input GUI 可以继续使用，但不是完成配置的必需入口；
-- Tier 1 写入 Codex settings authority，Tier 2+ 同步 device、Input cache/database；
-- 需要宿主语义的动作仍由对应 runtime 执行并接受行为验证。
+1. 从所有相关 authority 读取当前状态；
+2. 发布私有、不可变备份；
+3. 校验引用、版本和限制；
+4. 展示精确 diff；
+5. 写入前拒绝过期 revision；
+6. 通过 provider 自己的序列化队列写入；
+7. 读回完整 post-state；
+8. mutation 失败后自动恢复；
+9. 输出 receipt 和可运行的手动恢复路径。
 
-独立 driver/runtime 明确不属于本项目目标；CLI 只替代配置入口和配置工作流。
+CLI 会保留未知字段；凭据与 snapshot 分离；socket/token 使用私有文件权限；
+诊断包在发布前完成脱敏。
 
-## 当前进度
+## 已验证兼容边界
 
-仓库目前处于 transaction source-alpha 阶段。Codex TOML read adapter 的
-`doctor`、`inspect`、`export`，以及 Input 0.18.0 live device 的 `status`、
-`files`、双哈希 `export`、byte-exact semantic cache snapshot、Companion Bridge v1
-contract/client/reference server、
-revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
-Input 自动恢复、Codex Companion Bridge settings snapshot/CAS/apply/restore/rollback
-与六键 Agent assignment snapshot/get/set/clear/apply/restore transaction、Codex 全局
-lighting brightness/auto-off candidate 与 fixture transaction、Codex voice
-`push-to-talk/realtime` candidate 与 fixture transaction，以及 profile/layer
-lifecycle、selection、ordering、24-bit RGB color 与 per-layer lighting、AppSense
-linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线
-candidate 生成，preset catalog snapshot/list/show/preview、17 个 bundled default
-install candidate 与 fixture transaction，keys、
-encoder gestures 的 control list/show/set、joystick mode 与 2–8 sector
-lifecycle/assignment/精确 angle rebalance，以及 Action
-list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
-permission status、firmware check 与 sanitized diagnostic log bundle 也已通过 bridge/CLI
-fixture。exact-release Codex/Input overlay 已完成真实 provider mutation、readback、
-restore 与 ownership handoff 验证；由上游 app 原生内置 bridge 仍是可选后续里程碑。
-deterministic macOS packaging、signature-state verification、Developer ID/
-notarization workflow 与 Homebrew formula generation 已完成；首个正式 signed
-binary 与 stable Homebrew tap 尚未发布。
+| 组件 | 已验证边界 |
+| --- | --- |
+| 平台 | macOS；Apple Silicon 与 Intel 打包 |
+| 设备 | Work Louder Codex Micro USB |
+| Codex | `26.727.51351` 精确版本 overlay |
+| Work Louder Input | `0.18.0` 精确版本 overlay；`0.17.3` 脱敏 schema fixture |
+| Rust | MSRV `1.61`；current stable CI |
+| Node.js | `>=22` provider runtime；`>=18` Companion conformance runtime |
 
-`transaction plan/show/apply/restore` 已把 Codex settings、六键 Agent
-assignments、Input device configuration 与 Input host settings 纳入同一个 canonical
-revision 和 rollback boundary。执行前会一次性 CAS 预检四个 authority，原子发布
-`0700` 目录/`0600` 文件的自包含 backup catalog，执行后做全 authority readback；
-失败时反向自动回滚，手动 restore 也有独立 recovery catalog 与失败 roll-forward。
-完整命令和验证边界见[跨 authority transaction 指南](docs/transactions.md)。
-自动化可使用固定的 `0`–`8` 状态与 `worklouderctl-error` JSON；详见
-[exit statuses](docs/exit-statuses.md)。
+请使用 `worklouderctl doctor --strict` 检查当前电脑，而不是仅根据应用名称推断支持。
+Capability gate 策略参见[兼容性文档](docs/compatibility.md)。
 
-配置边界已经确定：**Tier 1 使用 Codex 的设置模型与运行时；Tier 2 及以上
-使用 Input 的设置模型与运行时；CLI 对两边都提供完整配置能力。** 详见
-[Tier 模型](docs/tier-model.md)、
-[完整配置参考](docs/configuration-reference.md) 与
-[配置能力对等矩阵](docs/configuration-parity.md)、
-[2026-08-02 深度审计](docs/research/2026-08-02-codex-micro-audit.md)。
+## 文档
+
+- [完整命令参考](docs/command-reference.md)
+- [配置覆盖矩阵](docs/configuration-parity.md)
+- [配置模型](docs/configuration-reference.md)
+- [Tier 模型](docs/tier-model.md)
+- [架构](docs/architecture.md)
+- [Companion Bridge](docs/companion-bridge.md)
+- [事务与回滚](docs/transactions.md)
+- [兼容性策略](docs/compatibility.md)
+- [JSON Schema](docs/json-schemas.md)
+- [发布与 Homebrew](docs/releases.md)
+- [FAQ](docs/faq.md)
+- [Changelog](CHANGELOG.md)
+
+## 开发
+
+```console
+cargo fmt --check
+cargo test --locked
+cargo clippy --all-targets -- -D warnings
+cargo +1.61.0 test --locked
+(cd companion && npm test)
+node --test \
+  scripts/live-bridge-cdp.test.mjs \
+  scripts/provider-lock.test.mjs \
+  scripts/provider-state.test.mjs
+```
+
+涉及 provider 行为的改动需要附带 baseline、精确命令与输出、已测试版本边界、
+读回证据和 rollback 结果。参见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 项目独立性
 
-WorkLouderCTL 是独立社区项目，与 Work Louder 或 OpenAI 没有官方隶属或背书关系。相关产品名称归各自所有者所有。
+WorkLouderCTL 是独立社区项目，与 Work Louder 和 OpenAI 均无隶属关系。产品名称
+仅用于说明兼容目标。
 
 ## License
 

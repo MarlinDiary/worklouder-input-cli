@@ -1,6 +1,6 @@
 # Security policy
 
-WorkLouderCTL will handle keyboard configuration, host-side actions, application
+WorkLouderCTL handles keyboard configuration, host-side actions, application
 paths, and command payloads. Treat configuration and backup files as potentially
 sensitive.
 
@@ -17,7 +17,7 @@ paths from reports and fixtures.
 
 ## Current support status
 
-The project is a source alpha and has no published binary release. The current
-`main` branch receives security fixes, but it is not a stable support line.
-Versioned security-support windows begin with the first published release and
-will be documented here by release line.
+The current distribution is a source-build prerelease; signed and notarized
+binaries begin with the first published version tag. The current `main` branch
+receives security fixes. Versioned security-support windows begin with the first
+published release and will be documented here by release line.

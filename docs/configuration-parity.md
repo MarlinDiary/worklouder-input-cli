@@ -21,7 +21,7 @@ parity contract.
 
 ## Tier 1 — Codex configuration
 
-| GUI surface | Configuration coverage | Planned command family | Current status |
+| GUI surface | Configuration coverage | Command family | Current status |
 | --- | --- | --- | --- |
 | Agent source | pinned, recent, priority, custom | `codex agent-source get/set` | strict candidate plus bridge `recent -> custom -> recent` apply/readback/restore fixture verified |
 | Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key snapshot/get/set/clear/apply/restore` | strict candidate, all assignment types, CAS, idempotency, stale rejection, exact readback, restore, and rollback fixture verified |
@@ -60,7 +60,7 @@ Promises as failures even when the USB interface still enumerates.
 
 ## Tier 2 — Input device configuration
 
-| GUI surface | Configuration coverage | Planned command family | Current status |
+| GUI surface | Configuration coverage | Command family | Current status |
 | --- | --- | --- | --- |
 | Profiles | create, duplicate, rename, select, delete, up to six | `profile` | full lifecycle candidate-verified; profile create included in combined fixture apply/readback/restore |
 | Layers | create, duplicate, rename, reorder, delete, color, up to six | `layer` | lifecycle, ordering, combined fixture transaction, and active-layer runtime observation verified; Input 0.18.0 has no persisted active-layer field or device RPC setter |
@@ -78,7 +78,7 @@ Promises as failures even when the USB interface still enumerates.
 
 ## Tier 3 — Input host configuration
 
-| GUI surface | Configuration coverage | Planned command family | Current status |
+| GUI surface | Configuration coverage | Command family | Current status |
 | --- | --- | --- | --- |
 | Smart Actions | text, command, URL, application | `smart-action` | typed list/show/create/set/delete, `SA_<ID>` control binding, and reference cascade candidate-verified against current Input 0.18.0 cache bytes |
 | Smart Action groups | create, rename, move, delete | `smart-action group` | metadata and ordered member CRUD, empty groups, and container-only delete candidate-verified |
@@ -89,7 +89,7 @@ Promises as failures even when the USB interface still enumerates.
 
 ## Tier 4 — Input operations
 
-| GUI surface | Configuration coverage | Planned command family | Current status |
+| GUI surface | Configuration coverage | Command family | Current status |
 | --- | --- | --- | --- |
 | Device setup | identity, transport, battery, firmware | `doctor`, `device status` | read-verified |
 | Input permissions | exact platform permission used by Input (`Input Monitoring` on macOS; HID read/write on Linux) | `input permissions` | Input authority/bridge/CLI fixture-verified |

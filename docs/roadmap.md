@@ -5,7 +5,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 ## M0 — Product and evidence foundation
 
 - [x] Repository name and product positioning
-- [x] SEO/AIO README and FAQ foundation
+- [x] Project positioning, README, and FAQ
 - [x] Compatibility and architecture policies
 - [x] Tier 1 Codex / Tier 2+ Input authority contract
 - [x] Codex 26.727.51351 and Input 0.18.0 feature inventory
@@ -15,7 +15,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Publish deterministic sanitized Input 0.17.3/0.18.0 and firmware v0.6.0 fixtures with manifest verification
 - [x] CLI command, doctor, configuration, transaction, and error JSON Schema registry
 
-## M1 — Read-only alpha
+## M1 — Read-only foundation
 
 - [x] `worklouderctl version`
 - [x] `worklouderctl doctor`
@@ -40,7 +40,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] JSON output
 - [x] Typed exit statuses and JSON error envelopes
 
-## M2 — Codex-native configuration beta
+## M2 — Codex-native configuration
 
 - [x] Exact Codex 26.727.51351 read contract and settings-schema adapter
 - [x] `settings-read` and `settings-write` bridge client/reference integration
@@ -56,7 +56,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Codex settings backup, apply, readback, restore, and automatic rollback fixture
 - [x] Codex settings-only structural diff with revisions and typed before/after values
 
-## M3 — Input semantic configuration beta
+## M3 — Input semantic configuration
 
 - [x] Strict offline snapshot validation and deterministic candidate rehash
 - [x] Profile list/show/create/duplicate/rename/select/delete candidates

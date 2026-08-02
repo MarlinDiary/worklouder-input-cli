@@ -5,7 +5,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-08-03
+## [0.1.0]
 
 ### Added
 
@@ -35,6 +35,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a checksum-pinned Homebrew formula, and a deterministic Companion integration
   package.
 
+### Changed
+
+- Promoted the public project status to configuration-parity prerelease,
+  condensed both READMEs around real workflows, and aligned repository metadata,
+  compatibility state, contributor guidance, security policy, and agent-facing
+  documentation with the implemented feature boundary.
+
 ### Security
 
 - Disabled Clap 3's optional terminal-color feature, removing the unmaintained
@@ -60,8 +67,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Known limitations
 
-- Version `0.1.0` is a macOS/Codex Micro source alpha until its first signed and
-  notarized GitHub release is published.
+- The first signed and notarized GitHub release awaits project credentials and
+  the `v0.1.0` publication tag; source builds and verified local packages are
+  available now.
 - Drivers, firmware programmers, device discovery, and runtime ownership remain
   delegated to the installed Codex and Input applications.
 - Input `0.18.0` can trap in its native `node-hid` re-enumeration path on the
@@ -69,5 +77,5 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   hidden Input process, quiescence checks, and rollback to contain that provider
   behavior.
 
-[Unreleased]: https://github.com/MarlinDiary/worklouder-input-cli/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/MarlinDiary/worklouder-input-cli/commits/main
 [0.1.0]: https://github.com/MarlinDiary/worklouder-input-cli/releases/tag/v0.1.0
