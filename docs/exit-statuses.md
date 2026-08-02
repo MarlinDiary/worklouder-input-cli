@@ -2,7 +2,11 @@
 
 Every runtime failure has one stable process status. With `--json`, the CLI
 writes a `worklouderctl-error` v1 object to standard error and leaves standard
-output empty. Clap keeps status `2` for command-line usage errors.
+output empty. The diagnostic `doctor --strict` commands are the deliberate
+exception: they keep the complete report on standard output and return
+`provider-unavailable` (`3`) when any reported warning/failure makes the
+provider configuration unready. Clap keeps status `2` for command-line usage
+errors.
 
 | Status | Code | Meaning |
 | ---: | --- | --- |
