@@ -30,7 +30,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Validate tag and Cargo version
         id: version
         shell: bash
@@ -122,10 +122,10 @@ jobs:
           ./scripts/verify-release-archive.py "$archive" \
             --expected-target "${{ matrix.target }}"
       - name: Attest release archive
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/*.tar.gz
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: worklouderctl-${{ matrix.target }}
           path: dist/*
@@ -141,8 +141,8 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: worklouderctl-*
           path: dist
@@ -167,7 +167,7 @@ jobs:
           cat dist/*.tar.gz.sha256 dist/*.tgz.sha256 | sort -k2 > dist/SHA256SUMS
           (cd dist && shasum -a 256 -c SHA256SUMS)
       - name: Attest Companion integration package
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/*.tgz
       - name: Publish GitHub release
