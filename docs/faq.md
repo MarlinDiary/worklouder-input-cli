@@ -72,16 +72,15 @@ The safety contract requires:
 8. automatic rollback after a failed mutation;
 9. a runnable manual restore command.
 
-## Why coordinate Input instead of writing while it is open?
+## How can the CLI coexist with Input while it is open?
 
-Input and another process can share the same vendor HID stream. Multi-report
-JSON-RPC operations may interleave, and Input may later restore cached state.
-The companion workflow pauses Input for the short transaction, synchronizes its
-state, and then reopens it.
+The Input Companion Bridge keeps Input as the only owner of the device session.
+CLI requests enter Input through a private authenticated Unix socket and use
+the same service container and serialized device queue as GUI requests.
 
-The current read-only implementation makes this explicit: it stops by default
-when Input is open, while `--input-mode restart` performs a graceful quit/read/
-reopen sequence. It does not force-terminate the app.
+Until a released Input build includes that bridge, the direct compatibility
+transport keeps `require-closed` as its default. Its explicit `restart` mode
+performs the older graceful quit/read/reopen cycle.
 
 ## Will it support Smart Actions?
 

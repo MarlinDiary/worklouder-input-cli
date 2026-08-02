@@ -85,9 +85,11 @@ worklouderctl codex inspect
 worklouderctl codex export --output CODEX_SNAPSHOT.json
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
-worklouderctl device --input-mode restart status
-worklouderctl device --input-mode restart files --recursive
-worklouderctl device --input-mode restart export --output DEVICE_BACKUP
+worklouderctl bridge status
+worklouderctl device --transport bridge status
+worklouderctl device --transport bridge files --recursive
+worklouderctl device --transport bridge export --output DEVICE_BACKUP
+worklouderctl device --transport direct --input-mode require-closed status
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
 worklouderctl --json input inspect
@@ -104,15 +106,29 @@ snapshot. Neither command serializes unrelated Codex settings.
 into an atomically published directory and records each file's size and SHA-256
 in `manifest.json`. It does not pause Input or write the device.
 
-The `device` commands use the exact device kit bundled with the installed Input
-app; WorkLouderCTL does not ship a second driver. The default
-`--input-mode require-closed` stops when Input is open. `--input-mode restart`
-requests a graceful quit, performs only `sys.version`, `device.status`,
-`fs.list`, and `fs.readbin` calls, and reopens Input even when the read fails.
-If Input declines the quit request, the command stops before opening the device;
-it does not force-terminate the app.
+The primary `device` transport is the
+[Input Companion Bridge](docs/companion-bridge.md). It authenticates over a
+private Unix socket and asks the running Input main process to execute requests
+through Input's existing device session. `--transport auto` prefers this bridge
+as soon as Input publishes its socket and token.
+
+The current released Input 0.18.0 app does not include the bridge, so
+`--transport direct` remains a read-only compatibility route. It loads the
+exact device kit bundled with the installed Input app and ships no second
+driver. `--input-mode require-closed` reports contention. The explicit
+`--input-mode restart` route requests a graceful quit and reopens Input after
+the read; it never force-terminates Input.
 `device export` verifies the device SHA-1 and host SHA-256 for every file,
 reopens the typed manifest and files, and atomically publishes the directory.
+
+The repository includes an executable Input-main reference server, a service
+adapter for the Input 0.18.0 service shape, authentication tests, and a
+cross-language Rust CLI conformance test:
+
+```console
+node --test companion/input-main-bridge.test.mjs
+./scripts/test-bridge-e2e.sh
+```
 
 ## Planned mutation command experience
 
@@ -158,7 +174,7 @@ inspect current state
         ↓
 validate + produce a plan and diff
         ↓
-coordinate and pause Input
+route the transaction through Input's serialized bridge
         ↓
 back up Codex settings + device files + Input cache/database
         ↓
@@ -201,6 +217,8 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Codex settings contract and TOML `doctor`/`inspect`/`export` | Complete |
 | Input 0.18.0 live `device status`/`files`/verified `export` | Complete |
 | Read-only Input process coordination and automatic reopen | Complete |
+| Companion Bridge v1 contract, CLI client, and reference server | Complete |
+| Companion Bridge integration in a released Input build | Upstream integration pending |
 | Codex live settings-bridge write client | Planned |
 | Semantic profile/layer/control commands | Planned |
 | Verified device mutation and rollback | Planned |
@@ -245,6 +263,7 @@ Read the complete [FAQ](docs/faq.md).
 - [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
 - [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)
 - [Input live device read contract](docs/research/2026-08-02-input-live-read-contract.md)
+- [Input Companion Bridge protocol](docs/companion-bridge.md)
 - [Frequently asked questions](docs/faq.md)
 - [Compatibility and support policy](docs/compatibility.md)
 - [Companion architecture](docs/architecture.md)

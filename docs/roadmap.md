@@ -29,6 +29,10 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] `worklouderctl device files`
 - [x] `worklouderctl device export`
 - [x] Read-only Input process coordination and automatic reopen
+- [x] Input Companion Bridge v1 contract and authenticated Unix-socket client
+- [x] Input-main reference server and Input 0.18.0 service adapter
+- [x] Cross-language bridge status/files/export conformance test
+- [ ] Integrate the bridge adapter into an official Input release
 - [x] Structural `validate` and `diff`
 - [x] JSON output
 - [ ] Typed exit statuses

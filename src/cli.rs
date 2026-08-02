@@ -49,7 +49,7 @@ pub enum Command {
         command: InputCommand,
     },
 
-    /// Read live Codex Micro state through Input's bundled device provider.
+    /// Read live Codex Micro state through Input or its compatibility provider.
     Device {
         /// Select the Input-owned bridge or the direct compatibility provider.
         #[clap(long, value_enum, default_value = "auto")]

@@ -125,6 +125,19 @@ container is initialized. Its adapter calls the same service objects used by
 the existing Electron handlers; it does not import private minified symbols
 from the packaged application.
 
-WorkLouderCTL will maintain a reference server and conformance suite. Input
-maintains only the small adapter from stable bridge method names to its current
-service container.
+WorkLouderCTL maintains the executable reference pieces in this repository:
+
+- `companion/input-main-bridge.mjs` — authenticated, allowlisted, serialized
+  Unix-socket JSON-RPC server;
+- `companion/input-main-adapter.mjs` — adapter over Input's existing
+  `devicesCommManager` and per-device `rpcService`;
+- `companion/input-main-bridge.test.mjs` — authentication, dispatch, and service
+  adapter tests;
+- `scripts/test-bridge-e2e.sh` — Rust CLI handshake, status, file list, exact
+  export, dual-hash readback, and `config validate` conformance test.
+
+Input maintains only the small adapter from stable bridge method names to its
+current service container. Integration creates the adapter after Input's
+service container is initialized, starts the bridge under `app.getPath("userData")`,
+and stops it from Input's existing quit cleanup. Input 0.18.0 is a static
+adapter boundary; the installed release itself remains unchanged.

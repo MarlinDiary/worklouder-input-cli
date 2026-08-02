@@ -109,19 +109,29 @@ and 1 hour.
 
 ### Implemented live read surface
 
-The current read-only adapter uses Input 0.18.0's bundled device kit and exposes:
+The primary transport uses the authenticated Input Companion Bridge. The CLI
+client and Input-main reference server expose:
 
 ```console
-worklouderctl device [--input-mode require-closed|restart] status
-worklouderctl device [--input-mode require-closed|restart] files [--path PATH] [--recursive]
-worklouderctl device [--input-mode require-closed|restart] export --output DIRECTORY
+worklouderctl bridge status
+worklouderctl device --transport bridge status
+worklouderctl device --transport bridge files [--path PATH] [--recursive]
+worklouderctl device --transport bridge export --output DIRECTORY
 ```
 
-It reports the firmware, active profile/layer, battery/charging state, device
-identity, transport, file names, sizes, and device checksums. Export reads raw
-file bytes through `fs.readbin`, verifies device SHA-1 plus host SHA-256, and
-atomically publishes a typed bundle accepted by `config validate` and
-`config diff`. These commands issue no device/config mutation calls.
+Input owns the connected session and serializes requests through its existing
+service container. It reports firmware, active profile/layer, battery/charging
+state, device identity, transport, file names, sizes, and device checksums.
+Export reads raw file bytes through the bridge, verifies device SHA-1 plus host
+SHA-256, and atomically publishes a typed bundle accepted by `config validate`
+and `config diff`.
+
+Input 0.18.0 does not yet ship the bridge. The verified direct compatibility
+path remains available as:
+
+```console
+worklouderctl device --transport direct [--input-mode require-closed|restart] status
+```
 
 ### Root model
 

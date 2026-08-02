@@ -32,8 +32,9 @@ Important: the project is currently a source alpha. The repository builds a work
 - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
 - Current maturity: source alpha; Codex/Input read-only commands implemented; no packaged release
 - Current Codex commands: `codex doctor`, `codex inspect`, and atomic typed `codex export`
-- Current live device commands: `device status`, `device files`, and dual-hash atomic `device export` through Input 0.18.0's bundled device kit
-- Current coordination: `require-closed` by default; `restart` gracefully quits and reopens Input around a live read
+- Primary device transport: authenticated Input Companion Bridge v1 over a private Unix socket; Rust client, Input-main reference server, and cross-language conformance tests are implemented
+- Released Input integration: pending; Input 0.18.0 has no external bridge transport
+- Direct compatibility transport: `device status`, `device files`, and dual-hash atomic `device export` through Input 0.18.0's bundled device kit with `require-closed` or explicit `restart`
 - Safety model: inspect, plan, diff, backup, conflict check, apply, readback, checksum verification, synchronize, rollback
 - Agent model: deterministic JSON over the same transaction engine as the human CLI
 - Affiliation: independent community project; not affiliated with Work Louder or OpenAI

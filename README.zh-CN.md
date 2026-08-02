@@ -57,9 +57,11 @@ worklouderctl codex inspect
 worklouderctl codex export --output CODEX_SNAPSHOT.json
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
-worklouderctl device --input-mode restart status
-worklouderctl device --input-mode restart files --recursive
-worklouderctl device --input-mode restart export --output DEVICE_BACKUP
+worklouderctl bridge status
+worklouderctl device --transport bridge status
+worklouderctl device --transport bridge files --recursive
+worklouderctl device --transport bridge export --output DEVICE_BACKUP
+worklouderctl device --transport direct --input-mode require-closed status
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
 worklouderctl --json input inspect
@@ -75,13 +77,26 @@ snapshot；两者都不会序列化其他 Codex 设置。
 目录，并在 `manifest.json` 记录 size 与 SHA-256。它不会暂停 Input，也不会
 写入设备。
 
-`device` 命令复用已安装 Input 内置的 device kit，不附带第二套 driver。默认
-`--input-mode require-closed` 会在 Input 正在运行时停止；选择
-`--input-mode restart` 后，CLI 会请求 Input 优雅退出，只调用 `sys.version`、
-`device.status`、`fs.list`、`fs.readbin`，完成后即使读取报错也会重新打开
-Input。若 Input 拒绝退出，请求会在打开设备前停止，不会强制结束 app。
+`device` 的首选 transport 是
+[Input Companion Bridge](docs/companion-bridge.md)：CLI 通过私有 Unix socket
+认证，由正在运行的 Input main process 使用现有 device session 执行请求。
+`--transport auto` 会在 socket 和 token 出现后优先选择 bridge。
+
+目前已发布的 Input 0.18.0 尚未包含 bridge，因此
+`--transport direct` 保留为只读兼容路径：它复用已安装 Input 内置的 device
+kit，不附带第二套 driver。`--input-mode require-closed` 只报告占用状态；
+显式选择 `--input-mode restart` 才会请求 Input 优雅退出并在读取后重新打开，
+且不执行 force-kill。
 `device export` 对每个文件核对 device SHA-1 与 host SHA-256，重新读取
 typed manifest 和文件后，再原子发布目录。
+
+仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
+adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
+
+```console
+node --test companion/input-main-bridge.test.mjs
+./scripts/test-bridge-e2e.sh
+```
 
 ## 计划中的写入命令
 
@@ -133,7 +148,8 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 
 仓库目前处于只读 source-alpha 阶段。Codex TOML read adapter 的
 `doctor`、`inspect`、`export`，以及 Input 0.18.0 live device 的 `status`、
-`files`、双哈希 `export` 和 Input 自动恢复已经实现；可安装 binary、Homebrew formula、
+`files`、双哈希 `export`、Companion Bridge v1 contract/client/reference server
+和 Input 自动恢复已经实现；Input release 集成、可安装 binary、Homebrew formula、
 Codex live settings bridge 写入与完整写入命令将在对应 transaction 和真实硬件
 readback 验证后发布。
 

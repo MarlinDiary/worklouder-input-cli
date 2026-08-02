@@ -16,6 +16,7 @@ not a public support guarantee.
 | Codex app | 26.727.51351 | Exact Tier 1 settings read adapter verified |
 | Work Louder Input | 0.17.3 | Earlier schema fixture |
 | Work Louder Input | 0.18.0 | Exact bundled-kit live read adapter verified |
+| Input Companion Bridge | Protocol v1 | Client/reference server conformance verified; released Input integration pending |
 | Codex Micro firmware | v0.6.0 | Live status/files/export read boundary verified |
 | USB | Observed | Release verification pending |
 | Bluetooth | Observed | Live read boundary verified; mutation pending |
@@ -67,6 +68,10 @@ Before a mutation, WorkLouderCTL will detect and record:
 
 An Input update alone will not silently select the nearest adapter. Exact
 matching or a verified compatibility range is required for writes.
+
+The Companion Bridge uses capability negotiation instead of matching Input's
+internal bundle hash. Once a released Input build includes protocol v1, internal
+device-kit and GUI updates remain behind Input's stable bridge adapter.
 
 ## Adding support
 

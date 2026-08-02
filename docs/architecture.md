@@ -33,7 +33,17 @@ Input's existing service container. The CLI negotiates named capabilities, so
 Input can update its internal device kit and GUI without exposing those
 implementation details as the public automation API.
 
-## Implemented live read path
+## Implemented Companion Bridge path
+
+The `input-companion-bridge-v1` client authenticates to the running Input main
+process over a user-only Unix socket. The reference server advertises exact
+capabilities and serializes all device operations through an injected Input
+service adapter. Status, file list, file read, exact-byte export, device SHA-1,
+host SHA-256, typed readback, and atomic publication pass a cross-language
+conformance test. Input 0.18.0 does not yet ship this server, so released-app
+integration remains a separate upstream milestone.
+
+## Implemented direct compatibility path
 
 The `input-bundled-device-kit-read-v1` adapter is the first implemented live
 device provider. It launches the installed Input Electron binary with
