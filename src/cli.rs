@@ -49,6 +49,20 @@ pub enum Command {
         command: InputCommand,
     },
 
+    /// Read live Codex Micro state through Input's bundled device provider.
+    Device {
+        /// Coordinate access when the Input app currently owns the device.
+        #[clap(long, value_enum, default_value = "require-closed")]
+        input_mode: InputCoordinationMode,
+
+        /// Override the Work Louder Input application bundle path.
+        #[clap(long, value_parser)]
+        app: Option<PathBuf>,
+
+        #[clap(subcommand)]
+        command: DeviceCommand,
+    },
+
     /// Validate or compare exported configuration.
     Config {
         #[clap(subcommand)]
@@ -111,6 +125,39 @@ pub enum InputCommand {
         #[clap(long, value_parser)]
         support_root: Option<PathBuf>,
     },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DeviceCommand {
+    /// Read firmware, active profile/layer, and power state from the device.
+    Status,
+
+    /// List files on the live device filesystem without changing them.
+    Files {
+        /// List a specific device filesystem path.
+        #[clap(long)]
+        path: Option<String>,
+
+        /// Include files in nested directories.
+        #[clap(long)]
+        recursive: bool,
+    },
+
+    /// Export exact live device files into a verified atomic bundle.
+    Export {
+        /// Destination directory. It must not already exist.
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum InputCoordinationMode {
+    /// Stop if Input is running, preserving explicit process ownership.
+    RequireClosed,
+
+    /// Gracefully quit Input for the read, then reopen it afterward.
+    Restart,
 }
 
 #[derive(Debug, Subcommand)]

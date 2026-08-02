@@ -34,6 +34,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("capability"));
     assert!(stdout.contains("doctor"));
     assert!(stdout.contains("codex"));
+    assert!(stdout.contains("device"));
     assert!(stdout.contains("input"));
     assert!(stdout.contains("config"));
     assert!(stdout.contains("completion"));
@@ -73,6 +74,18 @@ fn codex_help_exposes_read_only_workflow() {
     assert!(stdout.contains("doctor"));
     assert!(stdout.contains("inspect"));
     assert!(stdout.contains("export"));
+}
+
+#[test]
+fn device_help_exposes_live_read_workflow() {
+    let device = binary().args(["device", "--help"]).output().unwrap();
+    let stdout = String::from_utf8(device.stdout).unwrap();
+
+    assert!(device.status.success());
+    assert!(stdout.contains("status"));
+    assert!(stdout.contains("files"));
+    assert!(stdout.contains("export"));
+    assert!(stdout.contains("--input-mode"));
 }
 
 #[test]

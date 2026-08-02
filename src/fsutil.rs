@@ -3,8 +3,19 @@ use std::path::Path;
 use std::process::Command;
 
 pub fn sha256(path: &Path) -> Result<String> {
-    let output = Command::new("/usr/bin/shasum")
-        .args(["-a", "256"])
+    shasum(path, Some("256"))
+}
+
+pub fn sha1(path: &Path) -> Result<String> {
+    shasum(path, None)
+}
+
+fn shasum(path: &Path, algorithm: Option<&str>) -> Result<String> {
+    let mut command = Command::new("/usr/bin/shasum");
+    if let Some(algorithm) = algorithm {
+        command.args(["-a", algorithm]);
+    }
+    let output = command
         .arg(path)
         .output()
         .with_context(|| format!("failed to run shasum for {}", path.display()))?;

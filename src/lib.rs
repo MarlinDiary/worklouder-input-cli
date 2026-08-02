@@ -2,6 +2,7 @@ pub mod cli;
 pub mod codex;
 pub mod config;
 pub mod contract;
+pub mod device;
 pub mod doctor;
 pub mod fsutil;
 pub mod input;
@@ -9,8 +10,8 @@ pub mod input;
 use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
-    CapabilityCommand, Cli, CodexCommand, Command, CompletionShell, ConfigCommand, InputCommand,
-    TierCommand,
+    CapabilityCommand, Cli, CodexCommand, Command, CompletionShell, ConfigCommand, DeviceCommand,
+    InputCommand, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -41,11 +42,116 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Doctor { strict } => run_doctor(strict, cli.json, &mut out)?,
         Command::Codex { command } => run_codex(command, cli.json, &mut out)?,
         Command::Input { command } => run_input(command, cli.json, &mut out)?,
+        Command::Device {
+            input_mode,
+            app,
+            command,
+        } => run_device(command, input_mode, app, cli.json, &mut out)?,
         Command::Config { command } => run_config(command, cli.json, &mut out)?,
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
     Ok(())
+}
+
+fn run_device(
+    command: DeviceCommand,
+    input_mode: cli::InputCoordinationMode,
+    app: Option<std::path::PathBuf>,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    let app = device::app_path(app);
+    match command {
+        DeviceCommand::Status => {
+            let report = device::status(&app, input_mode)?;
+            if json {
+                write_json(&mut out, &report)?;
+            } else {
+                writeln!(
+                    out,
+                    "Codex Micro {} via {} (firmware {})",
+                    report.device.device_pid,
+                    report.device.connection_type,
+                    report
+                        .status
+                        .firmware_version
+                        .as_deref()
+                        .unwrap_or("unknown")
+                )?;
+                writeln!(
+                    out,
+                    "profile={} layer={} battery={} charging={}",
+                    optional_number(report.status.selected_profile_index),
+                    optional_number(report.status.selected_layer_index),
+                    optional_number(report.status.battery_percentage),
+                    report
+                        .status
+                        .is_charging
+                        .map(|value| value.to_string())
+                        .unwrap_or_else(|| "unknown".into())
+                )?;
+                for warning in report.warnings {
+                    writeln!(out, "WARN\t{warning}")?;
+                }
+            }
+        }
+        DeviceCommand::Files { path, recursive } => {
+            let report = device::files(&app, input_mode, path.as_deref(), recursive)?;
+            if json {
+                write_json(&mut out, &report)?;
+            } else {
+                writeln!(out, "{} live device file(s)", report.files.len())?;
+                for file in report.files {
+                    writeln!(
+                        out,
+                        "{}\t{} bytes\tsha1 {}",
+                        file.relative_path,
+                        file.size,
+                        file.device_checksum_sha1.as_deref().unwrap_or("unknown")
+                    )?;
+                }
+                for warning in report.warnings {
+                    writeln!(out, "WARN\t{warning}")?;
+                }
+            }
+        }
+        DeviceCommand::Export { output } => {
+            let result = device::export(&app, input_mode, &output)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "Exported {} live device file(s) to {}",
+                    result.manifest.files.len(),
+                    result.output.display()
+                )?;
+                writeln!(
+                    out,
+                    "firmware={} profile={} layer={}",
+                    result
+                        .manifest
+                        .status
+                        .firmware_version
+                        .as_deref()
+                        .unwrap_or("unknown"),
+                    optional_number(result.manifest.status.selected_profile_index),
+                    optional_number(result.manifest.status.selected_layer_index)
+                )?;
+                for warning in result.manifest.warnings {
+                    writeln!(out, "WARN\t{warning}")?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn optional_number(value: Option<u64>) -> String {
+    value
+        .map(|number| number.to_string())
+        .unwrap_or_else(|| "unknown".into())
 }
 
 fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<()> {
