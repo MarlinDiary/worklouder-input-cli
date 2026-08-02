@@ -216,6 +216,9 @@ _worklouderctl() {
             recover)
                 cmd+="__recover"
                 ;;
+            recovery)
+                cmd+="__recovery"
+                ;;
             remove)
                 cmd+="__remove"
                 ;;
@@ -3432,7 +3435,7 @@ _worklouderctl() {
             return 0
             ;;
         worklouderctl__input)
-            opts="-h -V --bridge-socket --bridge-token --help --version --json inspect export config permission permissions firmware reset logs preset help"
+            opts="-h -V --bridge-socket --bridge-token --help --version --json inspect export config permission permissions firmware reset recovery logs preset help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -3949,6 +3952,86 @@ _worklouderctl() {
             fi
             case "${prev}" in
                 --output)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__input__recovery)
+            opts="-h -V --help --version --json plan apply help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__input__recovery__apply)
+            opts="-h -V --plan --backup --receipt --idempotency-key --help --version --json"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --plan)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --backup)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --receipt)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --idempotency-key)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__input__recovery__help)
+            opts="--json <SUBCOMMAND>..."
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__input__recovery__plan)
+            opts="-h -V --backup --plan --help --version --json"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --backup)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --plan)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

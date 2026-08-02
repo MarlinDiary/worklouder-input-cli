@@ -1434,6 +1434,57 @@ _arguments "${_arguments_options[@]}" \
     ;;
 esac
 ;;
+(recovery)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__input__recovery_commands" \
+"*::: :->recovery" \
+&& ret=0
+
+    case $state in
+    (recovery)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-input-recovery-command-$line[1]:"
+        case $line[1] in
+            (plan)
+_arguments "${_arguments_options[@]}" \
+'*--backup=[Complete configuration snapshot captured before entering recovery]:BACKUP:_files' \
+'*--plan=[Destination for the immutable recovery plan]:PLAN:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(apply)
+_arguments "${_arguments_options[@]}" \
+'*--plan=[Immutable plan produced by `input recovery plan`]:PLAN:_files' \
+'*--backup=[Exact complete pre-recovery configuration snapshot]:BACKUP:_files' \
+'*--receipt=[Destination for the verified recovery receipt]:RECEIPT:_files' \
+'--idempotency-key=[Stable retry key; reuse it only with the same plan and backup]:IDEMPOTENCY_KEY: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (logs)
 _arguments "${_arguments_options[@]}" \
 '-h[Print help information]' \
@@ -3766,6 +3817,11 @@ _worklouderctl__input__permission__command__apply_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl input permission command apply commands' commands "$@"
 }
+(( $+functions[_worklouderctl__input__recovery__apply_commands] )) ||
+_worklouderctl__input__recovery__apply_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input recovery apply commands' commands "$@"
+}
 (( $+functions[_worklouderctl__input__reset__apply_commands] )) ||
 _worklouderctl__input__reset__apply_commands() {
     local commands; commands=()
@@ -4502,6 +4558,11 @@ _worklouderctl__input__preset__help_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl input preset help commands' commands "$@"
 }
+(( $+functions[_worklouderctl__input__recovery__help_commands] )) ||
+_worklouderctl__input__recovery__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input recovery help commands' commands "$@"
+}
 (( $+functions[_worklouderctl__input__reset__help_commands] )) ||
 _worklouderctl__input__reset__help_commands() {
     local commands; commands=()
@@ -4602,6 +4663,7 @@ _worklouderctl__input_commands() {
 'permissions:Check the Input-owned OS permission required for device access' \
 'firmware:Inspect firmware availability through Input'\''s released update service' \
 'reset:Plan and apply an Input-owned complete default configuration' \
+'recovery:Recover firmware through Input and restore an exact complete configuration' \
 'logs:Collect a bounded, sanitized diagnostic log bundle from Input' \
 'preset:Snapshot the Input-owned preset catalog through the companion bridge' \
 'help:Print this message or the help of the given subcommand(s)' \
@@ -4889,6 +4951,11 @@ _worklouderctl__input__firmware__plan_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl input firmware plan commands' commands "$@"
 }
+(( $+functions[_worklouderctl__input__recovery__plan_commands] )) ||
+_worklouderctl__input__recovery__plan_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input recovery plan commands' commands "$@"
+}
 (( $+functions[_worklouderctl__input__reset__plan_commands] )) ||
 _worklouderctl__input__reset__plan_commands() {
     local commands; commands=()
@@ -4949,6 +5016,15 @@ _worklouderctl__radial_commands() {
 _worklouderctl__codex__runtime__recover_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl codex runtime recover commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__recovery_commands] )) ||
+_worklouderctl__input__recovery_commands() {
+    local commands; commands=(
+'plan:Freeze Input'\''s bootloader identity, selected release, and backup revision' \
+'apply:Delegate recovery to Input, reconnect, and restore the exact backup' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl input recovery commands' commands "$@"
 }
 (( $+functions[_worklouderctl__action__group__member__remove_commands] )) ||
 _worklouderctl__action__group__member__remove_commands() {
