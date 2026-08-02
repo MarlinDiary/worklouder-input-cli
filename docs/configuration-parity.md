@@ -57,7 +57,7 @@ the runtime reloaded the new value.
 | Underglow | effect, brightness, speed, magic, color | `lighting underglow` | researched |
 | AppSense links | application-to-layer mapping | `appsense` | researched |
 | Presets | inspect, preview, install | `preset` | researched |
-| Full object | export, validate, diff, apply, restore | `device export/diff/apply/restore` | read-verified |
+| Full object | export, snapshot, validate, diff, apply, restore | `device export`, `device config snapshot/validate`, future apply/restore | revisioned read/CAS verified |
 
 ## Tier 3 — Input host configuration
 

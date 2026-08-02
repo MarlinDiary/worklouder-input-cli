@@ -117,6 +117,8 @@ worklouderctl bridge status
 worklouderctl device --transport bridge status
 worklouderctl device --transport bridge files [--path PATH] [--recursive]
 worklouderctl device --transport bridge export --output DIRECTORY
+worklouderctl device --transport bridge config snapshot --output SNAPSHOT.json
+worklouderctl device --transport bridge config validate --input SNAPSHOT.json
 ```
 
 Input owns the connected session and serializes requests through its existing
@@ -124,7 +126,10 @@ service container. It reports firmware, active profile/layer, battery/charging
 state, device identity, transport, file names, sizes, and device checksums.
 Export reads raw file bytes through the bridge, verifies device SHA-1 plus host
 SHA-256, and atomically publishes a typed bundle accepted by `config validate`
-and `config diff`.
+and `config diff`. The config snapshot command adds exact base64 content and a
+deterministic full-configuration revision. Validation recomputes sizes, both
+digests, and the revision; `--expected-revision` enables a live read-only
+compare-and-swap preflight.
 
 Input 0.18.0 does not yet ship the bridge. The verified direct compatibility
 path remains available as:

@@ -6,7 +6,7 @@
     "version": 1,
     "framing": "utf8-json-lines",
     "rpc": "json-rpc-2.0",
-    "maxRequestBytes": 1048576,
+    "maxRequestBytes": 67108864,
     "maxResponseBytes": 67108864
   },
   "discovery": {
@@ -75,12 +75,24 @@
     {
       "name": "device.config.snapshot",
       "capability": "device.config.snapshot.v1",
-      "mutation": false
+      "mutation": false,
+      "params": [
+        "deviceId"
+      ],
+      "resultKind": "worklouder-input-config-snapshot"
     },
     {
       "name": "device.config.validate",
       "capability": "device.config.validate.v1",
-      "mutation": false
+      "mutation": false,
+      "requiredParams": [
+        "snapshot"
+      ],
+      "optionalParams": [
+        "deviceId",
+        "expectedRevision"
+      ],
+      "resultKind": "worklouder-input-config-validation"
     },
     {
       "name": "device.config.apply",
@@ -122,6 +134,28 @@
     "snapshotBeforeApply": true,
     "readbackAfterApply": true,
     "rollbackOnFailure": true
+  },
+  "configurationSnapshots": {
+    "schemaVersion": 1,
+    "kind": "worklouder-input-config-snapshot",
+    "contentEncoding": "base64",
+    "maxFiles": 4096,
+    "maxFileBytes": 16777216,
+    "maxTotalDecodedBytes": 33554432,
+    "fileDigests": [
+      "device-sha1",
+      "host-sha256"
+    ],
+    "revisionAlgorithm": "sha256:path-u32be-path-bytes-size-u64be-content-v1",
+    "revisionFraming": [
+      "utf8(worklouder-input-config-revision-v1\\0)",
+      "for each relativePath sorted lexically by UTF-8 bytes: u32be(path byte length)",
+      "utf8(relativePath)",
+      "u64be(content byte length)",
+      "content bytes"
+    ],
+    "consistency": "list-read-list",
+    "validateExpectedRevision": "optional live compare-and-swap preflight"
   },
   "inputEvidence": {
     "testedVersion": "0.18.0",

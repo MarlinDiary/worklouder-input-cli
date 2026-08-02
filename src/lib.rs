@@ -12,7 +12,7 @@ use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
     BridgeCommand, CapabilityCommand, Cli, CodexCommand, Command, CompletionShell, ConfigCommand,
-    DeviceCommand, DeviceTransport, InputCommand, TierCommand,
+    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -186,6 +186,54 @@ fn run_device(
                 )?;
                 for warning in result.manifest.warnings {
                     writeln!(out, "WARN\t{warning}")?;
+                }
+            }
+        }
+        DeviceCommand::Config { command } => {
+            anyhow::ensure!(
+                use_bridge,
+                "device config commands require the Input Companion Bridge transport"
+            );
+            match command {
+                DeviceConfigCommand::Snapshot { output, device } => {
+                    let result =
+                        bridge::config_snapshot(&bridge_paths, device.as_deref(), &output)?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "Saved {} configuration file(s) to {}",
+                            result.file_count,
+                            result.output.display()
+                        )?;
+                        writeln!(out, "revision={}", result.revision)?;
+                    }
+                }
+                DeviceConfigCommand::Validate {
+                    input,
+                    device,
+                    expected_revision,
+                } => {
+                    let result = bridge::config_validate(
+                        &bridge_paths,
+                        device.as_deref(),
+                        &input,
+                        expected_revision.as_deref(),
+                    )?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "Configuration snapshot is valid ({} file(s), {} bytes)",
+                            result.file_count, result.total_bytes
+                        )?;
+                        writeln!(out, "revision={}", result.revision)?;
+                        if let Some(live_revision) = result.live_revision {
+                            writeln!(out, "liveRevision={live_revision}")?;
+                        }
+                    }
                 }
             }
         }

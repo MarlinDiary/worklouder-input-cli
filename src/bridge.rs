@@ -13,12 +13,17 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const ADAPTER: &str = "input-companion-bridge-v1";
 const PROTOCOL_VERSION: u64 = 1;
 const MAX_TOKEN_BYTES: usize = 4096;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+const CONFIG_SNAPSHOT_KIND: &str = "worklouder-input-config-snapshot";
+const CONFIG_REVISION_ALGORITHM: &str = "sha256:path-u32be-path-bytes-size-u64be-content-v1";
+static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug)]
 pub struct BridgePaths {
@@ -35,6 +40,28 @@ pub struct BridgeInspection {
     pub session_id: String,
     pub capabilities: Vec<String>,
     pub socket: PathBuf,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigSnapshotReceipt {
+    pub output: PathBuf,
+    pub device_id: String,
+    pub revision: String,
+    pub file_count: usize,
+    pub total_bytes: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigValidation {
+    pub schema_version: u64,
+    pub kind: String,
+    pub valid: bool,
+    pub revision: String,
+    pub live_revision: Option<String>,
+    pub file_count: usize,
+    pub total_bytes: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -296,6 +323,209 @@ pub fn export(paths: &BridgePaths, output: &Path) -> Result<ExportResult> {
         let _ = fs::remove_dir_all(&staging);
     }
     result
+}
+
+pub fn config_snapshot(
+    paths: &BridgePaths,
+    device_id: Option<&str>,
+    output: &Path,
+) -> Result<ConfigSnapshotReceipt> {
+    let mut client = BridgeClient::connect(paths)?;
+    let snapshot: Value = client.call(
+        "device.config.snapshot",
+        "device.config.snapshot.v1",
+        json!({ "deviceId": device_id }),
+    )?;
+    let metadata = inspect_config_snapshot(&snapshot)?;
+    write_atomic_json(output, &snapshot)?;
+    Ok(ConfigSnapshotReceipt {
+        output: output.to_path_buf(),
+        device_id: metadata.device_id,
+        revision: metadata.revision,
+        file_count: metadata.file_count,
+        total_bytes: metadata.total_bytes,
+    })
+}
+
+pub fn config_validate(
+    paths: &BridgePaths,
+    device_id: Option<&str>,
+    input: &Path,
+    expected_revision: Option<&str>,
+) -> Result<ConfigValidation> {
+    let bytes = fs::read(input)
+        .with_context(|| format!("failed to read config snapshot {}", input.display()))?;
+    let snapshot: Value = serde_json::from_slice(&bytes)
+        .with_context(|| format!("config snapshot was invalid JSON: {}", input.display()))?;
+    inspect_config_snapshot(&snapshot)?;
+    if let Some(revision) = expected_revision {
+        ensure!(
+            is_sha256(revision),
+            "expected revision must be a SHA-256 digest"
+        );
+    }
+    let mut client = BridgeClient::connect(paths)?;
+    let validation: ConfigValidation = client.call(
+        "device.config.validate",
+        "device.config.validate.v1",
+        json!({
+            "deviceId": device_id,
+            "snapshot": snapshot,
+            "expectedRevision": expected_revision,
+        }),
+    )?;
+    ensure!(
+        validation.schema_version == 1,
+        "bridge returned an unknown validation schema"
+    );
+    ensure!(
+        validation.kind == "worklouder-input-config-validation",
+        "bridge returned an unknown validation kind"
+    );
+    ensure!(
+        validation.valid,
+        "bridge reported an invalid configuration snapshot"
+    );
+    ensure!(
+        is_sha256(&validation.revision),
+        "bridge returned an invalid validated revision"
+    );
+    if let Some(revision) = &validation.live_revision {
+        ensure!(
+            is_sha256(revision),
+            "bridge returned an invalid live revision"
+        );
+    }
+    Ok(validation)
+}
+
+struct ConfigSnapshotMetadata {
+    device_id: String,
+    revision: String,
+    file_count: usize,
+    total_bytes: u64,
+}
+
+fn inspect_config_snapshot(snapshot: &Value) -> Result<ConfigSnapshotMetadata> {
+    let object = snapshot
+        .as_object()
+        .context("bridge configuration snapshot was not an object")?;
+    ensure!(
+        object.get("schemaVersion").and_then(Value::as_u64) == Some(1),
+        "bridge returned an unknown configuration snapshot schema"
+    );
+    ensure!(
+        object.get("kind").and_then(Value::as_str) == Some(CONFIG_SNAPSHOT_KIND),
+        "bridge returned an unknown configuration snapshot kind"
+    );
+    ensure!(
+        object.get("revisionAlgorithm").and_then(Value::as_str) == Some(CONFIG_REVISION_ALGORITHM),
+        "bridge returned an unknown configuration revision algorithm"
+    );
+    let device_id = object
+        .get("deviceId")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .context("bridge configuration snapshot omitted deviceId")?
+        .to_owned();
+    let revision = object
+        .get("revision")
+        .and_then(Value::as_str)
+        .filter(|value| is_sha256(value))
+        .context("bridge configuration snapshot had an invalid revision")?
+        .to_owned();
+    let files = object
+        .get("files")
+        .and_then(Value::as_array)
+        .filter(|value| !value.is_empty())
+        .context("bridge configuration snapshot contained no files")?;
+    let total_bytes = files.iter().try_fold(0_u64, |total, file| {
+        let size = file
+            .get("size")
+            .and_then(Value::as_u64)
+            .context("bridge configuration snapshot had an invalid file size")?;
+        total
+            .checked_add(size)
+            .context("bridge configuration snapshot size overflowed")
+    })?;
+    Ok(ConfigSnapshotMetadata {
+        device_id,
+        revision,
+        file_count: files.len(),
+        total_bytes,
+    })
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn write_atomic_json(output: &Path, value: &Value) -> Result<()> {
+    ensure!(
+        !output.exists(),
+        "configuration snapshot destination already exists: {}",
+        output.display()
+    );
+    let parent = output
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(parent)
+        .with_context(|| format!("failed to create snapshot parent {}", parent.display()))?;
+    let staging = json_staging_path(output)?;
+    let result = (|| -> Result<()> {
+        let mut bytes = serde_json::to_vec_pretty(value)?;
+        bytes.push(b'\n');
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&staging)
+            .with_context(|| format!("failed to create {}", staging.display()))?;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        let reopened: Value = serde_json::from_slice(&fs::read(&staging)?)?;
+        ensure!(
+            &reopened == value,
+            "configuration snapshot staging readback differed"
+        );
+        ensure!(
+            !output.exists(),
+            "configuration snapshot destination appeared during write"
+        );
+        fs::rename(&staging, output).with_context(|| {
+            format!(
+                "failed to atomically publish {} as {}",
+                staging.display(),
+                output.display()
+            )
+        })?;
+        let published: Value = serde_json::from_slice(&fs::read(output)?)?;
+        ensure!(
+            &published == value,
+            "published configuration snapshot readback differed"
+        );
+        Ok(())
+    })();
+    if result.is_err() && staging.exists() {
+        let _ = fs::remove_file(staging);
+    }
+    result
+}
+
+fn json_staging_path(output: &Path) -> Result<PathBuf> {
+    let name = output
+        .file_name()
+        .and_then(|value| value.to_str())
+        .context("configuration snapshot destination had no UTF-8 file name")?;
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    Ok(output.with_file_name(format!(
+        ".{name}.worklouderctl-{}-{nonce}-{}.tmp",
+        std::process::id(),
+        NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed)
+    )))
 }
 
 impl BridgeClient {

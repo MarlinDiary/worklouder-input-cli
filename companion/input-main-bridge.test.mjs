@@ -149,6 +149,79 @@ test("Input adapter maps the existing connected session", async () => {
   assert.equal(Buffer.from(read.dataBase64, "base64").toString(), keymap.toString());
 });
 
+test("Input adapter snapshots and validates a compare-and-swap revision", async () => {
+  const fileBytes = new Map([
+    ["smart_actions.json", Buffer.from('{"smartActions":{}}')],
+    ["keymap.json", Buffer.from('{"version":1,"layers":[]}')],
+  ]);
+  const device = {
+    id: "device-config",
+    info: {
+      devicePid: 33632,
+      deviceType: "codex_micro",
+      layoutType: "universal",
+      connectionType: 1,
+      isUsbConnection: false,
+    },
+    isConnected: () => true,
+    rpcService: {
+      async getFirmwareVersion() {
+        return "v0.6.0";
+      },
+      async getDeviceStatus() {
+        return { selectedProfileIndex: 0, selectedLayerIndex: 2 };
+      },
+      async getFileList() {
+        return [...fileBytes].map(([name, bytes]) => ({
+          name,
+          size: bytes.length,
+          checksum: createHash("sha1").update(bytes).digest("hex"),
+        }));
+      },
+      async readFileChunked(path) {
+        return fileBytes.get(path);
+      },
+    },
+  };
+  const adapter = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [device] },
+    deviceKitVersion: "0.1.29",
+  });
+
+  const snapshot = await adapter.snapshotConfig({ deviceId: "device-config" });
+  assert.equal(snapshot.kind, "worklouder-input-config-snapshot");
+  assert.equal(snapshot.deviceId, "device-config");
+  assert.deepEqual(
+    snapshot.files.map((file) => file.relativePath),
+    ["keymap.json", "smart_actions.json"],
+  );
+  assert.match(snapshot.revision, /^[0-9a-f]{64}$/);
+  const validation = await adapter.validateConfig({
+    deviceId: "device-config",
+    snapshot,
+    expectedRevision: snapshot.revision,
+  });
+  assert.equal(validation.valid, true);
+  assert.equal(validation.revision, snapshot.revision);
+  assert.equal(validation.liveRevision, snapshot.revision);
+  assert.equal(validation.fileCount, 2);
+
+  const tampered = structuredClone(snapshot);
+  tampered.files[0].dataBase64 = Buffer.from("tampered").toString("base64");
+  await assert.rejects(
+    adapter.validateConfig({ deviceId: "device-config", snapshot: tampered }),
+    (error) => error.code === -32602,
+  );
+  await assert.rejects(
+    adapter.validateConfig({
+      deviceId: "device-config",
+      snapshot,
+      expectedRevision: "f".repeat(64),
+    }),
+    (error) => error.code === -32005,
+  );
+});
+
 test("one-call Input integration owns discovery and lifecycle paths", async () => {
   const root = await mkdtemp("/tmp/wlb-integration-");
   class FixtureApp extends EventEmitter {
@@ -209,6 +282,8 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
   );
   assert.equal((await stat(integration.socketPath)).mode & 0o777, 0o600);
   assert.equal((await stat(integration.tokenPath)).mode & 0o777, 0o600);
+  assert.ok(integration.capabilities.includes("device.config.snapshot.v1"));
+  assert.ok(integration.capabilities.includes("device.config.validate.v1"));
   assert.equal(app.listenerCount("before-quit"), 1);
   await integration.stop();
   assert.equal(app.listenerCount("before-quit"), 0);

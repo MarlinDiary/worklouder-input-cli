@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { createInputMainAdapter } from "./input-main-adapter.mjs";
 import { startInputCompanionBridge } from "./input-main-bridge.mjs";
 
 const [socketPath, tokenPath] = process.argv.slice(2);
@@ -25,58 +26,44 @@ const files = new Map([
   ],
 ]);
 
-const common = {
-  deviceKitVersion: "0.1.29-fixture",
-  device: {
+const device = {
+  id: "fixture-device",
+  info: {
     devicePid: "33632",
     deviceType: "codex_micro",
     layoutType: "universal",
-    connectionType: "hid",
+    connectionType: 1,
     isUsbConnection: false,
   },
-  status: {
-    firmwareVersion: "v0.6.0-fixture",
-    selectedProfileIndex: 0,
-    selectedLayerIndex: 2,
-    batteryPercentage: null,
-    isCharging: null,
+  isConnected: () => true,
+  rpcService: {
+    async getFirmwareVersion() {
+      return "v0.6.0-fixture";
+    },
+    async getDeviceStatus() {
+      return { selectedProfileIndex: 0, selectedLayerIndex: 2 };
+    },
+    async getFileList() {
+      return [...files].map(([name, bytes]) => ({
+        name,
+        size: bytes.length,
+        checksum: createHash("sha1").update(bytes).digest("hex"),
+      }));
+    },
+    async readFileChunked(path) {
+      const bytes = files.get(path);
+      if (!bytes) {
+        throw new Error("fixture file not found: " + path);
+      }
+      return bytes;
+    },
   },
-  warnings: [],
 };
 
-const adapter = {
-  async listDevices() {
-    return {
-      deviceKitVersion: common.deviceKitVersion,
-      devices: [{ id: "fixture-device", connected: true, device: common.device }],
-    };
-  },
-  async getDeviceStatus() {
-    return common;
-  },
-  async listFiles() {
-    return {
-      ...common,
-      files: [...files].map(([relativePath, bytes]) => ({
-        relativePath,
-        size: bytes.length,
-        deviceChecksumSha1: createHash("sha1").update(bytes).digest("hex"),
-      })),
-    };
-  },
-  async readFile({ path }) {
-    const bytes = files.get(path);
-    if (!bytes) {
-      throw new Error("fixture file not found: " + path);
-    }
-    return {
-      relativePath: path,
-      size: bytes.length,
-      deviceChecksumSha1: createHash("sha1").update(bytes).digest("hex"),
-      dataBase64: bytes.toString("base64"),
-    };
-  },
-};
+const adapter = createInputMainAdapter({
+  devicesCommManager: { getDevices: () => [device] },
+  deviceKitVersion: "0.1.29-fixture",
+});
 
 const bridge = await startInputCompanionBridge({
   adapter,

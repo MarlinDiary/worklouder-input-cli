@@ -85,7 +85,17 @@ fn device_help_exposes_live_read_workflow() {
     assert!(stdout.contains("status"));
     assert!(stdout.contains("files"));
     assert!(stdout.contains("export"));
+    assert!(stdout.contains("config"));
     assert!(stdout.contains("--input-mode"));
+
+    let config = binary()
+        .args(["device", "config", "--help"])
+        .output()
+        .unwrap();
+    let config_stdout = String::from_utf8(config.stdout).unwrap();
+    assert!(config.status.success());
+    assert!(config_stdout.contains("snapshot"));
+    assert!(config_stdout.contains("validate"));
 }
 
 #[test]

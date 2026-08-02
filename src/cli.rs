@@ -175,6 +175,41 @@ pub enum DeviceCommand {
         #[clap(long, value_parser)]
         output: PathBuf,
     },
+
+    /// Snapshot or validate configuration through Input's live session.
+    Config {
+        #[clap(subcommand)]
+        command: DeviceConfigCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DeviceConfigCommand {
+    /// Save a revisioned, byte-exact configuration snapshot as JSON.
+    Snapshot {
+        /// Destination JSON file. It must not already exist.
+        #[clap(long, value_parser)]
+        output: PathBuf,
+
+        /// Select a connected device ID; defaults to the single Codex Micro.
+        #[clap(long)]
+        device: Option<String>,
+    },
+
+    /// Validate a snapshot and optionally compare it with the live revision.
+    Validate {
+        /// Snapshot JSON produced by `device config snapshot`.
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        /// Select a connected device ID; defaults to the snapshot device.
+        #[clap(long)]
+        device: Option<String>,
+
+        /// Require the live device to have this exact revision.
+        #[clap(long)]
+        expected_revision: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]

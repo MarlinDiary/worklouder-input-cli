@@ -87,6 +87,31 @@ Protocol version 1 defines:
 File content uses base64 inside JSON. Device SHA-1 and host SHA-256 remain
 separate fields so a CLI export can independently verify both authorities.
 
+`device.config.snapshot` captures the recursive file set with a list-read-list
+consistency check. The response contains exact base64 bytes, each file's device
+SHA-1 and host SHA-256, and a deterministic configuration revision. The
+revision hashes this prefix and then every path-sorted file:
+
+```text
+"worklouder-input-config-revision-v1\0"
+u32be(path byte length) || utf8(path)
+u64be(content byte length) || content bytes
+```
+
+`device.config.validate` recomputes every size, digest, and revision. With an
+`expectedRevision`, it also takes a fresh live snapshot and performs a read-only
+compare-and-swap preflight. WorkLouderCTL exposes these methods as:
+
+Protocol v1 bounds a snapshot at 4,096 files, 16 MiB per file, and 32 MiB of
+decoded content; request and response lines are each capped at 64 MiB.
+
+```sh
+worklouderctl device config snapshot --output config-snapshot.json
+worklouderctl device config validate --input config-snapshot.json
+worklouderctl device config validate --input config-snapshot.json \
+  --expected-revision REVISION
+```
+
 ## Mutation methods
 
 Configuration apply and restore are capability-gated:

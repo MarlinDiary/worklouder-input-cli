@@ -39,9 +39,12 @@ The `input-companion-bridge-v1` client authenticates to the running Input main
 process over a user-only Unix socket. The reference server advertises exact
 capabilities and serializes all device operations through an injected Input
 service adapter. Status, file list, file read, exact-byte export, device SHA-1,
-host SHA-256, typed readback, and atomic publication pass a cross-language
-conformance test. Input 0.18.0 does not yet ship this server, so released-app
-integration remains a separate upstream milestone.
+host SHA-256, typed readback, atomic publication, revisioned configuration
+snapshots, and live compare-and-swap validation pass a cross-language
+conformance test. The repository also packages a one-call Electron main-process
+integration and a read-only release conformance command. Input 0.18.0 does not
+yet ship this server, so released-app integration remains a separate upstream
+milestone.
 
 ## Implemented direct compatibility path
 

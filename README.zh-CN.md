@@ -8,7 +8,8 @@
 
 > **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
 > provider 诊断、Codex Micro 设置检查/导出、Input 只读检查/原字节导出、
-> live device status/files、双哈希验证导出、结构化 diff、JSON 输出和 shell
+> live device status/files、双哈希验证导出、带 revision 的 bridge snapshot、
+> live CAS 校验、结构化 diff、JSON 输出和 shell
 > completion。尚未发布打包版本；配置
 > 写入会等 provider transaction 与 rollback 完整验证后再开放。
 
@@ -61,6 +62,8 @@ worklouderctl bridge status
 worklouderctl device --transport bridge status
 worklouderctl device --transport bridge files --recursive
 worklouderctl device --transport bridge export --output DEVICE_BACKUP
+worklouderctl device --transport bridge config snapshot --output CONFIG.json
+worklouderctl device --transport bridge config validate --input CONFIG.json
 worklouderctl device --transport direct --input-mode require-closed status
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
@@ -89,6 +92,9 @@ kit，不附带第二套 driver。`--input-mode require-closed` 只报告占用�
 且不执行 force-kill。
 `device export` 对每个文件核对 device SHA-1 与 host SHA-256，重新读取
 typed manifest 和文件后，再原子发布目录。
+bridge 专用的 `device config snapshot` 还会保存精确 base64 字节和确定性
+revision；`device config validate` 会重算 size、双哈希与 revision，配合
+`--expected-revision REVISION` 可对 live device 做只读 CAS 预检。
 
 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
 adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
@@ -148,8 +154,9 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 
 仓库目前处于只读 source-alpha 阶段。Codex TOML read adapter 的
 `doctor`、`inspect`、`export`，以及 Input 0.18.0 live device 的 `status`、
-`files`、双哈希 `export`、Companion Bridge v1 contract/client/reference server
-和 Input 自动恢复已经实现；Input release 集成、可安装 binary、Homebrew formula、
+`files`、双哈希 `export`、Companion Bridge v1 contract/client/reference server、
+revisioned config snapshot、live CAS 预检和 Input 自动恢复已经实现；Input
+release 集成、可安装 binary、Homebrew formula、
 Codex live settings bridge 写入与完整写入命令将在对应 transaction 和真实硬件
 readback 验证后发布。
 

@@ -11,7 +11,7 @@ import { createServer } from "node:net";
 import { dirname } from "node:path";
 
 export const BRIDGE_PROTOCOL_VERSION = 1;
-export const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024;
+export const DEFAULT_MAX_REQUEST_BYTES = 64 * 1024 * 1024;
 export const DEFAULT_MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
 
 const METHOD_DEFINITIONS = new Map([
