@@ -13,7 +13,7 @@ jobs:
     name: Rust 1.61 test
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install declared MSRV
         run: rustup toolchain install 1.61.0 --profile minimal
       - name: Vendor locked dependency graph with stable Cargo
@@ -29,7 +29,7 @@ jobs:
     env:
       CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install stable checks
         run: rustup component add rustfmt clippy
       - name: Check formatting
