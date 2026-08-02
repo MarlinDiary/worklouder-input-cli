@@ -214,7 +214,7 @@ fn semantic_help_exposes_offline_candidate_workflow() {
     let appsense = binary().args(["appsense", "--help"]).output().unwrap();
     let appsense_stdout = String::from_utf8(appsense.stdout).unwrap();
     assert!(appsense.status.success());
-    for command in ["list", "show", "link", "set", "unlink"] {
+    for command in ["list", "show", "link", "set", "unlink", "test"] {
         assert!(appsense_stdout.contains(command));
     }
 
@@ -1463,7 +1463,10 @@ fn runtime_errors_have_typed_status_and_json_envelope() {
     assert_eq!(error["kind"], "worklouderctl-error");
     assert_eq!(error["code"], "invalid-data");
     assert_eq!(error["exitStatus"], 4);
-    assert!(error["message"].as_str().unwrap().contains("failed to inspect"));
+    assert!(error["message"]
+        .as_str()
+        .unwrap()
+        .contains("failed to inspect"));
 }
 
 #[test]

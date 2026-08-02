@@ -145,6 +145,21 @@
         "snapshot"
       ],
       "resultKind": "worklouder-input-host-settings-mutation"
+    },
+    {
+      "name": "input.presets.snapshot",
+      "capability": "input.presets.snapshot.v1",
+      "mutation": false,
+      "resultKind": "worklouder-input-preset-catalog"
+    },
+    {
+      "name": "input.appsense.runtime",
+      "capability": "input.appsense.runtime.v1",
+      "mutation": false,
+      "optionalParams": [
+        "deviceId"
+      ],
+      "resultKind": "worklouder-input-appsense-runtime"
     }
   ],
   "errors": {
@@ -252,6 +267,24 @@
       "afterRevision",
       "targetRevision"
     ]
+  },
+  "appSenseRuntime": {
+    "schemaVersion": 1,
+    "kind": "worklouder-input-appsense-runtime",
+    "authority": "Input nativeService, focusAppService, and existing device session",
+    "fields": [
+      "collecting",
+      "selectedDeviceRegistered",
+      "deviceIds",
+      "focusedApp",
+      "lastForwardedApp",
+      "selectedProfileIndex",
+      "selectedLayerIndex"
+    ],
+    "readOnly": true,
+    "directFocusMutation": false,
+    "guiControl": false,
+    "capabilityAdvertisement": "advertised only when appsenseRuntimeAuthority supplies readState"
   },
   "inputEvidence": {
     "testedVersion": "0.18.0",

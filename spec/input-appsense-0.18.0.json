@@ -13,7 +13,12 @@
   "storage": {
     "appsField": "linkedApps",
     "layerReferenceField": "linkedAppId",
-    "appFields": ["id", "name", "process", "path"],
+    "appFields": [
+      "id",
+      "name",
+      "process",
+      "path"
+    ],
     "newIdRule": "first missing non-negative integer, or maximum id plus one when there is no gap",
     "linkRule": "append one linkedApps record and set the selected layer linkedAppId to the new id",
     "unlinkRule": "remove the linkedApps record and remove the selected layer linkedAppId",
@@ -28,7 +33,11 @@
     "authority": "Input focus service and device firmware",
     "codexMicroFocusedAppFeature": true,
     "pollIntervalMilliseconds": 1000,
-    "changeFields": ["appName", "process", "path"],
+    "changeFields": [
+      "appName",
+      "process",
+      "path"
+    ],
     "macProcessMeaning": "bundle identifier",
     "macPathBehavior": "focus payload omits path and the linkedApps record stores an empty path string",
     "autoDetect": {
@@ -36,6 +45,21 @@
       "stabilizationSeconds": 5,
       "storedNameSuffix": "-mac on macOS and -win on Windows"
     },
-    "matchRule": "device firmware consumes the focus payload; the matching algorithm is not implemented in the Input renderer or main process"
+    "matchRule": "device firmware consumes the focus payload; the matching algorithm is not implemented in the Input renderer or main process",
+    "mainChunkSha256": "7c16191956acb8d0d89c50eb940dc9b757bf6966b19c56499ca2d60d8743154a",
+    "deviceKitIndexSha256": "c0c25fce60054c8bee49e71dd31e2e38ffc2edade02a825191991bcd9f413729",
+    "serviceSymbols": {
+      "focusServiceClassOffset": 140809,
+      "nativeGetWindowInFocusOffset": 137701,
+      "focusForwardOffset": 142161,
+      "deviceKitSendFocusAppOffset": 252892,
+      "deviceRpcMethod": "host.focused_app"
+    },
+    "runtimeRead": {
+      "bridgeCapability": "input.appsense.runtime.v1",
+      "bridgeMethod": "input.appsense.runtime",
+      "profileIndex": "device.status.selectedProfileIndex is zero-based",
+      "layerIndex": "device.status.selectedLayerIndex is firmware one-based; Input renderer subtracts one"
+    }
   }
 }

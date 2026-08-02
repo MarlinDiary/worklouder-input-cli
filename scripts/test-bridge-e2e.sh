@@ -98,12 +98,34 @@ node "$repo/companion/conformance.mjs" \
   --require input.host-settings.apply.v1 \
   --require input.host-settings.restore.v1 \
   --require input.presets.snapshot.v1 \
+  --require input.appsense.runtime.v1 \
   >"$root/node-conformance.json"
 "$bin" --json bridge --socket "$socket" --token "$token" status \
   >"$root/bridge-status.json"
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" status \
   >"$root/device-status.json"
+"$bin" --json appsense test \
+  --bridge-socket "$socket" --bridge-token "$token" \
+  --device fixture-device \
+  --expected-app-name 'Fixture App' \
+  --expected-process com.example.fixture \
+  --expected-profile-index 0 --expected-layer-index 2 \
+  --timeout-ms 100 --poll-ms 10 \
+  >"$root/appsense-runtime-test.json"
+set +e
+"$bin" --json appsense test \
+  --bridge-socket "$socket" --bridge-token "$token" \
+  --device fixture-device --expected-process com.example.not-focused \
+  --timeout-ms 0 --poll-ms 10 \
+  >"$root/appsense-runtime-mismatch.stdout" \
+  2>"$root/appsense-runtime-mismatch.json"
+appsense_mismatch_status=$?
+set -e
+if [ "$appsense_mismatch_status" -ne 5 ]; then
+  echo "AppSense mismatch returned status $appsense_mismatch_status instead of 5" >&2
+  exit 1
+fi
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" files --recursive \
   >"$root/device-files.json"
@@ -469,6 +491,8 @@ root = pathlib.Path(sys.argv[1])
 conformance = json.loads((root / "node-conformance.json").read_text())
 bridge = json.loads((root / "bridge-status.json").read_text())
 status = json.loads((root / "device-status.json").read_text())
+appsense_runtime_test = json.loads((root / "appsense-runtime-test.json").read_text())
+appsense_runtime_mismatch = json.loads((root / "appsense-runtime-mismatch.json").read_text())
 files = json.loads((root / "device-files.json").read_text())
 manifest = json.loads((root / "export" / "manifest.json").read_text())
 validation = json.loads((root / "export-validation.json").read_text())
@@ -659,8 +683,18 @@ assert "input.host-settings.snapshot.v1" in bridge["capabilities"]
 assert "input.host-settings.apply.v1" in bridge["capabilities"]
 assert "input.host-settings.restore.v1" in bridge["capabilities"]
 assert "input.presets.snapshot.v1" in bridge["capabilities"]
+assert "input.appsense.runtime.v1" in bridge["capabilities"]
 assert status["adapter"] == "input-companion-bridge-v1"
 assert status["status"]["selectedLayerIndex"] == 2
+assert appsense_runtime_test["matched"] is True
+assert appsense_runtime_test["samples"] == 1
+assert appsense_runtime_test["state"]["runtime"]["collecting"] is True
+assert appsense_runtime_test["state"]["runtime"]["selectedDeviceRegistered"] is True
+assert appsense_runtime_test["state"]["runtime"]["focusedApp"]["process"] == "com.example.fixture"
+assert appsense_runtime_test["state"]["status"]["selectedLayerIndex"] == 2
+assert appsense_runtime_mismatch["code"] == "conflict"
+assert appsense_runtime_mismatch["exitStatus"] == 5
+assert "expectation timed out" in appsense_runtime_mismatch["message"]
 assert len(files["files"]) == 2
 assert manifest["adapter"] == "input-companion-bridge-v1"
 assert validation["valid"] is True
@@ -1290,6 +1324,8 @@ print("semantic_layer_lighting=verified")
 print("semantic_appsense_list_show=verified")
 print("semantic_appsense_link_set_unlink=verified")
 print("semantic_appsense_apply_readback_restore=verified")
+print("semantic_appsense_runtime_focus_layer=verified")
+print("semantic_appsense_runtime_mismatch=typed-conflict")
 print("semantic_control_list=verified")
 print("semantic_control_show=verified")
 print("semantic_control_set=verified")

@@ -158,6 +158,41 @@ pub struct PresetCatalogSnapshotReceipt {
     pub preset_count: usize,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AppSenseFocusedApp {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub app_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub process: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AppSenseRuntimeState {
+    pub collecting: bool,
+    pub selected_device_registered: bool,
+    pub device_ids: Vec<String>,
+    pub focused_app: Option<AppSenseFocusedApp>,
+    pub last_forwarded_app: Option<AppSenseFocusedApp>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSenseRuntimeReport {
+    pub schema_version: u64,
+    pub kind: String,
+    pub adapter: String,
+    pub input_app_version: String,
+    pub device_kit_version: String,
+    pub device: DeviceInfo,
+    pub status: DeviceStatus,
+    pub runtime: AppSenseRuntimeState,
+    pub warnings: Vec<String>,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ConfigMutationResponse {
@@ -207,6 +242,19 @@ struct BridgeDeviceReport {
     device_kit_version: String,
     device: DeviceInfo,
     status: DeviceStatus,
+    #[serde(default)]
+    warnings: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct BridgeAppSenseRuntimeReport {
+    schema_version: u64,
+    kind: String,
+    device_kit_version: String,
+    device: DeviceInfo,
+    status: DeviceStatus,
+    runtime: AppSenseRuntimeState,
     #[serde(default)]
     warnings: Vec<String>,
 }
@@ -317,6 +365,72 @@ pub fn status(paths: &BridgePaths) -> Result<StatusReport> {
         status: report.status,
         warnings: report.warnings,
     })
+}
+
+pub fn appsense_runtime(
+    paths: &BridgePaths,
+    device_id: Option<&str>,
+) -> Result<AppSenseRuntimeReport> {
+    let mut client = BridgeClient::connect(paths)?;
+    let report: BridgeAppSenseRuntimeReport = client.call(
+        "input.appsense.runtime",
+        "input.appsense.runtime.v1",
+        json!({ "deviceId": device_id }),
+    )?;
+    ensure!(
+        report.schema_version == 1 && report.kind == "worklouder-input-appsense-runtime",
+        "Input AppSense runtime response header was invalid"
+    );
+    validate_appsense_runtime(&report.runtime)?;
+    Ok(AppSenseRuntimeReport {
+        schema_version: 1,
+        kind: "worklouderctl-appsense-runtime".into(),
+        adapter: ADAPTER.into(),
+        input_app_version: client.handshake.input_version,
+        device_kit_version: report.device_kit_version,
+        device: report.device,
+        status: report.status,
+        runtime: report.runtime,
+        warnings: report.warnings,
+    })
+}
+
+fn validate_appsense_runtime(runtime: &AppSenseRuntimeState) -> Result<()> {
+    ensure!(
+        runtime.device_ids.len() <= 256
+            && runtime.device_ids.windows(2).all(|pair| pair[0] < pair[1])
+            && runtime
+                .device_ids
+                .iter()
+                .all(|id| !id.is_empty() && id.len() <= 256 && !id.contains('\0')),
+        "Input AppSense runtime device IDs were invalid"
+    );
+    ensure!(
+        !runtime.selected_device_registered || runtime.collecting,
+        "Input AppSense runtime registration was inconsistent"
+    );
+    for app in [
+        runtime.focused_app.as_ref(),
+        runtime.last_forwarded_app.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let values = [
+            app.app_name.as_ref(),
+            app.process.as_ref(),
+            app.path.as_ref(),
+        ];
+        ensure!(
+            values.iter().flatten().any(|value| !value.is_empty())
+                && values
+                    .iter()
+                    .flatten()
+                    .all(|value| { value.len() <= 4096 && !value.contains('\0') }),
+            "Input AppSense runtime application identity was invalid"
+        );
+    }
+    Ok(())
 }
 
 pub fn files(paths: &BridgePaths, path: Option<&str>, recursive: bool) -> Result<FileListReport> {

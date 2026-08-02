@@ -453,6 +453,14 @@ plus the exact macOS HID primary label for `KC_*`/`KI_*` under every released
 Input language. The overlay stays Input-owned; sector edits use the verified
 `layer joystick` and `control set` candidate/apply/rollback path.
 
+`appsense test` reads Input's one-second focus collector, last-forwarded
+application identity, registered-device set, and raw selected profile/layer
+status through `input.appsense.runtime.v1`. It can wait for exact app/process/
+path and device-index expectations without focusing an app or controlling a
+GUI; the positive transition state and typed timeout conflict are fixture-
+verified. Released Input integration and a real A/B focus transition remain
+compatibility gates.
+
 `transaction plan/show/apply/restore` now coordinates Codex settings, Codex
 Agent Keys, Input device configuration, and Input host settings behind one
 canonical revision and rollback boundary. It preflights all authorities before

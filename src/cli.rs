@@ -1650,6 +1650,32 @@ pub enum AppSenseCommand {
         #[clap(long, value_parser)]
         output: PathBuf,
     },
+
+    /// Observe Input's focus forwarding and wait for an optional device layer state.
+    Test {
+        #[clap(long, value_parser)]
+        bridge_socket: Option<PathBuf>,
+        #[clap(long, value_parser)]
+        bridge_token: Option<PathBuf>,
+        #[clap(long)]
+        device: Option<String>,
+        #[clap(long)]
+        expected_app_name: Option<String>,
+        #[clap(long)]
+        expected_process: Option<String>,
+        #[clap(long)]
+        expected_path: Option<String>,
+        /// Raw firmware profile index reported by Input.
+        #[clap(long)]
+        expected_profile_index: Option<u64>,
+        /// Raw one-based firmware layer index reported by Input.
+        #[clap(long)]
+        expected_layer_index: Option<u64>,
+        #[clap(long, default_value_t = 5000)]
+        timeout_ms: u64,
+        #[clap(long, default_value_t = 250)]
+        poll_ms: u64,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]

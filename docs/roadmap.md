@@ -63,7 +63,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Strict offline snapshot validation and deterministic candidate rehash
 - [x] Profile list/show/create/duplicate/rename/select/delete candidates
 - [x] Layer list/show/create/duplicate/rename/delete/move and 24-bit RGB metadata candidates
-- [ ] Live active-layer selection
+- [x] Input-owned active profile/layer runtime observation and AppSense expectation test fixture
 - [x] Existing keys and frozen Input 0.18.0 assignment tokens
 - [x] Encoder rotation and press assignments
 - [x] Existing joystick sector assignments

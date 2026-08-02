@@ -83,7 +83,7 @@ Promises as failures even when the USB interface still enumerates.
 | Command permission | explicit host command toggle | `input permission command` | snapshot/get/offline set plus bridge CAS/apply/replay/restore/automatic-rollback fixture-verified; released Input integration pending |
 | Cheat Sheet | show, hold, hide, toggle assignments | `cheat-sheet` | exact four-token catalog, binding inventory, strict offline bind candidate, and fixture apply/readback/restore verified |
 | Radial menu | ordered sectors, angles, assignment kinds, and resolved Action/Multi Action/Smart Action labels | `radial show`, `layer joystick`, `control set` | no separate persisted settings exist; inspection plus sector/assignment mutation and fixture apply/readback/restore verified; overlay runtime remains Input-owned |
-| AppSense runtime | focus observer and layer transition | `appsense test` | researched |
+| AppSense runtime | focus collector, last-forwarded identity, registered device, and raw selected profile/layer transition | `appsense test` | exact Input 0.18.0 service/RPC path hash-pinned; authenticated bridge and positive/negative CLI fixture verified; released Input A/B focus transition pending |
 
 ## Tier 4 — Input operations
 

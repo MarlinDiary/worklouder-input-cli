@@ -37,7 +37,8 @@ use cli::{
 use serde::Serialize;
 use std::io::Write;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::thread;
+use std::time::{Duration, Instant};
 
 pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
     match cli.command {
@@ -800,8 +801,152 @@ fn run_appsense(command: AppSenseCommand, json: bool, mut out: impl Write) -> Re
             let result = semantic::appsense_unlink(&input, profile, layer, &output)?;
             write_candidate_result(result, json, &mut out)?;
         }
+        AppSenseCommand::Test {
+            bridge_socket,
+            bridge_token,
+            device,
+            expected_app_name,
+            expected_process,
+            expected_path,
+            expected_profile_index,
+            expected_layer_index,
+            timeout_ms,
+            poll_ms,
+        } => {
+            anyhow::ensure!(
+                timeout_ms <= 300_000 && poll_ms >= 10 && poll_ms <= 10_000,
+                "AppSense timeout or poll interval was invalid"
+            );
+            for (label, value) in [
+                ("app name", expected_app_name.as_deref()),
+                ("process", expected_process.as_deref()),
+                ("path", expected_path.as_deref()),
+            ] {
+                if let Some(value) = value {
+                    anyhow::ensure!(
+                        !value.is_empty() && value.len() <= 4096 && !value.contains('\0'),
+                        "expected AppSense {label} was invalid"
+                    );
+                }
+            }
+            let paths = bridge::paths(bridge_socket, bridge_token);
+            let started = Instant::now();
+            let mut samples = 0_u64;
+            let result = loop {
+                samples += 1;
+                let state = bridge::appsense_runtime(&paths, device.as_deref())?;
+                let matched = appsense_runtime_matches(
+                    &state,
+                    expected_app_name.as_deref(),
+                    expected_process.as_deref(),
+                    expected_path.as_deref(),
+                    expected_profile_index,
+                    expected_layer_index,
+                );
+                let receipt = AppSenseTestReceipt {
+                    schema_version: 1,
+                    kind: "worklouderctl-appsense-test",
+                    matched,
+                    samples,
+                    elapsed_ms: started.elapsed().as_millis() as u64,
+                    state,
+                };
+                if matched {
+                    break receipt;
+                }
+                if started.elapsed() >= Duration::from_millis(timeout_ms) {
+                    anyhow::bail!(
+                        "AppSense runtime expectation timed out after {} ms; last state: {}",
+                        receipt.elapsed_ms,
+                        serde_json::to_string(&receipt)?
+                    );
+                }
+                thread::sleep(Duration::from_millis(poll_ms));
+            };
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                let focused = result.state.runtime.focused_app.as_ref();
+                writeln!(
+                    out,
+                    "AppSense matched after {} sample(s): collecting={} registered={} app={} process={} profile={} layer={}",
+                    result.samples,
+                    result.state.runtime.collecting,
+                    result.state.runtime.selected_device_registered,
+                    focused
+                        .and_then(|app| app.app_name.as_deref())
+                        .unwrap_or(""),
+                    focused
+                        .and_then(|app| app.process.as_deref())
+                        .unwrap_or(""),
+                    result
+                        .state
+                        .status
+                        .selected_profile_index
+                        .map(|value| value.to_string())
+                        .unwrap_or_default(),
+                    result
+                        .state
+                        .status
+                        .selected_layer_index
+                        .map(|value| value.to_string())
+                        .unwrap_or_default(),
+                )?;
+            }
+        }
     }
     Ok(())
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppSenseTestReceipt {
+    schema_version: u64,
+    kind: &'static str,
+    matched: bool,
+    samples: u64,
+    elapsed_ms: u64,
+    state: bridge::AppSenseRuntimeReport,
+}
+
+fn appsense_runtime_matches(
+    state: &bridge::AppSenseRuntimeReport,
+    expected_app_name: Option<&str>,
+    expected_process: Option<&str>,
+    expected_path: Option<&str>,
+    expected_profile_index: Option<u64>,
+    expected_layer_index: Option<u64>,
+) -> bool {
+    if !state.runtime.collecting || !state.runtime.selected_device_registered {
+        return false;
+    }
+    let focused = match state.runtime.focused_app.as_ref() {
+        Some(app) => app,
+        None => return false,
+    };
+    let forwarded = match state.runtime.last_forwarded_app.as_ref() {
+        Some(app) if app == focused => app,
+        _ => return false,
+    };
+    let identity_matches = |app: &bridge::AppSenseFocusedApp| {
+        expected_app_name
+            .map(|expected| app.app_name.as_deref() == Some(expected))
+            .unwrap_or(true)
+            && expected_process
+                .map(|expected| app.process.as_deref() == Some(expected))
+                .unwrap_or(true)
+            && expected_path
+                .map(|expected| app.path.as_deref() == Some(expected))
+                .unwrap_or(true)
+    };
+    identity_matches(focused)
+        && identity_matches(forwarded)
+        && expected_profile_index
+            .map(|expected| state.status.selected_profile_index == Some(expected))
+            .unwrap_or(true)
+        && expected_layer_index
+            .map(|expected| state.status.selected_layer_index == Some(expected))
+            .unwrap_or(true)
 }
 
 fn run_profile(command: ProfileCommand, json: bool, mut out: impl Write) -> Result<()> {

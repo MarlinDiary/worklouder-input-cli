@@ -387,6 +387,12 @@ language 使用精确的 macOS HID primary label 解析 `KC_*`/`KI_*`。overlay 
 继续由 Input 负责；sector 修改复用已验证的 `layer joystick`、`control set` 和完整
 transaction。
 
+`appsense test` 通过 `input.appsense.runtime.v1` 读取 Input 每秒一次的 focus
+collector、最后一次转发给 firmware 的应用 identity、已注册 device，以及 device
+报告的 profile/layer index；它只等待并校验状态，不切换应用或操作 GUI。正向状态和
+timeout 的 typed conflict 已由 fixture 验证，released Input 集成与真实 A/B focus
+transition 仍是 compatibility gate。
+
 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
 adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
 

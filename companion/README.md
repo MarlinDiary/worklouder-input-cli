@@ -71,6 +71,12 @@ recursively key-sorts it for the catalog revision, and exposes only the
 read-only snapshot method. WorkLouderCTL does not read or edit the LokiJS
 `presets` collection directly.
 
+When Input supplies `nativeService.getWindowInFocus()` plus its existing
+`focusAppService`, the integration advertises `input.appsense.runtime.v1`.
+This read-only method returns collector/registration state, the native focused
+application, the last payload forwarded to firmware, and the selected device
+profile/layer status. It does not focus an application or open an Input window.
+
 The reference adapter owns the surrounding transaction: validate every byte
 and digest, capture a pre-mutation snapshot, compare the live revision, invoke
 the writer, read back the complete revision, and automatically restore and
@@ -91,7 +97,8 @@ node companion/conformance.mjs \
   --require input.host-settings.snapshot.v1 \
   --require input.host-settings.apply.v1 \
   --require input.host-settings.restore.v1 \
-  --require input.presets.snapshot.v1
+  --require input.presets.snapshot.v1 \
+  --require input.appsense.runtime.v1
 ```
 
 Nonstandard paths can be supplied with `--socket` and `--token`, or with

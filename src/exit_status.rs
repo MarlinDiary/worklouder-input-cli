@@ -111,6 +111,8 @@ pub fn classify_message(message: &str) -> ErrorCode {
             "destination appeared during write",
             "did not match this apply retry",
             "did not match this restore retry",
+            "differed during transaction postflight",
+            "runtime expectation timed out",
         ],
     ) {
         ErrorCode::Conflict
@@ -177,6 +179,7 @@ mod tests {
                 6,
             ),
             ("revision conflict", ErrorCode::Conflict, 5),
+            ("runtime expectation timed out", ErrorCode::Conflict, 5),
             ("snapshot was invalid JSON", ErrorCode::InvalidData, 4),
             ("bridge is not running", ErrorCode::ProviderUnavailable, 3),
             ("operation not permitted", ErrorCode::PermissionDenied, 8),

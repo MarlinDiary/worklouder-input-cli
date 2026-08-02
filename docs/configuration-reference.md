@@ -565,6 +565,25 @@ Input renderer or main process. Therefore candidate/apply/readback/restore
 proves configuration parity, while full runtime parity additionally needs an
 A/B focus transition and device-status read.
 
+`appsense test` now reads that runtime path through Input instead of opening or
+focusing an application itself:
+
+```console
+worklouderctl --json appsense test \
+  --expected-process com.example.app \
+  --expected-profile-index 0 --expected-layer-index 2 \
+  --timeout-ms 5000
+```
+
+The report requires Input's collector to be active, the selected device to be
+registered, and `focusedApp` to equal `lastForwardedApp`. Optional identity and
+raw device-status expectations are polled until the timeout. Input 0.18.0
+reports profile index as zero-based and firmware layer index as one-based; its
+renderer subtracts one from the layer value. A timeout is a typed `conflict`
+(exit status 5). The isolated bridge fixture verifies focus forwarding and
+`selectedProfileIndex=0`/`selectedLayerIndex=2`; a released-Input A/B focus
+transition remains a separate compatibility gate.
+
 ## Tier 3: Input host configuration
 
 ### Smart Actions

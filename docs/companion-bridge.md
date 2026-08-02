@@ -85,6 +85,7 @@ Protocol version 1 defines:
 - `device.config.validate`
 - `input.host-settings.snapshot`
 - `input.presets.snapshot`
+- `input.appsense.runtime`
 
 File content uses base64 inside JSON. Device SHA-1 and host SHA-256 remain
 separate fields so a CLI export can independently verify both authorities.
@@ -116,6 +117,13 @@ device ID and does not read or write device configuration files.
 its saved-first/default-second merged preset DTO array; the bridge recursively
 sorts object keys for a deterministic SHA-256 revision and publishes the
 complete catalog without exposing the underlying LokiJS collection.
+
+`input.appsense.runtime` is a read-only Input-owned runtime authority. It
+returns the current native focused application, the last focus payload Input
+forwarded to firmware, collector/device-registration state, and the device's
+raw selected profile/layer status. The one-call integration delegates to
+Input 0.18.0 `nativeService.getWindowInFocus`, `focusAppService`, and the
+existing device session; the CLI does not synthesize focus or control a GUI.
 
 ```sh
 worklouderctl input config snapshot --output config-snapshot.json
@@ -168,6 +176,8 @@ worklouderctl appsense set --input appsense-candidate.json --id 0 \
   --name 'Codex Desktop' --output appsense-renamed-candidate.json
 worklouderctl appsense unlink --input appsense-candidate.json \
   --profile 0 --layer 1 --output appsense-unlinked-candidate.json
+worklouderctl appsense test --expected-process com.openai.codex \
+  --expected-profile-index 0 --expected-layer-index 2 --timeout-ms 5000
 worklouderctl control list --input config-snapshot.json --profile 0 --layer 1
 worklouderctl control show --input config-snapshot.json --profile 0 --layer 1 \
   --control encoder:0:press
