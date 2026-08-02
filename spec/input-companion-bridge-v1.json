@@ -117,6 +117,34 @@
         "snapshot"
       ],
       "resultKind": "worklouder-input-config-mutation"
+    },
+    {
+      "name": "input.host-settings.snapshot",
+      "capability": "input.host-settings.snapshot.v1",
+      "mutation": false,
+      "resultKind": "worklouder-input-host-settings"
+    },
+    {
+      "name": "input.host-settings.apply",
+      "capability": "input.host-settings.apply.v1",
+      "mutation": true,
+      "requiredParams": [
+        "expectedRevision",
+        "idempotencyKey",
+        "settings"
+      ],
+      "resultKind": "worklouder-input-host-settings-mutation"
+    },
+    {
+      "name": "input.host-settings.restore",
+      "capability": "input.host-settings.restore.v1",
+      "mutation": true,
+      "requiredParams": [
+        "expectedRevision",
+        "idempotencyKey",
+        "snapshot"
+      ],
+      "resultKind": "worklouder-input-host-settings-mutation"
     }
   ],
   "errors": {
@@ -185,6 +213,46 @@
     "consistency": "list-read-list",
     "validateExpectedRevision": "optional live compare-and-swap preflight"
   },
+  "hostSettings": {
+    "schemaVersion": 1,
+    "kind": "worklouder-input-host-settings",
+    "fields": [
+      "showedAnalyticsPopUp",
+      "analyticsConsented",
+      "smartActionCmdEnabled"
+    ],
+    "revisionAlgorithm": "sha256:input-host-settings-three-booleans-v1",
+    "revisionFraming": [
+      "utf8(worklouder-input-host-settings-revision-v1\\0)",
+      "u8(showedAnalyticsPopUp ? 1 : 0)",
+      "u8(analyticsConsented ? 1 : 0)",
+      "u8(smartActionCmdEnabled ? 1 : 0)"
+    ],
+    "authority": "Input ApplicationService.getAppSettings/saveAppSettings",
+    "directDatabaseWrite": false,
+    "completeDtoReplacement": true,
+    "preserveSiblingFields": true,
+    "snapshotBeforeApply": true,
+    "compareAndSwapRevision": true,
+    "idempotencyRequired": true,
+    "readbackAfterApply": true,
+    "rollbackOnFailure": true,
+    "capabilityAdvertisement": "all three methods are advertised only when hostSettingsAuthority supplies readSettings and replaceSettings"
+  },
+  "hostSettingsMutationResult": {
+    "schemaVersion": 1,
+    "kind": "worklouder-input-host-settings-mutation",
+    "fields": [
+      "operation",
+      "idempotencyKey",
+      "idempotentReplay",
+      "changed",
+      "rollbackPerformed",
+      "beforeRevision",
+      "afterRevision",
+      "targetRevision"
+    ]
+  },
   "inputEvidence": {
     "testedVersion": "0.18.0",
     "bundleId": "it.focusense.input-app",
@@ -196,7 +264,9 @@
       "rpcGetDeviceStatus",
       "rpcGetFileList",
       "rpcReadFile",
-      "connDeviceChangeDeviceConfig"
+      "connDeviceChangeDeviceConfig",
+      "common-get-app-settings",
+      "common-send-app-settings"
     ],
     "quitCleanup": "devicesCommManager.disconnectAllDevices()",
     "externalTransportFound": false

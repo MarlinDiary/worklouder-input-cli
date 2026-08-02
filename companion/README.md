@@ -17,6 +17,8 @@ const companionBridge = await installInputCompanionBridge({
   app,
   services: {
     devicesCommManager,
+    applicationService,
+    analyticsService,
     configurationWriter: {
       async replaceConfiguration({ device, files, operation, targetRevision }) {
         // Route the complete file set through Input's existing queue and
@@ -47,6 +49,16 @@ queue and finish any cache/database synchronization before returning. Only then
 does the bridge advertise `device.config.apply.v1` and
 `device.config.restore.v1`.
 
+When `applicationService` provides Input's existing `getAppSettings()` and
+`saveAppSettings()` methods, the integration also advertises
+`input.host-settings.snapshot.v1`, `input.host-settings.apply.v1`, and
+`input.host-settings.restore.v1`. It reuses the current model instance,
+replaces the complete three-boolean DTO through Input, runs the existing
+analytics-consent refresh when available, and verifies CAS/readback/rollback.
+It does not edit Input's LokiJS file directly. A custom `hostSettingsAuthority`
+with `readSettings()` and `replaceSettings()` can be injected by later Input
+versions.
+
 The reference adapter owns the surrounding transaction: validate every byte
 and digest, capture a pre-mutation snapshot, compare the live revision, invoke
 the writer, read back the complete revision, and automatically restore and
@@ -63,7 +75,10 @@ node companion/conformance.mjs \
   --require device.files.list.v1 \
   --require device.files.read.v1 \
   --require device.config.apply.v1 \
-  --require device.config.restore.v1
+  --require device.config.restore.v1 \
+  --require input.host-settings.snapshot.v1 \
+  --require input.host-settings.apply.v1 \
+  --require input.host-settings.restore.v1
 ```
 
 Nonstandard paths can be supplied with `--socket` and `--token`, or with
@@ -81,5 +96,7 @@ The first command checks server, adapter, lifecycle, authentication, and path
 ownership. The second starts an isolated fixture and verifies the Node
 conformance command plus the Rust CLI handshake, live status, file list, exact
 export, dual-hash readback, apply, idempotent replay, stale-revision rejection,
-restore, and final revision recovery. All mutation conformance runs against the
-isolated fixture writer.
+restore, and final revision recovery. It also verifies host-settings snapshot,
+offline command-permission candidate generation with analytics-field
+preservation, apply/replay/readback, and restore. All mutation conformance runs
+against isolated fixture authorities.

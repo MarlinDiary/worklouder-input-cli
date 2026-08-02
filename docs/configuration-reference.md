@@ -593,8 +593,29 @@ The CLI reports command definitions with `requiresCommandPermission: true`;
 definition editing does not toggle the host permission.
 
 The Input database has a `smartActionCmdEnabled` permission field. Command
-execution must remain explicitly enabled and must be reported separately from
-device deployment.
+execution remains explicitly separate from device deployment:
+
+```console
+worklouderctl input permission command snapshot --output HOST_SETTINGS.json
+worklouderctl input permission command get --input HOST_SETTINGS.json
+worklouderctl input permission command set --input HOST_SETTINGS.json enabled \
+  --output HOST_SETTINGS_ENABLED.json
+worklouderctl input permission command apply \
+  --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json \
+  --expected-revision REVISION --idempotency-key RETRY_KEY
+worklouderctl input permission command restore \
+  --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json \
+  --expected-revision CURRENT_REVISION --idempotency-key RESTORE_KEY
+```
+
+The snapshot includes `showedAnalyticsPopUp`, `analyticsConsented`, and
+`smartActionCmdEnabled`. Offline set changes only the last field. The Input
+Companion Bridge owns complete-DTO replacement, CAS, idempotent replay, exact
+readback, explicit restore, and automatic rollback; it never writes LokiJS
+storage behind the running application's back. The SHA-256 revision frames
+those booleans in that order after
+`worklouder-input-host-settings-revision-v1\0`. Live replacement delegates to
+Input's `ApplicationService.getAppSettings/saveAppSettings` authority.
 
 ### Cheat Sheet and radial menu
 

@@ -100,6 +100,11 @@ worklouderctl codex runtime recover [--timeout-seconds 15]
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
 worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
+worklouderctl input permission command snapshot --output HOST_SETTINGS.json
+worklouderctl input permission command get --input HOST_SETTINGS.json
+worklouderctl input permission command set --input HOST_SETTINGS.json enabled --output HOST_SETTINGS_ENABLED.json
+worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json
+worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
 worklouderctl bridge status
 worklouderctl device --transport bridge status
 worklouderctl device --transport bridge files --recursive
@@ -332,6 +337,24 @@ groups。Action ID 按 maximum-ID-plus-one 分配并从 1 开始；group ID 从 
 membership，并保留 group container。只修改 Smart Action 的 candidate 会保持
 `keymap.json` 原字节不变。Command action 会显式报告 `requiresCommandPermission`；
 Input 的 `smartActionCmdEnabled` host permission 不会被 definition CRUD 隐式修改。
+`input permission command` 会 snapshot 三个完整的 Input host-setting boolean，
+只修改 command gate；bridge transaction 保留 analytics siblings，并覆盖 revision
+CAS、idempotency、完整 DTO readback 与失败后的自动 rollback。
+
+```console
+worklouderctl input permission command snapshot --output host-settings.json
+worklouderctl input permission command get --input host-settings.json
+worklouderctl input permission command set --input host-settings.json enabled \
+  --output host-settings-enabled.json
+worklouderctl input permission command apply \
+  --input host-settings-enabled.json --backup host-settings-before-apply.json \
+  --expected-revision REVISION --idempotency-key enable-command-actions
+worklouderctl input permission command restore \
+  --input host-settings.json --backup host-settings-before-restore.json \
+  --expected-revision CURRENT_REVISION --idempotency-key restore-command-actions
+```
+
+CLI 不直接写 `input_storage.json`；持久化与 command execution 继续由 Input 负责。
 
 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
 adapter、认证测试，以及 Rust CLI 跨语言 conformance test：

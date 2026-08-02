@@ -131,6 +131,11 @@ worklouderctl codex runtime recover [--timeout-seconds 15]
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
 worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
+worklouderctl input permission command snapshot --output HOST_SETTINGS.json
+worklouderctl input permission command get --input HOST_SETTINGS.json
+worklouderctl input permission command set --input HOST_SETTINGS.json enabled --output HOST_SETTINGS_ENABLED.json
+worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json
+worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
 worklouderctl bridge status
 worklouderctl device --transport bridge status
 worklouderctl device --transport bridge files --recursive
@@ -395,6 +400,26 @@ to `KC_NONE` and removes group membership while preserving the group container.
 Smart-only candidates preserve the exact `keymap.json` bytes. Command actions
 report `requiresCommandPermission`; the host gate remains Input's
 `smartActionCmdEnabled` setting and is not silently changed by definition CRUD.
+`input permission command` snapshots all three Input host-setting booleans and
+changes only this gate. Its bridge transaction preserves the analytics fields,
+uses revision CAS and idempotency, verifies complete DTO readback, and restores
+the pre-write settings automatically after a failed readback.
+
+```console
+worklouderctl input permission command snapshot --output host-settings.json
+worklouderctl input permission command get --input host-settings.json
+worklouderctl input permission command set --input host-settings.json enabled \
+  --output host-settings-enabled.json
+worklouderctl input permission command apply \
+  --input host-settings-enabled.json --backup host-settings-before-apply.json \
+  --expected-revision REVISION --idempotency-key enable-command-actions
+worklouderctl input permission command restore \
+  --input host-settings.json --backup host-settings-before-restore.json \
+  --expected-revision CURRENT_REVISION --idempotency-key restore-command-actions
+```
+
+The CLI does not write `input_storage.json`; Input remains responsible for
+persistence and command execution.
 
 The repository includes an executable Input-main reference server, a service
 adapter for the Input 0.18.0 service shape, authentication tests, and a

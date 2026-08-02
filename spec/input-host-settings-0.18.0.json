@@ -34,7 +34,11 @@
     "guiMutation": "read complete DTO, replace smartActionCmdEnabled, save complete DTO"
   },
   "candidateBoundary": {
-    "bridgeCapability": "input.host-settings.v1",
+    "bridgeCapabilities": [
+      "input.host-settings.snapshot.v1",
+      "input.host-settings.apply.v1",
+      "input.host-settings.restore.v1"
+    ],
     "directDatabaseWrite": false,
     "preserveSiblingFields": true,
     "compareAndSwap": "canonical complete-setting revision",

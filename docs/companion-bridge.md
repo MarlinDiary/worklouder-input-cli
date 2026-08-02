@@ -83,6 +83,7 @@ Protocol version 1 defines:
 - `device.files.read`
 - `device.config.snapshot`
 - `device.config.validate`
+- `input.host-settings.snapshot`
 
 File content uses base64 inside JSON. Device SHA-1 and host SHA-256 remain
 separate fields so a CLI export can independently verify both authorities.
@@ -104,6 +105,11 @@ compare-and-swap preflight. WorkLouderCTL exposes these methods as:
 
 Protocol v1 bounds a snapshot at 4,096 files, 16 MiB per file, and 32 MiB of
 decoded content; request and response lines are each capped at 64 MiB.
+
+`input.host-settings.snapshot` is an independent host authority. It returns the
+complete `showedAnalyticsPopUp`, `analyticsConsented`, and
+`smartActionCmdEnabled` DTO plus a deterministic SHA-256 revision. It has no
+device ID and does not read or write device configuration files.
 
 ```sh
 worklouderctl input config snapshot --output config-snapshot.json
@@ -197,12 +203,14 @@ Configuration apply and restore are capability-gated:
 
 - `device.config.apply`
 - `device.config.restore`
+- `input.host-settings.apply`
+- `input.host-settings.restore`
 
-Every mutation carries a device ID, expected revision, unique idempotency key,
-and complete typed input. Input serializes mutations on its existing device
-queue. It snapshots before apply, checks the revision immediately before the
-first write, reads back after the write, and restores the snapshot if any
-authority fails to synchronize.
+Every mutation carries an expected revision, unique idempotency key, and
+complete typed input; device configuration mutations also carry a device ID.
+Input serializes mutations in its main process. It snapshots before apply,
+checks the revision immediately before the first write, reads back after the
+write, and restores the snapshot if any authority fails to synchronize.
 
 This makes the GUI and CLI two clients of the same transaction owner rather
 than two independent writers.
@@ -221,6 +229,14 @@ worklouderctl device config apply \
 worklouderctl device config restore \
   --input original.json --backup pre-restore.json \
   --expected-revision CURRENT_REVISION --idempotency-key RESTORE_KEY
+
+worklouderctl input permission command apply \
+  --input host-settings-enabled.json --backup host-settings-before.json \
+  --expected-revision REVISION --idempotency-key HOST_RETRY_KEY
+
+worklouderctl input permission command restore \
+  --input host-settings-original.json --backup host-settings-current.json \
+  --expected-revision CURRENT_REVISION --idempotency-key HOST_RESTORE_KEY
 ```
 
 Input advertises these methods only when its version adapter injects a
@@ -229,6 +245,11 @@ replace the complete file set through Input's own serialized queue and finish
 its state synchronization before returning. The bridge then performs a fresh
 full snapshot and revision readback. A writer/readback failure triggers a full
 pre-mutation restore plus another revision readback.
+
+Host-setting methods are advertised separately when Input injects its
+application-settings authority. They replace the complete three-boolean DTO
+through `ApplicationService`, including the existing analytics-consent refresh,
+and use an independent revision/idempotency domain.
 
 The reference writer and cross-language fixture verify this transaction model.
 Enabling it for an installed Input release remains a separate version-adapter
@@ -261,7 +282,8 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
 - `companion/input-main-bridge.mjs` — authenticated, allowlisted, serialized
   Unix-socket JSON-RPC server;
 - `companion/input-main-adapter.mjs` — adapter over Input's existing
-  `devicesCommManager` and per-device `rpcService`;
+  `devicesCommManager`, per-device `rpcService`, and application-settings
+  authority;
 - `companion/input-main-integration.mjs` — one-call Electron main-process
   installation with Input-owned discovery and lifecycle cleanup;
 - `companion/conformance.mjs` — read-only release conformance command;
@@ -270,8 +292,8 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
 - `scripts/test-bridge-e2e.sh` — Rust CLI handshake, status, file list, exact
   export, semantic profile/layer/lighting/AppSense/control/Action/Multi Action/group
   inspection, lifecycle/CRUD/cascade candidates, independent candidate rehash,
-  apply/readback, idempotent retry, stale-CAS rejection, restore, and dual-hash
-  conformance test.
+  apply/readback, idempotent retry, stale-CAS rejection, restore, host command
+  permission `false -> true -> false`, and dual-hash conformance test.
 
 Input maintains only the small adapter from stable bridge method names to its
 current service container. Integration creates the adapter after Input's
