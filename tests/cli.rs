@@ -243,6 +243,7 @@ fn input_and_config_help_expose_read_only_workflow() {
     assert!(input_stdout.contains("export"));
     assert!(input_stdout.contains("config"));
     assert!(input_stdout.contains("permission"));
+    assert!(input_stdout.contains("preset"));
 
     let input_config = binary()
         .args(["input", "config", "--help"])
@@ -261,6 +262,14 @@ fn input_and_config_help_expose_read_only_workflow() {
     for command in ["snapshot", "get", "set", "apply", "restore"] {
         assert!(permission_stdout.contains(command));
     }
+
+    let preset = binary()
+        .args(["input", "preset", "--help"])
+        .output()
+        .unwrap();
+    let preset_stdout = String::from_utf8(preset.stdout).unwrap();
+    assert!(preset.status.success());
+    assert!(preset_stdout.contains("snapshot"));
 
     let config = binary().args(["config", "--help"]).output().unwrap();
     let config_stdout = String::from_utf8(config.stdout).unwrap();

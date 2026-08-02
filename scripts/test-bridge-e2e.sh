@@ -12,6 +12,7 @@ cache_snapshot=$root/config-cache-snapshot.json
 candidate_snapshot=$root/config-candidate.json
 host_settings_snapshot=$root/host-settings.json
 host_settings_enabled=$root/host-settings-enabled.json
+preset_catalog=$root/preset-catalog.json
 color_snapshot=$root/config-color.json
 control_snapshot=$root/config-control.json
 action_created_snapshot=$root/config-action-created.json
@@ -94,6 +95,7 @@ node "$repo/companion/conformance.mjs" \
   --require input.host-settings.snapshot.v1 \
   --require input.host-settings.apply.v1 \
   --require input.host-settings.restore.v1 \
+  --require input.presets.snapshot.v1 \
   >"$root/node-conformance.json"
 "$bin" --json bridge --socket "$socket" --token "$token" status \
   >"$root/bridge-status.json"
@@ -114,6 +116,9 @@ node "$repo/companion/conformance.mjs" \
 "$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
   permission command snapshot --output "$host_settings_snapshot" \
   >"$root/host-settings-snapshot-receipt.json"
+"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
+  preset snapshot --output "$preset_catalog" \
+  >"$root/preset-catalog-receipt.json"
 "$bin" --json input permission command get --input "$host_settings_snapshot" \
   >"$root/host-settings-get.json"
 "$bin" --json input permission command set --input "$host_settings_snapshot" \
@@ -528,6 +533,8 @@ host_settings_post_apply = json.loads((root / "host-settings-post-apply.json").r
 host_settings_pre_restore = json.loads((root / "host-settings-pre-restore.json").read_text())
 host_settings_restore = json.loads((root / "host-settings-restore.json").read_text())
 host_settings_post_restore = json.loads((root / "host-settings-post-restore.json").read_text())
+preset_catalog = json.loads((root / "preset-catalog.json").read_text())
+preset_catalog_receipt = json.loads((root / "preset-catalog-receipt.json").read_text())
 
 assert conformance["conformant"] is True
 assert conformance["protocolVersion"] == 1
@@ -542,6 +549,7 @@ assert "device.config.restore.v1" in bridge["capabilities"]
 assert "input.host-settings.snapshot.v1" in bridge["capabilities"]
 assert "input.host-settings.apply.v1" in bridge["capabilities"]
 assert "input.host-settings.restore.v1" in bridge["capabilities"]
+assert "input.presets.snapshot.v1" in bridge["capabilities"]
 assert status["adapter"] == "input-companion-bridge-v1"
 assert status["status"]["selectedLayerIndex"] == 2
 assert len(files["files"]) == 2
@@ -1071,6 +1079,11 @@ assert host_settings_restore["operation"] == "restore"
 assert host_settings_restore["changed"] is True
 assert host_settings_restore["afterRevision"] == host_settings["revision"]
 assert host_settings_post_restore == host_settings
+assert preset_catalog["kind"] == "worklouder-input-preset-catalog"
+assert preset_catalog_receipt["revision"] == preset_catalog["revision"]
+assert preset_catalog_receipt["presetCount"] == 1
+assert preset_catalog["presets"][0]["id"] == 9002
+assert preset_catalog["presets"][0]["layer"]["name"] == "Fixture Preset Layer"
 
 print("bridge_protocol=1")
 print("node_conformance=verified")
@@ -1127,4 +1140,5 @@ print("host_settings_snapshot_revision=verified")
 print("host_command_permission_candidate=verified")
 print("host_command_permission_sibling_preservation=verified")
 print("host_settings_apply_replay_restore=verified")
+print("preset_catalog_snapshot_revision=verified")
 PY

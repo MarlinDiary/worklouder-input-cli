@@ -237,6 +237,58 @@ const adapter = createInputMainAdapter({
       hostSettings = { ...settings };
     },
   },
+  presetCatalogAuthority: {
+    async listPresets() {
+      return [
+        {
+          id: 9002,
+          name: "Fixture Figma",
+          tags: ["fixture", "design"],
+          description: "Fixture preset",
+          author: "Work LouderCTL",
+          base64Image: "data:image/png;base64,",
+          os: [0],
+          keyboardLayoutTypes: ["universal"],
+          devices: ["codex_micro"],
+          layer: {
+            id: 4,
+            name: "Fixture Preset Layer",
+            color: "#336699",
+            os: 0,
+            layout: {
+              base: [[{ keycode: "KA_7" }, { keycode: "KM_2" }]],
+              encoders: [[{ keycode: "KC_LEFT" }, { keycode: "KC_RGHT" }, { keycode: "KC_MUTE" }]],
+            },
+          },
+          actions: [
+            {
+              id: 7,
+              name: "Preset Action",
+              color: null,
+              keyInputs: [{ keycode: "KC_P", delay: 0, actionType: 1 }],
+            },
+          ],
+          actionGroups: [
+            { id: 3, name: "Preset Actions", tags: [], color: null, actionIds: [7] },
+          ],
+          multiactions: [
+            {
+              id: 2,
+              name: "Preset Multi",
+              color: null,
+              tap: { keycode: "KA_7", delay: 0, actionType: 1 },
+              onHold: { keycode: "KC_NONE", delay: 0, actionType: 1 },
+              doubleTap: { keycode: "KC_NONE", delay: 0, actionType: 1 },
+              tapHold: { keycode: "KC_NONE", delay: 0, actionType: 1 },
+              tappingTerms: 250,
+            },
+          ],
+          multiactionGroups: [],
+          previewImg: "data:image/png;base64,",
+        },
+      ];
+    },
+  },
 });
 
 const bridge = await startInputCompanionBridge({

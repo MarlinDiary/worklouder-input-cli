@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   createInputMainAdapter,
   hostSettingsRevision,
+  presetCatalogRevision,
 } from "./input-main-adapter.mjs";
 import { startInputCompanionBridge } from "./input-main-bridge.mjs";
 import { installInputCompanionBridge } from "./input-main-integration.mjs";
@@ -505,6 +506,33 @@ test("Input adapter automatically restores host settings after failed readback",
   assert.equal(restored.revision, baseline.revision);
 });
 
+test("Input adapter snapshots a complete preset catalog deterministically", async () => {
+  const presets = [
+    {
+      name: "Fixture",
+      id: 9002,
+      tags: ["design"],
+      layer: { name: "Fixture layer", id: 4 },
+    },
+  ];
+  const adapter = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [] },
+    deviceKitVersion: "0.1.29",
+    presetCatalogAuthority: {
+      async listPresets() {
+        return presets;
+      },
+    },
+  });
+  const snapshot = await adapter.snapshotPresets();
+  assert.equal(snapshot.kind, "worklouder-input-preset-catalog");
+  assert.equal(snapshot.revision, presetCatalogRevision(snapshot.presets));
+  assert.deepEqual(snapshot.presets, presets);
+
+  presets[0].name = "Changed after snapshot";
+  assert.equal(snapshot.presets[0].name, "Fixture");
+});
+
 test("one-call Input integration owns discovery and lifecycle paths", async () => {
   const root = await mkdtemp("/tmp/wlb-integration-");
   class FixtureApp extends EventEmitter {
@@ -565,6 +593,9 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
         getAppSettings: () => appSettings,
         saveAppSettings: () => {},
       },
+      presetCatalogAuthority: {
+        listPresets: () => [],
+      },
     },
     deviceKitVersion: "0.1.29-integration",
     bridgeVersion: "0.1.0-integration",
@@ -586,6 +617,7 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
   assert.ok(
     integration.capabilities.includes("input.host-settings.restore.v1"),
   );
+  assert.ok(integration.capabilities.includes("input.presets.snapshot.v1"));
   assert.equal(app.listenerCount("before-quit"), 1);
   await integration.stop();
   assert.equal(app.listenerCount("before-quit"), 0);
