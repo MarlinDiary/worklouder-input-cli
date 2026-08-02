@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-input-device-read-contract",
+  "inputApp": {
+    "version": "0.18.0",
+    "defaultPath": "/Applications/input.app",
+    "bundleId": "it.focusense.input-app",
+    "asarRelativePath": "Contents/Resources/app.asar",
+    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8"
+  },
+  "deviceKit": {
+    "package": "@worklouder/wl-device-kit",
+    "version": "0.1.29",
+    "entryRelativePath": "Contents/Resources/app.asar/node_modules/@worklouder/wl-device-kit",
+    "unpackedIndexRelativePath": "Contents/Resources/app.asar.unpacked/node_modules/@worklouder/wl-device-kit/dist/index.js",
+    "indexSha256": "c0c25fce60054c8bee49e71dd31e2e38ffc2edade02a825191991bcd9f413729",
+    "packageSha256": "5351b20edbc66bb5d2bc144f85e60888a6b95556178c512c9cc2dce759f26a7d"
+  },
+  "provider": {
+    "adapter": "input-bundled-device-kit-read-v1",
+    "runtime": "Input Electron with ELECTRON_RUN_AS_NODE=1",
+    "mode": "read-only",
+    "coordination": {
+      "default": "require-closed",
+      "supported": [
+        "require-closed",
+        "restart"
+      ],
+      "reason": "Input and the headless provider share the device JSON-RPC stream"
+    }
+  },
+  "discovery": {
+    "class": "WLDeviceDiscovery",
+    "deviceType": "codex_micro",
+    "usbVendorId": 12346,
+    "productId": 33632,
+    "usagePage": 65280
+  },
+  "transport": {
+    "class": "WLDeviceCommImpl",
+    "macosHidOpen": "nonExclusive",
+    "rpcClass": "WLRPCApi",
+    "chunkRawBytes": 3072
+  },
+  "readMethods": {
+    "firmwareVersion": "sys.version",
+    "deviceStatus": "device.status",
+    "fileList": "fs.list",
+    "fileRead": "fs.readbin"
+  },
+  "deviceStatusFields": [
+    "firmwareVersion",
+    "selectedProfileIndex",
+    "selectedLayerIndex",
+    "batteryPercentage",
+    "isCharging"
+  ],
+  "fileListFields": [
+    "name",
+    "size",
+    "checksum"
+  ],
+  "export": {
+    "deviceChecksum": "sha1",
+    "hostChecksum": "sha256",
+    "atomicDirectoryPublish": true,
+    "typedManifestReadback": true,
+    "safeRelativePathsOnly": true
+  }
+}
