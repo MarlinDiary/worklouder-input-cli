@@ -12,12 +12,6 @@
   <a href="docs/roadmap.md">Roadmap</a>
 </p>
 
-<p align="center">
-  <img alt="Project status: pre-alpha" src="https://img.shields.io/badge/status-pre--alpha-F59E0B">
-  <img alt="Target platform: macOS first" src="https://img.shields.io/badge/platform-macOS%20first-111827">
-  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-22C55E">
-</p>
-
 > [!IMPORTANT]
 > **Project status: pre-alpha.** This repository currently contains the product
 > specification and research baseline. There is no installable release yet.
