@@ -301,6 +301,29 @@ pub enum InputFirmwareCommand {
         #[clap(long)]
         device: Option<String>,
     },
+
+    /// Delegate the complete update workflow to Input and verify firmware/config postflight.
+    Update {
+        /// Immutable plan produced by `input firmware plan`.
+        #[clap(long, value_parser)]
+        plan: PathBuf,
+
+        /// Immutable complete pre-update configuration snapshot.
+        #[clap(long, value_parser)]
+        backup: PathBuf,
+
+        /// Destination for the verified update receipt.
+        #[clap(long, value_parser)]
+        receipt: PathBuf,
+
+        /// Require the live configuration to have this exact revision.
+        #[clap(long)]
+        expected_revision: Option<String>,
+
+        /// Stable retry key; reuse it only with the exact same plan.
+        #[clap(long)]
+        idempotency_key: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]

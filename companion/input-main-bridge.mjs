@@ -49,6 +49,10 @@ const METHOD_DEFINITIONS = new Map([
     ["input.firmware.status.v1", "getFirmwareStatus"],
   ],
   ["input.firmware.plan", ["input.firmware.plan.v1", "getFirmwarePlan"]],
+  [
+    "input.firmware.update",
+    ["input.firmware.update.v1", "updateFirmware"],
+  ],
   ["input.logs.snapshot", ["input.logs.snapshot.v1", "snapshotLogs"]],
 ]);
 
@@ -57,6 +61,7 @@ const MUTATION_METHODS = new Set([
   "device.config.restore",
   "input.host-settings.apply",
   "input.host-settings.restore",
+  "input.firmware.update",
 ]);
 
 export class BridgeError extends Error {
@@ -361,14 +366,21 @@ function validateMutationParams(method, params) {
     }
     return;
   }
-  if (
-    typeof params.deviceId !== "string" ||
-    params.deviceId.length === 0 ||
-    Buffer.byteLength(params.deviceId, "utf8") > 512 ||
-    params.deviceId.includes("\0")
-  ) {
-    throw new BridgeError(-32602, "deviceId is invalid");
+  if (method === "input.firmware.update") {
+    validateDeviceId(params.deviceId);
+    validateRevisionAndIdempotency(params);
+    if (
+      typeof params.expectedPlanRevision !== "string" ||
+      !/^[0-9a-f]{64}$/i.test(params.expectedPlanRevision)
+    ) {
+      throw new BridgeError(-32602, "expectedPlanRevision is invalid");
+    }
+    if (!params.plan || typeof params.plan !== "object" || Array.isArray(params.plan)) {
+      throw new BridgeError(-32602, "firmware plan is required");
+    }
+    return;
   }
+  validateDeviceId(params.deviceId);
   validateRevisionAndIdempotency(params);
   const payload = method === "device.config.apply" ? "config" : "snapshot";
   if (
@@ -377,6 +389,17 @@ function validateMutationParams(method, params) {
     Array.isArray(params[payload])
   ) {
     throw new BridgeError(-32602, payload + " is required");
+  }
+}
+
+function validateDeviceId(deviceId) {
+  if (
+    typeof deviceId !== "string" ||
+    deviceId.length === 0 ||
+    Buffer.byteLength(deviceId, "utf8") > 512 ||
+    deviceId.includes("\0")
+  ) {
+    throw new BridgeError(-32602, "deviceId is invalid");
   }
 }
 

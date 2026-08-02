@@ -25,6 +25,15 @@ const MAX_PRESETS = 1024;
 const MAX_PRESET_CATALOG_BYTES = 32 * 1024 * 1024;
 const MAX_LOG_ENTRIES = 5000;
 const MAX_LOG_MESSAGE_BYTES = 8192;
+const FIRMWARE_PHASES = [
+  "backup-configuration",
+  "download-input-selected-release",
+  "enter-bootloader",
+  "flash-with-input-device-programmer",
+  "reconnect-original-device",
+  "restore-changed-configuration",
+  "verify-firmware-and-configuration",
+];
 
 export function createInputMainAdapter({
   devicesCommManager,
@@ -35,6 +44,7 @@ export function createInputMainAdapter({
   appsenseRuntimeAuthority,
   permissionsAuthority,
   firmwareAuthority,
+  firmwareOperationsAuthority,
   logsAuthority,
 }) {
   if (
@@ -93,6 +103,20 @@ export function createInputMainAdapter({
     throw new TypeError("firmwareAuthority.readStatus must be a function");
   }
   if (
+    firmwareOperationsAuthority !== undefined &&
+    (!firmwareOperationsAuthority ||
+      typeof firmwareOperationsAuthority.updateFirmware !== "function")
+  ) {
+    throw new TypeError(
+      "firmwareOperationsAuthority.updateFirmware must be a function",
+    );
+  }
+  if (firmwareOperationsAuthority && !firmwareAuthority) {
+    throw new TypeError(
+      "firmwareOperationsAuthority requires firmwareAuthority.readStatus",
+    );
+  }
+  if (
     logsAuthority !== undefined &&
     (!logsAuthority || typeof logsAuthority.readLogs !== "function")
   ) {
@@ -100,6 +124,7 @@ export function createInputMainAdapter({
   }
   const idempotencyCache = new Map();
   const hostSettingsIdempotencyCache = new Map();
+  const firmwareIdempotencyCache = new Map();
 
   const selectDevice = (deviceId) => {
     const devices = devicesCommManager
@@ -223,6 +248,26 @@ export function createInputMainAdapter({
       deviceId: String(device.id),
       ...status,
       files,
+    };
+  };
+
+  const captureFirmwarePlan = async (device) => {
+    const [config, update] = await Promise.all([
+      captureConfigSnapshot(device),
+      firmwareAuthority.readStatus({ device }),
+    ]);
+    return {
+      config,
+      plan: firmwarePlan({
+        deviceId: String(device.id),
+        deviceStatus: {
+          deviceKitVersion: config.deviceKitVersion,
+          device: config.device,
+          status: config.status,
+        },
+        update: normalizeFirmwareStatus(update),
+        config,
+      }),
     };
   };
 
@@ -470,6 +515,121 @@ export function createInputMainAdapter({
     }
   };
 
+  const runFirmwareUpdate = async ({
+    deviceId,
+    expectedRevision,
+    expectedPlanRevision,
+    idempotencyKey,
+    plan: suppliedPlan,
+  }) => {
+    const plan = normalizeFirmwarePlan(suppliedPlan);
+    const expected = safeSha256(expectedRevision, "expected revision");
+    const expectedPlan = safeSha256(
+      expectedPlanRevision,
+      "expected firmware plan revision",
+    );
+    if (plan.revision !== expectedPlan || plan.configRevision !== expected) {
+      throw new BridgeError(-32602, "firmware plan expectations differed");
+    }
+    if (String(deviceId) !== plan.deviceId) {
+      throw new BridgeError(-32602, "firmware plan deviceId differed");
+    }
+    const targetVersion = plan.targetRelease?.version ?? "";
+    const requestDigest = mutationRequestDigest({
+      operation: "firmware-update",
+      deviceId: plan.deviceId,
+      expectedRevision: expected,
+      targetRevision: plan.revision,
+    });
+    const cached = firmwareIdempotencyCache.get(idempotencyKey);
+    if (cached) {
+      if (cached.requestDigest !== requestDigest) {
+        throw new BridgeError(
+          -32602,
+          "idempotency key was reused with a different firmware update",
+        );
+      }
+      return { ...cached.result, idempotentReplay: true };
+    }
+
+    const device = selectDevice(deviceId);
+    const live = await captureFirmwarePlan(device);
+    if (live.plan.revision !== expectedPlan) {
+      throw new BridgeError(-32005, "firmware plan revision conflict", {
+        expectedPlanRevision: expectedPlan,
+        livePlanRevision: live.plan.revision,
+      });
+    }
+    if (!live.plan.ready || targetVersion.length === 0) {
+      throw new BridgeError(-32007, "firmware plan was not ready", {
+        blockers: live.plan.blockers,
+      });
+    }
+    if (live.config.revision !== expected) {
+      throw new BridgeError(-32005, "firmware configuration revision conflict", {
+        expectedRevision: expected,
+        liveRevision: live.config.revision,
+      });
+    }
+
+    let providerOutcome = "completed";
+    try {
+      const providerResult = await firmwareOperationsAuthority.updateFirmware({
+        device,
+        operation: "update",
+        plan: live.plan,
+        release: live.plan.targetRelease,
+        configurationSnapshot: live.config,
+      });
+      validateFirmwareOperationResult(providerResult, targetVersion);
+    } catch (providerError) {
+      providerOutcome = "postflight-confirmed";
+      try {
+        const observed = await captureConfigSnapshot(selectDevice(deviceId));
+        if (
+          observed.status.firmwareVersion !== targetVersion ||
+          observed.revision !== expected
+        ) {
+          throw new Error("postflight did not match the update target");
+        }
+      } catch (postflightError) {
+        throw new BridgeError(-32008, "firmware update required recovery", {
+          recoveryRequired: true,
+          deviceId: plan.deviceId,
+          planRevision: plan.revision,
+          beforeFirmwareVersion: plan.currentFirmwareVersion,
+          targetFirmwareVersion: targetVersion,
+          beforeConfigRevision: expected,
+          providerError: errorMessage(providerError),
+          postflightError: errorMessage(postflightError),
+        });
+      }
+    }
+
+    const after = await captureConfigSnapshot(selectDevice(deviceId));
+    if (
+      after.status.firmwareVersion !== targetVersion ||
+      after.revision !== expected
+    ) {
+      throw new BridgeError(-32008, "firmware update postflight failed", {
+        recoveryRequired: true,
+        targetFirmwareVersion: targetVersion,
+        afterFirmwareVersion: after.status.firmwareVersion ?? null,
+        beforeConfigRevision: expected,
+        afterConfigRevision: after.revision,
+      });
+    }
+    const result = firmwareMutationResult({
+      idempotencyKey,
+      plan,
+      targetVersion,
+      after,
+      providerOutcome,
+    });
+    cacheMutation(firmwareIdempotencyCache, idempotencyKey, requestDigest, result);
+    return result;
+  };
+
   const adapter = {
     async listDevices() {
       return {
@@ -675,18 +835,11 @@ export function createInputMainAdapter({
     };
     adapter.getFirmwarePlan = async ({ deviceId = null }) => {
       const device = selectDevice(deviceId);
-      const [deviceStatus, update, config] = await Promise.all([
-        common(device),
-        firmwareAuthority.readStatus({ device }),
-        captureConfigSnapshot(device),
-      ]);
-      return firmwarePlan({
-        deviceId: String(device.id),
-        deviceStatus,
-        update: normalizeFirmwareStatus(update),
-        config,
-      });
+      return (await captureFirmwarePlan(device)).plan;
     };
+  }
+  if (firmwareOperationsAuthority) {
+    adapter.updateFirmware = runFirmwareUpdate;
   }
   if (logsAuthority) {
     adapter.snapshotLogs = async ({ maxEntries = MAX_LOG_ENTRIES }) => {
@@ -798,15 +951,7 @@ function firmwarePlan({ deviceId, deviceStatus, update, config }) {
     ),
     ready: blockers.length === 0,
     blockers,
-    phases: [
-      "backup-configuration",
-      "download-input-selected-release",
-      "enter-bootloader",
-      "flash-with-input-device-programmer",
-      "reconnect-original-device",
-      "restore-changed-configuration",
-      "verify-firmware-and-configuration",
-    ],
+    phases: [...FIRMWARE_PHASES],
   };
   return {
     schemaVersion: FIRMWARE_PLAN_SCHEMA_VERSION,
@@ -822,6 +967,196 @@ export function firmwarePlanRevision(body) {
     .update("worklouder-input-firmware-plan-revision-v1\0", "utf8")
     .update(canonicalJson(body), "utf8")
     .digest("hex");
+}
+
+function normalizeFirmwarePlan(plan) {
+  if (!plan || typeof plan !== "object" || Array.isArray(plan)) {
+    throw new BridgeError(-32602, "firmware plan must be an object");
+  }
+  exactKeys(
+    plan,
+    [
+      "schemaVersion",
+      "kind",
+      "revisionAlgorithm",
+      "revision",
+      "deviceId",
+      "deviceKitVersion",
+      "device",
+      "currentFirmwareVersion",
+      "targetRelease",
+      "configRevision",
+      "configFileCount",
+      "ready",
+      "blockers",
+      "phases",
+    ],
+    "firmware plan",
+  );
+  if (
+    plan.schemaVersion !== FIRMWARE_PLAN_SCHEMA_VERSION ||
+    plan.kind !== FIRMWARE_PLAN_KIND ||
+    plan.revisionAlgorithm !== FIRMWARE_PLAN_REVISION_ALGORITHM
+  ) {
+    throw new BridgeError(-32602, "firmware plan header was invalid");
+  }
+  const device = normalizeFirmwarePlanDevice(plan.device);
+  const targetRelease = normalizeFirmwareStatus({
+    updateAvailable: plan.targetRelease === null ? false : true,
+    release: plan.targetRelease,
+  }).release;
+  const blockers = normalizeFirmwareBlockers(plan.blockers);
+  if (
+    typeof plan.ready !== "boolean" ||
+    plan.ready !== (blockers.length === 0) ||
+    (targetRelease === null) !== blockers.includes("release-unavailable") ||
+    (!device.isUsbConnection) !== blockers.includes("usb-required") ||
+    (blockers.includes("update-availability-unknown") &&
+      blockers.includes("no-update-available"))
+  ) {
+    throw new BridgeError(-32602, "firmware plan blockers were inconsistent");
+  }
+  if (
+    !Array.isArray(plan.phases) ||
+    canonicalJson(plan.phases) !== canonicalJson(FIRMWARE_PHASES)
+  ) {
+    throw new BridgeError(-32602, "firmware plan phases were invalid");
+  }
+  const body = {
+    deviceId: safeBoundedString(plan.deviceId, "firmware plan deviceId", 512),
+    deviceKitVersion: safeBoundedString(
+      plan.deviceKitVersion,
+      "firmware plan device kit version",
+      128,
+    ),
+    device,
+    currentFirmwareVersion: safeBoundedString(
+      plan.currentFirmwareVersion,
+      "current firmware version",
+      128,
+    ),
+    targetRelease,
+    configRevision: safeSha256(plan.configRevision, "configuration revision"),
+    configFileCount: safeInteger(
+      plan.configFileCount,
+      "configuration file count",
+      1,
+      MAX_CONFIG_FILES,
+    ),
+    ready: plan.ready,
+    blockers,
+    phases: [...FIRMWARE_PHASES],
+  };
+  const revision = safeSha256(plan.revision, "firmware plan revision");
+  if (revision !== firmwarePlanRevision(body)) {
+    throw new BridgeError(-32602, "firmware plan revision did not match content");
+  }
+  return {
+    schemaVersion: FIRMWARE_PLAN_SCHEMA_VERSION,
+    kind: FIRMWARE_PLAN_KIND,
+    revisionAlgorithm: FIRMWARE_PLAN_REVISION_ALGORITHM,
+    revision,
+    ...body,
+  };
+}
+
+function normalizeFirmwarePlanDevice(device) {
+  if (!device || typeof device !== "object" || Array.isArray(device)) {
+    throw new BridgeError(-32602, "firmware plan device was invalid");
+  }
+  exactKeys(
+    device,
+    [
+      "devicePid",
+      "deviceType",
+      "layoutType",
+      "connectionType",
+      "isUsbConnection",
+    ],
+    "firmware plan device",
+  );
+  if (typeof device.isUsbConnection !== "boolean") {
+    throw new BridgeError(-32602, "firmware plan USB state was invalid");
+  }
+  return {
+    devicePid: safeBoundedString(device.devicePid, "device PID", 128),
+    deviceType: safeBoundedString(device.deviceType, "device type", 128),
+    layoutType: safeBoundedString(device.layoutType, "layout type", 128),
+    connectionType: safeBoundedString(
+      device.connectionType,
+      "connection type",
+      128,
+    ),
+    isUsbConnection: device.isUsbConnection,
+  };
+}
+
+function normalizeFirmwareBlockers(blockers) {
+  const known = new Set([
+    "update-availability-unknown",
+    "no-update-available",
+    "release-unavailable",
+    "usb-required",
+  ]);
+  if (
+    !Array.isArray(blockers) ||
+    blockers.length > known.size ||
+    new Set(blockers).size !== blockers.length ||
+    blockers.some((blocker) => !known.has(blocker))
+  ) {
+    throw new BridgeError(-32602, "firmware plan blockers were invalid");
+  }
+  return [...blockers];
+}
+
+function validateFirmwareOperationResult(result, targetVersion) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    throw new Error("firmware update authority returned no result");
+  }
+  if (
+    result.targetVersion !== targetVersion ||
+    result.configurationRestored !== true ||
+    !Array.isArray(result.completedPhases) ||
+    canonicalJson(result.completedPhases) !== canonicalJson(FIRMWARE_PHASES)
+  ) {
+    throw new Error("firmware update authority returned an invalid result");
+  }
+}
+
+function firmwareMutationResult({
+  idempotencyKey,
+  plan,
+  targetVersion,
+  after,
+  providerOutcome,
+}) {
+  return {
+    schemaVersion: 1,
+    kind: "worklouder-input-firmware-mutation",
+    operation: "update",
+    idempotencyKey,
+    idempotentReplay: false,
+    changed: plan.currentFirmwareVersion !== targetVersion,
+    deviceId: plan.deviceId,
+    planRevision: plan.revision,
+    beforeFirmwareVersion: plan.currentFirmwareVersion,
+    afterFirmwareVersion: after.status.firmwareVersion,
+    targetFirmwareVersion: targetVersion,
+    beforeConfigRevision: plan.configRevision,
+    afterConfigRevision: after.revision,
+    configurationRestored: true,
+    providerOutcome,
+    recoveryRequired: false,
+    phases: FIRMWARE_PHASES.map((name) => ({ name, status: "completed" })),
+  };
+}
+
+function exactKeys(value, expected, label) {
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  if (canonicalJson(actual) !== canonicalJson(wanted)) {
+    throw new BridgeError(-32602, `${label} fields were invalid`);
+  }
 }
 
 function normalizeLogsSnapshot(source, limit) {

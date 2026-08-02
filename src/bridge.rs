@@ -21,6 +21,7 @@ pub const ADAPTER: &str = "input-companion-bridge-v1";
 const PROTOCOL_VERSION: u64 = 1;
 const MAX_TOKEN_BYTES: usize = 4096;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+const FIRMWARE_UPDATE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const CONFIG_SNAPSHOT_KIND: &str = "worklouder-input-config-snapshot";
 const CONFIG_REVISION_ALGORITHM: &str = "sha256:path-u32be-path-bytes-size-u64be-content-v1";
 const HOST_SETTINGS_KIND: &str = "worklouder-input-host-settings";
@@ -278,6 +279,41 @@ pub struct FirmwarePlanReceipt {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct FirmwarePhaseReceipt {
+    pub name: String,
+    pub status: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct FirmwareUpdateReceipt {
+    pub schema_version: u64,
+    pub kind: String,
+    pub adapter: String,
+    pub input_app_version: String,
+    pub device_kit_version: String,
+    pub plan: PathBuf,
+    pub backup: PathBuf,
+    pub receipt: PathBuf,
+    pub operation: String,
+    pub idempotency_key: String,
+    pub idempotent_replay: bool,
+    pub changed: bool,
+    pub device_id: String,
+    pub plan_revision: String,
+    pub before_firmware_version: String,
+    pub after_firmware_version: String,
+    pub target_firmware_version: String,
+    pub before_config_revision: String,
+    pub after_config_revision: String,
+    pub configuration_restored: bool,
+    pub provider_outcome: String,
+    pub recovery_required: bool,
+    pub phases: Vec<FirmwarePhaseReceipt>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct InputLogEntry {
     pub time: String,
     pub level: String,
@@ -413,6 +449,28 @@ struct BridgeFirmwareStatusReport {
     update: FirmwareUpdateState,
     #[serde(default)]
     warnings: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct BridgeFirmwareMutationResponse {
+    schema_version: u64,
+    kind: String,
+    operation: String,
+    idempotency_key: String,
+    idempotent_replay: bool,
+    changed: bool,
+    device_id: String,
+    plan_revision: String,
+    before_firmware_version: String,
+    after_firmware_version: String,
+    target_firmware_version: String,
+    before_config_revision: String,
+    after_config_revision: String,
+    configuration_restored: bool,
+    provider_outcome: String,
+    recovery_required: bool,
+    phases: Vec<FirmwarePhaseReceipt>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -635,6 +693,92 @@ pub fn firmware_plan(
     })
 }
 
+pub fn firmware_update(
+    paths: &BridgePaths,
+    plan_path: &Path,
+    backup: &Path,
+    receipt_path: &Path,
+    expected_revision: Option<&str>,
+    idempotency_key: Option<&str>,
+) -> Result<FirmwareUpdateReceipt> {
+    ensure!(
+        plan_path != backup && plan_path != receipt_path && backup != receipt_path,
+        "firmware plan, backup, and receipt paths must differ"
+    );
+    ensure!(
+        !receipt_path.exists(),
+        "firmware receipt destination already exists: {}",
+        receipt_path.display()
+    );
+    let plan = read_firmware_plan(plan_path)?;
+    ensure!(plan.ready, "firmware plan was not ready");
+    ensure!(
+        plan.target_release.is_some(),
+        "firmware plan omitted a target release"
+    );
+    let backup_receipt = prepare_mutation_backup(paths, &plan.device_id, backup)?;
+    let expected = expected_revision.unwrap_or(&plan.config_revision);
+    ensure!(
+        is_sha256(expected)
+            && expected.eq_ignore_ascii_case(&plan.config_revision)
+            && backup_receipt.revision.eq_ignore_ascii_case(expected),
+        "firmware backup, plan, and expected configuration revisions differed"
+    );
+    let key = idempotency_key
+        .map(str::to_owned)
+        .unwrap_or_else(|| generated_idempotency_key("firmware-update", &plan.revision));
+    ensure!(
+        !key.is_empty() && key.len() <= 256 && !key.contains('\0'),
+        "idempotency key was invalid"
+    );
+    let mut client = BridgeClient::connect(paths)?;
+    client.set_timeout(FIRMWARE_UPDATE_TIMEOUT)?;
+    let response: BridgeFirmwareMutationResponse = client.call(
+        "input.firmware.update",
+        "input.firmware.update.v1",
+        json!({
+            "deviceId": plan.device_id,
+            "expectedRevision": expected,
+            "expectedPlanRevision": plan.revision,
+            "idempotencyKey": key,
+            "plan": plan,
+        }),
+    )?;
+    validate_firmware_mutation_response(&response, &plan, expected, &key)?;
+    let receipt = FirmwareUpdateReceipt {
+        schema_version: 1,
+        kind: "worklouderctl-input-firmware-update-receipt".into(),
+        adapter: ADAPTER.into(),
+        input_app_version: client.handshake.input_version.clone(),
+        device_kit_version: plan.device_kit_version.clone(),
+        plan: plan_path.to_path_buf(),
+        backup: backup.to_path_buf(),
+        receipt: receipt_path.to_path_buf(),
+        operation: response.operation,
+        idempotency_key: response.idempotency_key,
+        idempotent_replay: response.idempotent_replay,
+        changed: response.changed,
+        device_id: response.device_id,
+        plan_revision: response.plan_revision,
+        before_firmware_version: response.before_firmware_version,
+        after_firmware_version: response.after_firmware_version,
+        target_firmware_version: response.target_firmware_version,
+        before_config_revision: response.before_config_revision,
+        after_config_revision: response.after_config_revision,
+        configuration_restored: response.configuration_restored,
+        provider_outcome: response.provider_outcome,
+        recovery_required: response.recovery_required,
+        phases: response.phases,
+    };
+    write_atomic_json(receipt_path, &serde_json::to_value(&receipt)?)?;
+    let reopened = read_firmware_update_receipt(receipt_path)?;
+    ensure!(
+        reopened == receipt,
+        "published firmware receipt readback differed"
+    );
+    Ok(receipt)
+}
+
 pub fn collect_logs(
     paths: &BridgePaths,
     output: &Path,
@@ -831,6 +975,66 @@ pub fn read_firmware_plan(input: &Path) -> Result<FirmwarePlan> {
     Ok(plan)
 }
 
+pub fn read_firmware_update_receipt(input: &Path) -> Result<FirmwareUpdateReceipt> {
+    let metadata = fs::symlink_metadata(input)
+        .with_context(|| format!("failed to inspect firmware receipt {}", input.display()))?;
+    ensure!(
+        metadata.file_type().is_file() && !metadata.file_type().is_symlink(),
+        "firmware receipt must be a regular file"
+    );
+    ensure!(
+        metadata.len() <= 2 * 1024 * 1024,
+        "firmware receipt exceeded 2 MiB"
+    );
+    let receipt: FirmwareUpdateReceipt = serde_json::from_slice(
+        &fs::read(input)
+            .with_context(|| format!("failed to read firmware receipt {}", input.display()))?,
+    )
+    .with_context(|| format!("firmware receipt was invalid JSON: {}", input.display()))?;
+    ensure!(
+        receipt.schema_version == 1
+            && receipt.kind == "worklouderctl-input-firmware-update-receipt"
+            && receipt.adapter == ADAPTER
+            && receipt.operation == "update"
+            && receipt.receipt == input
+            && !receipt.input_app_version.is_empty()
+            && !receipt.device_kit_version.is_empty(),
+        "firmware receipt header was invalid"
+    );
+    let plan = read_firmware_plan(&receipt.plan)?;
+    let (_, backup) = read_config_snapshot(&receipt.backup)?;
+    ensure!(
+        plan.device_id == receipt.device_id
+            && plan.device_kit_version == receipt.device_kit_version
+            && plan.revision == receipt.plan_revision
+            && plan.current_firmware_version == receipt.before_firmware_version
+            && plan
+                .target_release
+                .as_ref()
+                .map(|release| release.version.as_str())
+                == Some(receipt.target_firmware_version.as_str())
+            && plan.config_revision == receipt.before_config_revision
+            && backup.device_id == receipt.device_id
+            && backup.revision == receipt.before_config_revision
+            && receipt.after_firmware_version == receipt.target_firmware_version
+            && receipt.after_config_revision == receipt.before_config_revision
+            && receipt.configuration_restored
+            && !receipt.recovery_required
+            && receipt.changed
+                == (receipt.before_firmware_version != receipt.target_firmware_version)
+            && matches!(
+                receipt.provider_outcome.as_str(),
+                "completed" | "postflight-confirmed"
+            )
+            && !receipt.idempotency_key.is_empty()
+            && receipt.idempotency_key.len() <= 256
+            && !receipt.idempotency_key.contains('\0'),
+        "firmware receipt did not match its plan, backup, or postflight"
+    );
+    validate_firmware_phase_receipts(&receipt.phases)?;
+    Ok(receipt)
+}
+
 fn validate_firmware_plan(plan: &FirmwarePlan) -> Result<()> {
     ensure!(
         plan.schema_version == 1
@@ -912,6 +1116,66 @@ fn validate_firmware_plan(plan: &FirmwarePlan) -> Result<()> {
     ensure!(
         plan.revision == firmware_plan_revision(plan)?,
         "Input firmware plan revision did not match content"
+    );
+    Ok(())
+}
+
+fn validate_firmware_mutation_response(
+    response: &BridgeFirmwareMutationResponse,
+    plan: &FirmwarePlan,
+    expected_revision: &str,
+    idempotency_key: &str,
+) -> Result<()> {
+    let target = plan
+        .target_release
+        .as_ref()
+        .context("firmware plan omitted target release")?;
+    ensure!(
+        response.schema_version == 1
+            && response.kind == "worklouder-input-firmware-mutation"
+            && response.operation == "update"
+            && response.idempotency_key == idempotency_key
+            && response.device_id == plan.device_id
+            && response.plan_revision == plan.revision
+            && response.before_firmware_version == plan.current_firmware_version
+            && response.after_firmware_version == target.version
+            && response.target_firmware_version == target.version
+            && response
+                .before_config_revision
+                .eq_ignore_ascii_case(expected_revision)
+            && response
+                .after_config_revision
+                .eq_ignore_ascii_case(expected_revision)
+            && response.configuration_restored
+            && !response.recovery_required
+            && response.changed
+                == (response.before_firmware_version != response.target_firmware_version)
+            && matches!(
+                response.provider_outcome.as_str(),
+                "completed" | "postflight-confirmed"
+            ),
+        "Input firmware update response did not match the plan or postflight"
+    );
+    validate_firmware_phase_receipts(&response.phases)
+}
+
+fn validate_firmware_phase_receipts(phases: &[FirmwarePhaseReceipt]) -> Result<()> {
+    let expected = [
+        "backup-configuration",
+        "download-input-selected-release",
+        "enter-bootloader",
+        "flash-with-input-device-programmer",
+        "reconnect-original-device",
+        "restore-changed-configuration",
+        "verify-firmware-and-configuration",
+    ];
+    ensure!(
+        phases.len() == expected.len()
+            && phases
+                .iter()
+                .zip(expected)
+                .all(|(phase, name)| phase.name == name && phase.status == "completed"),
+        "Input firmware update phases were incomplete or reordered"
     );
     Ok(())
 }
@@ -2026,6 +2290,12 @@ impl BridgeClient {
         );
         client.handshake = handshake;
         Ok(client)
+    }
+
+    fn set_timeout(&self, timeout: Duration) -> Result<()> {
+        self.writer.set_read_timeout(Some(timeout))?;
+        self.writer.set_write_timeout(Some(timeout))?;
+        Ok(())
     }
 
     fn call<T: DeserializeOwned>(

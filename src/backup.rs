@@ -202,6 +202,18 @@ fn inspect_file(input: &Path) -> Result<BackupInspection> {
                 None,
             ))
         }
+        "worklouderctl-input-firmware-update-receipt" => {
+            let receipt = bridge::read_firmware_update_receipt(input)?;
+            Ok(report(
+                kind,
+                input,
+                receipt.schema_version,
+                Some(receipt.plan_revision),
+                receipt.phases.len(),
+                false,
+                None,
+            ))
+        }
         "worklouder-input-preset-catalog" => {
             let snapshot = bridge::read_preset_catalog_snapshot(input)?;
             Ok(report(

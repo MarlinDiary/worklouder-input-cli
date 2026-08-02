@@ -642,6 +642,73 @@ test("Input adapter normalizes Tier 4 permission, firmware, and sanitized log st
   assert.equal(logs.redactionCount, 3);
 });
 
+test("Input adapter delegates firmware update and verifies config-preserving postflight", async () => {
+  const files = new Map([["keymap.json", Buffer.from('{"version":1}')]]);
+  const device = configDevice("firmware-device", files);
+  device.info.isUsbConnection = true;
+  let firmwareVersion = "v0.6.0";
+  device.rpcService.getFirmwareVersion = async () => firmwareVersion;
+  const completedPhases = [
+    "backup-configuration",
+    "download-input-selected-release",
+    "enter-bootloader",
+    "flash-with-input-device-programmer",
+    "reconnect-original-device",
+    "restore-changed-configuration",
+    "verify-firmware-and-configuration",
+  ];
+  const adapter = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [device] },
+    deviceKitVersion: "0.1.29",
+    firmwareAuthority: {
+      readStatus: async () => ({
+        updateAvailable: firmwareVersion === "v0.6.0",
+        release:
+          firmwareVersion === "v0.6.0"
+            ? {
+                version: "v0.7.0",
+                fetchedAt: 1234,
+                changeLog: "Fixture",
+                downloadUrl: "https://example.test/firmware.bin",
+              }
+            : null,
+      }),
+    },
+    firmwareOperationsAuthority: {
+      async updateFirmware({ release, configurationSnapshot }) {
+        assert.equal(release.version, "v0.7.0");
+        assert.equal(configurationSnapshot.files.length, 1);
+        firmwareVersion = release.version;
+        return {
+          targetVersion: release.version,
+          configurationRestored: true,
+          completedPhases,
+        };
+      },
+    },
+  });
+
+  const plan = await adapter.getFirmwarePlan({ deviceId: "firmware-device" });
+  assert.equal(plan.ready, true);
+  const request = {
+    deviceId: plan.deviceId,
+    expectedRevision: plan.configRevision,
+    expectedPlanRevision: plan.revision,
+    idempotencyKey: "firmware-update-1",
+    plan,
+  };
+  const updated = await adapter.updateFirmware(request);
+  assert.equal(updated.afterFirmwareVersion, "v0.7.0");
+  assert.equal(updated.afterConfigRevision, plan.configRevision);
+  assert.equal(updated.configurationRestored, true);
+  assert.equal(updated.recoveryRequired, false);
+  assert.equal(updated.providerOutcome, "completed");
+  assert.equal(updated.phases.length, 7);
+  const replay = await adapter.updateFirmware(request);
+  assert.equal(replay.idempotentReplay, true);
+  assert.equal(replay.afterFirmwareVersion, "v0.7.0");
+});
+
 test("one-call Input integration owns discovery and lifecycle paths", async () => {
   const root = await mkdtemp("/tmp/wlb-integration-");
   class FixtureApp extends EventEmitter {
@@ -756,6 +823,7 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
   assert.ok(integration.capabilities.includes("input.permissions.status.v1"));
   assert.ok(integration.capabilities.includes("input.firmware.status.v1"));
   assert.ok(integration.capabilities.includes("input.firmware.plan.v1"));
+  assert.ok(!integration.capabilities.includes("input.firmware.update.v1"));
   assert.ok(integration.capabilities.includes("input.logs.snapshot.v1"));
   assert.equal(app.listenerCount("before-quit"), 1);
   await integration.stop();

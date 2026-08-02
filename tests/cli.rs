@@ -500,6 +500,23 @@ fn firmware_help_exposes_plan_before_delegated_update() {
     assert!(output.status.success());
     assert!(stdout.contains("check"));
     assert!(stdout.contains("plan"));
+    assert!(stdout.contains("update"));
+
+    let update = binary()
+        .args(["input", "firmware", "update", "--help"])
+        .output()
+        .unwrap();
+    let update_stdout = String::from_utf8(update.stdout).unwrap();
+    assert!(update.status.success());
+    for option in [
+        "--plan",
+        "--backup",
+        "--receipt",
+        "--expected-revision",
+        "--idempotency-key",
+    ] {
+        assert!(update_stdout.contains(option));
+    }
 }
 
 #[test]

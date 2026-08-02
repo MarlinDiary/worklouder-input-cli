@@ -183,6 +183,7 @@ let hostSettings = {
   analyticsConsented: false,
   smartActionCmdEnabled: false,
 };
+let firmwareVersion = "v0.6.0-fixture";
 const configurationWriteFailure =
   process.env.WORKLOUDERCTL_FIXTURE_CONFIG_WRITE_FAILURE ?? "";
 let configurationWriteFailureUsed = false;
@@ -194,12 +195,12 @@ const device = {
     deviceType: "codex_micro",
     layoutType: "universal",
     connectionType: 1,
-    isUsbConnection: false,
+    isUsbConnection: process.env.WORKLOUDERCTL_FIXTURE_USB === "1",
   },
   isConnected: () => true,
   rpcService: {
     async getFirmwareVersion() {
-      return "v0.6.0-fixture";
+      return firmwareVersion;
     },
     async getDeviceStatus() {
       return { selectedProfileIndex: 0, selectedLayerIndex: 2 };
@@ -330,13 +331,40 @@ const adapter = createInputMainAdapter({
   firmwareAuthority: {
     async readStatus() {
       return {
-        updateAvailable: true,
-        release: {
-          version: "v0.7.0-fixture",
-          fetchedAt: 1785680000000,
-          changeLog: "Fixture firmware release",
-          downloadUrl: "https://example.test/codex-micro-v0.7.0.bin",
-        },
+        updateAvailable: firmwareVersion === "v0.6.0-fixture",
+        release:
+          firmwareVersion === "v0.6.0-fixture"
+            ? {
+                version: "v0.7.0-fixture",
+                fetchedAt: 1785680000000,
+                changeLog: "Fixture firmware release",
+                downloadUrl: "https://example.test/codex-micro-v0.7.0.bin",
+              }
+            : null,
+      };
+    },
+  },
+  firmwareOperationsAuthority: {
+    async updateFirmware({ release, configurationSnapshot }) {
+      if (
+        configurationSnapshot.revision.length !== 64 ||
+        configurationSnapshot.files.length !== files.size
+      ) {
+        throw new Error("fixture firmware backup was incomplete");
+      }
+      firmwareVersion = release.version;
+      return {
+        targetVersion: release.version,
+        configurationRestored: true,
+        completedPhases: [
+          "backup-configuration",
+          "download-input-selected-release",
+          "enter-bootloader",
+          "flash-with-input-device-programmer",
+          "reconnect-original-device",
+          "restore-changed-configuration",
+          "verify-firmware-and-configuration",
+        ],
       };
     },
   },

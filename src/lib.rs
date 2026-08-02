@@ -3386,6 +3386,37 @@ fn run_input(
                     }
                 }
             }
+            InputFirmwareCommand::Update {
+                plan,
+                backup,
+                receipt,
+                expected_revision,
+                idempotency_key,
+            } => {
+                let result = bridge::firmware_update(
+                    &bridge_paths,
+                    &plan,
+                    &backup,
+                    &receipt,
+                    expected_revision.as_deref(),
+                    idempotency_key.as_deref(),
+                )?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "Firmware {} -> {}: configRestored={} replay={}",
+                        result.before_firmware_version,
+                        result.after_firmware_version,
+                        result.configuration_restored,
+                        result.idempotent_replay
+                    )?;
+                    writeln!(out, "backup={}", result.backup.display())?;
+                    writeln!(out, "receipt={}", result.receipt.display())?;
+                    writeln!(out, "providerOutcome={}", result.provider_outcome)?;
+                }
+            }
         },
         InputCommand::Logs { command } => match command {
             InputLogsCommand::Collect {
