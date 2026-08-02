@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouder-input-profile-layer-model",
+  "inputVersion": "0.18.0",
+  "source": {
+    "asarPath": "/Applications/input.app/Contents/Resources/app.asar",
+    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
+    "rendererChunk": "device_config_data-BMUs-0m4.js",
+    "rendererChunkSha256": "c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e"
+  },
+  "profile": {
+    "fields": ["id", "name", "layers", "macrosUsed", "multiActionsUsed"],
+    "maximumCount": 6,
+    "minimumCount": 1,
+    "newIdRule": "maximum existing profile id plus one",
+    "activeProfileField": {
+      "name": "activeProfileId",
+      "meaning": "zero-based index into profiles, despite the field name"
+    },
+    "create": "Codex Micro default profile containing the protected KV_OAI layer",
+    "duplicate": "append the selected profile with a new profile id and the same ordered layers",
+    "deleteSelectionRule": "when the selected profile is deleted, select the previous index when possible; otherwise keep the current valid index"
+  },
+  "layer": {
+    "fields": ["id", "name", "color", "layout", "lights", "linkedAppId"],
+    "maximumCount": 6,
+    "minimumCount": 1,
+    "newIdRule": "maximum existing layer id plus one",
+    "protectedLayerAssignmentPrefix": "KV_OAI_",
+    "protectedLayerRules": ["not editable", "not duplicated", "not deleted", "not reordered away from index zero"],
+    "create": {
+      "name": "Layer",
+      "color": 16711680,
+      "layout": {
+        "keymap": [
+          ["KC_NONE", "KC_NONE"],
+          ["KC_NONE", "KC_NONE", "KC_NONE", "KC_NONE"],
+          ["KC_NONE", "KC_NONE", "KC_NONE", "KC_NONE"],
+          ["KC_NONE", "KC_NONE", "KC_NONE"]
+        ],
+        "encoders": [["KC_NONE", "KC_NONE", "KC_NONE"]],
+        "joystick": {
+          "type": "RADIAL",
+          "sectors": [
+            {"k": "KI_X", "a1": 0.1875, "a2": 0.3125},
+            {"k": "KC_NONE", "a1": 0.3125, "a2": 0.1875}
+          ]
+        }
+      },
+      "lightingRule": "copy the last layer lighting when present"
+    },
+    "duplicate": "append a deep copy with a new layer id and no linkedAppId",
+    "deleteSelectionRule": "select min(max(deleted index minus one, zero), remaining length minus one)"
+  },
+  "lighting": {
+    "zones": ["backlight", "underglow"],
+    "effects": ["off", "solid", "snake", "rainbow", "breath", "gradient"],
+    "normalizedRange": {"minimum": 0.0, "maximum": 1.0},
+    "fields": ["effect", "brightness", "speed", "magic", "color"],
+    "default": {
+      "backlight": {"effect": "solid", "brightness": 1.0, "speed": 0.5, "magic": 1.0, "color": 16777215},
+      "underglow": {"effect": "rainbow", "brightness": 1.0, "speed": 0.55, "magic": 1.0, "color": 16777215}
+    },
+    "applyToAllRule": "replace the selected zone on existing lighting and initialize both zones on layers without lighting"
+  }
+}
