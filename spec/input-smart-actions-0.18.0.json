@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouder-input-smart-action-model",
+  "inputVersion": "0.18.0",
+  "source": {
+    "asarPath": "/Applications/input.app/Contents/Resources/app.asar",
+    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
+    "mainChunk": "index.js",
+    "mainChunkSha256": "7c16191956acb8d0d89c50eb940dc9b757bf6966b19c56499ca2d60d8743154a",
+    "rendererChunk": "device_config_data-BMUs-0m4.js",
+    "rendererChunkSha256": "c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e"
+  },
+  "storage": {
+    "file": "smart_actions.json",
+    "version": 1,
+    "actionsField": "smartActions",
+    "actionsShape": "object keyed by SA_<canonical non-negative integer>",
+    "groupsField": "smartActionGroups",
+    "groupsShape": "array of {id,name,tags,color,actionIds}",
+    "keymapReference": "SA_<id>",
+    "newActionIdRule": "maximum existing id plus one, starting at 1 when empty",
+    "newGroupIdRule": "maximum existing id plus one, starting at 0 when empty"
+  },
+  "types": {
+    "TEXT_STEP": {"payload": ["text"], "defaults": {"text": ""}},
+    "CMD_STEP": {"payload": ["cmd"], "defaults": {"cmd": ""}},
+    "URL_STEP": {"payload": ["url"], "defaults": {"url": ""}},
+    "APP_STEP": {"payload": ["name", "path"], "defaults": {"name": "", "path": ""}}
+  },
+  "guiRules": {
+    "newAction": {"name": "My Smart action", "type": "TEXT_STEP", "payload": {"text": ""}},
+    "saveRule": "replace an existing id or append the new action",
+    "deleteRule": "replace matching physical SA_<id> layer assignments with KC_NONE and remove the action record",
+    "deleteGroupRule": "remove only the selected group container",
+    "groupEditing": "stored groups are displayed and can be deleted; profile/layer import can add deduplicated groups",
+    "importGroupIdRule": "maximum existing id plus one"
+  },
+  "runtime": {
+    "authority": "Input main process and device firmware",
+    "notifications": {
+      "TEXT_STEP": "kb.sa.inserttext",
+      "CMD_STEP": "kb.sa.exec",
+      "URL_STEP": "kb.sa.openurl",
+      "APP_STEP": "kb.sa.openapp"
+    },
+    "commandPermissionField": "input_storage.json app_settings.smartActionCmdEnabled",
+    "commandPermissionDefault": false,
+    "commandPermissionScope": "host runtime gate; independent from the stored CMD_STEP definition"
+  },
+  "cliIntegrityPolicy": {
+    "validateAllGroupReferences": true,
+    "deleteActionRemovesGroupMembership": true,
+    "allowEmptyGroups": true,
+    "preserveUnknownRootAndRecordFields": true,
+    "preserveUnchangedKeymapBytes": true
+  }
+}
