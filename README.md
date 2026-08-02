@@ -87,6 +87,13 @@ worklouderctl doctor [--strict]
 worklouderctl codex doctor [--strict]
 worklouderctl codex inspect
 worklouderctl codex export --output CODEX_SNAPSHOT.json
+worklouderctl codex agent-source get --input CODEX_SNAPSHOT.json
+worklouderctl codex agent-source set --input CODEX_SNAPSHOT.json priority --output CODEX_CANDIDATE.json
+worklouderctl codex agent-key tap-mode get --input CODEX_SNAPSHOT.json
+worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled --output CODEX_CANDIDATE.json
+worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
+worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
+worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
 worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
@@ -167,6 +174,14 @@ worklouderctl completion bash|zsh|fish
 Codex 26.727.51351 contract, and recursively fills inherited defaults in the
 effective view. `codex export` atomically publishes and reopens a typed JSON
 snapshot. Neither command serializes unrelated Codex settings.
+
+`codex agent-source`, `codex agent-key tap-mode`, and `codex command-key` are
+strict offline Tier 1 editors. They validate the embedded frozen definitions,
+recompute effective settings and a recursive-key-sorted revision, preserve
+unknown `codex-micro-*` values, publish atomically, and reopen the result. Each
+receipt carries `expectedSourceSha256` for the future Codex `settings-write`
+CAS transaction; candidate generation leaves the source TOML and Codex runtime
+state unchanged.
 
 `input inspect` is also read-only. `input export` copies the exact source bytes
 into an atomically published directory and records each file's size and SHA-256
@@ -294,8 +309,9 @@ node --test companion/input-main-bridge.test.mjs
 The intended binary name is `worklouderctl`:
 
 ```console
-worklouderctl codex agent-source set priority
-worklouderctl codex command-key set ACT06 --command toggleFastMode
+worklouderctl codex agent-source set --input codex.json priority --output codex-priority.json
+worklouderctl codex command-key set --input codex-priority.json ACT06 \
+  --command toggleFastMode --output codex-fast.json
 worklouderctl codex joystick set up --skill SKILL_ID
 worklouderctl codex lighting set --brightness 80 --auto-off 10-minutes
 worklouderctl plan layout.yaml
@@ -372,6 +388,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Provider `doctor` and Input `inspect`/exact-byte `export`/semantic cache snapshot | Complete |
 | Bundle `validate` and structural `diff` | Complete |
 | Codex settings contract and TOML `doctor`/`inspect`/`export` | Complete |
+| Codex Agent source/tap mode and Command Key offline candidates | Complete; bridge apply pending |
 | Input 0.18.0 live `device status`/`files`/verified `export` | Complete |
 | Read-only Input process coordination and automatic reopen | Complete |
 | Companion Bridge v1 contract, CLI client, and reference server | Complete |

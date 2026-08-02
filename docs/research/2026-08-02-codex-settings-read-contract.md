@@ -31,6 +31,12 @@ effective view, and never serializes unrelated Codex configuration. A later
 write adapter should use the running bridge or the equivalent Codex
 configuration transaction rather than editing TOML text in place.
 
+The implemented offline candidate adapter consumes that typed snapshot for
+Agent source, single-tap mode, and all six Command Key slots. It validates the
+embedded definitions/effective view, preserves unknown prefixed settings,
+records a deterministic settings revision plus the original source SHA-256,
+and leaves online mutation to the versioned `settings-write` transaction.
+
 ## Capture and compatibility rules
 
 1. Hash the source file before and after reading it. Reject a moving capture.

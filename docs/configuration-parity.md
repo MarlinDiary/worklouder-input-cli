@@ -23,10 +23,10 @@ parity contract.
 
 | GUI surface | Configuration coverage | Planned command family | Current status |
 | --- | --- | --- | --- |
-| Agent source | pinned, recent, priority, custom | `codex agent-source get/set` | researched |
+| Agent source | pinned, recent, priority, custom | `codex agent-source get/set` | strict offline candidate verified; bridge apply pending |
 | Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key get/set/clear` | researched |
-| Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | researched |
-| Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | researched |
+| Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | strict offline candidate verified; bridge apply pending |
+| Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; bridge apply pending |
 | Voice button | push-to-talk, Voice Chat | `codex voice get/set` | researched |
 | Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | researched |
 | Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | researched |

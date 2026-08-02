@@ -45,8 +45,9 @@ The roadmap prioritizes evidence and configuration safety over command count.
 
 - [x] Exact Codex 26.727.51351 read contract and settings-schema adapter
 - [ ] `settings-read` and `settings-write` bridge client
-- [ ] Agent source and six Agent Key assignments
-- [ ] six Command Key slots and reset
+- [x] Agent source and single-tap behavior offline candidates
+- [ ] Six Agent Key task/command/Skill assignments
+- [x] Six Command Key slots get/set/reset offline candidates
 - [ ] voice mode
 - [ ] dial modes and custom gestures
 - [ ] joystick directions and Skills

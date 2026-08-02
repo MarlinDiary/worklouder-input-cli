@@ -57,6 +57,13 @@ worklouderctl doctor [--strict]
 worklouderctl codex doctor [--strict]
 worklouderctl codex inspect
 worklouderctl codex export --output CODEX_SNAPSHOT.json
+worklouderctl codex agent-source get --input CODEX_SNAPSHOT.json
+worklouderctl codex agent-source set --input CODEX_SNAPSHOT.json priority --output CODEX_CANDIDATE.json
+worklouderctl codex agent-key tap-mode get --input CODEX_SNAPSHOT.json
+worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled --output CODEX_CANDIDATE.json
+worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
+worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
+worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
 worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
@@ -132,6 +139,12 @@ worklouderctl completion bash|zsh|fish
 `codex-micro-*` 设置，按照 Codex 26.727.51351 的冻结契约校验，并在 effective
 view 中递归补齐继承的默认值。`codex export` 原子发布并重新打开 typed JSON
 snapshot；两者都不会序列化其他 Codex 设置。
+
+`codex agent-source`、`codex agent-key tap-mode` 与 `codex command-key` 是严格的
+Tier 1 离线 editor：核对内嵌 frozen definitions，重算 effective settings 与
+recursive-key-sorted revision，保留未知 `codex-micro-*` 值，原子发布并重新打开。
+receipt 中的 `expectedSourceSha256` 供后续 Codex `settings-write` CAS transaction
+使用；candidate 生成阶段保持源 TOML 与 Codex runtime state 原样。
 
 `input inspect` 同样全程只读；`input export` 把源文件原字节复制到原子发布的
 目录，并在 `manifest.json` 记录 size 与 SHA-256。它不会暂停 Input，也不会
@@ -239,8 +252,9 @@ node --test companion/input-main-bridge.test.mjs
 ## 其余计划中的写入命令
 
 ```console
-worklouderctl codex agent-source set priority
-worklouderctl codex command-key set ACT06 --command toggleFastMode
+worklouderctl codex agent-source set --input codex.json priority --output codex-priority.json
+worklouderctl codex command-key set --input codex-priority.json ACT06 \
+  --command toggleFastMode --output codex-fast.json
 worklouderctl codex joystick set up --skill SKILL_ID
 worklouderctl plan layout.yaml
 worklouderctl apply layout.yaml

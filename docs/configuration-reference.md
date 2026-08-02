@@ -25,13 +25,30 @@ all unrelated Codex configuration from its output. Offline mutation still
 requires separate round-trip and restart fixtures. Raw Chromium LevelDB
 mutation is not part of the configuration path.
 
-The current read-only command surface is:
+The current read and offline-candidate command surface is:
 
 ```console
 worklouderctl codex doctor [--strict] [--config PATH] [--app PATH]
 worklouderctl codex inspect [--config PATH] [--app PATH]
 worklouderctl codex export --output FILE [--config PATH] [--app PATH]
+worklouderctl codex agent-source get --input SNAPSHOT.json
+worklouderctl codex agent-source set --input SNAPSHOT.json VALUE --output CANDIDATE.json
+worklouderctl codex agent-key tap-mode get --input SNAPSHOT.json
+worklouderctl codex agent-key tap-mode set --input SNAPSHOT.json enabled|disabled --output CANDIDATE.json
+worklouderctl codex command-key get --input SNAPSHOT.json SLOT
+worklouderctl codex command-key set --input SNAPSHOT.json SLOT \
+  [--keycap KEYCAP] [--command COMMAND_ID | --skill-name NAME --skill-path PATH | --clear-action] \
+  --output CANDIDATE.json
+worklouderctl codex command-key reset --input SNAPSHOT.json SLOT --output CANDIDATE.json
 ```
+
+Candidate input is a complete `codex export` snapshot. The editor verifies the
+frozen definitions and effective view, preserves unknown prefixed settings,
+hashes canonical explicit settings with `codex-settings-revision-v1`, and
+publishes/reopens a complete candidate. Command Key updates preserve the
+current keycap when omitted, keep command and Skill representations mutually
+exclusive, and reset from the frozen slot default. The source TOML SHA-256 is
+retained as the future online transaction's CAS value.
 
 ### Persisted setting keys
 
