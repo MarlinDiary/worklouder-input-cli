@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-input-companion-bridge-contract",
+  "protocol": {
+    "name": "worklouder-input-companion",
+    "version": 1,
+    "framing": "utf8-json-lines",
+    "rpc": "json-rpc-2.0",
+    "maxRequestBytes": 1048576,
+    "maxResponseBytes": 67108864
+  },
+  "discovery": {
+    "macosSocketRelativePath": "Library/Application Support/input/worklouderctl-bridge-v1.sock",
+    "macosTokenRelativePath": "Library/Application Support/input/worklouderctl-bridge-v1.token",
+    "environmentSocket": "WORKLOUDERCTL_BRIDGE_SOCKET",
+    "environmentToken": "WORKLOUDERCTL_BRIDGE_TOKEN_FILE"
+  },
+  "security": {
+    "network": "unix-domain-socket-only",
+    "socketMode": "0600",
+    "tokenMode": "0600",
+    "authentication": "token-in-bridge.hello",
+    "minimumTokenBytes": 32,
+    "remoteListening": false,
+    "shellEvaluation": false
+  },
+  "handshake": {
+    "method": "bridge.hello",
+    "requiredParams": [
+      "protocolVersion",
+      "token",
+      "client.name",
+      "client.version"
+    ],
+    "resultFields": [
+      "protocolVersion",
+      "bridgeVersion",
+      "inputVersion",
+      "sessionId",
+      "capabilities"
+    ]
+  },
+  "methods": [
+    {
+      "name": "bridge.hello",
+      "capability": "bridge.handshake.v1",
+      "mutation": false
+    },
+    {
+      "name": "bridge.health",
+      "capability": "bridge.health.v1",
+      "mutation": false
+    },
+    {
+      "name": "device.list",
+      "capability": "device.list.v1",
+      "mutation": false
+    },
+    {
+      "name": "device.status",
+      "capability": "device.status.v1",
+      "mutation": false
+    },
+    {
+      "name": "device.files.list",
+      "capability": "device.files.list.v1",
+      "mutation": false
+    },
+    {
+      "name": "device.files.read",
+      "capability": "device.files.read.v1",
+      "mutation": false,
+      "binaryEncoding": "base64"
+    },
+    {
+      "name": "device.config.snapshot",
+      "capability": "device.config.snapshot.v1",
+      "mutation": false
+    },
+    {
+      "name": "device.config.validate",
+      "capability": "device.config.validate.v1",
+      "mutation": false
+    },
+    {
+      "name": "device.config.apply",
+      "capability": "device.config.apply.v1",
+      "mutation": true,
+      "requiredParams": [
+        "deviceId",
+        "expectedRevision",
+        "idempotencyKey",
+        "config"
+      ]
+    },
+    {
+      "name": "device.config.restore",
+      "capability": "device.config.restore.v1",
+      "mutation": true,
+      "requiredParams": [
+        "deviceId",
+        "expectedRevision",
+        "idempotencyKey",
+        "snapshot"
+      ]
+    }
+  ],
+  "errors": {
+    "-32001": "authentication-failed",
+    "-32002": "protocol-version-unsupported",
+    "-32003": "capability-unavailable",
+    "-32004": "device-not-found",
+    "-32005": "revision-conflict",
+    "-32006": "input-busy",
+    "-32007": "policy-denied",
+    "-32008": "adapter-failure"
+  },
+  "mutationRules": {
+    "serializedByInput": true,
+    "compareAndSwapRevision": true,
+    "idempotencyRequired": true,
+    "snapshotBeforeApply": true,
+    "readbackAfterApply": true,
+    "rollbackOnFailure": true
+  },
+  "inputEvidence": {
+    "testedVersion": "0.18.0",
+    "bundleId": "it.focusense.input-app",
+    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
+    "mainRelativePath": "dist-electron/main/index.js",
+    "mainSha256": "7c16191956acb8d0d89c50eb940dc9b757bf6966b19c56499ca2d60d8743154a",
+    "existingInternalChannels": [
+      "devsManGetDevs",
+      "rpcGetDeviceStatus",
+      "rpcGetFileList",
+      "rpcReadFile",
+      "connDeviceChangeDeviceConfig"
+    ],
+    "quitCleanup": "devicesCommManager.disconnectAllDevices()",
+    "externalTransportFound": false
+  }
+}

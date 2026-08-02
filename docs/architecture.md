@@ -15,7 +15,8 @@ actions, and Input host actions to the currently installed Codex/Input builds.
 
 Provider selection follows this order:
 
-1. use the running app's supported settings/IPC/RPC surface;
+1. use the running Input app through the versioned
+   [Input Companion Bridge](companion-bridge.md);
 2. use the exact installed app's bundled device kit where a headless provider
    entry point is verified;
 3. use coordinated file adapters only for state that the app itself persists;
@@ -25,6 +26,12 @@ Provider selection follows this order:
 This keeps firmware, transport fixes, new device support, and runtime behavior
 with the upstream applications while the CLI owns planning, validation, diff,
 automation, verification, and rollback.
+
+The bridge is the target transport for both reads and writes. It exposes an
+allowlisted JSON-RPC surface over a private Unix socket and dispatches through
+Input's existing service container. The CLI negotiates named capabilities, so
+Input can update its internal device kit and GUI without exposing those
+implementation details as the public automation API.
 
 ## Implemented live read path
 
