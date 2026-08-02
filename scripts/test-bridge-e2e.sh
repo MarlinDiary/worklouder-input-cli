@@ -184,11 +184,16 @@ revision=$(python3 -c \
 preset_candidate_revision=$(python3 -c \
   'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
   "$preset_installed_snapshot")
+mkdir "$root/input-transaction-plan-inputs"
+cp "$config_snapshot" "$root/input-transaction-plan-inputs/config-base.json"
+cp "$preset_installed_snapshot" "$root/input-transaction-plan-inputs/config-candidate.json"
+cp "$host_settings_snapshot" "$root/input-transaction-plan-inputs/host-base.json"
+cp "$host_settings_enabled" "$root/input-transaction-plan-inputs/host-candidate.json"
 "$bin" --json transaction plan \
-  --input-config-base "$config_snapshot" \
-  --input-config-candidate "$preset_installed_snapshot" \
-  --input-host-settings-base "$host_settings_snapshot" \
-  --input-host-settings-candidate "$host_settings_enabled" \
+  --input-config-base "$root/input-transaction-plan-inputs/config-base.json" \
+  --input-config-candidate "$root/input-transaction-plan-inputs/config-candidate.json" \
+  --input-host-settings-base "$root/input-transaction-plan-inputs/host-base.json" \
+  --input-host-settings-candidate "$root/input-transaction-plan-inputs/host-candidate.json" \
   --output "$root/input-transaction-plan.json" \
   >"$root/input-transaction-plan-receipt.json"
 "$bin" --json transaction show --input "$root/input-transaction-plan.json" \
@@ -208,6 +213,7 @@ preset_candidate_revision=$(python3 -c \
   permission command snapshot \
   --output "$root/input-transaction-post-host.json" \
   >"$root/input-transaction-post-host-receipt.json"
+rm -rf "$root/input-transaction-plan-inputs" "$root/input-transaction-plan.json"
 "$bin" --json transaction restore \
   --apply-receipt "$root/input-transaction-apply.json" \
   --backup-dir "$root/input-transaction-restore-backup" \
@@ -625,7 +631,7 @@ preset_apply = json.loads((root / "preset-config-apply.json").read_text())
 preset_post_apply = json.loads((root / "preset-post-apply.json").read_text())
 preset_restore = json.loads((root / "preset-config-restore.json").read_text())
 preset_post_restore = json.loads((root / "preset-post-restore.json").read_text())
-input_transaction_plan = json.loads((root / "input-transaction-plan.json").read_text())
+input_transaction_plan = json.loads((root / "input-transaction-backup/plan.json").read_text())
 input_transaction_plan_receipt = json.loads((root / "input-transaction-plan-receipt.json").read_text())
 input_transaction_plan_show = json.loads((root / "input-transaction-plan-show.json").read_text())
 input_transaction_apply = json.loads((root / "input-transaction-apply.json").read_text())
@@ -1257,6 +1263,8 @@ assert [item["id"] for item in input_transaction_restore["mutations"]] == [
 assert input_transaction_restored_config["revision"] == snapshot["revision"]
 assert input_transaction_restored_host["revision"] == host_settings["revision"]
 assert input_transaction_restore_catalog["operation"] == "restore"
+assert not (root / "input-transaction-plan.json").exists()
+assert not (root / "input-transaction-plan-inputs").exists()
 
 print("bridge_protocol=1")
 print("node_conformance=verified")
@@ -1321,4 +1329,5 @@ print("preset_apply_readback_restore=verified")
 print("input_cross_authority_plan_diff=verified")
 print("input_cross_authority_apply_catalog=verified")
 print("input_cross_authority_restore=verified")
+print("input_self_contained_backup_restore=verified")
 PY

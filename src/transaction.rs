@@ -241,6 +241,7 @@ pub fn apply_transaction(
     let catalog = prepare_backup_catalog(&plan, plan_path, backup_dir, runtime)?;
     let mut mutations = Vec::new();
     let mut failure = None;
+    let mut recovery_uncertain = false;
     for id in [
         "input-host-settings",
         "input-config",
@@ -265,6 +266,27 @@ pub fn apply_transaction(
             Ok(receipt) => mutations.push(receipt),
             Err(error) => {
                 failure = Some(format!("{error:#}"));
+                let observation = backup_dir.join(format!("{id}-failed-apply-observation.json"));
+                match observe_after_provider_error(
+                    authority,
+                    "apply",
+                    &authority.before_revision,
+                    &authority.target_revision,
+                    &entry.baseline,
+                    &observation,
+                    runtime,
+                ) {
+                    Ok(Some(receipt)) => mutations.push(receipt),
+                    Ok(None) => {}
+                    Err(observation_error) => {
+                        recovery_uncertain = true;
+                        failure = Some(format!(
+                            "{}; failed to classify {} after provider error: {observation_error:#}",
+                            failure.unwrap_or_default(),
+                            authority.id
+                        ));
+                    }
+                }
                 break;
             }
         }
@@ -295,7 +317,9 @@ pub fn apply_transaction(
                 }
             }
         }
-        if rollback_mutations.len() == mutations.iter().filter(|item| item.changed).count() {
+        if !recovery_uncertain
+            && rollback_mutations.len() == mutations.iter().filter(|item| item.changed).count()
+        {
             "rolled-back"
         } else {
             "rollback-failed"
@@ -383,6 +407,7 @@ pub fn restore_transaction(
 
     let mut mutations = Vec::new();
     let mut failure = None;
+    let mut recovery_uncertain = false;
     for id in [
         "codex-settings",
         "codex-agent-keys",
@@ -411,6 +436,27 @@ pub fn restore_transaction(
             Ok(receipt) => mutations.push(receipt),
             Err(error) => {
                 failure = Some(format!("{error:#}"));
+                let observation = backup_dir.join(format!("{id}-failed-restore-observation.json"));
+                match observe_after_provider_error(
+                    item,
+                    "restore",
+                    &applied_mutation.after_revision,
+                    &item.before_revision,
+                    &current,
+                    &observation,
+                    runtime,
+                ) {
+                    Ok(Some(receipt)) => mutations.push(receipt),
+                    Ok(None) => {}
+                    Err(observation_error) => {
+                        recovery_uncertain = true;
+                        failure = Some(format!(
+                            "{}; failed to classify {} after provider error: {observation_error:#}",
+                            failure.unwrap_or_default(),
+                            item.id
+                        ));
+                    }
+                }
                 break;
             }
         }
@@ -439,7 +485,9 @@ pub fn restore_transaction(
                 }
             }
         }
-        if rollback_mutations.len() == mutations.iter().filter(|item| item.changed).count() {
+        if !recovery_uncertain
+            && rollback_mutations.len() == mutations.iter().filter(|item| item.changed).count()
+        {
             "rolled-back"
         } else {
             "rollback-failed"
@@ -752,6 +800,41 @@ fn snapshot_live(
     Ok(live)
 }
 
+fn observe_after_provider_error(
+    item: &AuthorityPlan,
+    operation: &str,
+    expected_before: &str,
+    expected_after: &str,
+    backup: &Path,
+    output: &Path,
+    runtime: &RuntimePaths,
+) -> Result<Option<AuthorityMutationReceipt>> {
+    let live = snapshot_live(item, output, runtime)?;
+    if live.revision == expected_before {
+        return Ok(None);
+    }
+    ensure!(
+        live.revision == expected_after,
+        "live {} revision was neither the pre-mutation nor target revision",
+        item.id
+    );
+    let mut provider_receipt = serde_json::Map::new();
+    provider_receipt.insert("observedAfterProviderError".into(), Value::Bool(true));
+    if let Some(source_sha256) = live.source_sha256 {
+        provider_receipt.insert("afterSourceSha256".into(), Value::String(source_sha256));
+    }
+    Ok(Some(AuthorityMutationReceipt {
+        id: item.id.clone(),
+        operation: operation.into(),
+        changed: true,
+        before_revision: expected_before.into(),
+        after_revision: expected_after.into(),
+        target_revision: expected_after.into(),
+        backup: backup.to_path_buf(),
+        provider_receipt: Value::Object(provider_receipt),
+    }))
+}
+
 fn apply_one(
     item: &AuthorityPlan,
     catalog: &BackupCatalogEntry,
@@ -828,6 +911,7 @@ fn restore_one(
                 Some(&applied.after_revision),
                 Some(idempotency_key),
             )?;
+            fs::set_permissions(current_backup, fs::Permissions::from_mode(0o600))?;
             mutation_from_settings(item, "restore", receipt)
         }
         "codex-agent-keys" => {
@@ -838,6 +922,7 @@ fn restore_one(
                 Some(&applied.after_revision),
                 Some(idempotency_key),
             )?;
+            fs::set_permissions(current_backup, fs::Permissions::from_mode(0o600))?;
             mutation_from_agent_keys(item, "restore", receipt)
         }
         "input-config" => {
@@ -849,6 +934,7 @@ fn restore_one(
                 Some(&applied.after_revision),
                 Some(idempotency_key),
             )?;
+            fs::set_permissions(current_backup, fs::Permissions::from_mode(0o600))?;
             mutation_from_input_config(item, "restore", receipt)
         }
         "input-host-settings" => {
@@ -859,6 +945,7 @@ fn restore_one(
                 Some(&applied.after_revision),
                 Some(idempotency_key),
             )?;
+            fs::set_permissions(current_backup, fs::Permissions::from_mode(0o600))?;
             mutation_from_host_settings(item, "restore", receipt)
         }
         _ => bail!("unknown transaction authority {}", item.id),

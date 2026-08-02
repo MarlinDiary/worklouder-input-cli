@@ -183,6 +183,9 @@ let hostSettings = {
   analyticsConsented: false,
   smartActionCmdEnabled: false,
 };
+const configurationWriteFailure =
+  process.env.WORKLOUDERCTL_FIXTURE_CONFIG_WRITE_FAILURE ?? "";
+let configurationWriteFailureUsed = false;
 
 const device = {
   id: "fixture-device",
@@ -223,9 +226,20 @@ const adapter = createInputMainAdapter({
   deviceKitVersion: "0.1.29-fixture",
   configurationWriter: {
     async replaceConfiguration({ files: replacement }) {
+      const injectFailure =
+        !configurationWriteFailureUsed &&
+        ["before-once", "after-once"].includes(configurationWriteFailure);
+      if (injectFailure && configurationWriteFailure === "before-once") {
+        configurationWriteFailureUsed = true;
+        throw new Error("injected fixture configuration write failure");
+      }
       files.clear();
       for (const file of replacement) {
         files.set(file.relativePath, Buffer.from(file.bytes));
+      }
+      if (injectFailure && configurationWriteFailure === "after-once") {
+        configurationWriteFailureUsed = true;
+        throw new Error("injected fixture post-write failure");
       }
     },
   },

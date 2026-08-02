@@ -23,6 +23,13 @@ let assignments = {
   AG04: null,
   AG05: null,
 };
+let failSettingsWrites = Number.parseInt(
+  process.env.WORKLOUDERCTL_FIXTURE_FAIL_CODEX_SETTINGS_WRITES ?? "0",
+  10,
+);
+if (!Number.isSafeInteger(failSettingsWrites) || failSettingsWrites < 0) {
+  throw new Error("WORKLOUDERCTL_FIXTURE_FAIL_CODEX_SETTINGS_WRITES must be a non-negative integer");
+}
 
 await persist();
 const request = async (method, params) => {
@@ -49,6 +56,10 @@ const adapter = createCodexMainAdapter({
   request,
   settingsReplacer: {
     async replaceSettings(request) {
+      if (failSettingsWrites > 0) {
+        failSettingsWrites -= 1;
+        throw new Error("injected Codex settings write failure");
+      }
       settings = structuredClone(request.settings);
       effectiveSettings = Object.fromEntries(Object.entries(contract.definitions).map(([key, definition]) => [
         key,

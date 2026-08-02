@@ -83,11 +83,16 @@ done
   >"$ROOT/agent-command-receipt.json"
 "$BIN" --json codex agent-key clear --input "$ROOT/agent-command.json" AG00 \
   --output "$ROOT/agent-candidate.json" >"$ROOT/agent-clear-receipt.json"
+mkdir "$ROOT/codex-transaction-plan-inputs"
+cp "$ROOT/baseline.json" "$ROOT/codex-transaction-plan-inputs/settings-base.json"
+cp "$ROOT/candidate.json" "$ROOT/codex-transaction-plan-inputs/settings-candidate.json"
+cp "$ROOT/agent-baseline.json" "$ROOT/codex-transaction-plan-inputs/agent-base.json"
+cp "$ROOT/agent-candidate.json" "$ROOT/codex-transaction-plan-inputs/agent-candidate.json"
 "$BIN" --json transaction plan \
-  --codex-settings-base "$ROOT/baseline.json" \
-  --codex-settings-candidate "$ROOT/candidate.json" \
-  --codex-agent-keys-base "$ROOT/agent-baseline.json" \
-  --codex-agent-keys-candidate "$ROOT/agent-candidate.json" \
+  --codex-settings-base "$ROOT/codex-transaction-plan-inputs/settings-base.json" \
+  --codex-settings-candidate "$ROOT/codex-transaction-plan-inputs/settings-candidate.json" \
+  --codex-agent-keys-base "$ROOT/codex-transaction-plan-inputs/agent-base.json" \
+  --codex-agent-keys-candidate "$ROOT/codex-transaction-plan-inputs/agent-candidate.json" \
   --output "$ROOT/codex-transaction-plan.json" \
   >"$ROOT/codex-transaction-plan-receipt.json"
 "$BIN" --json transaction show --input "$ROOT/codex-transaction-plan.json" \
@@ -105,6 +110,7 @@ done
 "$BIN" --json codex agent-key snapshot --socket "$SOCKET" --token "$TOKEN" \
   --output "$ROOT/codex-transaction-post-agent.json" \
   >"$ROOT/codex-transaction-post-agent-receipt.json"
+rm -rf "$ROOT/codex-transaction-plan-inputs" "$ROOT/codex-transaction-plan.json"
 "$BIN" --json transaction restore \
   --apply-receipt "$ROOT/codex-transaction-apply.json" \
   --backup-dir "$ROOT/codex-transaction-restore-backup" \
@@ -163,7 +169,7 @@ agent_restored = json.loads((root / "agent-restored.json").read_text())
 agent_apply = json.loads((root / "agent-apply.json").read_text())
 agent_replay = json.loads((root / "agent-apply-replay.json").read_text())
 agent_restore = json.loads((root / "agent-restore.json").read_text())
-transaction_plan = json.loads((root / "codex-transaction-plan.json").read_text())
+transaction_plan = json.loads((root / "codex-transaction-backup/plan.json").read_text())
 transaction_receipt = json.loads((root / "codex-transaction-plan-receipt.json").read_text())
 transaction_show = json.loads((root / "codex-transaction-plan-show.json").read_text())
 transaction_apply = json.loads((root / "codex-transaction-apply.json").read_text())
@@ -238,6 +244,8 @@ assert [item["id"] for item in transaction_restore["mutations"]] == [
 assert transaction_restored_settings["settings"] == baseline["settings"]
 assert transaction_restored_agent["assignments"] == agent_baseline["assignments"]
 assert transaction_restore_catalog["operation"] == "restore"
+assert not (root / "codex-transaction-plan.json").exists()
+assert not (root / "codex-transaction-plan-inputs").exists()
 
 print(json.dumps({
     "status": "pass",
@@ -265,5 +273,6 @@ print(json.dumps({
     "crossAuthorityPlanDiff": True,
     "crossAuthorityApplyCatalog": True,
     "crossAuthorityRestore": True,
+    "selfContainedBackupRestore": True,
 }, separators=(",", ":")))
 PY
