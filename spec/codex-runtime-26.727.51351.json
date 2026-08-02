@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "appVersion": "26.727.51351",
+  "appAsarSha256": "a529edd72e10b08931c0d695b5e3e6a0be7f51874610dafc04f578436ab7d74d",
+  "hidTopologyWatcherSha256": "a6b9b01f33cc3fb9f2974ee39e4614d8eac71edbcae983b43cc0a2b1f3e4f441",
+  "inputMonitoringPermissionSha256": "47bb934388889b276aa964fb20a64e657089d11a3c05aa5f3b4bfe12a2909ebb",
+  "processExecutable": "Contents/MacOS/ChatGPT",
+  "mainChunk": ".vite/build/main-dcXtv3U5.js",
+  "serviceChunk": "./service-4uQDVZZZ.js",
+  "serviceExport": "CodexMicroService",
+  "inspectorHost": "127.0.0.1",
+  "inspectorPort": 9229,
+  "inputExecutable": "Contents/MacOS/input",
+  "healthyState": {
+    "lifecycleState": "started",
+    "deviceStatus": "connected",
+    "requiresComm": true,
+    "requiresApi": true,
+    "requiresSettledConnectPromise": true,
+    "requiresSettledTopologyPromise": true,
+    "requiresHidSubscription": true,
+    "requiresJoystickSubscription": true
+  }
+}
