@@ -5,6 +5,26 @@ Companion Bridge. Input keeps its existing device session; `worklouderctl`
 connects to the private bridge socket and never starts a competing device-kit
 session.
 
+## Verified release asset
+
+Tagged WorkLouderCTL releases attach this directory as a deterministic `.tgz`
+integration kit alongside the native CLI archives. The package stays
+`private: true`: it is an explicit release asset for provider integration, not
+an independently published npm-registry product.
+
+Verify and install a downloaded kit without running lifecycle scripts:
+
+```sh
+shasum -a 256 -c worklouder-input-companion-bridge-reference-VERSION.tgz.sha256
+npm install --ignore-scripts --no-audit --no-fund \
+  ./worklouder-input-companion-bridge-reference-VERSION.tgz
+```
+
+`./scripts/test-companion-package.py` builds the kit twice, requires byte-for-byte
+identity, rejects unlisted archive members and unsafe paths, checks the exact
+file modes and exports, installs it into an isolated prefix, imports its public
+API, and executes the installed conformance binary.
+
 ## One-call main-process installation
 
 Install the bridge after Electron is ready and Input's service container has

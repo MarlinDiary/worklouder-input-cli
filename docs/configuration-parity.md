@@ -111,3 +111,13 @@ One end-to-end parity fixture must combine:
 7. exact settings/device/cache/database readback;
 8. observed key, host action, layer transition, and lighting behavior;
 9. one rollback restoring all original hashes and behaviors.
+
+`./scripts/test-transaction-e2e.sh` now exercises this acceptance fixture across
+all four tiers. It requires a unified diff containing the Tier 1 settings and
+Agent Key changes, Tier 2 profile/layer/control/Action/lighting changes, Tier 3
+Smart Action/AppSense/host-settings changes, and a Tier 4 Input-owned firmware
+plan. It then verifies semantic post-state reads, complete four-authority
+readback, private backup inspection, idempotent retry, drift rejection, exact
+restore, and injected-failure automatic rollback. The observed-behavior claims
+are bounded to the isolated provider fixtures; released-app and physical-device
+behavior remain the explicit upstream gates above.

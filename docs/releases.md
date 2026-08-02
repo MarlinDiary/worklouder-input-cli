@@ -10,6 +10,12 @@ still a **source alpha** until the first version tag is signed, notarized, and
 published. Do not interpret a local unsigned or ad-hoc build as an official
 signed release.
 
+The same tagged release also contains a deterministic Companion Bridge `.tgz`
+integration kit. That package lets Codex/Input maintainers install the exact
+reference adapters, one-call main-process integrations, and read-only
+conformance executable without copying source files manually. It remains a
+private release asset rather than an npm-registry publication.
+
 ## Verify a downloaded release
 
 Download the archive and its adjacent `.sha256` file, then run:
@@ -85,9 +91,11 @@ tagged release:
 
 The workflow imports the certificate into an ephemeral keychain, signs both
 architectures, submits each binary to Apple notarization, verifies the release
-archives, emits build-provenance attestations, renders the release-specific
-Homebrew formula, recomputes `SHA256SUMS`, and finally creates the GitHub
-release. Missing credentials or any verification mismatch stops publication.
+archives, builds and independently installs the Companion integration kit,
+emits build-provenance attestations for all three packages, renders the
+release-specific Homebrew formula, recomputes `SHA256SUMS`, and finally creates
+the GitHub release. Missing credentials or any verification mismatch stops
+publication.
 
 ## Homebrew formula
 
@@ -118,7 +126,9 @@ there is no stable `brew install` command to advertise yet.
 5. Require both architecture jobs, notarization, archive verification, and
    provenance attestation to pass.
 6. Download and independently verify both published archives and checksums.
-7. Install the generated formula into an isolated Homebrew prefix and run its
+7. Verify, install, import, and execute the Companion `.tgz` with
+   `./scripts/test-companion-package.py`'s exact inventory/export boundary.
+8. Install the generated formula into an isolated Homebrew prefix and run its
    test before promoting it to a stable tap.
 
 Rollback for an unpublished release is deletion of the local output directory.

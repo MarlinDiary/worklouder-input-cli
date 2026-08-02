@@ -551,23 +551,36 @@ node --test companion/input-main-bridge.test.mjs
 ./scripts/test-transaction-rollback-e2e.sh
 ```
 
-## Additional planned mutation commands
+## Current coordinated mutation workflow
 
-The intended binary name is `worklouderctl`:
+Offline editors produce immutable candidates; the coordinated transaction then
+binds all changed authorities into one plan, backup, receipt, and rollback
+boundary:
 
 ```console
 worklouderctl codex agent-source set --input codex.json priority --output codex-priority.json
 worklouderctl codex command-key set --input codex-priority.json ACT06 \
   --command toggleFastMode --output codex-fast.json
-worklouderctl codex joystick set up --skill SKILL_ID
-worklouderctl plan layout.yaml
-worklouderctl apply layout.yaml
-worklouderctl backup list
-worklouderctl backup restore BACKUP_ID
+worklouderctl codex joystick set --input codex-fast.json --output codex-final.json \
+  up --skill-name Plan --skill-path /PATH/TO/SKILL.md
+worklouderctl transaction plan \
+  --codex-settings-base codex-before.json \
+  --codex-settings-candidate codex-final.json \
+  --input-config-base input-before.json \
+  --input-config-candidate input-final.json \
+  --output transaction-plan.json
+worklouderctl transaction apply --plan transaction-plan.json \
+  --backup-dir apply-backup --receipt apply-receipt.json \
+  --idempotency-key APPLY_KEY
+worklouderctl backup inspect --input apply-receipt.json
+worklouderctl transaction restore --apply-receipt apply-receipt.json \
+  --backup-dir restore-backup --receipt restore-receipt.json \
+  --idempotency-key RESTORE_KEY
 ```
 
-These examples document the remaining mutation interface. Follow the
-[roadmap](docs/roadmap.md) for exact status.
+Socket/token options may be omitted when the installed providers expose their
+standard private bridge locations. The [transaction guide](docs/transactions.md)
+documents all four authority inputs, preflight, readback, and rollback.
 
 ## Target capabilities
 
@@ -634,7 +647,7 @@ CLI semantic parser.
 | Milestone | Status |
 | --- | --- |
 | SEO/AIO and product documentation foundation | Complete |
-| Sanitized research fixtures and schema model | Planned |
+| Sanitized research fixtures and schema model | Complete; deterministic regeneration, manifests, parsing, and sensitive-pattern gates verified |
 | Rust CLI foundation, tier/capability contract, and JSON output | Complete |
 | Provider `doctor` and Input `inspect`/exact-byte `export`/semantic cache snapshot | Complete |
 | Bundle `validate` and structural `diff` | Complete |
@@ -656,12 +669,13 @@ CLI semantic parser.
 | Tier 4 permissions, firmware check, and diagnostic logs | Exact Input 0.18.0 authority paths frozen; bridge/CLI fixture verified with private sanitized bundle |
 | Input-owned reset | Complete per-version/device/layout default candidate, immutable plan, CAS apply, exact readback, idempotent replay, and rollback fixture verified |
 | Input-owned bootloader recovery | Backup-bound bootloader/release plan, delegated programmer/reconnect, exact configuration restore, postflight, receipt inspection, and idempotent replay fixture verified |
-| Real-device mutation and rollback | Planned |
+| Official-provider real-device mutation and rollback | Released Codex/Input bridge integration and USB writer evidence pending upstream |
 | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
 | Input cache read adapter | Complete; byte-exact bridge-equivalent semantic snapshot |
-| Input database synchronization | Planned |
+| Input database synchronization | Provider-owned reference adapter and rollback fixture complete; released Input integration pending |
 | Deterministic macOS archives and signature-state verification | Complete; unsigned and ad-hoc builds locally executed |
 | Developer ID signing/notarization and Homebrew formula pipeline | Complete and fail-closed; tagged publication credentials pending |
+| Deterministic provider integration kit | Complete; exact `.tgz` inventory, install/import, conformance executable, checksum, and provenance gates verified |
 | First signed macOS release and stable Homebrew tap | Not published yet |
 
 ## Frequently asked questions

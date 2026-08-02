@@ -450,17 +450,35 @@ node --test companion/input-main-bridge.test.mjs
 ./scripts/test-bridge-e2e.sh
 ```
 
-## 其余计划中的写入命令
+## 当前跨 authority 写入流程
+
+离线 editor 生成 immutable candidate；随后由统一 transaction 把所有变化绑定到
+同一个 plan、backup、receipt 与 rollback boundary：
 
 ```console
 worklouderctl codex agent-source set --input codex.json priority --output codex-priority.json
 worklouderctl codex command-key set --input codex-priority.json ACT06 \
   --command toggleFastMode --output codex-fast.json
-worklouderctl codex joystick set up --skill SKILL_ID
-worklouderctl plan layout.yaml
-worklouderctl apply layout.yaml
-worklouderctl backup restore BACKUP_ID
+worklouderctl codex joystick set --input codex-fast.json --output codex-final.json \
+  up --skill-name Plan --skill-path /PATH/TO/SKILL.md
+worklouderctl transaction plan \
+  --codex-settings-base codex-before.json \
+  --codex-settings-candidate codex-final.json \
+  --input-config-base input-before.json \
+  --input-config-candidate input-final.json \
+  --output transaction-plan.json
+worklouderctl transaction apply --plan transaction-plan.json \
+  --backup-dir apply-backup --receipt apply-receipt.json \
+  --idempotency-key APPLY_KEY
+worklouderctl backup inspect --input apply-receipt.json
+worklouderctl transaction restore --apply-receipt apply-receipt.json \
+  --backup-dir restore-backup --receipt restore-receipt.json \
+  --idempotency-key RESTORE_KEY
 ```
+
+当 installed provider 发布标准 private bridge location 时可以省略 socket/token
+参数；四个 authority 的完整输入、preflight、readback 与 rollback 见
+[transaction 指南](docs/transactions.md)。
 
 ## 目标功能
 
