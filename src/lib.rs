@@ -11,6 +11,7 @@ pub mod doctor;
 pub mod exit_status;
 pub mod fsutil;
 pub mod input;
+pub mod schema;
 pub mod semantic;
 pub mod transaction;
 
@@ -31,8 +32,9 @@ use cli::{
     LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand, LayerJoystickSectorCommand,
     LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
     MultiActionGroupCommand, MultiActionGroupMemberCommand, PresetCommand, ProfileCommand,
-    RadialCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
-    SmartActionType as CliSmartActionType, TierCommand, TransactionCommand,
+    RadialCommand, SchemaCommand, SmartActionCommand, SmartActionGroupCommand,
+    SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType, TierCommand,
+    TransactionCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -100,6 +102,7 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
             command,
         } => run_bridge(command, socket, token, cli.json, &mut out)?,
         Command::Config { command } => run_config(command, cli.json, &mut out)?,
+        Command::Schema { command } => run_schema(command, cli.json, &mut out)?,
         Command::Transaction { command } => run_transaction(command, cli.json, &mut out)?,
         Command::Profile { command } => run_profile(command, cli.json, &mut out)?,
         Command::Layer { command } => run_layer(command, cli.json, &mut out)?,
@@ -114,6 +117,31 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
+    Ok(())
+}
+
+fn run_schema(command: SchemaCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        SchemaCommand::List => {
+            let schemas = schema::list();
+            if json {
+                write_json(&mut out, &schemas)?;
+            } else {
+                for schema in schemas {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}",
+                        schema.name, schema.id, schema.description
+                    )?;
+                }
+            }
+        }
+        SchemaCommand::Show { name } => {
+            let document = schema::show(&name)?;
+            serde_json::to_writer_pretty(&mut out, &document)?;
+            writeln!(out)?;
+        }
+    }
     Ok(())
 }
 

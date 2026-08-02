@@ -62,6 +62,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("doctor"));
     assert!(stdout.contains("bridge"));
     assert!(stdout.contains("config"));
+    assert!(stdout.contains("schema"));
     assert!(stdout.contains("codex"));
     assert!(stdout.contains("device"));
     assert!(stdout.contains("input"));
@@ -77,6 +78,34 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("preset"));
     assert!(stdout.contains("radial"));
     assert!(stdout.contains("completion"));
+}
+
+#[test]
+fn schemas_are_discoverable_and_machine_readable() {
+    let list = binary()
+        .args(["--json", "schema", "list"])
+        .output()
+        .unwrap();
+    assert!(list.status.success());
+    let summaries: serde_json::Value = serde_json::from_slice(&list.stdout).unwrap();
+    assert_eq!(summaries.as_array().unwrap().len(), 4);
+    assert_eq!(summaries[1]["name"], "configuration-v1");
+
+    let show = binary()
+        .args(["--json", "schema", "show", "configuration-v1"])
+        .output()
+        .unwrap();
+    assert!(show.status.success());
+    let document: serde_json::Value = serde_json::from_slice(&show.stdout).unwrap();
+    assert_eq!(
+        document["$schema"],
+        "https://json-schema.org/draft/2020-12/schema"
+    );
+    assert_eq!(document["oneOf"].as_array().unwrap().len(), 4);
+    assert_eq!(
+        document["$defs"]["inputHostSettings"]["properties"]["kind"]["const"],
+        "worklouder-input-host-settings"
+    );
 }
 
 #[test]

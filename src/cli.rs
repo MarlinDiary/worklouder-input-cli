@@ -103,6 +103,12 @@ pub enum Command {
         command: ConfigCommand,
     },
 
+    /// Discover the versioned JSON Schemas used by automation clients.
+    Schema {
+        #[clap(subcommand)]
+        command: SchemaCommand,
+    },
+
     /// Plan coordinated Codex and Input mutations with one unified diff.
     Transaction {
         #[clap(subcommand)]
@@ -238,10 +244,53 @@ pub enum InputCommand {
         command: InputPermissionCommand,
     },
 
+    /// Check the Input-owned OS permission required for device access.
+    Permissions {
+        /// Select a connected device ID; defaults to the single Codex Micro.
+        #[clap(long)]
+        device: Option<String>,
+    },
+
+    /// Inspect firmware availability through Input's released update service.
+    Firmware {
+        #[clap(subcommand)]
+        command: InputFirmwareCommand,
+    },
+
+    /// Collect a bounded, sanitized diagnostic log bundle from Input.
+    Logs {
+        #[clap(subcommand)]
+        command: InputLogsCommand,
+    },
+
     /// Snapshot the Input-owned preset catalog through the companion bridge.
     Preset {
         #[clap(subcommand)]
         command: InputPresetCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum InputFirmwareCommand {
+    /// Check the connected device and the current compatible release.
+    Check {
+        /// Select a connected device ID; defaults to the single Codex Micro.
+        #[clap(long)]
+        device: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum InputLogsCommand {
+    /// Write sanitized JSON/text logs and a checksum manifest atomically.
+    Collect {
+        /// Destination directory. It must not already exist.
+        #[clap(long, value_parser)]
+        output: PathBuf,
+
+        /// Maximum newest log entries to request from Input.
+        #[clap(long, default_value_t = 5000, value_parser = clap::value_parser!(u32).range(1..=5000))]
+        max_entries: u32,
     },
 }
 
@@ -1088,6 +1137,18 @@ pub enum ConfigCommand {
 
         #[clap(value_parser)]
         candidate: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SchemaCommand {
+    /// List every embedded public schema and its stable identifier.
+    List,
+
+    /// Print one complete JSON Schema document.
+    Show {
+        /// Schema registry name, for example configuration-v1.
+        name: String,
     },
 }
 

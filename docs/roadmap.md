@@ -13,7 +13,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Machine-readable capability registry
 - [x] Full Codex + Input configuration parity contract
 - [ ] Publish sanitized Input 0.17.3/0.18.0 and firmware v0.6.0 fixtures
-- [ ] CLI command and configuration JSON schemas
+- [x] CLI command, configuration, transaction, and error JSON Schema registry
 
 ## M1 — Read-only alpha
 

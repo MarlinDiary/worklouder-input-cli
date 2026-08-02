@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worklouderctl.dev/schemas/transaction-v1.schema.json",
+  "title": "WorkLouderCTL coordinated transaction artifacts v1",
+  "oneOf": [
+    { "$ref": "#/$defs/plan" },
+    { "$ref": "#/$defs/receipt" },
+    { "$ref": "#/$defs/catalog" }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "path": { "type": "string", "minLength": 1 },
+    "authorityPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "tier", "provider", "baseline", "candidate", "baselineSha256", "candidateSha256", "beforeRevision", "targetRevision", "changed", "changes"],
+      "properties": {
+        "id": { "type": "string", "enum": ["codex-settings", "codex-agent-keys", "input-config", "input-host-settings"] },
+        "tier": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "provider": { "type": "string", "minLength": 1 },
+        "baseline": { "$ref": "#/$defs/path" },
+        "candidate": { "$ref": "#/$defs/path" },
+        "baselineSha256": { "$ref": "#/$defs/sha256" },
+        "candidateSha256": { "$ref": "#/$defs/sha256" },
+        "beforeRevision": { "$ref": "#/$defs/sha256" },
+        "targetRevision": { "$ref": "#/$defs/sha256" },
+        "changed": { "type": "boolean" },
+        "expectedSourceSha256": { "$ref": "#/$defs/sha256" },
+        "deviceId": { "type": "string", "minLength": 1 },
+        "changes": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "revisionAlgorithm", "revision", "authorities"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-cross-authority-plan" },
+        "revisionAlgorithm": { "const": "sha256:recursive-key-sorted-plan-authorities-json-v1" },
+        "revision": { "$ref": "#/$defs/sha256" },
+        "authorities": { "type": "array", "items": { "$ref": "#/$defs/authorityPlan" }, "minItems": 1, "maxItems": 4 }
+      }
+    },
+    "mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "operation", "changed", "beforeRevision", "afterRevision", "targetRevision", "backup", "providerReceipt"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "operation": { "type": "string", "enum": ["apply", "restore", "skip"] },
+        "changed": { "type": "boolean" },
+        "beforeRevision": { "$ref": "#/$defs/sha256" },
+        "afterRevision": { "$ref": "#/$defs/sha256" },
+        "targetRevision": { "$ref": "#/$defs/sha256" },
+        "backup": { "$ref": "#/$defs/path" },
+        "providerReceipt": {}
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "operation", "status", "planRevision", "plan", "backupCatalog", "idempotencyKey", "mutations", "rollbackMutations"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-cross-authority-transaction" },
+        "operation": { "type": "string", "enum": ["apply", "restore"] },
+        "status": { "type": "string", "enum": ["applied", "restored", "rolled-back", "rollback-failed"] },
+        "planRevision": { "$ref": "#/$defs/sha256" },
+        "plan": { "$ref": "#/$defs/path" },
+        "backupCatalog": { "$ref": "#/$defs/path" },
+        "idempotencyKey": { "type": "string", "minLength": 1 },
+        "mutations": { "type": "array", "items": { "$ref": "#/$defs/mutation" } },
+        "rollbackMutations": { "type": "array", "items": { "$ref": "#/$defs/mutation" } },
+        "failure": { "type": "string", "minLength": 1 }
+      }
+    },
+    "catalogEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "baseline", "candidate", "baselineSha256", "candidateSha256", "beforeRevision", "targetRevision"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "baseline": { "$ref": "#/$defs/path" },
+        "candidate": { "$ref": "#/$defs/path" },
+        "baselineSha256": { "$ref": "#/$defs/sha256" },
+        "candidateSha256": { "$ref": "#/$defs/sha256" },
+        "beforeRevision": { "$ref": "#/$defs/sha256" },
+        "targetRevision": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "operation", "planRevision", "plan", "planSha256", "authorities"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-private-backup-catalog" },
+        "operation": { "type": "string", "enum": ["apply", "restore"] },
+        "planRevision": { "$ref": "#/$defs/sha256" },
+        "plan": { "$ref": "#/$defs/path" },
+        "planSha256": { "$ref": "#/$defs/sha256" },
+        "authorities": { "type": "array", "items": { "$ref": "#/$defs/catalogEntry" }, "minItems": 1, "maxItems": 4 }
+      }
+    }
+  }
+}

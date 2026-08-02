@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worklouderctl.dev/schemas/configuration-v1.schema.json",
+  "title": "WorkLouderCTL configuration snapshots v1",
+  "description": "Complete snapshot formats accepted by the four coordinated configuration authorities.",
+  "oneOf": [
+    { "$ref": "#/$defs/codexSettings" },
+    { "$ref": "#/$defs/codexAgentKeys" },
+    { "$ref": "#/$defs/inputConfig" },
+    { "$ref": "#/$defs/inputHostSettings" }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "codexSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "adapter", "contractAppVersion", "sourcePath", "sourceSha256", "settings", "effectiveSettings", "definitions", "warnings"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-codex-settings-snapshot" },
+        "adapter": { "type": "string", "minLength": 1 },
+        "contractAppVersion": { "type": "string", "minLength": 1 },
+        "installedAppVersion": { "type": "string", "minLength": 1 },
+        "sourcePath": { "type": "string" },
+        "sourceSha256": { "$ref": "#/$defs/sha256" },
+        "settings": { "type": "object" },
+        "effectiveSettings": { "type": "object" },
+        "definitions": { "type": "object" },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "codexAgentKeys": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "adapter", "contractAppVersion", "installedAppVersion", "globalStateKey", "slots", "assignments", "globalStateRevision", "warnings"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-codex-agent-keys-snapshot" },
+        "adapter": { "type": "string", "minLength": 1 },
+        "contractAppVersion": { "type": "string", "minLength": 1 },
+        "installedAppVersion": { "type": "string", "minLength": 1 },
+        "globalStateKey": { "type": "string", "minLength": 1 },
+        "slots": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+        "assignments": { "type": "object" },
+        "globalStateRevision": { "$ref": "#/$defs/sha256" },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "inputConfigFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relativePath", "size", "deviceChecksumSha1", "sha256", "dataBase64"],
+      "properties": {
+        "relativePath": { "type": "string", "minLength": 1 },
+        "size": { "type": "integer", "minimum": 0, "maximum": 16777216 },
+        "deviceChecksumSha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "dataBase64": { "type": "string" }
+      }
+    },
+    "inputConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "revisionAlgorithm", "revision", "deviceId", "files"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouder-input-config-snapshot" },
+        "revisionAlgorithm": { "const": "sha256:path-u32be-path-bytes-size-u64be-content-v1" },
+        "revision": { "$ref": "#/$defs/sha256" },
+        "deviceId": { "type": "string", "minLength": 1 },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/inputConfigFile" }, "minItems": 1, "maxItems": 4096 }
+      }
+    },
+    "inputHostSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "revisionAlgorithm", "revision", "settings"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouder-input-host-settings" },
+        "revisionAlgorithm": { "const": "sha256:input-host-settings-three-booleans-v1" },
+        "revision": { "$ref": "#/$defs/sha256" },
+        "settings": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["showedAnalyticsPopUp", "analyticsConsented", "smartActionCmdEnabled"],
+          "properties": {
+            "showedAnalyticsPopUp": { "type": "boolean" },
+            "analyticsConsented": { "type": "boolean" },
+            "smartActionCmdEnabled": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  }
+}

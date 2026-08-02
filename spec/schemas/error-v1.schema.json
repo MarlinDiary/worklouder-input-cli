@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worklouderctl.dev/schemas/error-v1.schema.json",
+  "title": "WorkLouderCTL error v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "code", "exitStatus", "message", "causes"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "worklouderctl-error" },
+    "code": {
+      "type": "string",
+      "enum": [
+        "unexpected",
+        "provider-unavailable",
+        "invalid-data",
+        "conflict",
+        "operation-rolled-back",
+        "rollback-failed",
+        "permission-denied"
+      ]
+    },
+    "exitStatus": { "type": "integer", "minimum": 1, "maximum": 8 },
+    "message": { "type": "string", "minLength": 1 },
+    "causes": { "type": "array", "items": { "type": "string" } }
+  }
+}
