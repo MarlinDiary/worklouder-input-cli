@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { mkdtemp, readFile, stat } from "node:fs/promises";
 import { createConnection } from "node:net";
 import test from "node:test";
 import { createInputMainAdapter } from "./input-main-adapter.mjs";
 import { startInputCompanionBridge } from "./input-main-bridge.mjs";
+import { installInputCompanionBridge } from "./input-main-integration.mjs";
 
 const TOKEN =
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -145,6 +147,72 @@ test("Input adapter maps the existing connected session", async () => {
   assert.equal(status.status.selectedLayerIndex, 2);
   assert.equal(files.files[0].relativePath, "keymap.json");
   assert.equal(Buffer.from(read.dataBase64, "base64").toString(), keymap.toString());
+});
+
+test("one-call Input integration owns discovery and lifecycle paths", async () => {
+  const root = await mkdtemp("/tmp/wlb-integration-");
+  class FixtureApp extends EventEmitter {
+    getPath(name) {
+      assert.equal(name, "userData");
+      return root;
+    }
+
+    getVersion() {
+      return "0.18.0-integration";
+    }
+  }
+  const device = {
+    id: "device-1",
+    info: {
+      devicePid: 33632,
+      deviceType: "codex_micro",
+      layoutType: "universal",
+      connectionType: 1,
+      isUsbConnection: false,
+    },
+    isConnected: () => true,
+    rpcService: {
+      async getFirmwareVersion() {
+        return "v0.6.0";
+      },
+      async getDeviceStatus() {
+        return { selectedProfileIndex: 0, selectedLayerIndex: 2 };
+      },
+      async getFileList() {
+        return [];
+      },
+      async readFileChunked() {
+        return Buffer.alloc(0);
+      },
+    },
+  };
+  const app = new FixtureApp();
+  const integration = await installInputCompanionBridge({
+    app,
+    services: {
+      devicesCommManager: {
+        getDevices: () => [device],
+      },
+    },
+    deviceKitVersion: "0.1.29-integration",
+    bridgeVersion: "0.1.0-integration",
+  });
+
+  assert.equal(integration.inputVersion, "0.18.0-integration");
+  assert.equal(
+    integration.socketPath,
+    root + "/worklouderctl-bridge-v1.sock",
+  );
+  assert.equal(
+    integration.tokenPath,
+    root + "/worklouderctl-bridge-v1.token",
+  );
+  assert.equal((await stat(integration.socketPath)).mode & 0o777, 0o600);
+  assert.equal((await stat(integration.tokenPath)).mode & 0o777, 0o600);
+  assert.equal(app.listenerCount("before-quit"), 1);
+  await integration.stop();
+  assert.equal(app.listenerCount("before-quit"), 0);
+  await assert.rejects(stat(integration.socketPath), { code: "ENOENT" });
 });
 
 async function connect(socketPath) {

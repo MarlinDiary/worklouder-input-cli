@@ -34,6 +34,12 @@ while [ ! -S "$socket" ] || [ ! -f "$token" ]; do
 done
 
 bin=$repo/target/debug/worklouderctl
+node "$repo/companion/conformance.mjs" \
+  --socket "$socket" --token "$token" \
+  --require device.status.v1 \
+  --require device.files.list.v1 \
+  --require device.files.read.v1 \
+  >"$root/node-conformance.json"
 "$bin" --json bridge --socket "$socket" --token "$token" status \
   >"$root/bridge-status.json"
 "$bin" --json device --transport bridge \
@@ -55,12 +61,16 @@ import pathlib
 import sys
 
 root = pathlib.Path(sys.argv[1])
+conformance = json.loads((root / "node-conformance.json").read_text())
 bridge = json.loads((root / "bridge-status.json").read_text())
 status = json.loads((root / "device-status.json").read_text())
 files = json.loads((root / "device-files.json").read_text())
 manifest = json.loads((root / "export" / "manifest.json").read_text())
 validation = json.loads((root / "export-validation.json").read_text())
 
+assert conformance["conformant"] is True
+assert conformance["protocolVersion"] == 1
+assert conformance["sessionId"] == bridge["sessionId"]
 assert bridge["protocolVersion"] == 1
 assert bridge["inputVersion"] == "0.18.0-fixture"
 assert "device.files.read.v1" in bridge["capabilities"]
@@ -77,6 +87,7 @@ for record in manifest["files"]:
     assert hashlib.sha256(data).hexdigest() == record["sha256"]
 
 print("bridge_protocol=1")
+print("node_conformance=verified")
 print("bridge_transport=input-owned-session")
 print("status_profile_layer=0/2")
 print("exported_files=2")

@@ -131,6 +131,9 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
   Unix-socket JSON-RPC server;
 - `companion/input-main-adapter.mjs` — adapter over Input's existing
   `devicesCommManager` and per-device `rpcService`;
+- `companion/input-main-integration.mjs` — one-call Electron main-process
+  installation with Input-owned discovery and lifecycle cleanup;
+- `companion/conformance.mjs` — read-only release conformance command;
 - `companion/input-main-bridge.test.mjs` — authentication, dispatch, and service
   adapter tests;
 - `scripts/test-bridge-e2e.sh` — Rust CLI handshake, status, file list, exact
@@ -141,3 +144,6 @@ current service container. Integration creates the adapter after Input's
 service container is initialized, starts the bridge under `app.getPath("userData")`,
 and stops it from Input's existing quit cleanup. Input 0.18.0 is a static
 adapter boundary; the installed release itself remains unchanged.
+
+The exact one-call integration and release-check commands are documented in
+[`companion/README.md`](../companion/README.md).

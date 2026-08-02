@@ -1,0 +1,22 @@
+{
+  "name": "@worklouder/input-companion-bridge-reference",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "input-companion-conformance": "./conformance.mjs"
+  },
+  "exports": {
+    ".": "./index.mjs",
+    "./adapter": "./input-main-adapter.mjs",
+    "./bridge": "./input-main-bridge.mjs",
+    "./conformance": "./conformance.mjs",
+    "./integration": "./input-main-integration.mjs"
+  },
+  "scripts": {
+    "test": "node --test input-main-bridge.test.mjs"
+  }
+}
