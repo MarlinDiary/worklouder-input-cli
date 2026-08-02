@@ -182,8 +182,8 @@ Codex Micro stores them in a separate `smart_actions.json` file.
 - Mac/Windows label mode;
 - touch-sensor layer cycling and AppSense automatic switching.
 
-The official setup guide describes a maximum of six layers. Profile and layer
-counts still require device-specific validation rather than a global constant.
+The frozen Codex Micro model has a maximum of six profiles and six layers per
+profile. Other device models still require their own versioned limits.
 
 The first semantic CLI slice operates on a complete revisioned snapshot rather
 than a partial keymap fragment:
@@ -191,14 +191,31 @@ than a partial keymap fragment:
 ```sh
 worklouderctl profile list --input SNAPSHOT.json
 worklouderctl profile show --input SNAPSHOT.json --id ID
+worklouderctl profile create --input SNAPSHOT.json --name NAME --output CANDIDATE.json
+worklouderctl profile duplicate --input SNAPSHOT.json --id ID \
+  [--name NAME] --output CANDIDATE.json
+worklouderctl profile delete --input SNAPSHOT.json --id ID --output CANDIDATE.json
 worklouderctl profile select --input SNAPSHOT.json --id ID --output CANDIDATE.json
 worklouderctl profile rename --input SNAPSHOT.json --id ID --name NAME --output CANDIDATE.json
 worklouderctl layer list --input SNAPSHOT.json [--profile ID]
 worklouderctl layer show --input SNAPSHOT.json [--profile ID] --id ID
+worklouderctl layer create --input SNAPSHOT.json [--profile ID] \
+  --name NAME --output CANDIDATE.json
+worklouderctl layer duplicate --input SNAPSHOT.json [--profile ID] \
+  --id ID [--name NAME] --output CANDIDATE.json
+worklouderctl layer delete --input SNAPSHOT.json [--profile ID] \
+  --id ID --output CANDIDATE.json
+worklouderctl layer move --input SNAPSHOT.json [--profile ID] \
+  --id ID --to INDEX --output CANDIDATE.json
 worklouderctl layer rename --input SNAPSHOT.json [--profile ID] \
   --id ID --name NAME --output CANDIDATE.json
 worklouderctl layer color --input SNAPSHOT.json [--profile ID] \
   --id ID --color '#RRGGBB' --output CANDIDATE.json
+worklouderctl layer lighting show --input SNAPSHOT.json [--profile ID] --id ID
+worklouderctl layer lighting set --input SNAPSHOT.json [--profile ID] \
+  --id ID --zone backlight --effect breath --brightness 0.5 \
+  --speed 0.5 --magic 0.5 --color '#RRGGBB' [--apply-to-all] \
+  --output CANDIDATE.json
 worklouderctl control list --input SNAPSHOT.json [--profile ID] --layer ID
 worklouderctl control show --input SNAPSHOT.json [--profile ID] \
   --layer ID --control key:ROW:COLUMN
@@ -212,6 +229,20 @@ and non-keymap bytes, rewrite `keymap.json` as compact ordered JSON, update its
 size/SHA-1/SHA-256, and recompute the full configuration revision. Candidate
 files are atomically published and reopened. Apply and rollback remain separate
 explicit transaction steps through the Input-owned bridge.
+
+Profile and layer object IDs are stable CLI identifiers allocated from the
+largest existing ID plus one. Input 0.18.0's persisted `activeProfileId` is
+instead a zero-based profile-array index; list/show report both values and
+`profile select` resolves the object ID before writing the index. Deletion
+keeps that index valid. A newly created profile contains the protected Codex
+layer template with layer ID zero and no per-layer lights.
+
+A layer is protected when any layout assignment begins with `KV_OAI_`. The
+protected layer stays at position zero and is excluded from duplicate, delete,
+move-to/from-zero, and per-layer lighting edits. New normal layers use the
+frozen Codex Micro empty layout and copy the last layer's lighting when present.
+Duplicate performs a deep copy with a new ID and removes `linkedAppId` so the
+copy does not silently inherit an AppSense binding.
 
 The observed Input 0.18.0 layer `color` is a 24-bit RGB integer. The CLI accepts
 `#RRGGBB`, `0xRRGGBB`, or decimal `0..16777215`, stores the integer, and reports
@@ -365,7 +396,12 @@ group delete applies the same orphan/shared-member rule as Action groups.
 
 Backlight and underglow each carry effect, brightness, speed, magic, and color.
 The inspected effect list is off, solid, snake, rainbow, breath, and gradient.
-Input can apply a lighting choice across all layers.
+Brightness, speed, and magic are normalized numbers in `0..1`; color is stored
+as a 24-bit integer. The default Codex Micro lighting is solid white backlight
+at `1/0.5/1` and rainbow white underglow at `1/0.55/1`. `layer lighting set`
+updates only supplied fields. `--apply-to-all` copies the selected zone to all
+layers in the profile and initializes both default zones on a layer that had no
+`lights` object, matching the inspected Input 0.18.0 mapping behavior.
 
 ### Linked applications / AppSense
 

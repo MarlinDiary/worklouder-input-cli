@@ -120,13 +120,26 @@ candidate without opening a bridge connection:
 ```sh
 worklouderctl profile list --input config-snapshot.json
 worklouderctl profile show --input config-snapshot.json --id 0
+worklouderctl profile create --input config-snapshot.json \
+  --name Work --output profile-create-candidate.json
+worklouderctl profile duplicate --input config-snapshot.json \
+  --id 0 --name 'Work Copy' --output profile-copy-candidate.json
 worklouderctl profile rename --input config-snapshot.json \
   --id 0 --name Work --output candidate.json
+worklouderctl profile select --input config-snapshot.json \
+  --id 7 --output profile-select-candidate.json
 worklouderctl layer show --input config-snapshot.json --profile 0 --id 1
+worklouderctl layer create --input config-snapshot.json \
+  --profile 0 --name Build --output layer-create-candidate.json
+worklouderctl layer duplicate --input config-snapshot.json \
+  --profile 0 --id 1 --name 'Build Copy' --output layer-copy-candidate.json
 worklouderctl layer rename --input config-snapshot.json \
   --profile 0 --id 1 --name Build --output candidate.json
 worklouderctl layer color --input config-snapshot.json \
   --profile 0 --id 1 --color '#EDF6FF' --output color-candidate.json
+worklouderctl layer lighting set --input config-snapshot.json \
+  --profile 0 --id 1 --zone backlight --effect breath --brightness 0.5 \
+  --color '#EDF6FF' --apply-to-all --output lighting-candidate.json
 worklouderctl control list --input config-snapshot.json --profile 0 --layer 1
 worklouderctl control show --input config-snapshot.json --profile 0 --layer 1 \
   --control encoder:0:press
@@ -231,8 +244,8 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
 - `companion/input-main-bridge.test.mjs` — authentication, dispatch, and service
   adapter tests;
 - `scripts/test-bridge-e2e.sh` — Rust CLI handshake, status, file list, exact
-  export, semantic profile/layer/control/Action/Multi Action/group inspection,
-  CRUD and cascade candidates, independent candidate rehash,
+  export, semantic profile/layer/lighting/control/Action/Multi Action/group
+  inspection, lifecycle/CRUD/cascade candidates, independent candidate rehash,
   apply/readback, idempotent retry, stale-CAS rejection, restore, and dual-hash
   conformance test.
 

@@ -85,7 +85,7 @@ Updating only one authority risks stale GUI state or a later overwrite. The
 transaction engine therefore snapshots, validates, writes, verifies, and
 synchronizes them as one operation.
 
-## Planned layers
+## Architecture layers
 
 ```text
 ┌────────────────────────────────────────────────────────────┐

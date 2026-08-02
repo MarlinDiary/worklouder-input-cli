@@ -48,16 +48,16 @@ the runtime reloaded the new value.
 
 | GUI surface | Configuration coverage | Planned command family | Current status |
 | --- | --- | --- | --- |
-| Profiles | create, rename, select, delete | `profile` | candidate-verified for list/show/rename/select; create/delete pending |
-| Layers | create, rename, select, delete, color, up to six | `layer` | candidate-verified for list/show/rename/color; create/select/delete pending |
+| Profiles | create, duplicate, rename, select, delete, up to six | `profile` | full lifecycle candidate-verified; profile create included in combined fixture apply/readback/restore |
+| Layers | create, duplicate, rename, reorder, delete, color, up to six | `layer` | lifecycle and ordering candidate-verified; layer create included in combined fixture transaction; live active-layer selection pending |
 | Basic keys | all frozen Input 0.18.0 device tokens | `control list/show/set` | candidate-verified |
 | Layer/profile keys | normal/temp layers and profiles 1–6 | `control list/show/set` | candidate-verified |
 | Actions | simple/advanced events, delays, groups | `action` | list/show/create/rename/delete, event CRUD/reorder, and group metadata/member/orphan-cascade candidate-verified |
 | Multi Actions | tap, double tap, hold, tap-hold, timing, groups | `multi-action` | complete field CRUD plus group metadata/member/orphan-cascade candidate-verified; fixture apply/readback/restore verified |
 | Encoder | counter-clockwise, clockwise, click | `control list/show/set` | candidate/apply/restore fixture-verified |
 | Joystick sectors | existing radial sectors and targets | `control list/show/set` | candidate-verified; sector CRUD pending |
-| Backlight | effect, brightness, speed, magic, color | `lighting backlight` | researched |
-| Underglow | effect, brightness, speed, magic, color | `lighting underglow` | researched |
+| Backlight | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
+| Underglow | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
 | AppSense links | application-to-layer mapping | `appsense` | researched |
 | Presets | inspect, preview, install | `preset` | researched |
 | Full object | export, snapshot, validate, diff, apply, restore | `device export`, `device config snapshot/validate/apply/restore` | transaction fixture verified; released writer pending |

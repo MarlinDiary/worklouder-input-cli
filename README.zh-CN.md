@@ -69,12 +69,21 @@ worklouderctl device --transport bridge config apply --input CONFIG.json --backu
 worklouderctl device --transport bridge config restore --input BEFORE.json --backup CURRENT.json
 worklouderctl profile list --input CONFIG.json
 worklouderctl profile show --input CONFIG.json --id PROFILE_ID
+worklouderctl profile create --input CONFIG.json --name NAME --output CANDIDATE.json
+worklouderctl profile duplicate --input CONFIG.json --id PROFILE_ID --name NAME --output CANDIDATE.json
+worklouderctl profile delete --input CONFIG.json --id PROFILE_ID --output CANDIDATE.json
 worklouderctl profile select --input CONFIG.json --id PROFILE_ID --output CANDIDATE.json
 worklouderctl profile rename --input CONFIG.json --id PROFILE_ID --name NAME --output CANDIDATE.json
 worklouderctl layer list --input CONFIG.json [--profile PROFILE_ID]
 worklouderctl layer show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
+worklouderctl layer create --input CONFIG.json [--profile PROFILE_ID] --name NAME --output CANDIDATE.json
+worklouderctl layer duplicate --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --name NAME --output CANDIDATE.json
+worklouderctl layer delete --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --output CANDIDATE.json
+worklouderctl layer move --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --to INDEX --output CANDIDATE.json
 worklouderctl layer rename --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --name NAME --output CANDIDATE.json
 worklouderctl layer color --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --color '#RRGGBB' --output CANDIDATE.json
+worklouderctl layer lighting show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
+worklouderctl layer lighting set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --zone backlight --effect breath --brightness 0.5 --color '#RRGGBB' [--apply-to-all] --output CANDIDATE.json
 worklouderctl control list --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID
 worklouderctl control show --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control key:ROW:COLUMN
 worklouderctl control set --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control encoder:INDEX:press --assignment KC_MUTE --output CANDIDATE.json
@@ -139,6 +148,15 @@ size、SHA-1、SHA-256、canonical base64、safe path、keymap ID 与完整 revi
 再只修改请求的 semantic field，保留未知 JSON 字段和其他文件的原字节，重算
 受影响的哈希与 revision，原子发布并重新打开 candidate。这个阶段不连接 Input
 或设备；candidate 再交给现有 `device config apply` transaction。
+
+Profile 与 layer 生命周期遵循冻结的 Input 0.18.0 Codex Micro 模型：最多六个
+profile、每个 profile 最多六层，object ID 使用 maximum-ID-plus-one 分配；存储字段
+`activeProfileId` 实际是 zero-based index，而 CLI 参数与输出使用稳定 object ID。
+含 `KV_OAI_*` 的 Codex protected layer 固定在第一层，不参与 duplicate、delete、
+move，也不作为直接 lighting target。普通 layer duplicate 会移除 `linkedAppId`，新 layer 会复制
+最后一层的 lights。backlight/underglow 支持 `off`、`solid`、`snake`、`rainbow`、
+`breath`、`gradient`，brightness/speed/magic 范围为 `0..1`，并支持 24-bit color
+与按 zone 的 `--apply-to-all`。
 
 物理 control 使用稳定 ID：`key:ROW:COLUMN`、
 `encoder:INDEX:ccw|cw|press`、`joystick:SECTOR`。`control set` 校验冻结的
@@ -223,8 +241,8 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 `doctor`、`inspect`、`export`，以及 Input 0.18.0 live device 的 `status`、
 `files`、双哈希 `export`、Companion Bridge v1 contract/client/reference server、
 revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
-Input 自动恢复，以及 profile list/select/rename 与 layer list/rename 的严格离线
-candidate 生成、profile/layer show、layer 24-bit RGB color candidate，keys、
+Input 自动恢复，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
+与 per-layer lighting 的严格离线 candidate 生成，keys、
 encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
 list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
 release 集成、可安装 binary、Homebrew formula、

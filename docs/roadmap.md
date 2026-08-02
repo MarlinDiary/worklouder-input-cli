@@ -55,15 +55,14 @@ The roadmap prioritizes evidence and configuration safety over command count.
 ## M3 — Input semantic configuration beta
 
 - [x] Strict offline snapshot validation and deterministic candidate rehash
-- [x] Profile list/show, rename, and active-profile candidate generation
-- [x] Layer list/show, rename, and 24-bit RGB metadata candidate generation
-- [ ] Profile create and delete
-- [ ] Layer create, select, delete, and remaining lighting metadata
+- [x] Profile list/show/create/duplicate/rename/select/delete candidates
+- [x] Layer list/show/create/duplicate/rename/delete/move and 24-bit RGB metadata candidates
+- [ ] Live active-layer selection
 - [x] Existing keys and frozen Input 0.18.0 assignment tokens
 - [x] Encoder rotation and press assignments
 - [x] Existing joystick sector assignments
 - [x] Action and Multi Action reference validation plus profile usage synchronization
-- [ ] Layer lighting
+- [x] Layer backlight/underglow inspection, updates, and apply-to-all
 - [x] Actions/macros list/show/create/rename/delete and event CRUD/reorder
 - [x] Action group metadata, ordered member CRUD, and Input orphan cascade
 - [x] Multi Action field CRUD, timing, groups, and reference cascade

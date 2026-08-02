@@ -99,12 +99,21 @@ worklouderctl device --transport bridge config apply --input CONFIG.json --backu
 worklouderctl device --transport bridge config restore --input BEFORE.json --backup CURRENT.json
 worklouderctl profile list --input CONFIG.json
 worklouderctl profile show --input CONFIG.json --id PROFILE_ID
+worklouderctl profile create --input CONFIG.json --name NAME --output CANDIDATE.json
+worklouderctl profile duplicate --input CONFIG.json --id PROFILE_ID --name NAME --output CANDIDATE.json
+worklouderctl profile delete --input CONFIG.json --id PROFILE_ID --output CANDIDATE.json
 worklouderctl profile select --input CONFIG.json --id PROFILE_ID --output CANDIDATE.json
 worklouderctl profile rename --input CONFIG.json --id PROFILE_ID --name NAME --output CANDIDATE.json
 worklouderctl layer list --input CONFIG.json [--profile PROFILE_ID]
 worklouderctl layer show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
+worklouderctl layer create --input CONFIG.json [--profile PROFILE_ID] --name NAME --output CANDIDATE.json
+worklouderctl layer duplicate --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --name NAME --output CANDIDATE.json
+worklouderctl layer delete --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --output CANDIDATE.json
+worklouderctl layer move --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --to INDEX --output CANDIDATE.json
 worklouderctl layer rename --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --name NAME --output CANDIDATE.json
 worklouderctl layer color --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --color '#RRGGBB' --output CANDIDATE.json
+worklouderctl layer lighting show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
+worklouderctl layer lighting set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --zone backlight --effect breath --brightness 0.5 --color '#RRGGBB' [--apply-to-all] --output CANDIDATE.json
 worklouderctl control list --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID
 worklouderctl control show --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control key:ROW:COLUMN
 worklouderctl control set --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control encoder:INDEX:press --assignment KC_MUTE --output CANDIDATE.json
@@ -189,6 +198,16 @@ worklouderctl device --transport bridge config apply \
   --input candidate.json --backup pre-apply.json \
   --expected-revision REVISION --idempotency-key layer-color-1
 ```
+
+Profile and layer lifecycle commands follow the frozen Input 0.18.0 Codex
+Micro model: at most six profiles and six layers, maximum-ID-plus-one object
+allocation, and a zero-based persisted `activeProfileId` index even though CLI
+arguments and output use stable object IDs. The protected `KV_OAI_*` Codex
+layer remains first and is not duplicated, deleted, reordered, or selected as
+a direct lighting target. A normal layer duplicate drops `linkedAppId`; a new
+layer copies the last layer's lighting. Backlight and underglow support `off`, `solid`, `snake`,
+`rainbow`, `breath`, and `gradient`, normalized `0..1` brightness/speed/magic,
+24-bit color, and zone-level `--apply-to-all`.
 
 Physical controls use stable IDs: `key:ROW:COLUMN`,
 `encoder:INDEX:ccw|cw|press`, and `joystick:SECTOR`. `control set` accepts the
@@ -319,7 +338,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Bridge apply/restore transaction and automatic rollback fixture | Complete |
 | Companion Bridge integration in a released Input build | Upstream integration pending |
 | Codex live settings-bridge write client | Planned |
-| Semantic profile/layer candidates | List/show/select/rename/color implemented and fixture-verified |
+| Semantic profile/layer candidates | Full lifecycle, selection, ordering, color, and lighting candidate-verified; combined profile-create/layer-create/lighting apply/readback/restore fixture-verified |
 | Semantic physical controls | List/show/set for keys, encoder gestures, and existing joystick sectors; candidate/apply/restore fixture-verified |
 | Semantic Actions | List/show/create/rename/delete and event add/set/delete/move; cascade/apply/restore fixture-verified |
 | Real-device mutation and rollback | Planned |
@@ -332,7 +351,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 
 WorkLouderCTL is an open-source full-configuration CLI project for Codex, Work
 Louder Input, and Codex Micro. The source alpha can inspect both apps,
-read/export live Codex Micro state, generate validated profile/layer/control/Action/Multi Action/group candidates,
+read/export live Codex Micro state, generate validated profile/layer/lighting/control/Action/Multi Action/group candidates,
 and exercise apply/restore against the isolated bridge writer; packaged
 binaries and released-Input writer integration are upcoming.
 
