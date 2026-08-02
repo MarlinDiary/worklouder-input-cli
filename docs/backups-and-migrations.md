@@ -16,6 +16,7 @@ Supported inputs are:
 - Codex settings and Codex Agent Key snapshots;
 - Input configuration and host-settings snapshots;
 - Input preset catalogs;
+- Input firmware/reset/recovery plans and verified mutation receipts;
 - Input and device export bundles; and
 - private sanitized Input log bundles.
 

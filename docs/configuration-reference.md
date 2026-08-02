@@ -752,14 +752,27 @@ worklouderctl input reset apply --plan RESET_PLAN.json \
   --candidate RESET_CANDIDATE.json --backup RESET_BEFORE.json \
   --receipt RESET_RECEIPT.json --expected-revision CONFIG_REVISION \
   --idempotency-key RESET_KEY
+worklouderctl input recovery plan --backup CONFIG_BEFORE_RECOVERY.json \
+  --plan RECOVERY_PLAN.json
+worklouderctl input recovery apply --plan RECOVERY_PLAN.json \
+  --backup CONFIG_BEFORE_RECOVERY.json --receipt RECOVERY_RECEIPT.json \
+  --idempotency-key RECOVERY_KEY
 ```
 
 Input owns the exact default layout for the connected
 app/device/device-kit/firmware/layout tuple. The CLI freezes its revision,
 captures a complete backup, applies it through `device.config.apply`, verifies
 the exact Input version immediately before mutation, performs exact readback,
-and restores through `device config restore`. Bootloader
-recovery remains the next distinct high-level authority.
+and restores through `device config restore`.
+
+Bootloader recovery is a separate Input-owned authority. Its read-only plan
+binds the exact Input/device-kit versions, original device and firmware,
+Input-detected bootloader identity, Input-selected release, and complete
+pre-recovery configuration revision. Apply delegates programmer and reconnect
+to Input, then reuses the existing complete configuration transaction to
+restore that exact backup. Success requires exact target-firmware and original
+configuration-revision postflight; the CLI does not implement the programmer,
+transport, or a firmware downgrade.
 
 ## Verification levels
 

@@ -127,8 +127,9 @@ configuration apply. They always require a fresh backup and explicit target
 version.
 
 Firmware and recovery commands delegate to the installed Input updater/flasher;
-the CLI adds planning, artifact verification, logging, and post-state readback.
-It does not reimplement the firmware or transport protocol.
+the CLI adds immutable backup-bound planning, artifact verification,
+idempotency, exact configuration restore, and firmware/config post-state
+readback. It does not reimplement the firmware or transport protocol.
 
 ## Cross-tier conflict rule
 

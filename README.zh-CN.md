@@ -111,6 +111,8 @@ worklouderctl input firmware plan --output FIRMWARE_PLAN.json [--device DEVICE_I
 worklouderctl input firmware update --plan FIRMWARE_PLAN.json --backup FIRMWARE_CONFIG_BEFORE.json --receipt FIRMWARE_UPDATE.json --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
 worklouderctl input reset plan --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json [--device DEVICE_ID]
 worklouderctl input reset apply --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json --backup RESET_BEFORE.json --receipt RESET_RECEIPT.json --expected-revision CONFIG_REVISION --idempotency-key RESET_KEY
+worklouderctl input recovery plan --backup CONFIG_BEFORE_RECOVERY.json --plan RECOVERY_PLAN.json
+worklouderctl input recovery apply --plan RECOVERY_PLAN.json --backup CONFIG_BEFORE_RECOVERY.json --receipt RECOVERY_RECEIPT.json --idempotency-key RECOVERY_KEY
 worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
 worklouderctl input preset snapshot --output PRESET_CATALOG.json
 worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
@@ -421,6 +423,16 @@ revision 和完整 candidate。`input reset apply` 会在写入前再次核对 I
 完全复用现有 configuration CAS/backup/readback/automatic-rollback transaction。receipt
 与原始 backup 都会严格 reopen；精确回滚继续使用普通的 `device config restore`。CLI
 不会复制 Input renderer 的 reset flow。
+
+`input recovery plan` 使用正常 device 进入 bootloader 之前保存的完整 configuration
+snapshot，并让 Input-owned authority 提供当前 bootloader identity 与 Input-selected
+release。plan 会冻结 Input/device-kit version、device identity、release 和完整 backup
+revision，但不会执行 flash。`input recovery apply` 把 programmer 与 reconnect 整体委派
+给 Input，再通过既有完整 configuration transaction 精确恢复 backup；成功必须同时满足
+target firmware 和原 configuration revision 的 exact postflight。相同 idempotency key
+可以重放已验证结果，原子写入并 reopen 的 receipt 可由 `backup inspect` 再次检查。CLI
+不实现 driver、bootloader transport、programmer 或 firmware downgrade。详见
+[Input-owned bootloader recovery guide](docs/input-bootloader-recovery.md)。
 
 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
 adapter、认证测试，以及 Rust CLI 跨语言 conformance test：

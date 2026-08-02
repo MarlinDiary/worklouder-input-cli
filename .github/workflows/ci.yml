@@ -51,6 +51,8 @@ jobs:
         run: ./scripts/test-firmware-update-e2e.sh
       - name: Test Input-owned default reset and exact rollback
         run: ./scripts/test-reset-e2e.sh
+      - name: Test delegated bootloader recovery and exact config restore
+        run: ./scripts/test-recovery-e2e.sh
       - name: Test Codex bridge CLI end to end
         run: ./scripts/test-codex-bridge-e2e.sh
       - name: Test four-authority transactions and rollback

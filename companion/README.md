@@ -36,6 +36,14 @@ const companionBridge = await installInputCompanionBridge({
         // all seven completed phases after reconnect and config restore.
       },
     },
+    recoveryAuthority: {
+      async readStatus({ configurationSnapshot }) {
+        // Return Input's detected bootloader identity and selected release.
+      },
+      async recoverFirmware({ release, bootloader, plan }) {
+        // Run Input's existing programmer and reconnect the original device.
+      },
+    },
   },
   deviceKitVersion: DEVICE_KIT_VERSION,
   bridgeVersion: "0.1.0",
@@ -112,6 +120,15 @@ candidate separately, then applies the candidate through the existing
 idempotency, exact readback, immutable receipt, and standard restore. The CLI
 rechecks the exact Input version immediately before the transaction.
 
+When `recoveryAuthority.readStatus()` and `recoverFirmware()` are injected, the
+adapter advertises `input.recovery.plan.v1` and `input.recovery.apply.v1`. The
+plan binds a complete caller-supplied pre-recovery snapshot to the current
+Input/device-kit versions, detected bootloader, and Input-selected release.
+Input owns programming and reconnection. After reconnect, the adapter restores
+the exact snapshot through the existing configuration writer, requires exact
+target-firmware plus configuration-revision postflight, and supports same-key
+receipt replay. No CLI-owned programmer or firmware downgrade is added.
+
 The reference adapter owns the surrounding transaction: validate every byte
 and digest, capture a pre-mutation snapshot, compare the live revision, invoke
 the writer, read back the complete revision, and automatically restore and
@@ -139,6 +156,8 @@ node companion/conformance.mjs \
   --require input.firmware.plan.v1 \
   --require input.firmware.update.v1 \
   --require input.reset.plan.v1 \
+  --require input.recovery.plan.v1 \
+  --require input.recovery.apply.v1 \
   --require input.logs.snapshot.v1
 ```
 
@@ -153,6 +172,7 @@ npm --prefix companion test
 ./scripts/test-bridge-e2e.sh
 ./scripts/test-firmware-update-e2e.sh
 ./scripts/test-reset-e2e.sh
+./scripts/test-recovery-e2e.sh
 ```
 
 The first command checks server, adapter, lifecycle, authentication, and path

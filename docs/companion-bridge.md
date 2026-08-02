@@ -154,6 +154,16 @@ publishes an immutable receipt, and supports exact restore through the normal
 configuration transaction. The CLI rechecks the exact Input version immediately
 before apply. No default keymap is duplicated in the CLI.
 
+`input.recovery.plan` and `input.recovery.apply` appear only when Input injects
+`recoveryAuthority.readStatus()` and `recoveryAuthority.recoverFirmware()`.
+Planning accepts a previously captured complete configuration snapshot and
+freezes its revision together with the exact Input/device-kit versions,
+Input-detected bootloader identity, and Input-selected release. Apply rechecks
+that plan, delegates programmer and reconnect to Input, then restores the exact
+snapshot through `device.config.apply.v1`. Final firmware and configuration
+revisions must match the frozen targets. The bridge does not expose a second
+driver, bootloader transport, programmer, or firmware downgrade path.
+
 ```sh
 worklouderctl input config snapshot --output config-snapshot.json
 worklouderctl device config snapshot --output config-snapshot.json
@@ -172,6 +182,11 @@ worklouderctl input reset apply --plan reset-plan.json \
   --candidate reset-candidate.json --backup reset-before.json \
   --receipt reset-receipt.json --expected-revision CONFIG_REVISION \
   --idempotency-key RESET_KEY
+worklouderctl input recovery plan --backup config-before-recovery.json \
+  --plan recovery-plan.json
+worklouderctl input recovery apply --plan recovery-plan.json \
+  --backup config-before-recovery.json --receipt recovery-receipt.json \
+  --idempotency-key RECOVERY_KEY
 worklouderctl input logs collect --output input-log-bundle
 ```
 
@@ -366,6 +381,9 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
   apply/readback, idempotent retry, stale-CAS rejection, restore, host command
   permission `false -> true -> false`, preset catalog/list/show/preview/install,
   preset apply/readback/restore, and dual-hash conformance test.
+- `scripts/test-recovery-e2e.sh` — backup-bound bootloader plan, delegated
+  programmer/reconnect, exact configuration restore, receipt inspection, and
+  idempotent replay fixture.
 
 Input maintains only the small adapter from stable bridge method names to its
 current service container. Integration creates the adapter after Input's
