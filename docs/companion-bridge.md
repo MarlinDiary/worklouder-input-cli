@@ -106,11 +106,18 @@ Protocol v1 bounds a snapshot at 4,096 files, 16 MiB per file, and 32 MiB of
 decoded content; request and response lines are each capped at 64 MiB.
 
 ```sh
+worklouderctl input config snapshot --output config-snapshot.json
 worklouderctl device config snapshot --output config-snapshot.json
 worklouderctl device config validate --input config-snapshot.json
 worklouderctl device config validate --input config-snapshot.json \
   --expected-revision REVISION
 ```
+
+The first command reads Input's current cache with no bridge/device transport
+and emits the standard semantic snapshot. The live bridge command may add
+device/runtime metadata; for identical cached/device bytes, both share the same
+`deviceId`, files, hashes, and revision. A later bridge apply still performs a
+fresh CAS check against the live device revision.
 
 ## Offline semantic candidates
 

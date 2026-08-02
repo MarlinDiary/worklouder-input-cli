@@ -89,6 +89,7 @@ worklouderctl codex inspect
 worklouderctl codex export --output CODEX_SNAPSHOT.json
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
+worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
 worklouderctl bridge status
 worklouderctl device --transport bridge status
 worklouderctl device --transport bridge files --recursive
@@ -170,6 +171,10 @@ snapshot. Neither command serializes unrelated Codex settings.
 `input inspect` is also read-only. `input export` copies the exact source bytes
 into an atomically published directory and records each file's size and SHA-256
 in `manifest.json`. It does not pause Input or write the device.
+`input config snapshot` reads the current Input cache without launching or
+controlling Input, captures `keymap.json` plus optional `smart_actions.json`
+byte-for-byte, excludes host-only `input_storage.json`, and publishes the same
+validated snapshot/revision core consumed by every offline semantic editor.
 
 The primary `device` transport is the
 [Input Companion Bridge](docs/companion-bridge.md). It authenticates over a
@@ -185,10 +190,10 @@ driver. `--input-mode require-closed` reports contention. The explicit
 the read; it never force-terminates Input.
 `device export` verifies the device SHA-1 and host SHA-256 for every file,
 reopens the typed manifest and files, and atomically publishes the directory.
-The bridge-only `device config snapshot` command additionally records exact
-base64 bytes and a deterministic revision. `device config validate` recomputes
-every size and digest; `--expected-revision REVISION` also checks the current
-live revision as a read-only compare-and-swap preflight.
+The live `device config snapshot` command adds bridge/device metadata around
+the same exact base64 bytes and deterministic revision core. `device config
+validate` recomputes every size and digest; `--expected-revision REVISION` also
+checks the current live revision as a read-only compare-and-swap preflight.
 `device config apply/restore` create or reopen immutable backups and route a
 complete-set transaction through Input with CAS, session-scoped idempotency,
 full revision readback, and automatic rollback. These commands are advertised
@@ -205,13 +210,16 @@ the revision, publishes atomically, and reopens the result. It does not contact
 Input or the device. Apply it through the guarded bridge transaction:
 
 ```console
-worklouderctl device --transport bridge config snapshot --output before.json
+worklouderctl input config snapshot --output before.json
 worklouderctl layer color --input before.json --profile 0 --id 1 \
   --color '#EDF6FF' --output candidate.json
 worklouderctl device --transport bridge config apply \
   --input candidate.json --backup pre-apply.json \
   --expected-revision REVISION --idempotency-key layer-color-1
 ```
+
+The apply-side live CAS compares `REVISION` with a fresh bridge snapshot, so a
+cache snapshot that became stale is detected before the first device write.
 
 Profile and layer lifecycle commands follow the frozen Input 0.18.0 Codex
 Micro model: at most six profiles and six layers, maximum-ID-plus-one object
@@ -361,7 +369,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | SEO/AIO and product documentation foundation | Complete |
 | Sanitized research fixtures and schema model | Planned |
 | Rust CLI foundation, tier/capability contract, and JSON output | Complete |
-| Provider `doctor` and Input `inspect`/exact-byte `export` | Complete |
+| Provider `doctor` and Input `inspect`/exact-byte `export`/semantic cache snapshot | Complete |
 | Bundle `validate` and structural `diff` | Complete |
 | Codex settings contract and TOML `doctor`/`inspect`/`export` | Complete |
 | Input 0.18.0 live `device status`/`files`/verified `export` | Complete |
@@ -376,7 +384,8 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Semantic Actions | List/show/create/rename/delete and event add/set/delete/move; cascade/apply/restore fixture-verified |
 | Real-device mutation and rollback | Planned |
 | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
-| Input cache/database synchronization | Planned |
+| Input cache read adapter | Complete; byte-exact bridge-equivalent semantic snapshot |
+| Input database synchronization | Planned |
 | Signed macOS release and Homebrew installation | Planned |
 
 ## Frequently asked questions

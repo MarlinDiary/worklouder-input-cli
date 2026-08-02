@@ -21,6 +21,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] `worklouderctl doctor`
 - [x] `worklouderctl input inspect`
 - [x] `worklouderctl input export`
+- [x] `worklouderctl input config snapshot`
 - [x] `worklouderctl codex doctor`
 - [x] `worklouderctl codex inspect`
 - [x] `worklouderctl codex export`
@@ -72,7 +73,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 ## M4 — Full cross-authority transaction
 
 - [x] Smart Actions and groups (offline candidate and current-cache format verified)
-- [ ] Input cache adapter
+- [x] Input cache read adapter with bridge-equivalent semantic snapshot/revision
 - [ ] Input database adapter
 - [ ] Input process coordination
 - [ ] Codex process and settings-bridge coordination

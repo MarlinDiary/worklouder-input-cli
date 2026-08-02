@@ -60,7 +60,7 @@ the runtime reloaded the new value.
 | Underglow | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
 | AppSense links | list/show, application identity, link, update, unlink | `appsense` | candidate and current-cache schema verified; fixture apply/readback/restore verified; live focus transition tracked separately |
 | Presets | inspect, preview, install | `preset` | researched |
-| Full object | export, snapshot, validate, diff, apply, restore | `device export`, `device config snapshot/validate/apply/restore` | transaction fixture verified; released writer pending |
+| Full object | cache capture, export, snapshot, validate, diff, apply, restore | `input config snapshot`, `device export`, `device config snapshot/validate/apply/restore` | cache adapter is byte-exact and revision-equivalent to the bridge core; transaction fixture verified; released writer pending |
 
 ## Tier 3 — Input host configuration
 

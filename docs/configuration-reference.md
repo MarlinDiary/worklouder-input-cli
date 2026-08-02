@@ -107,6 +107,24 @@ and 1 hour.
 
 ## Tier 2: Input device configuration
 
+### Implemented Input cache snapshot
+
+The read-only cache adapter exposes the current semantic configuration without
+opening a device transport or changing the Input process/GUI state:
+
+```console
+worklouderctl input config snapshot --output SNAPSHOT.json [--device DEVICE_ID]
+```
+
+It selects the requested or sole cached device, captures regular
+`keymap.json` and optional `smart_actions.json` files byte-for-byte, rejects
+symlink sources, and excludes host-only `input_storage.json`. Before atomic
+publication it verifies source stability, SHA-1, SHA-256, canonical base64,
+semantic JSON, safe paths, and the full deterministic revision; it then reopens
+the result and rereads the sources. The snapshot core (`deviceId`, files, and
+revision) matches a bridge snapshot of the same bytes and feeds every offline
+semantic command directly.
+
 ### Implemented live read surface
 
 The primary transport uses the authenticated Input Companion Bridge. The CLI

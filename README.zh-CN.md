@@ -59,6 +59,7 @@ worklouderctl codex inspect
 worklouderctl codex export --output CODEX_SNAPSHOT.json
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
+worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
 worklouderctl bridge status
 worklouderctl device --transport bridge status
 worklouderctl device --transport bridge files --recursive
@@ -135,6 +136,9 @@ snapshot；两者都不会序列化其他 Codex 设置。
 `input inspect` 同样全程只读；`input export` 把源文件原字节复制到原子发布的
 目录，并在 `manifest.json` 记录 size 与 SHA-256。它不会暂停 Input，也不会
 写入设备。
+`input config snapshot` 直接读取当前 Input cache，全程保持 Input 与 GUI 现状，
+逐字节捕获 `keymap.json` 和可选的 `smart_actions.json`，排除仅属于 host 的
+`input_storage.json`，并发布供全部离线 semantic editor 使用的标准 snapshot/revision。
 
 `device` 的首选 transport 是
 [Input Companion Bridge](docs/companion-bridge.md)：CLI 通过私有 Unix socket
@@ -148,9 +152,9 @@ kit，不附带第二套 driver。`--input-mode require-closed` 只报告占用�
 且不执行 force-kill。
 `device export` 对每个文件核对 device SHA-1 与 host SHA-256，重新读取
 typed manifest 和文件后，再原子发布目录。
-bridge 专用的 `device config snapshot` 还会保存精确 base64 字节和确定性
-revision；`device config validate` 会重算 size、双哈希与 revision，配合
-`--expected-revision REVISION` 可对 live device 做只读 CAS 预检。
+live `device config snapshot` 会在相同的精确 base64 字节和确定性 revision core
+外补充 bridge/device metadata；`device config validate` 会重算 size、双哈希与
+revision，配合 `--expected-revision REVISION` 可对 live device 做只读 CAS 预检。
 `device config apply/restore` 会创建或复用 immutable backup，并由 Input 执行
 CAS、session-scoped idempotency、完整 revision readback 与 automatic rollback。
 只有运行中的 Input 注入已验证 writer 时，bridge 才会公布这两个写能力；当前
@@ -162,6 +166,18 @@ size、SHA-1、SHA-256、canonical base64、safe path、keymap ID 与完整 revi
 再只修改请求的 semantic field，保留未知 JSON 字段和其他文件的原字节，重算
 受影响的哈希与 revision，原子发布并重新打开 candidate。这个阶段不连接 Input
 或设备；candidate 再交给现有 `device config apply` transaction。
+
+```console
+worklouderctl input config snapshot --output before.json
+worklouderctl layer color --input before.json --profile 0 --id 1 \
+  --color '#EDF6FF' --output candidate.json
+worklouderctl device --transport bridge config apply \
+  --input candidate.json --backup pre-apply.json \
+  --expected-revision REVISION --idempotency-key layer-color-1
+```
+
+apply 侧的 live CAS 会用新 bridge snapshot 核对 `REVISION`，在首次 device write
+前识别已经过期的 cache snapshot。
 
 Profile 与 layer 生命周期遵循冻结的 Input 0.18.0 Codex Micro 模型：最多六个
 profile、每个 profile 最多六层，object ID 使用 maximum-ID-plus-one 分配；存储字段
@@ -268,7 +284,8 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 
 仓库目前处于 transaction source-alpha 阶段。Codex TOML read adapter 的
 `doctor`、`inspect`、`export`，以及 Input 0.18.0 live device 的 `status`、
-`files`、双哈希 `export`、Companion Bridge v1 contract/client/reference server、
+`files`、双哈希 `export`、byte-exact semantic cache snapshot、Companion Bridge v1
+contract/client/reference server、
 revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
 Input 自动恢复，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
 与 per-layer lighting、AppSense linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线 candidate 生成，keys、
