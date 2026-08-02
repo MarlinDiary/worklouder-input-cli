@@ -1,0 +1,3180 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index a8c55d0..8d4f575 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -37,7 +37,9 @@ jobs:
+         run: cargo test --locked
+       - name: Lint
+         run: cargo clippy --all-targets -- -D warnings
+-      - name: Test Input Companion Bridge reference server
+-        run: node --test companion/input-main-bridge.test.mjs
+-      - name: Test bridge CLI end to end
++      - name: Test companion bridge reference servers
++        run: npm test --prefix companion
++      - name: Test Input bridge CLI end to end
+         run: ./scripts/test-bridge-e2e.sh
++      - name: Test Codex bridge CLI end to end
++        run: ./scripts/test-codex-bridge-e2e.sh
+diff --git a/README.md b/README.md
+index 997b31d..e662791 100644
+--- a/README.md
++++ b/README.md
+@@ -23,13 +23,16 @@
+ > `worklouderctl` binary with provider diagnostics, Codex Micro settings
+ > inspection/export, Input inspection/exact-byte export, validation, structural
+ > diff, live device status/file reads, verified device export, revisioned bridge
+-> snapshots/CAS validation, offline profile/layer/AppSense/control/Action/Smart Action candidate generation,
+-> fixture-verified apply/restore transactions, JSON output, and shell completions.
++> snapshots/CAS validation, offline profile/layer/AppSense/control/Action/Smart
++> Action candidate generation, fixture-verified Input and Codex apply/restore
++> transactions, live Codex Agent Key assignment snapshots, JSON output, and
++> shell completions.
+ > There is no packaged release yet.
+ > The bridge transaction engine now verifies backup, apply, idempotent retry,
+ > readback, restore, and automatic rollback against an isolated writer fixture.
+-> Installed-device mutation remains gated on a released, hardware-verified
+-> Input writer adapter.
++> Released-app mutation remains gated on Codex/Input integrations that supply
++> verified complete-set writers; hardware mutation additionally requires exact
++> device rollback evidence.
+ 
+ ## The short answer
+ 
+@@ -87,6 +90,11 @@ worklouderctl doctor [--strict]
+ worklouderctl codex doctor [--strict]
+ worklouderctl codex inspect
+ worklouderctl codex export --output CODEX_SNAPSHOT.json
++worklouderctl codex bridge inspect
++worklouderctl codex config snapshot --output CODEX_SNAPSHOT.json
++worklouderctl codex config apply --input CODEX_CANDIDATE.json --backup CODEX_BEFORE.json
++worklouderctl codex config restore --input CODEX_BEFORE.json --backup CODEX_CURRENT.json
++worklouderctl codex agent-key assignments
+ worklouderctl codex agent-source get --input CODEX_SNAPSHOT.json
+ worklouderctl codex agent-source set --input CODEX_SNAPSHOT.json priority --output CODEX_CANDIDATE.json
+ worklouderctl codex agent-key tap-mode get --input CODEX_SNAPSHOT.json
+@@ -179,9 +187,22 @@ snapshot. Neither command serializes unrelated Codex settings.
+ strict offline Tier 1 editors. They validate the embedded frozen definitions,
+ recompute effective settings and a recursive-key-sorted revision, preserve
+ unknown `codex-micro-*` values, publish atomically, and reopen the result. Each
+-receipt carries `expectedSourceSha256` for the future Codex `settings-write`
+-CAS transaction; candidate generation leaves the source TOML and Codex runtime
+-state unchanged.
++receipt carries `expectedSourceSha256` for the Codex `settings-write` CAS
++transaction; candidate generation leaves the source TOML and Codex runtime
++state unchanged. `codex config apply/restore` consumes those candidates through
++the authenticated Codex Companion Bridge with source-SHA and canonical
++settings-revision CAS, complete explicit-setting replacement, exact
++explicit/effective readback, immutable backup, session idempotency, and
++automatic rollback. `codex agent-key assignments` validates all six live slots
++and the command, Skill, task, keycap, and empty assignment shapes.
++
++The repository ships the reference Codex main-process adapter and Electron
++integration. The inspected Codex 26.727.51351 release exposes its internal
++`settings-read`, `settings-write`, and global-state handlers to its renderer but
++does not publish the external socket. Live mutations therefore remain behind
++the integration capability gate; the current end-to-end evidence uses the
++isolated same-contract fixture. See the
++[Codex Companion Bridge protocol](docs/codex-companion-bridge.md).
+ 
+ `input inspect` is also read-only. `input export` copies the exact source bytes
+ into an atomically published directory and records each file's size and SHA-256
+@@ -302,6 +323,7 @@ cross-language Rust CLI conformance test:
+ ```console
+ node --test companion/input-main-bridge.test.mjs
+ ./scripts/test-bridge-e2e.sh
++./scripts/test-codex-bridge-e2e.sh
+ ```
+ 
+ ## Additional planned mutation commands
+@@ -388,14 +410,14 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
+ | Provider `doctor` and Input `inspect`/exact-byte `export`/semantic cache snapshot | Complete |
+ | Bundle `validate` and structural `diff` | Complete |
+ | Codex settings contract and TOML `doctor`/`inspect`/`export` | Complete |
+-| Codex Agent source/tap mode and Command Key offline candidates | Complete; bridge apply pending |
++| Codex Agent source/tap mode and Command Key offline candidates | Complete; Codex bridge apply/restore fixture verified |
+ | Input 0.18.0 live `device status`/`files`/verified `export` | Complete |
+ | Read-only Input process coordination and automatic reopen | Complete |
+ | Companion Bridge v1 contract, CLI client, and reference server | Complete |
+ | Bridge config snapshot, deterministic revision, and live CAS preflight | Complete |
+ | Bridge apply/restore transaction and automatic rollback fixture | Complete |
+ | Companion Bridge integration in a released Input build | Upstream integration pending |
+-| Codex live settings-bridge write client | Planned |
++| Codex Companion Bridge client/reference integration | Complete; released Codex integration pending |
+ | Semantic profile/layer candidates | Full lifecycle, selection, ordering, color, and lighting candidate-verified; combined profile-create/layer-create/lighting apply/readback/restore fixture-verified |
+ | Semantic physical controls | List/show/set for keys, encoder gestures, and existing joystick sectors; candidate/apply/restore fixture-verified |
+ | Semantic Actions | List/show/create/rename/delete and event add/set/delete/move; cascade/apply/restore fixture-verified |
+@@ -445,6 +467,7 @@ Read the complete [FAQ](docs/faq.md).
+ - [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)
+ - [Input live device read contract](docs/research/2026-08-02-input-live-read-contract.md)
+ - [Input Companion Bridge protocol](docs/companion-bridge.md)
++- [Codex Companion Bridge protocol](docs/codex-companion-bridge.md)
+ - [Frequently asked questions](docs/faq.md)
+ - [Compatibility and support policy](docs/compatibility.md)
+ - [Companion architecture](docs/architecture.md)
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 26be1fa..475f832 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -9,8 +9,9 @@
+ > **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
+ > provider 诊断、Codex Micro 设置检查/导出、Input 只读检查/原字节导出、
+ > live device status/files、双哈希验证导出、带 revision 的 bridge snapshot、
+-> live CAS 校验、离线 profile/layer/AppSense/control/Action/Smart Action candidate 生成、fixture 验证的
+-> apply/restore transaction、结构化 diff、JSON 输出和 shell completion。
++> live CAS 校验、离线 profile/layer/AppSense/control/Action/Smart Action candidate
++> 生成、fixture 验证的 Input/Codex apply/restore transaction、六个 Codex Agent
++> Key assignment 的 live snapshot、结构化 diff、JSON 输出和 shell completion。
+ > 尚未发布打包版本；bridge transaction 已通过隔离 writer fixture
+ > 验证，真实设备写入仍以 Input writer adapter 与硬件 rollback 验证为启用条件。
+ 
+@@ -57,6 +58,11 @@ worklouderctl doctor [--strict]
+ worklouderctl codex doctor [--strict]
+ worklouderctl codex inspect
+ worklouderctl codex export --output CODEX_SNAPSHOT.json
++worklouderctl codex bridge inspect
++worklouderctl codex config snapshot --output CODEX_SNAPSHOT.json
++worklouderctl codex config apply --input CODEX_CANDIDATE.json --backup CODEX_BEFORE.json
++worklouderctl codex config restore --input CODEX_BEFORE.json --backup CODEX_CURRENT.json
++worklouderctl codex agent-key assignments
+ worklouderctl codex agent-source get --input CODEX_SNAPSHOT.json
+ worklouderctl codex agent-source set --input CODEX_SNAPSHOT.json priority --output CODEX_CANDIDATE.json
+ worklouderctl codex agent-key tap-mode get --input CODEX_SNAPSHOT.json
+@@ -143,8 +149,19 @@ snapshot；两者都不会序列化其他 Codex 设置。
+ `codex agent-source`、`codex agent-key tap-mode` 与 `codex command-key` 是严格的
+ Tier 1 离线 editor：核对内嵌 frozen definitions，重算 effective settings 与
+ recursive-key-sorted revision，保留未知 `codex-micro-*` 值，原子发布并重新打开。
+-receipt 中的 `expectedSourceSha256` 供后续 Codex `settings-write` CAS transaction
++receipt 中的 `expectedSourceSha256` 供 Codex `settings-write` CAS transaction
+ 使用；candidate 生成阶段保持源 TOML 与 Codex runtime state 原样。
++`codex config apply/restore` 通过认证的 Codex Companion Bridge 消费这些
++candidate，执行 source SHA + canonical settings revision 双 CAS、complete explicit
++settings replacement、explicit/effective exact readback、immutable backup、
++session idempotency 和 automatic rollback。`codex agent-key assignments` 会校验
++六个 live slots 以及 command、Skill、task、keycap 和 empty assignment shape。
++
++仓库已经包含 Codex main-process reference adapter 和 Electron integration。
++静态检查确认 Codex 26.727.51351 内部有 `settings-read`、`settings-write` 与
++global-state handlers，但当前 release 还没有发布外部 socket。因此 live mutation
++仍由 integration capability gate 控制；现有 E2E 证据来自隔离的同契约 fixture。
++详见 [Codex Companion Bridge](docs/codex-companion-bridge.md)。
+ 
+ `input inspect` 同样全程只读；`input export` 把源文件原字节复制到原子发布的
+ 目录，并在 `manifest.json` 记录 size 与 SHA-256。它不会暂停 Input，也不会
+@@ -301,13 +318,13 @@ WorkLouderCTL 是 **Full-configuration CLI**：
+ `files`、双哈希 `export`、byte-exact semantic cache snapshot、Companion Bridge v1
+ contract/client/reference server、
+ revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
+-Input 自动恢复，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
++Input 自动恢复、Codex Companion Bridge settings snapshot/CAS/apply/restore/rollback
++与六键 Agent assignment snapshot，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
+ 与 per-layer lighting、AppSense linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线 candidate 生成，keys、
+ encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
+ list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
+-release 集成、可安装 binary、Homebrew formula、
+-Codex live settings bridge 写入与完整写入命令将在对应 transaction 和真实硬件
+-readback 验证后发布。
++release 集成、Codex released-app bridge 集成、可安装 binary 与 Homebrew formula
++仍在后续里程碑中。
+ 
+ 配置边界已经确定：**Tier 1 使用 Codex 的设置模型与运行时；Tier 2 及以上
+ 使用 Input 的设置模型与运行时；CLI 对两边都提供完整配置能力。** 详见
+diff --git a/companion/codex-fixture-server.mjs b/companion/codex-fixture-server.mjs
+new file mode 100644
+index 0000000..cc32208
+--- /dev/null
++++ b/companion/codex-fixture-server.mjs
+@@ -0,0 +1,84 @@
++#!/usr/bin/env node
++import { readFile, writeFile } from "node:fs/promises";
++import { fileURLToPath } from "node:url";
++import { dirname, join, resolve } from "node:path";
++import { createCodexMainAdapter } from "./codex-main-adapter.mjs";
++import { startCodexCompanionBridge } from "./codex-main-bridge.mjs";
++
++const [socketPath, tokenPath] = process.argv.slice(2);
++if (!socketPath || !tokenPath) {
++  process.stderr.write("usage: codex-fixture-server.mjs SOCKET TOKEN_FILE\n");
++  process.exit(2);
++}
++const here = dirname(fileURLToPath(import.meta.url));
++const contract = JSON.parse(await readFile(resolve(here, "../spec/codex-settings-26.727.51351.json"), "utf8"));
++const sourcePath = join(dirname(socketPath), "codex-fixture-config.toml");
++let settings = Object.fromEntries(Object.entries(contract.definitions).map(([key, definition]) => [key, structuredClone(definition.default)]));
++let effectiveSettings = structuredClone(settings);
++const assignments = {
++  AG00: { type: "command", commandId: "fixture.command" },
++  AG01: null,
++  AG02: null,
++  AG03: null,
++  AG04: null,
++  AG05: null,
++};
++
++await persist();
++const request = async (method, params) => {
++  if (method === "settings-read") {
++    return {
++      filePath: sourcePath,
++      settings: structuredClone(settings),
++      effectiveSettings: structuredClone(effectiveSettings),
++      definitions: structuredClone(contract.definitions),
++    };
++  }
++  if (method === "get-global-state") {
++    if (params.key !== "codex-micro-custom-agent-assignments") throw new Error("unknown fixture state key");
++    return { value: structuredClone(assignments) };
++  }
++  throw new Error("unsupported fixture request: " + method);
++};
++const adapter = createCodexMainAdapter({
++  request,
++  settingsReplacer: {
++    async replaceSettings(request) {
++      settings = structuredClone(request.settings);
++      effectiveSettings = Object.fromEntries(Object.entries(contract.definitions).map(([key, definition]) => [
++        key,
++        structuredClone(Object.hasOwn(settings, key) ? settings[key] : definition.default),
++      ]));
++      await persist();
++    },
++  },
++});
++const bridge = await startCodexCompanionBridge({
++  adapter,
++  codexVersion: contract.appVersion + "-fixture",
++  bridgeVersion: "0.1.0-fixture",
++  socketPath,
++  tokenPath,
++  token: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
++});
++process.stdout.write(JSON.stringify({ ready: true, socketPath, tokenPath, sourcePath }) + "\n");
++
++let stopping = false;
++const stop = async () => {
++  if (stopping) return;
++  stopping = true;
++  await bridge.stop();
++  process.exit(0);
++};
++process.on("SIGINT", stop);
++process.on("SIGTERM", stop);
++
++async function persist() {
++  await writeFile(sourcePath, JSON.stringify(canonicalJson({ desktop: settings }), null, 2) + "\n", { mode: 0o600 });
++}
++
++function canonicalJson(value) {
++  if (Array.isArray(value)) return value.map(canonicalJson);
++  if (value === null || typeof value !== "object") return value;
++  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalJson(value[key])]));
++}
+diff --git a/companion/codex-main-adapter.mjs b/companion/codex-main-adapter.mjs
+new file mode 100644
+index 0000000..e2e1ad2
+--- /dev/null
++++ b/companion/codex-main-adapter.mjs
+@@ -0,0 +1,280 @@
++import { createHash } from "node:crypto";
++import { readFile } from "node:fs/promises";
++import { CodexBridgeError } from "./codex-main-bridge.mjs";
++
++export const CODEX_SETTINGS_SNAPSHOT_SCHEMA_VERSION = 1;
++export const CODEX_SETTINGS_SNAPSHOT_KIND = "worklouderctl-codex-settings-snapshot";
++export const CODEX_SETTINGS_REVISION_ALGORITHM = "codex-settings-revision-v1";
++export const CODEX_AGENT_KEYS_SNAPSHOT_KIND = "worklouder-codex-agent-keys-snapshot";
++export const CODEX_AGENT_KEYS_STATE_KEY = "codex-micro-custom-agent-assignments";
++export const CODEX_AGENT_KEY_SLOTS = Object.freeze([
++  "AG00", "AG01", "AG02", "AG03", "AG04", "AG05",
++]);
++
++const SETTINGS_PREFIX = "worklouder-codex-settings-revision-v1\0";
++const AGENT_KEYS_PREFIX = "worklouder-codex-agent-keys-revision-v1\0";
++const MAX_IDEMPOTENCY_ENTRIES = 256;
++
++export function createCodexMainAdapter({
++  request,
++  settingsReplacer,
++  readSettingsSource = (path) => readFile(path),
++}) {
++  if (typeof request !== "function") throw new TypeError("request is required");
++  if (
++    settingsReplacer !== undefined &&
++    (!settingsReplacer || typeof settingsReplacer.replaceSettings !== "function")
++  ) {
++    throw new TypeError("settingsReplacer.replaceSettings is required");
++  }
++  if (typeof readSettingsSource !== "function") {
++    throw new TypeError("readSettingsSource must be a function");
++  }
++  const idempotencyCache = new Map();
++
++  const snapshotSettings = async () => {
++    const result = await request("settings-read", {});
++    if (!isRecord(result) || typeof result.filePath !== "string") {
++      throw new CodexBridgeError(-32008, "Codex returned an invalid settings snapshot");
++    }
++    for (const name of ["settings", "effectiveSettings", "definitions"]) {
++      if (!isRecord(result[name])) {
++        throw new CodexBridgeError(-32008, `Codex settings ${name} was invalid`);
++      }
++    }
++    const source = await readSettingsSource(result.filePath);
++    if (!Buffer.isBuffer(source) && !(source instanceof Uint8Array)) {
++      throw new CodexBridgeError(-32008, "Codex settings source was unavailable");
++    }
++    return {
++      schemaVersion: CODEX_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
++      kind: CODEX_SETTINGS_SNAPSHOT_KIND,
++      filePath: result.filePath,
++      sourceSha256: sha256(source),
++      settings: structuredClone(result.settings),
++      effectiveSettings: structuredClone(result.effectiveSettings),
++      definitions: structuredClone(result.definitions),
++      settingsRevision: settingsRevision(result.settings),
++    };
++  };
++
++  const snapshotAgentKeys = async () => {
++    const response = await request("get-global-state", {
++      key: CODEX_AGENT_KEYS_STATE_KEY,
++    });
++    const assignments = normalizeAssignments(response?.value);
++    return {
++      schemaVersion: 1,
++      kind: CODEX_AGENT_KEYS_SNAPSHOT_KIND,
++      globalStateKey: CODEX_AGENT_KEYS_STATE_KEY,
++      slots: [...CODEX_AGENT_KEY_SLOTS],
++      assignments,
++      globalStateRevision: agentKeysRevision(assignments),
++    };
++  };
++
++  const runMutation = async ({
++    operation,
++    expectedSourceSha256,
++    expectedSettingsRevision,
++    targetSettingsRevision,
++    idempotencyKey,
++    settings,
++    effectiveSettings,
++  }) => {
++    validateSha(expectedSourceSha256, "expectedSourceSha256");
++    validateSha(expectedSettingsRevision, "expectedSettingsRevision");
++    validateSha(targetSettingsRevision, "targetSettingsRevision");
++    if (settingsRevision(settings) !== targetSettingsRevision) {
++      throw new CodexBridgeError(-32602, "targetSettingsRevision did not match settings");
++    }
++    const requestDigest = sha256(Buffer.from(canonicalJson({
++      operation,
++      expectedSourceSha256,
++      expectedSettingsRevision,
++      targetSettingsRevision,
++      settings,
++      effectiveSettings,
++    })));
++    const cached = idempotencyCache.get(idempotencyKey);
++    if (cached) {
++      if (cached.requestDigest !== requestDigest) {
++        throw new CodexBridgeError(-32602, "idempotency key was reused with a different mutation");
++      }
++      return { ...cached.result, idempotentReplay: true };
++    }
++
++    const before = await snapshotSettings();
++    if (
++      before.sourceSha256 !== expectedSourceSha256 ||
++      before.settingsRevision !== expectedSettingsRevision
++    ) {
++      throw new CodexBridgeError(-32005, "Codex settings revision conflict", {
++        expectedSourceSha256,
++        liveSourceSha256: before.sourceSha256,
++        expectedSettingsRevision,
++        liveSettingsRevision: before.settingsRevision,
++      });
++    }
++    if (before.settingsRevision === targetSettingsRevision) {
++      if (canonicalJson(before.effectiveSettings) !== canonicalJson(effectiveSettings)) {
++        throw new CodexBridgeError(-32602, "target effectiveSettings differed from live settings");
++      }
++      const result = mutationResult({ operation, idempotencyKey, before, after: before, changed: false });
++      cacheMutation(idempotencyCache, idempotencyKey, requestDigest, result);
++      return result;
++    }
++
++    try {
++      await settingsReplacer.replaceSettings({
++        settings: structuredClone(settings),
++        operation,
++        targetSettingsRevision,
++      });
++      const after = await snapshotSettings();
++      assertReadback(after, { settings, effectiveSettings, targetSettingsRevision });
++      const result = mutationResult({ operation, idempotencyKey, before, after, changed: true });
++      cacheMutation(idempotencyCache, idempotencyKey, requestDigest, result);
++      return result;
++    } catch (mutationError) {
++      let restored;
++      try {
++        await settingsReplacer.replaceSettings({
++          settings: structuredClone(before.settings),
++          operation: "automatic-rollback",
++          targetSettingsRevision: before.settingsRevision,
++        });
++        restored = await snapshotSettings();
++        assertReadback(restored, {
++          settings: before.settings,
++          effectiveSettings: before.effectiveSettings,
++          targetSettingsRevision: before.settingsRevision,
++        });
++      } catch (rollbackError) {
++        throw new CodexBridgeError(-32008, "settings mutation and rollback failed", {
++          mutationError: errorMessage(mutationError),
++          rollbackError: errorMessage(rollbackError),
++        });
++      }
++      throw new CodexBridgeError(-32008, "settings mutation failed and was rolled back", {
++        operation,
++        beforeSettingsRevision: before.settingsRevision,
++        targetSettingsRevision,
++        rollbackSettingsRevision: restored.settingsRevision,
++        rollbackPerformed: true,
++        mutationError: errorMessage(mutationError),
++      });
++    }
++  };
++
++  const adapter = { snapshotSettings, snapshotAgentKeys };
++  if (settingsReplacer) {
++    adapter.applySettings = (params) => runMutation({ ...params, operation: "apply" });
++    adapter.restoreSettings = (params) => runMutation({ ...params, operation: "restore" });
++  }
++  return adapter;
++}
++
++export function settingsRevision(settings) {
++  if (!isRecord(settings)) throw new CodexBridgeError(-32602, "settings must be an object");
++  return sha256(Buffer.from(SETTINGS_PREFIX + canonicalJson(settings)));
++}
++
++export function agentKeysRevision(assignments) {
++  return sha256(Buffer.from(AGENT_KEYS_PREFIX + canonicalJson(normalizeAssignments(assignments))));
++}
++
++export function canonicalJson(value) {
++  return JSON.stringify(sortRecursively(value));
++}
++
++function normalizeAssignments(value) {
++  const source = value === undefined || value === null ? {} : value;
++  if (!isRecord(source)) throw new CodexBridgeError(-32008, "Agent Key assignments were invalid");
++  for (const key of Object.keys(source)) {
++    if (!CODEX_AGENT_KEY_SLOTS.includes(key)) {
++      throw new CodexBridgeError(-32008, "Agent Key assignments contained an unknown slot", { slot: key });
++    }
++  }
++  return Object.fromEntries(CODEX_AGENT_KEY_SLOTS.map((slot) => [slot, normalizeAssignment(source[slot], slot)]));
++}
++
++function normalizeAssignment(value, slot) {
++  if (value === undefined || value === null) return null;
++  if (!isRecord(value)) throw invalidAssignment(slot);
++  if (value.type === "command" && nonEmpty(value.commandId)) {
++    return { type: "command", commandId: value.commandId };
++  }
++  if (value.type === "skill" && nonEmpty(value.skillName) && nonEmpty(value.skillPath)) {
++    return { type: "skill", skillName: value.skillName, skillPath: value.skillPath };
++  }
++  if (nonEmpty(value.hostId) && nonEmpty(value.threadKey) && nonEmpty(value.title)) {
++    return { hostId: value.hostId, threadKey: value.threadKey, title: value.title };
++  }
++  if (nonEmpty(value.keycapId)) return { keycapId: value.keycapId };
++  throw invalidAssignment(slot);
++}
++
++function invalidAssignment(slot) {
++  return new CodexBridgeError(-32008, "Agent Key assignment was invalid", { slot });
++}
++
++function assertReadback(after, target) {
++  if (
++    after.settingsRevision !== target.targetSettingsRevision ||
++    canonicalJson(after.settings) !== canonicalJson(target.settings) ||
++    canonicalJson(after.effectiveSettings) !== canonicalJson(target.effectiveSettings)
++  ) {
++    throw new Error("Codex exact settings readback did not match the target");
++  }
++}
++
++function mutationResult({ operation, idempotencyKey, before, after, changed }) {
++  return {
++    schemaVersion: 1,
++    kind: "worklouderctl-codex-settings-mutation",
++    operation,
++    idempotencyKey,
++    idempotentReplay: false,
++    changed,
++    rollbackPerformed: false,
++    beforeSourceSha256: before.sourceSha256,
++    afterSourceSha256: after.sourceSha256,
++    beforeSettingsRevision: before.settingsRevision,
++    afterSettingsRevision: after.settingsRevision,
++    targetSettingsRevision: after.settingsRevision,
++  };
++}
++
++function cacheMutation(cache, key, requestDigest, result) {
++  cache.set(key, { requestDigest, result });
++  while (cache.size > MAX_IDEMPOTENCY_ENTRIES) cache.delete(cache.keys().next().value);
++}
++
++function sortRecursively(value) {
++  if (Array.isArray(value)) return value.map(sortRecursively);
++  if (!isRecord(value)) return value;
++  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortRecursively(value[key])]));
++}
++
++function validateSha(value, name) {
++  if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) {
++    throw new CodexBridgeError(-32602, name + " is invalid");
++  }
++}
++
++function sha256(bytes) {
++  return createHash("sha256").update(bytes).digest("hex");
++}
++
++function isRecord(value) {
++  return value !== null && typeof value === "object" && !Array.isArray(value);
++}
++
++function nonEmpty(value) {
++  return typeof value === "string" && value.length > 0;
++}
++
++function errorMessage(error) {
++  return error instanceof Error ? error.message : String(error);
++}
+diff --git a/companion/codex-main-bridge.mjs b/companion/codex-main-bridge.mjs
+new file mode 100644
+index 0000000..7752400
+--- /dev/null
++++ b/companion/codex-main-bridge.mjs
+@@ -0,0 +1,324 @@
++import { randomBytes, timingSafeEqual } from "node:crypto";
++import {
++  chmod,
++  lstat,
++  mkdir,
++  readFile,
++  unlink,
++  writeFile,
++} from "node:fs/promises";
++import { createServer } from "node:net";
++import { dirname } from "node:path";
++
++export const CODEX_BRIDGE_PROTOCOL_VERSION = 1;
++export const CODEX_BRIDGE_MAX_REQUEST_BYTES = 16 * 1024 * 1024;
++export const CODEX_BRIDGE_MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
++
++const METHOD_DEFINITIONS = new Map([
++  ["codex.settings.snapshot", ["codex.settings.snapshot.v1", "snapshotSettings"]],
++  ["codex.settings.apply", ["codex.settings.apply.v1", "applySettings"]],
++  ["codex.settings.restore", ["codex.settings.restore.v1", "restoreSettings"]],
++  ["codex.agentKeys.snapshot", ["codex.agentKeys.snapshot.v1", "snapshotAgentKeys"]],
++]);
++
++const MUTATION_METHODS = new Set([
++  "codex.settings.apply",
++  "codex.settings.restore",
++]);
++
++export class CodexBridgeError extends Error {
++  constructor(code, message, data) {
++    super(message);
++    this.name = "CodexBridgeError";
++    this.code = code;
++    this.data = data;
++  }
++}
++
++export async function startCodexCompanionBridge({
++  adapter,
++  codexVersion,
++  socketPath,
++  tokenPath,
++  bridgeVersion = "0.1.0",
++  token,
++  maxRequestBytes = CODEX_BRIDGE_MAX_REQUEST_BYTES,
++  maxResponseBytes = CODEX_BRIDGE_MAX_RESPONSE_BYTES,
++}) {
++  validateOptions({ adapter, codexVersion, socketPath, tokenPath });
++  await mkdir(dirname(socketPath), { recursive: true, mode: 0o700 });
++  await mkdir(dirname(tokenPath), { recursive: true, mode: 0o700 });
++  await removeStaleSocket(socketPath);
++
++  const bridgeToken = await prepareToken(tokenPath, token);
++  const capabilities = [
++    "bridge.handshake.v1",
++    "bridge.health.v1",
++    ...[...METHOD_DEFINITIONS.values()]
++      .filter(([, adapterMethod]) => typeof adapter[adapterMethod] === "function")
++      .map(([capability]) => capability),
++  ];
++  const sessionId = randomBytes(16).toString("hex");
++  const startedAt = Date.now();
++  let requestTail = Promise.resolve();
++  const clients = new Set();
++
++  const enqueue = (operation) => {
++    const result = requestTail.then(operation, operation);
++    requestTail = result.catch(() => {});
++    return result;
++  };
++
++  const server = createServer((socket) => {
++    clients.add(socket);
++    socket.setEncoding("utf8");
++    let authenticated = false;
++    let buffer = "";
++
++    socket.on("close", () => clients.delete(socket));
++    socket.on("error", () => clients.delete(socket));
++    socket.on("data", (chunk) => {
++      buffer += chunk;
++      if (Buffer.byteLength(buffer, "utf8") > maxRequestBytes) {
++        writeError(socket, null, -32600, "request exceeded maximum size");
++        socket.end();
++        return;
++      }
++      while (buffer.includes("\n")) {
++        const newline = buffer.indexOf("\n");
++        const line = buffer.slice(0, newline);
++        buffer = buffer.slice(newline + 1);
++        if (line.length !== 0) {
++          void handleLine(line);
++        }
++      }
++    });
++
++    async function handleLine(line) {
++      let request;
++      try {
++        request = JSON.parse(line);
++      } catch {
++        writeError(socket, null, -32700, "parse error");
++        return;
++      }
++      const id = request?.id ?? null;
++      if (
++        request?.jsonrpc !== "2.0" ||
++        typeof request?.method !== "string" ||
++        request?.params === null ||
++        typeof request?.params !== "object" ||
++        Array.isArray(request?.params)
++      ) {
++        writeError(socket, id, -32600, "invalid request");
++        return;
++      }
++
++      if (!authenticated) {
++        if (request.method !== "bridge.hello") {
++          writeError(socket, id, -32001, "authentication required");
++          socket.end();
++          return;
++        }
++        try {
++          validateHello(request.params, bridgeToken);
++          authenticated = true;
++          writeResult(socket, id, {
++            protocolVersion: CODEX_BRIDGE_PROTOCOL_VERSION,
++            bridgeVersion,
++            codexVersion,
++            sessionId,
++            capabilities,
++          }, maxResponseBytes);
++        } catch (error) {
++          writeKnownError(socket, id, error);
++          socket.end();
++        }
++        return;
++      }
++
++      if (request.method === "bridge.hello") {
++        writeError(socket, id, -32600, "bridge.hello is only valid once");
++        return;
++      }
++      if (request.method === "bridge.health") {
++        writeResult(socket, id, {
++          protocolVersion: CODEX_BRIDGE_PROTOCOL_VERSION,
++          bridgeVersion,
++          codexVersion,
++          sessionId,
++          uptimeMs: Date.now() - startedAt,
++        }, maxResponseBytes);
++        return;
++      }
++
++      const definition = METHOD_DEFINITIONS.get(request.method);
++      if (!definition) {
++        writeError(socket, id, -32601, "method not found");
++        return;
++      }
++      const [capability, adapterMethod] = definition;
++      if (!capabilities.includes(capability)) {
++        writeError(socket, id, -32003, "capability unavailable", { capability });
++        return;
++      }
++      try {
++        if (MUTATION_METHODS.has(request.method)) {
++          validateMutationParams(request.params);
++        }
++        const result = await enqueue(() => adapter[adapterMethod](request.params));
++        writeResult(socket, id, result, maxResponseBytes);
++      } catch (error) {
++        writeKnownError(socket, id, error);
++      }
++    }
++  });
++
++  await new Promise((resolve, reject) => {
++    server.once("error", reject);
++    server.listen(socketPath, () => {
++      server.off("error", reject);
++      resolve();
++    });
++  });
++  await chmod(socketPath, 0o600);
++
++  return {
++    bridgeVersion,
++    capabilities,
++    codexVersion,
++    protocolVersion: CODEX_BRIDGE_PROTOCOL_VERSION,
++    sessionId,
++    socketPath,
++    tokenPath,
++    async stop() {
++      for (const client of clients) client.destroy();
++      await new Promise((resolve, reject) => {
++        server.close((error) => (error ? reject(error) : resolve()));
++      });
++      await unlink(socketPath).catch((error) => {
++        if (error.code !== "ENOENT") throw error;
++      });
++    },
++  };
++}
++
++function validateOptions({ adapter, codexVersion, socketPath, tokenPath }) {
++  if (!adapter || typeof adapter !== "object") {
++    throw new TypeError("adapter must be an object");
++  }
++  for (const [name, value] of [
++    ["codexVersion", codexVersion],
++    ["socketPath", socketPath],
++    ["tokenPath", tokenPath],
++  ]) {
++    if (typeof value !== "string" || value.length === 0) {
++      throw new TypeError(name + " must be a non-empty string");
++    }
++  }
++}
++
++async function removeStaleSocket(socketPath) {
++  try {
++    const metadata = await lstat(socketPath);
++    if (!metadata.isSocket()) {
++      throw new Error("bridge path exists and is not a socket: " + socketPath);
++    }
++    await unlink(socketPath);
++  } catch (error) {
++    if (error.code !== "ENOENT") throw error;
++  }
++}
++
++async function prepareToken(tokenPath, suppliedToken) {
++  let token = suppliedToken;
++  if (token === undefined) {
++    try {
++      token = (await readFile(tokenPath, "utf8")).trim();
++    } catch (error) {
++      if (error.code !== "ENOENT") throw error;
++      token = randomBytes(32).toString("hex");
++    }
++  }
++  const byteLength = typeof token === "string" ? Buffer.byteLength(token) : 0;
++  if (byteLength < 32 || byteLength > 4096) {
++    throw new Error("bridge token must contain between 32 and 4096 bytes");
++  }
++  await writeFile(tokenPath, token, { encoding: "utf8", mode: 0o600 });
++  await chmod(tokenPath, 0o600);
++  return token;
++}
++
++function validateHello(params, expectedToken) {
++  if (params.protocolVersion !== CODEX_BRIDGE_PROTOCOL_VERSION) {
++    throw new CodexBridgeError(-32002, "protocol version unsupported", {
++      supported: [CODEX_BRIDGE_PROTOCOL_VERSION],
++    });
++  }
++  if (
++    !params.client ||
++    typeof params.client.name !== "string" ||
++    typeof params.client.version !== "string"
++  ) {
++    throw new CodexBridgeError(-32602, "client name and version are required");
++  }
++  const supplied = Buffer.from(String(params.token ?? ""));
++  const expected = Buffer.from(expectedToken);
++  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
++    throw new CodexBridgeError(-32001, "authentication failed");
++  }
++}
++
++function validateMutationParams(params) {
++  for (const name of [
++    "expectedSourceSha256",
++    "expectedSettingsRevision",
++    "targetSettingsRevision",
++  ]) {
++    if (typeof params[name] !== "string" || !/^[0-9a-f]{64}$/.test(params[name])) {
++      throw new CodexBridgeError(-32602, name + " is invalid");
++    }
++  }
++  if (
++    typeof params.idempotencyKey !== "string" ||
++    params.idempotencyKey.length === 0 ||
++    Buffer.byteLength(params.idempotencyKey) > 256 ||
++    params.idempotencyKey.includes("\0")
++  ) {
++    throw new CodexBridgeError(-32602, "idempotencyKey is invalid");
++  }
++  for (const name of ["settings", "effectiveSettings"]) {
++    if (!isRecord(params[name])) {
++      throw new CodexBridgeError(-32602, name + " is required");
++    }
++  }
++}
++
++function writeKnownError(socket, id, error) {
++  if (error instanceof CodexBridgeError) {
++    writeError(socket, id, error.code, error.message, error.data);
++  } else {
++    writeError(socket, id, -32603, "internal error", {
++      message: error instanceof Error ? error.message : String(error),
++    });
++  }
++}
++
++function writeResult(socket, id, result, maxBytes) {
++  const response = JSON.stringify({ jsonrpc: "2.0", id, result }) + "\n";
++  if (Buffer.byteLength(response) > maxBytes) {
++    writeError(socket, id, -32603, "response exceeded maximum size");
++    return;
++  }
++  socket.write(response);
++}
++
++function writeError(socket, id, code, message, data) {
++  const error = { code, message };
++  if (data !== undefined) error.data = data;
++  socket.write(JSON.stringify({ jsonrpc: "2.0", id, error }) + "\n");
++}
++
++function isRecord(value) {
++  return value !== null && typeof value === "object" && !Array.isArray(value);
++}
+diff --git a/companion/codex-main-bridge.test.mjs b/companion/codex-main-bridge.test.mjs
+new file mode 100644
+index 0000000..c84ee19
+--- /dev/null
++++ b/companion/codex-main-bridge.test.mjs
+@@ -0,0 +1,279 @@
++import assert from "node:assert/strict";
++import { EventEmitter } from "node:events";
++import { mkdtemp, readFile, stat } from "node:fs/promises";
++import { createConnection } from "node:net";
++import test from "node:test";
++import {
++  agentKeysRevision,
++  createCodexMainAdapter,
++  settingsRevision,
++} from "./codex-main-adapter.mjs";
++import { startCodexCompanionBridge } from "./codex-main-bridge.mjs";
++import { installCodexCompanionBridge } from "./codex-main-integration.mjs";
++
++const TOKEN = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
++
++test("Codex bridge authenticates, gates mutations, and dispatches snapshots", async () => {
++  const root = await mkdtemp("/tmp/wlb-codex-bridge-");
++  const bridge = await startCodexCompanionBridge({
++    adapter: {
++      async snapshotSettings() {
++        return { marker: "settings-from-codex-session" };
++      },
++    },
++    codexVersion: "26.727.51351-test",
++    socketPath: root + "/bridge.sock",
++    tokenPath: root + "/bridge.token",
++    token: TOKEN,
++  });
++  try {
++    assert.equal((await stat(bridge.socketPath)).mode & 0o777, 0o600);
++    assert.equal((await stat(bridge.tokenPath)).mode & 0o777, 0o600);
++    assert.equal(await readFile(bridge.tokenPath, "utf8"), TOKEN);
++    const client = await connect(bridge.socketPath);
++    const hello = await client.request("bridge.hello", {
++      protocolVersion: 1,
++      token: TOKEN,
++      client: { name: "test", version: "1" },
++    });
++    assert.equal(hello.result.codexVersion, "26.727.51351-test");
++    assert.ok(hello.result.capabilities.includes("codex.settings.snapshot.v1"));
++    assert.ok(!hello.result.capabilities.includes("codex.settings.apply.v1"));
++    const snapshot = await client.request("codex.settings.snapshot", {});
++    assert.equal(snapshot.result.marker, "settings-from-codex-session");
++    const mutation = await client.request("codex.settings.apply", mutationParams({}));
++    assert.equal(mutation.error.code, -32003);
++    client.close();
++  } finally {
++    await bridge.stop();
++  }
++});
++
++test("Codex bridge rejects a mismatched token before dispatch", async () => {
++  const root = await mkdtemp("/tmp/wlb-codex-auth-");
++  let calls = 0;
++  const bridge = await startCodexCompanionBridge({
++    adapter: { async snapshotSettings() { calls += 1; return {}; } },
++    codexVersion: "test",
++    socketPath: root + "/bridge.sock",
++    tokenPath: root + "/bridge.token",
++    token: TOKEN,
++  });
++  try {
++    const client = await connect(bridge.socketPath);
++    const response = await client.request("bridge.hello", {
++      protocolVersion: 1,
++      token: "f".repeat(64),
++      client: { name: "test", version: "1" },
++    });
++    assert.equal(response.error.code, -32001);
++    assert.equal(calls, 0);
++    client.close();
++  } finally {
++    await bridge.stop();
++  }
++});
++
++test("Codex adapter snapshots settings and validates all Agent Key assignment types", async () => {
++  const state = testState();
++  state.assignments = {
++    AG00: { type: "command", commandId: "composer.togglePlanMode" },
++    AG01: { type: "skill", skillName: "Review", skillPath: "/tmp/review/SKILL.md" },
++    AG02: { hostId: "host", threadKey: "thread", title: "Task" },
++    AG03: { keycapId: "GIT" },
++  };
++  const adapter = testAdapter(state);
++  const settings = await adapter.snapshotSettings({});
++  assert.equal(settings.settingsRevision, settingsRevision(state.settings));
++  assert.match(settings.sourceSha256, /^[0-9a-f]{64}$/);
++  const keys = await adapter.snapshotAgentKeys({});
++  assert.deepEqual(Object.keys(keys.assignments), ["AG00", "AG01", "AG02", "AG03", "AG04", "AG05"]);
++  assert.equal(keys.assignments.AG04, null);
++  assert.equal(keys.globalStateRevision, agentKeysRevision(keys.assignments));
++});
++
++test("Codex adapter applies, replays, rejects stale CAS, and restores", async () => {
++  const state = testState();
++  const adapter = testAdapter(state);
++  const baseline = await adapter.snapshotSettings({});
++  const candidateSettings = { ...baseline.settings, "codex-micro-agent-source": "custom" };
++  const candidateEffective = { ...baseline.effectiveSettings, "codex-micro-agent-source": "custom" };
++  const candidateRevision = settingsRevision(candidateSettings);
++  const apply = await adapter.applySettings(mutationParams({
++    expectedSourceSha256: baseline.sourceSha256,
++    expectedSettingsRevision: baseline.settingsRevision,
++    targetSettingsRevision: candidateRevision,
++    settings: candidateSettings,
++    effectiveSettings: candidateEffective,
++    idempotencyKey: "apply-1",
++  }));
++  assert.equal(apply.changed, true);
++  assert.equal(apply.afterSettingsRevision, candidateRevision);
++  const replay = await adapter.applySettings(mutationParams({
++    expectedSourceSha256: baseline.sourceSha256,
++    expectedSettingsRevision: baseline.settingsRevision,
++    targetSettingsRevision: candidateRevision,
++    settings: candidateSettings,
++    effectiveSettings: candidateEffective,
++    idempotencyKey: "apply-1",
++  }));
++  assert.equal(replay.idempotentReplay, true);
++  await assert.rejects(
++    adapter.applySettings(mutationParams({
++      expectedSourceSha256: baseline.sourceSha256,
++      expectedSettingsRevision: baseline.settingsRevision,
++      targetSettingsRevision: candidateRevision,
++      settings: candidateSettings,
++      effectiveSettings: candidateEffective,
++      idempotencyKey: "stale",
++    })),
++    (error) => error.code === -32005,
++  );
++  const live = await adapter.snapshotSettings({});
++  const restore = await adapter.restoreSettings(mutationParams({
++    expectedSourceSha256: live.sourceSha256,
++    expectedSettingsRevision: live.settingsRevision,
++    targetSettingsRevision: baseline.settingsRevision,
++    settings: baseline.settings,
++    effectiveSettings: baseline.effectiveSettings,
++    idempotencyKey: "restore-1",
++  }));
++  assert.equal(restore.afterSettingsRevision, baseline.settingsRevision);
++});
++
++test("Codex adapter rolls back after exact readback failure", async () => {
++  const state = testState();
++  const adapter = testAdapter(state, { corruptOnce: true });
++  const baseline = await adapter.snapshotSettings({});
++  const settings = { ...baseline.settings, "codex-micro-lighting-brightness": 42 };
++  await assert.rejects(
++    adapter.applySettings(mutationParams({
++      expectedSourceSha256: baseline.sourceSha256,
++      expectedSettingsRevision: baseline.settingsRevision,
++      targetSettingsRevision: settingsRevision(settings),
++      settings,
++      effectiveSettings: { ...baseline.effectiveSettings, "codex-micro-lighting-brightness": 42 },
++      idempotencyKey: "corrupt-readback",
++    })),
++    (error) => error.code === -32008 && error.data.rollbackPerformed === true,
++  );
++  const restored = await adapter.snapshotSettings({});
++  assert.equal(restored.settingsRevision, baseline.settingsRevision);
++});
++
++test("Codex integration uses the Codex userData boundary and lifecycle", async () => {
++  const root = await mkdtemp("/tmp/wlb-codex-integration-");
++  const app = new EventEmitter();
++  app.getPath = (name) => { assert.equal(name, "userData"); return root; };
++  app.getVersion = () => "26.727.51351-test";
++  const state = testState();
++  const bridge = await installCodexCompanionBridge({
++    app,
++    request: makeRequest(state),
++  });
++  try {
++    assert.equal(bridge.socketPath, root + "/worklouderctl-codex-bridge-v1.sock");
++    assert.ok(bridge.capabilities.includes("codex.settings.snapshot.v1"));
++    assert.ok(!bridge.capabilities.includes("codex.settings.apply.v1"));
++  } finally {
++    await bridge.stop();
++  }
++});
++
++function testState() {
++  const settings = {
++    "codex-micro-agent-source": "recent",
++    "codex-micro-single-tap-agent-keys": false,
++    "codex-micro-lighting-brightness": 100,
++  };
++  return {
++    settings,
++    effectiveSettings: structuredClone(settings),
++    definitions: {
++      "codex-micro-agent-source": { type: "string", default: "recent" },
++    },
++    source: Buffer.from(JSON.stringify(settings)),
++    assignments: null,
++  };
++}
++
++function makeRequest(state) {
++  return async (method, params) => {
++    if (method === "settings-read") {
++      return {
++        filePath: "/fixture/config.toml",
++        settings: structuredClone(state.settings),
++        effectiveSettings: structuredClone(state.effectiveSettings),
++        definitions: structuredClone(state.definitions),
++      };
++    }
++    if (method === "get-global-state") {
++      assert.equal(params.key, "codex-micro-custom-agent-assignments");
++      return { value: structuredClone(state.assignments) };
++    }
++    throw new Error("unexpected request: " + method);
++  };
++}
++
++function testAdapter(state, { corruptOnce = false } = {}) {
++  let corrupt = corruptOnce;
++  return createCodexMainAdapter({
++    request: makeRequest(state),
++    readSettingsSource: async () => state.source,
++    settingsReplacer: {
++      async replaceSettings({ settings, operation }) {
++        state.settings = structuredClone(settings);
++        state.effectiveSettings = structuredClone(settings);
++        state.source = Buffer.from(JSON.stringify(settings));
++        if (corrupt && operation !== "automatic-rollback") {
++          corrupt = false;
++          state.effectiveSettings["codex-micro-lighting-brightness"] = 99;
++        }
++      },
++    },
++  });
++}
++
++function mutationParams(overrides) {
++  return {
++    expectedSourceSha256: "0".repeat(64),
++    expectedSettingsRevision: "0".repeat(64),
++    targetSettingsRevision: "0".repeat(64),
++    idempotencyKey: "test",
++    settings: {},
++    effectiveSettings: {},
++    ...overrides,
++  };
++}
++
++async function connect(socketPath) {
++  const socket = createConnection(socketPath);
++  socket.setEncoding("utf8");
++  await new Promise((resolve, reject) => {
++    socket.once("connect", resolve);
++    socket.once("error", reject);
++  });
++  let nextId = 1;
++  let buffer = "";
++  const pending = new Map();
++  socket.on("data", (chunk) => {
++    buffer += chunk;
++    while (buffer.includes("\n")) {
++      const newline = buffer.indexOf("\n");
++      const message = JSON.parse(buffer.slice(0, newline));
++      buffer = buffer.slice(newline + 1);
++      pending.get(message.id)?.(message);
++      pending.delete(message.id);
++    }
++  });
++  return {
++    request(method, params) {
++      const id = nextId++;
++      return new Promise((resolve) => {
++        pending.set(id, resolve);
++        socket.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
++      });
++    },
++    close() { socket.destroy(); },
++  };
++}
+diff --git a/companion/codex-main-integration.mjs b/companion/codex-main-integration.mjs
+new file mode 100644
+index 0000000..8febf20
+--- /dev/null
++++ b/companion/codex-main-integration.mjs
+@@ -0,0 +1,37 @@
++import { join } from "node:path";
++import { createCodexMainAdapter } from "./codex-main-adapter.mjs";
++import { startCodexCompanionBridge } from "./codex-main-bridge.mjs";
++
++export async function installCodexCompanionBridge({
++  app,
++  request,
++  settingsReplacer,
++  bridgeVersion,
++  socketPath,
++  tokenPath,
++}) {
++  if (!app || typeof app.getPath !== "function" || typeof app.getVersion !== "function") {
++    throw new TypeError("Electron app.getPath/getVersion are required");
++  }
++  if (typeof app.once !== "function" || typeof app.removeListener !== "function") {
++    throw new TypeError("Electron app lifecycle methods are required");
++  }
++  const userData = app.getPath("userData");
++  const adapter = createCodexMainAdapter({ request, settingsReplacer });
++  const bridge = await startCodexCompanionBridge({
++    adapter,
++    codexVersion: app.getVersion(),
++    bridgeVersion,
++    socketPath: socketPath ?? join(userData, "worklouderctl-codex-bridge-v1.sock"),
++    tokenPath: tokenPath ?? join(userData, "worklouderctl-codex-bridge-v1.token"),
++  });
++  const stop = () => void bridge.stop();
++  app.once("before-quit", stop);
++  return {
++    ...bridge,
++    async stop() {
++      app.removeListener("before-quit", stop);
++      await bridge.stop();
++    },
++  };
++}
+diff --git a/companion/index.mjs b/companion/index.mjs
+index 8e3b002..a2ca997 100644
+--- a/companion/index.mjs
++++ b/companion/index.mjs
+@@ -11,3 +11,21 @@ export {
+ } from "./input-main-adapter.mjs";
+ export { installInputCompanionBridge } from "./input-main-integration.mjs";
+ export { inspectInputCompanionBridge } from "./conformance.mjs";
++export {
++  CodexBridgeError,
++  CODEX_BRIDGE_PROTOCOL_VERSION,
++  startCodexCompanionBridge,
++} from "./codex-main-bridge.mjs";
++export {
++  CODEX_AGENT_KEYS_SNAPSHOT_KIND,
++  CODEX_AGENT_KEYS_STATE_KEY,
++  CODEX_AGENT_KEY_SLOTS,
++  CODEX_SETTINGS_REVISION_ALGORITHM,
++  CODEX_SETTINGS_SNAPSHOT_KIND,
++  CODEX_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
++  agentKeysRevision,
++  canonicalJson,
++  createCodexMainAdapter,
++  settingsRevision,
++} from "./codex-main-adapter.mjs";
++export { installCodexCompanionBridge } from "./codex-main-integration.mjs";
+diff --git a/companion/package.json b/companion/package.json
+index fc88da5..dcc3ff5 100644
+--- a/companion/package.json
++++ b/companion/package.json
+@@ -13,10 +13,13 @@
+     ".": "./index.mjs",
+     "./adapter": "./input-main-adapter.mjs",
+     "./bridge": "./input-main-bridge.mjs",
++    "./codex-adapter": "./codex-main-adapter.mjs",
++    "./codex-bridge": "./codex-main-bridge.mjs",
++    "./codex-integration": "./codex-main-integration.mjs",
+     "./conformance": "./conformance.mjs",
+     "./integration": "./input-main-integration.mjs"
+   },
+   "scripts": {
+-    "test": "node --test input-main-bridge.test.mjs"
++    "test": "node --test input-main-bridge.test.mjs codex-main-bridge.test.mjs"
+   }
+ }
+diff --git a/docs/architecture.md b/docs/architecture.md
+index 451c655..890d365 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -15,25 +15,41 @@ actions, and Input host actions to the currently installed Codex/Input builds.
+ 
+ Provider selection follows this order:
+ 
+-1. use the running Input app through the versioned
++1. use the running Codex app for Tier 1 through the versioned
++   [Codex Companion Bridge](codex-companion-bridge.md);
++2. use the running Input app through the versioned
+    [Input Companion Bridge](companion-bridge.md);
+-2. use the exact installed app's bundled device kit where a headless provider
++3. use the exact installed app's bundled device kit where a headless provider
+    entry point is verified;
+-3. use coordinated file adapters only for state that the app itself persists;
+-4. preserve new/unknown fields and expose them through raw inspect/export;
+-5. disable typed writes for a changed schema until its adapter fixtures pass.
++4. use coordinated file adapters only for state that the app itself persists;
++5. preserve new/unknown fields and expose them through raw inspect/export;
++6. disable typed writes for a changed schema until its adapter fixtures pass.
+ 
+ This keeps firmware, transport fixes, new device support, and runtime behavior
+ with the upstream applications while the CLI owns planning, validation, diff,
+ automation, verification, and rollback.
+ 
+-The bridge is the target transport for both reads and writes. It exposes an
++Each bridge is the target transport for its authority. It exposes an
+ allowlisted JSON-RPC surface over a private Unix socket and dispatches through
+-Input's existing service container. The CLI negotiates named capabilities, so
+-Input can update its internal device kit and GUI without exposing those
++the owning application's existing services. The CLI negotiates named
++capabilities, so Codex/Input can update internal implementations and GUIs without exposing those
+ implementation details as the public automation API.
+ 
+-## Implemented Companion Bridge path
++## Implemented Codex Companion Bridge path
++
++The `codex-companion-bridge-v1` client authenticates to the running Codex main
++process over a user-only Unix socket. Its snapshot adapter delegates to Codex's
++`settings-read` and `get-global-state` handlers, validates the exact frozen
++definitions and all six Agent Key slots, and produces offline-editor-compatible
++snapshots. When Codex injects complete explicit-setting replacement, the bridge
++advertises apply/restore and serializes source-SHA plus settings-revision CAS,
++immutable backup, exact explicit/effective readback, idempotency, restore, and
++automatic rollback. The cross-language fixture verifies `recent -> custom ->
++recent` and exact source SHA recovery. Codex 26.727.51351 contains the internal
++handlers but does not yet ship the external listener, leaving released-app
++integration as the next upstream milestone.
++
++## Implemented Input Companion Bridge path
+ 
+ The `input-companion-bridge-v1` client authenticates to the running Input main
+ process over a user-only Unix socket. The reference server advertises exact
+diff --git a/docs/codex-companion-bridge.md b/docs/codex-companion-bridge.md
+new file mode 100644
+index 0000000..d254129
+--- /dev/null
++++ b/docs/codex-companion-bridge.md
+@@ -0,0 +1,143 @@
++# Codex Companion Bridge v1
++
++The Codex Companion Bridge is WorkLouderCTL's stable Tier 1 automation boundary.
++It keeps Codex as the settings, global-state, and runtime authority while giving
++the CLI a versioned, authenticated transaction API.
++
++## Release boundary
++
++Static inspection of Codex 26.727.51351 found the native handlers
++`settings-read`, `settings-write`, `get-global-state`, and `set-global-state`.
++The renderer reaches native handlers with `POST vscode://codex/{method}`. The
++inspected release does not publish an external listener. This repository ships
++the reference main-process adapter and integration, not an `app.asar` patch.
++
++The bridge is useful in two environments:
++
++1. the isolated fixture, which verifies the complete CLI transaction today;
++2. a Codex main process that installs `installCodexCompanionBridge` and supplies
++   an exact settings replacer.
++
++The adapter advertises mutation capabilities only when the integration supplies
++complete explicit-setting replacement, including removal of keys that are
++absent from the target.
++
++## Discovery and authentication
++
++Default paths:
++
++```text
++$HOME/Library/Application Support/Codex/worklouderctl-codex-bridge-v1.sock
++$HOME/Library/Application Support/Codex/worklouderctl-codex-bridge-v1.token
++```
++
++Environment overrides:
++
++```text
++WORKLOUDERCTL_CODEX_BRIDGE_SOCKET
++WORKLOUDERCTL_CODEX_BRIDGE_TOKEN_FILE
++```
++
++The Unix socket and token are owned by the current user and have mode `0600`.
++The transport is newline-framed JSON-RPC 2.0. A connection begins with exactly
++one authenticated `bridge.hello` request and negotiates named capabilities.
++
++## Capabilities
++
++| JSON-RPC method | Capability | Meaning |
++| --- | --- | --- |
++| `bridge.hello` | `bridge.handshake.v1` | authenticate and negotiate |
++| `bridge.health` | `bridge.health.v1` | report bridge/Codex version and uptime |
++| `codex.settings.snapshot` | `codex.settings.snapshot.v1` | read explicit/effective settings, definitions, source SHA, and canonical revision |
++| `codex.settings.apply` | `codex.settings.apply.v1` | complete-set CAS apply with readback and rollback |
++| `codex.settings.restore` | `codex.settings.restore.v1` | complete-set CAS restore with readback and rollback |
++| `codex.agentKeys.snapshot` | `codex.agentKeys.snapshot.v1` | read and validate all six custom Agent Key slots |
++
++## CLI workflow
++
++```console
++worklouderctl codex bridge inspect
++worklouderctl codex config snapshot --output before.json
++worklouderctl codex agent-source set \
++  --input before.json custom --output candidate.json
++worklouderctl codex config apply \
++  --input candidate.json --backup pre-apply.json \
++  --idempotency-key agent-source-custom-1
++worklouderctl codex config restore \
++  --input before.json --backup pre-restore.json \
++  --idempotency-key agent-source-restore-1
++worklouderctl codex agent-key assignments
++```
++
++Pass `--socket PATH --token PATH` after `codex bridge` or `codex config`, or
++after `codex agent-key assignments`, to select an isolated bridge.
++
++## Settings transaction
++
++Every apply and restore request contains:
++
++- `expectedSourceSha256` — compare-and-swap against the settings source bytes;
++- `expectedSettingsRevision` — compare-and-swap against recursive-key-sorted
++  explicit settings;
++- `targetSettingsRevision` — independently recomputed from the candidate;
++- `idempotencyKey` — a stable key for exact retries in the bridge session;
++- complete `settings` and `effectiveSettings` objects.
++
++The main-process adapter serializes operations and performs this sequence:
++
++1. capture current source SHA, explicit settings, effective settings, and
++   canonical revision;
++2. compare both expected revisions before the first write;
++3. preserve the complete pre-mutation snapshot;
++4. replace the complete explicit Codex Micro setting set through Codex;
++5. flush and capture a second snapshot;
++6. compare exact explicit settings, effective settings, and target revision;
++7. restore the pre-mutation explicit set and verify it after any mutation or
++   readback error.
++
++The Rust client creates or reopens an immutable backup before calling apply or
++restore. Existing backup files enable retries without replacing the original.
++
++## Agent Key snapshot
++
++The global-state key is `codex-micro-custom-agent-assignments`. Slots are
++`AG00` through `AG05`. Each value is one of:
++
++- `null`;
++- a command `{ "type": "command", "commandId": "..." }`;
++- a Skill `{ "type": "skill", "skillName": "...", "skillPath": "..." }`;
++- a task `{ "hostId": "...", "threadKey": "...", "title": "..." }`;
++- a keycap `{ "keycapId": "..." }`.
++
++The bridge normalizes all six slots and hashes recursive-key-sorted compact JSON
++with the frozen `codex-agent-keys-revision-v1` framing.
++
++## Reference integration
++
++```js
++import { installCodexCompanionBridge } from "./companion/index.mjs";
++
++const bridge = await installCodexCompanionBridge({
++  app,
++  request: (method, params) => nativeRequest(method, params),
++  settingsReplacer: {
++    replaceSettings: ({ settings }) => replaceCompleteCodexMicroSettings(settings),
++  },
++});
++```
++
++Omit `settingsReplacer` for a snapshot-only integration. The handshake then
++excludes `codex.settings.apply.v1` and `codex.settings.restore.v1`.
++
++## Verification
++
++```console
++npm test --prefix companion
++cargo test --all-targets
++cargo build --release
++WORKLOUDERCTL_BIN=./target/release/worklouderctl \
++  ./scripts/test-codex-bridge-e2e.sh
++```
++
++The E2E test proves `recent -> custom -> recent`, validates six Agent Key slots,
++and requires the restored source SHA-256 to equal the baseline source SHA-256.
+diff --git a/docs/compatibility.md b/docs/compatibility.md
+index 5773605..dd8b9f3 100644
+--- a/docs/compatibility.md
++++ b/docs/compatibility.md
+@@ -13,7 +13,8 @@ not a public support guarantee.
+ | --- | ---: | --- |
+ | Device | Work Louder Codex Micro | Initial target |
+ | Host OS | macOS | Initial target |
+-| Codex app | 26.727.51351 | Exact Tier 1 settings read adapter verified |
++| Codex app | 26.727.51351 | Exact Tier 1 settings read/offline candidate adapter verified; external bridge integration pending |
++| Codex Companion Bridge | Protocol v1 | Settings snapshot/CAS/apply/restore/rollback and six Agent Key snapshot fixture verified |
+ | Work Louder Input | 0.17.3 | Earlier schema fixture |
+ | Work Louder Input | 0.18.0 | Exact bundled-kit live read adapter verified |
+ | Input Companion Bridge | Protocol v1 | Snapshot/CAS/apply/replay/restore/rollback fixture conformance verified; released Input writer pending |
+@@ -29,7 +30,19 @@ For Codex 26.727.51351, `codex-config-toml-read-v1` has live read-only evidence:
+ the five explicit Codex Micro settings validated, inherited layout defaults
+ were reconstructed, an atomic typed snapshot was reopened, and the source
+ `config.toml` SHA-256 was identical before and after. This claim does not cover
+-Codex settings mutation.
++Codex settings mutation. Static inspection found the internal `settings-read`,
++`settings-write`, `get-global-state`, and `set-global-state` handlers, while the
++released build did not expose an external listener.
++
++The isolated Codex Companion Bridge v1 fixture has cross-language evidence for
++authenticated capability negotiation, frozen-definition settings snapshot,
++source-SHA plus canonical-settings CAS, immutable backup, complete explicit-set
++apply, exact explicit/effective readback, idempotent replay, stale-CAS rejection,
++explicit restore, automatic rollback after corrupt readback, and all six Agent
++Key assignment slots. Its E2E path verifies `recent -> custom -> recent` and an
++exact baseline source SHA-256 after restore. This is bridge transaction evidence;
++released-Codex mutation begins when Codex installs the reference integration and
++supplies its exact settings replacer.
+ 
+ For Input 0.18.0 and Codex Micro firmware v0.6.0,
+ `input-bundled-device-kit-read-v1` has live read-only evidence over HID: the CLI
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index f16cc09..98081cf 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -23,10 +23,10 @@ parity contract.
+ 
+ | GUI surface | Configuration coverage | Planned command family | Current status |
+ | --- | --- | --- | --- |
+-| Agent source | pinned, recent, priority, custom | `codex agent-source get/set` | strict offline candidate verified; bridge apply pending |
+-| Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key get/set/clear` | researched |
+-| Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | strict offline candidate verified; bridge apply pending |
+-| Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; bridge apply pending |
++| Agent source | pinned, recent, priority, custom | `codex agent-source get/set` | strict candidate plus bridge `recent -> custom -> recent` apply/readback/restore fixture verified |
++| Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key assignments`, future set/clear | six-slot bridge snapshot and every assignment shape verified; mutation pending |
++| Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | strict offline candidate verified; generic complete-settings bridge transaction verified |
++| Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; generic complete-settings bridge transaction verified |
+ | Voice button | push-to-talk, Voice Chat | `codex voice get/set` | researched |
+ | Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | researched |
+ | Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | researched |
+@@ -34,15 +34,19 @@ parity contract.
+ | Lighting brightness | integer 0–100 | `codex lighting brightness get/set` | researched |
+ | Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | researched |
+ | Layout reset | installed-build default layout | `codex reset layout` | researched |
+-| Full object | export, validate, diff, apply, restore | `codex export/diff/apply/restore` | adapter-pending |
++| Full object | export, validate, diff, apply, restore | `codex config snapshot/apply/restore`, future diff | authenticated snapshot/CAS/apply/readback/restore/rollback fixture verified; released Codex integration and diff pending |
+ 
+ ### Tier 1 adapter
+ 
+-Codex 26.727.51351 exposes `settings-read` and `settings-write` via the native
+-`vscode://codex/` bridge. The renderer sends partial setting updates and then
+-invalidates `get-settings`. The adapter must preserve every unmodified setting,
+-validate the Codex Micro schema, coordinate the running app, and confirm that
+-the runtime reloaded the new value.
++Codex 26.727.51351 exposes `settings-read`, `settings-write`, and global-state
++handlers via the native `vscode://codex/` bridge. The reference Codex Companion
++Bridge delegates to those handlers, freezes the settings and Agent Key schemas,
++and advertises writes only with injected complete explicit-setting replacement.
++Its transaction preserves every unmodified setting, compares source and
++canonical settings revisions, verifies exact explicit/effective readback, and
++restores the pre-mutation snapshot after any failure. The inspected released
++Codex build does not publish the external Unix socket, so released integration
++remains separate from fixture transaction evidence.
+ 
+ ## Tier 2 — Input device configuration
+ 
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index 229c30e..a314b68 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -22,8 +22,10 @@ transactions. The implemented `codex-config-toml-read-v1` adapter reads the
+ `codex-micro-` prefix, and preserves unknown prefixed keys. It hashes the source
+ before and after capture, recursively fills inherited defaults, and excludes
+ all unrelated Codex configuration from its output. Offline mutation still
+-requires separate round-trip and restart fixtures. Raw Chromium LevelDB
+-mutation is not part of the configuration path.
++uses the same frozen definitions. The Codex Companion Bridge now supplies the
++online snapshot/CAS/apply/restore client and reference main-process integration;
++the released Codex build still needs to install that external listener. Raw
++Chromium LevelDB mutation is not part of the configuration path.
+ 
+ The current read and offline-candidate command surface is:
+ 
+@@ -31,6 +33,11 @@ The current read and offline-candidate command surface is:
+ worklouderctl codex doctor [--strict] [--config PATH] [--app PATH]
+ worklouderctl codex inspect [--config PATH] [--app PATH]
+ worklouderctl codex export --output FILE [--config PATH] [--app PATH]
++worklouderctl codex bridge [--socket PATH] [--token PATH] inspect
++worklouderctl codex config [--socket PATH] [--token PATH] snapshot --output FILE
++worklouderctl codex config [--socket PATH] [--token PATH] apply --input CANDIDATE.json --backup BEFORE.json
++worklouderctl codex config [--socket PATH] [--token PATH] restore --input BEFORE.json --backup CURRENT.json
++worklouderctl codex agent-key assignments [--socket PATH] [--token PATH]
+ worklouderctl codex agent-source get --input SNAPSHOT.json
+ worklouderctl codex agent-source set --input SNAPSHOT.json VALUE --output CANDIDATE.json
+ worklouderctl codex agent-key tap-mode get --input SNAPSHOT.json
+@@ -48,7 +55,9 @@ hashes canonical explicit settings with `codex-settings-revision-v1`, and
+ publishes/reopens a complete candidate. Command Key updates preserve the
+ current keycap when omitted, keep command and Skill representations mutually
+ exclusive, and reset from the frozen slot default. The source TOML SHA-256 is
+-retained as the future online transaction's CAS value.
++retained as the online transaction's source CAS value. The bridge also compares
++the canonical settings revision, performs complete explicit-setting replacement,
++and verifies exact explicit/effective readback before reporting success.
+ 
+ ### Persisted setting keys
+ 
+diff --git a/docs/faq.md b/docs/faq.md
+index 2a9d8bf..9d3efd4 100644
+--- a/docs/faq.md
++++ b/docs/faq.md
+@@ -13,8 +13,10 @@ surface exposed by both GUIs.
+ 
+ WorkLouderCTL is being built for that role. The source-built CLI already reads
+ Codex settings, Input cache state, and live Codex Micro status/files through
+-Input 0.18.0's bundled provider. Packaged releases and mutation commands are
+-later milestones.
++Input 0.18.0's bundled provider. It also generates strict offline candidates
++and runs authenticated Codex/Input apply/readback/restore/rollback transactions
++against isolated reference writers. Packaged releases and released-app writer
++integration are later milestones.
+ 
+ ## What does full-configuration parity mean?
+ 
+@@ -54,8 +56,8 @@ metadata. The CLI configures every tier through its corresponding authority.
+ 
+ ## Can an AI agent configure Codex Micro?
+ 
+-Yes, through the planned deterministic JSON contract. Human and agent clients
+-will share one transaction engine: inspect, plan, diff, apply, verify, and
++Yes, through the deterministic JSON contract. Human and agent clients share
++the same transaction model: inspect, plan, diff, apply, verify, and
+ rollback. There will be no separate unverified AI write path.
+ 
+ ## How will WorkLouderCTL protect an existing layout?
+@@ -87,11 +89,21 @@ Until a released Input build includes that bridge, the direct compatibility
+ transport keeps `require-closed` as its default. Its explicit `restart` mode
+ performs the older graceful quit/read/reopen cycle.
+ 
++## How can the CLI coexist with Codex while it is open?
++
++The Codex Companion Bridge keeps the running Codex main process authoritative.
++It delegates settings/global-state reads to Codex and advertises settings writes
++only when Codex injects exact complete-setting replacement. The CLI performs
++source-SHA and settings-revision CAS, immutable backup, exact readback, restore,
++and rollback over a private authenticated Unix socket. The current Codex release
++contains the internal handlers but has not yet installed this external listener;
++the repository includes the reference integration and complete fixture E2E.
++
+ ## Will it support Smart Actions?
+ 
+-Smart Actions are part of the planned model, including app, URL, text, and
+-command actions, groups, references, explicit command permission, device-file
+-serialization, and Input database/cache synchronization.
++Smart Action text, command, URL, and app definitions, groups, references,
++bindings, and delete cascades are implemented as strict offline candidates.
++Released Input writer and database synchronization remain separate milestones.
+ 
+ ## Will it support Linux and Windows?
+ 
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 32f9ea2..9d6445d 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -44,15 +44,18 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ ## M2 — Codex-native configuration beta
+ 
+ - [x] Exact Codex 26.727.51351 read contract and settings-schema adapter
+-- [ ] `settings-read` and `settings-write` bridge client
++- [x] `settings-read` and `settings-write` bridge client/reference integration
++- [ ] Integrate the Codex Companion Bridge into a released Codex build
+ - [x] Agent source and single-tap behavior offline candidates
+-- [ ] Six Agent Key task/command/Skill assignments
++- [x] Six Agent Key task/command/Skill/keycap assignment snapshot and validation
++- [ ] Six Agent Key assignment mutation commands
+ - [x] Six Command Key slots get/set/reset offline candidates
+ - [ ] voice mode
+ - [ ] dial modes and custom gestures
+ - [ ] joystick directions and Skills
+ - [ ] global brightness and auto-off
+-- [ ] Codex settings backup, diff, apply, readback, and rollback
++- [x] Codex settings backup, apply, readback, restore, and automatic rollback fixture
++- [ ] Codex settings structural diff command
+ 
+ ## M3 — Input semantic configuration beta
+ 
+@@ -77,7 +80,8 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Input cache read adapter with bridge-equivalent semantic snapshot/revision
+ - [ ] Input database adapter
+ - [ ] Input process coordination
+-- [ ] Codex process and settings-bridge coordination
++- [x] Codex settings-bridge protocol, client, and reference process integration
++- [ ] Released Codex process integration
+ - [ ] Private backup catalog
+ - [ ] Plan/apply conflict detection
+ - [ ] Exact readback and checksum verification
+diff --git a/docs/tier-model.md b/docs/tier-model.md
+index e9df0cf..e2c57d9 100644
+--- a/docs/tier-model.md
++++ b/docs/tier-model.md
+@@ -50,6 +50,9 @@ physical control is visible there. It uses a versioned Codex settings adapter:
+ worklouderctl codex inspect
+ worklouderctl codex doctor
+ worklouderctl codex export
++worklouderctl codex bridge inspect
++worklouderctl codex config snapshot|apply|restore
++worklouderctl codex agent-key assignments
+ worklouderctl codex diff CONFIG
+ worklouderctl codex agent-source get|set --input SNAPSHOT
+ worklouderctl codex agent-key get|set|clear AG00
+@@ -63,10 +66,12 @@ worklouderctl codex apply CONFIG
+ worklouderctl codex restore BACKUP_ID
+ ```
+ 
+-The inspected Codex build exposes `settings-read` and `settings-write` through
+-its native settings bridge. The adapter uses that validated bridge when Codex
+-is running and a separately verified storage adapter for coordinated offline
+-transactions. Direct Chromium LevelDB editing is excluded from the design.
++The inspected Codex build exposes `settings-read`, `settings-write`, and
++global-state handlers through its native renderer bridge. The authenticated
++Codex Companion Bridge reference integration delegates to those authorities;
++the released build does not yet publish its external Unix socket. The CLI also
++uses a separately verified storage adapter for offline snapshot/candidate
++generation. Direct Chromium LevelDB editing is excluded from the design.
+ 
+ ## Tier 2 — Input device configuration
+ 
+diff --git a/llms.txt b/llms.txt
+index 92c6b88..95e38e2 100644
+--- a/llms.txt
++++ b/llms.txt
+@@ -2,7 +2,7 @@
+ 
+ > WorkLouderCTL is an unofficial, open-source full-configuration CLI being built for Codex, Work Louder Input, and Codex Micro. It targets complete configuration-GUI parity with safe inspection, diff, backup, verified apply, synchronization, and rollback for humans, scripts, and AI agents.
+ 
+-Important: the project is currently a source alpha. The repository builds a working `worklouderctl` binary with read-only Codex/Input inspection, live Codex Micro status/files, and verified exports, but there is no packaged release yet. Mutation examples describe the target interface.
++Important: the project is currently a source alpha. The repository builds a working `worklouderctl` binary with Codex/Input inspection, offline semantic candidate editors, authenticated Codex/Input bridge clients, fixture-verified apply/readback/restore/rollback, live Codex Micro status/files, and verified exports, but there is no packaged release yet.
+ 
+ ## Core documentation
+ 
+@@ -15,6 +15,7 @@ Important: the project is currently a source alpha. The repository builds a work
+ - [2026-08-02 audit](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/research/2026-08-02-codex-micro-audit.md): frozen app, firmware, state, protocol, and rollback evidence
+ - [Compatibility](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/compatibility.md): version and evidence policy
+ - [Architecture](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/architecture.md): device, cache, database, transaction, and rollback model
++- [Codex Companion Bridge](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/codex-companion-bridge.md): authenticated Tier 1 settings and Agent Key transaction protocol
+ - [Roadmap](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/roadmap.md): implementation milestones
+ 
+ ## Canonical facts
+@@ -31,12 +32,13 @@ Important: the project is currently a source alpha. The repository builds a work
+ - Non-goal: implementing a replacement hardware driver or firmware protocol
+ - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
+ - Current maturity: source alpha; read paths and isolated bridge apply/restore transaction conformance implemented; no packaged release
+-- Current Codex commands: `codex doctor`, `codex inspect`, and atomic typed `codex export`
+-- Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, and `codex command-key` provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; live `settings-write` apply remains pending
++- Current Codex commands: `codex doctor/inspect/export`, `codex bridge inspect`, `codex config snapshot/apply/restore`, and six-slot `codex agent-key assignments`
++- Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, and `codex command-key` provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; the Codex Companion Bridge fixture verifies complete settings apply/readback/restore/rollback while released-Codex integration remains pending
+ - Input cache command: `input config snapshot` captures `keymap.json` plus optional `smart_actions.json` byte-for-byte, excludes host-only state, and emits a bridge-revision-equivalent semantic snapshot without controlling the Input GUI or device transport
+ - Primary device transport: authenticated Input Companion Bridge v1 over a private Unix socket; Rust client, one-call Input-main integration, release conformance command, and cross-language tests are implemented
+ - Bridge config commands: deterministic byte-exact snapshot/validate plus capability-gated apply/restore with immutable CLI backup, CAS, session idempotency, full readback, and automatic rollback
+ - Released Input integration: pending; Input 0.18.0 has no external bridge transport
++- Released Codex integration: pending; Codex 26.727.51351 has internal settings/global-state handlers but no external bridge listener
+ - Direct compatibility transport: `device status`, `device files`, and dual-hash atomic `device export` through Input 0.18.0's bundled device kit with `require-closed` or explicit `restart`
+ - Safety model: inspect, plan, diff, backup, conflict check, apply, readback, checksum verification, synchronize, rollback
+ - Agent model: deterministic JSON over the same transaction engine as the human CLI
+diff --git a/scripts/test-codex-bridge-e2e.sh b/scripts/test-codex-bridge-e2e.sh
+new file mode 100755
+index 0000000..f14c2b3
+--- /dev/null
++++ b/scripts/test-codex-bridge-e2e.sh
+@@ -0,0 +1,89 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++REPO="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
++cd "$REPO"
++ROOT="$(mktemp -d "${TMPDIR:-/tmp}/worklouderctl-codex-e2e.XXXXXX")"
++if [[ -n "${WORKLOUDERCTL_BIN:-}" ]]; then
++  BIN="$WORKLOUDERCTL_BIN"
++else
++  cargo build --locked
++  BIN="$REPO/target/debug/worklouderctl"
++fi
++SOCKET="$ROOT/bridge.sock"
++TOKEN="$ROOT/bridge.token"
++SERVER_PID=""
++
++cleanup() {
++  if [[ -n "$SERVER_PID" ]]; then
++    kill "$SERVER_PID" 2>/dev/null || true
++    wait "$SERVER_PID" 2>/dev/null || true
++  fi
++  if [[ "${KEEP_CODEX_BRIDGE_E2E:-0}" != 1 ]]; then
++    rm -rf "$ROOT"
++  fi
++}
++trap cleanup EXIT
++
++node companion/codex-fixture-server.mjs "$SOCKET" "$TOKEN" \
++  >"$ROOT/server.stdout" 2>"$ROOT/server.stderr" &
++SERVER_PID=$!
++for _ in $(seq 1 100); do
++  [[ -S "$SOCKET" ]] && break
++  sleep 0.05
++done
++[[ -S "$SOCKET" ]]
++
++"$BIN" --json codex bridge --socket "$SOCKET" --token "$TOKEN" inspect \
++  >"$ROOT/bridge.json"
++"$BIN" --json codex config --socket "$SOCKET" --token "$TOKEN" snapshot \
++  --output "$ROOT/baseline.json" >"$ROOT/baseline-receipt.json"
++"$BIN" --json codex agent-key assignments --socket "$SOCKET" --token "$TOKEN" \
++  >"$ROOT/agent-keys.json"
++"$BIN" --json codex agent-source set --input "$ROOT/baseline.json" custom \
++  --output "$ROOT/candidate.json" >"$ROOT/candidate-receipt.json"
++"$BIN" --json codex config --socket "$SOCKET" --token "$TOKEN" apply \
++  --input "$ROOT/candidate.json" --backup "$ROOT/pre-apply.json" \
++  --idempotency-key fixture-apply-v1 >"$ROOT/apply.json"
++"$BIN" --json codex config --socket "$SOCKET" --token "$TOKEN" snapshot \
++  --output "$ROOT/modified.json" >"$ROOT/modified-receipt.json"
++"$BIN" --json codex config --socket "$SOCKET" --token "$TOKEN" restore \
++  --input "$ROOT/baseline.json" --backup "$ROOT/pre-restore.json" \
++  --idempotency-key fixture-restore-v1 >"$ROOT/restore.json"
++"$BIN" --json codex config --socket "$SOCKET" --token "$TOKEN" snapshot \
++  --output "$ROOT/restored.json" >"$ROOT/restored-receipt.json"
++
++python3 - "$ROOT" <<'PY'
++import json
++import pathlib
++import sys
++
++root = pathlib.Path(sys.argv[1])
++baseline = json.loads((root / "baseline.json").read_text())
++modified = json.loads((root / "modified.json").read_text())
++restored = json.loads((root / "restored.json").read_text())
++keys = json.loads((root / "agent-keys.json").read_text())
++apply = json.loads((root / "apply.json").read_text())
++restore = json.loads((root / "restore.json").read_text())
++
++assert baseline["settings"]["codex-micro-agent-source"] == "recent"
++assert modified["settings"]["codex-micro-agent-source"] == "custom"
++assert apply["changed"] is True and apply["rollbackPerformed"] is False
++assert restore["changed"] is True and restore["rollbackPerformed"] is False
++assert restored["settings"] == baseline["settings"]
++assert restored["effectiveSettings"] == baseline["effectiveSettings"]
++assert restored["sourceSha256"] == baseline["sourceSha256"]
++assert keys["assignments"]["AG00"]["commandId"] == "fixture.command"
++assert len(keys["slots"]) == 6
++
++print(json.dumps({
++    "status": "pass",
++    "baselineAgentSource": baseline["settings"]["codex-micro-agent-source"],
++    "modifiedAgentSource": modified["settings"]["codex-micro-agent-source"],
++    "restoredAgentSource": restored["settings"]["codex-micro-agent-source"],
++    "baselineSourceSha256": baseline["sourceSha256"],
++    "modifiedSourceSha256": modified["sourceSha256"],
++    "restoredSourceSha256": restored["sourceSha256"],
++    "agentKeySlots": len(keys["slots"]),
++}, separators=(",", ":")))
++PY
+diff --git a/spec/codex-companion-bridge-v1.json b/spec/codex-companion-bridge-v1.json
+new file mode 100644
+index 0000000..7d6c59d
+--- /dev/null
++++ b/spec/codex-companion-bridge-v1.json
+@@ -0,0 +1,158 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouderctl-codex-companion-bridge-contract",
++  "protocolVersion": 1,
++  "contractAppVersion": "26.727.51351",
++  "authority": [
++    "codex-settings",
++    "codex-global-state",
++    "codex-runtime"
++  ],
++  "staticEvidence": {
++    "appBundle": "/Applications/ChatGPT.app",
++    "bundleIdentifier": "com.openai.codex",
++    "asarRelativePath": "Contents/Resources/app.asar",
++    "asarSha256": "a529edd72e10b08931c0d695b5e3e6a0be7f51874610dafc04f578436ab7d74d",
++    "nativeHandlers": [
++      "settings-read",
++      "settings-write",
++      "get-global-state",
++      "set-global-state"
++    ],
++    "rendererTransport": "POST vscode://codex/{method}",
++    "externalListenerObserved": false
++  },
++  "discovery": {
++    "socket": "$HOME/Library/Application Support/Codex/worklouderctl-codex-bridge-v1.sock",
++    "token": "$HOME/Library/Application Support/Codex/worklouderctl-codex-bridge-v1.token",
++    "environmentSocket": "WORKLOUDERCTL_CODEX_BRIDGE_SOCKET",
++    "environmentToken": "WORKLOUDERCTL_CODEX_BRIDGE_TOKEN_FILE",
++    "mode": "0600",
++    "transport": "JSON-RPC 2.0 newline frames over Unix socket"
++  },
++  "handshake": {
++    "method": "bridge.hello",
++    "request": [
++      "protocolVersion",
++      "token",
++      "client.name",
++      "client.version"
++    ],
++    "response": [
++      "protocolVersion",
++      "bridgeVersion",
++      "codexVersion",
++      "sessionId",
++      "capabilities"
++    ]
++  },
++  "methods": {
++    "bridge.health": "bridge.health.v1",
++    "codex.settings.snapshot": "codex.settings.snapshot.v1",
++    "codex.settings.apply": "codex.settings.apply.v1",
++    "codex.settings.restore": "codex.settings.restore.v1",
++    "codex.agentKeys.snapshot": "codex.agentKeys.snapshot.v1"
++  },
++  "settingsSnapshot": {
++    "kind": "worklouderctl-codex-settings-snapshot",
++    "fields": [
++      "filePath",
++      "sourceSha256",
++      "settings",
++      "effectiveSettings",
++      "definitions",
++      "settingsRevision"
++    ],
++    "settingsRevisionAlgorithm": "codex-settings-revision-v1"
++  },
++  "mutation": {
++    "resultKind": "worklouderctl-codex-settings-mutation",
++    "requiredRequestFields": [
++      "expectedSourceSha256",
++      "expectedSettingsRevision",
++      "targetSettingsRevision",
++      "idempotencyKey",
++      "settings",
++      "effectiveSettings"
++    ],
++    "sequence": [
++      "serialize on Codex main-process queue",
++      "snapshot current settings and source hash",
++      "compare source SHA-256 and settings revision",
++      "replace the complete explicit Codex Micro settings set through Codex authority",
++      "flush",
++      "snapshot and validate exact explicit/effective readback",
++      "restore pre-mutation snapshot after any readback failure"
++    ],
++    "capabilityGate": "apply/restore are advertised only when the integration supplies exact replace including removal of formerly absent keys",
++    "idempotencyScope": "bridge session"
++  },
++  "agentKeys": {
++    "snapshotKind": "worklouder-codex-agent-keys-snapshot",
++    "globalStateKey": "codex-micro-custom-agent-assignments",
++    "slots": [
++      "AG00",
++      "AG01",
++      "AG02",
++      "AG03",
++      "AG04",
++      "AG05"
++    ],
++    "default": {
++      "AG00": null,
++      "AG01": null,
++      "AG02": null,
++      "AG03": null,
++      "AG04": null,
++      "AG05": null
++    },
++    "assignmentTypes": {
++      "thread": {
++        "required": [
++          "hostId",
++          "threadKey",
++          "title"
++        ]
++      },
++      "command": {
++        "required": [
++          "type",
++          "commandId"
++        ],
++        "type": "command"
++      },
++      "skill": {
++        "required": [
++          "type",
++          "skillName",
++          "skillPath"
++        ],
++        "type": "skill"
++      },
++      "keycap": {
++        "required": [
++          "keycapId"
++        ]
++      },
++      "empty": null
++    },
++    "globalStateRevisionAlgorithm": {
++      "id": "codex-agent-keys-revision-v1",
++      "prefixUtf8": "worklouder-codex-agent-keys-revision-v1\\u0000",
++      "payload": "recursive-key-sorted compact JSON"
++    }
++  },
++  "limits": {
++    "tokenBytes": 4096,
++    "requestBytes": 16777216,
++    "responseBytes": 16777216,
++    "idempotencyEntries": 256
++  },
++  "boundary": {
++    "shipsDriver": false,
++    "implementsCodexRuntime": false,
++    "editsChromiumLevelDb": false,
++    "editsAppAsar": false,
++    "integrationOwner": "running Codex main process"
++  }
++}
+diff --git a/src/cli.rs b/src/cli.rs
+index 9181f78..aeac90a 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -353,6 +353,34 @@ pub enum InputCoordinationMode {
+ 
+ #[derive(Debug, Subcommand)]
+ pub enum CodexCommand {
++    /// Inspect the authenticated Codex Companion Bridge.
++    Bridge {
++        /// Override the Codex Companion Bridge Unix socket path.
++        #[clap(long, value_parser)]
++        socket: Option<PathBuf>,
++
++        /// Override the Codex Companion Bridge token file path.
++        #[clap(long, value_parser)]
++        token: Option<PathBuf>,
++
++        #[clap(subcommand)]
++        command: CodexBridgeCommand,
++    },
++
++    /// Snapshot, apply, or restore settings through the running Codex authority.
++    Config {
++        /// Override the Codex Companion Bridge Unix socket path.
++        #[clap(long, value_parser)]
++        socket: Option<PathBuf>,
++
++        /// Override the Codex Companion Bridge token file path.
++        #[clap(long, value_parser)]
++        token: Option<PathBuf>,
++
++        #[clap(subcommand)]
++        command: CodexConfigCommand,
++    },
++
+     /// Diagnose the Codex app and Codex Micro settings source.
+     Doctor {
+         /// Treat warnings as a failing exit status.
+@@ -442,6 +470,17 @@ pub enum CodexAgentSourceCommand {
+ 
+ #[derive(Debug, Subcommand)]
+ pub enum CodexAgentKeyCommand {
++    /// Read all six live Agent Key assignments through Codex.
++    Assignments {
++        /// Override the Codex Companion Bridge Unix socket path.
++        #[clap(long, value_parser)]
++        socket: Option<PathBuf>,
++
++        /// Override the Codex Companion Bridge token file path.
++        #[clap(long, value_parser)]
++        token: Option<PathBuf>,
++    },
++
+     /// Inspect or edit the single-tap focus behavior.
+     TapMode {
+         #[clap(subcommand)]
+@@ -449,6 +488,68 @@ pub enum CodexAgentKeyCommand {
+     },
+ }
+ 
++#[derive(Debug, Subcommand)]
++pub enum CodexBridgeCommand {
++    /// Authenticate and print the negotiated Codex bridge capabilities.
++    Inspect,
++}
++
++#[derive(Debug, Subcommand)]
++pub enum CodexConfigCommand {
++    /// Save a frozen-contract settings snapshot from the running Codex process.
++    Snapshot {
++        /// Destination JSON file. It must not already exist.
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Apply a complete settings candidate with backup, CAS, and exact readback.
++    Apply {
++        /// Candidate from `codex config snapshot` or an offline Codex editor.
++        #[clap(long, value_parser)]
++        input: PathBuf,
++
++        /// Immutable pre-apply snapshot; an existing file is reused for retry.
++        #[clap(long, value_parser)]
++        backup: PathBuf,
++
++        /// Require this exact settings source SHA-256 before mutation.
++        #[clap(long)]
++        expected_source_sha256: Option<String>,
++
++        /// Require this exact canonical settings revision before mutation.
++        #[clap(long)]
++        expected_settings_revision: Option<String>,
++
++        /// Stable retry key; reuse it only with the exact same mutation.
++        #[clap(long)]
++        idempotency_key: Option<String>,
++    },
++
++    /// Restore a complete settings snapshot with backup, CAS, and exact readback.
++    Restore {
++        /// Snapshot to restore.
++        #[clap(long, value_parser)]
++        input: PathBuf,
++
++        /// Immutable pre-restore snapshot; an existing file is reused for retry.
++        #[clap(long, value_parser)]
++        backup: PathBuf,
++
++        /// Require this exact settings source SHA-256 before mutation.
++        #[clap(long)]
++        expected_source_sha256: Option<String>,
++
++        /// Require this exact canonical settings revision before mutation.
++        #[clap(long)]
++        expected_settings_revision: Option<String>,
++
++        /// Stable retry key; reuse it only with the exact same mutation.
++        #[clap(long)]
++        idempotency_key: Option<String>,
++    },
++}
++
+ #[derive(Clone, Copy, Debug, ValueEnum)]
+ pub enum CodexAgentTapMode {
+     Enabled,
+diff --git a/src/codex.rs b/src/codex.rs
+index 60aa333..ad8278b 100644
+--- a/src/codex.rs
++++ b/src/codex.rs
+@@ -263,6 +263,57 @@ pub fn inspect(config_path: &Path, app_path: &Path) -> Result<Snapshot> {
+     })
+ }
+ 
++pub fn snapshot_from_bridge(
++    installed_app_version: String,
++    source_path: PathBuf,
++    source_sha256: String,
++    settings: BTreeMap<String, Value>,
++    effective_settings: BTreeMap<String, Value>,
++    observed_definitions: BTreeMap<String, Value>,
++) -> Result<Snapshot> {
++    let contract = load_contract()?;
++    let parsed_definitions = observed_definitions
++        .into_iter()
++        .map(|(key, value)| {
++            serde_json::from_value::<Definition>(value)
++                .map(|definition| (key, definition))
++                .context("Codex bridge returned an invalid setting definition")
++        })
++        .collect::<Result<BTreeMap<_, _>>>()?;
++    ensure!(
++        parsed_definitions == contract.definitions,
++        "Codex bridge definitions differ from the frozen contract"
++    );
++    validate_settings(&settings, &contract)?;
++    ensure!(
++        effective_settings == compute_effective_settings(&settings, &contract),
++        "Codex bridge effectiveSettings differed from the frozen contract"
++    );
++    let warnings = if installed_app_version == contract.app_version {
++        Vec::new()
++    } else {
++        vec![format!(
++            "connected Codex version {installed_app_version} differs from frozen contract {}",
++            contract.app_version
++        )]
++    };
++    let snapshot = Snapshot {
++        schema_version: SNAPSHOT_SCHEMA_VERSION,
++        kind: SNAPSHOT_KIND.into(),
++        adapter: "codex-companion-bridge-v1".into(),
++        contract_app_version: contract.app_version.clone(),
++        installed_app_version: Some(installed_app_version),
++        source_path,
++        source_sha256,
++        settings,
++        effective_settings,
++        definitions: definition_values(&contract)?,
++        warnings,
++    };
++    validate_snapshot(&snapshot)?;
++    Ok(snapshot)
++}
++
+ pub fn export(config_path: &Path, app_path: &Path, output: &Path) -> Result<Snapshot> {
+     if output.exists() {
+         bail!("export destination already exists: {}", output.display());
+@@ -633,7 +684,7 @@ fn command_key_slot<'a>(layout: &'a Map<String, Value>, slot: &str) -> Result<&'
+         .with_context(|| format!("Command Key slot {slot} was missing"))
+ }
+ 
+-fn read_snapshot(path: &Path) -> Result<Snapshot> {
++pub fn read_snapshot(path: &Path) -> Result<Snapshot> {
+     let metadata = fs::symlink_metadata(path)
+         .with_context(|| format!("failed to inspect Codex snapshot {}", path.display()))?;
+     ensure!(
+@@ -649,7 +700,7 @@ fn read_snapshot(path: &Path) -> Result<Snapshot> {
+     Ok(snapshot)
+ }
+ 
+-fn validate_snapshot(snapshot: &Snapshot) -> Result<()> {
++pub fn validate_snapshot(snapshot: &Snapshot) -> Result<()> {
+     let contract = load_contract()?;
+     ensure!(
+         snapshot.schema_version == SNAPSHOT_SCHEMA_VERSION,
+@@ -660,7 +711,8 @@ fn validate_snapshot(snapshot: &Snapshot) -> Result<()> {
+         "Codex snapshot kind is invalid"
+     );
+     ensure!(
+-        snapshot.adapter == contract.storage.adapter,
++        snapshot.adapter == contract.storage.adapter
++            || snapshot.adapter == "codex-companion-bridge-v1",
+         "Codex snapshot adapter is invalid"
+     );
+     ensure!(
+@@ -775,7 +827,7 @@ fn publish_candidate(
+     })
+ }
+ 
+-fn settings_revision(settings: &BTreeMap<String, Value>) -> Result<String> {
++pub fn settings_revision(settings: &BTreeMap<String, Value>) -> Result<String> {
+     let mut framed = REVISION_PREFIX.to_vec();
+     let value = serde_json::to_value(settings)?;
+     framed.extend(serde_json::to_vec(&canonical_json(&value))?);
+diff --git a/src/codex_bridge.rs b/src/codex_bridge.rs
+new file mode 100644
+index 0000000..32c0828
+--- /dev/null
++++ b/src/codex_bridge.rs
+@@ -0,0 +1,724 @@
++use crate::{codex, fsutil};
++use anyhow::{bail, ensure, Context, Result};
++use serde::de::DeserializeOwned;
++use serde::{Deserialize, Serialize};
++use serde_json::{json, Value};
++use std::collections::BTreeMap;
++use std::env;
++use std::fs::{self, OpenOptions};
++use std::io::{BufRead, BufReader, Write};
++use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
++use std::os::unix::net::UnixStream;
++use std::path::{Path, PathBuf};
++use std::sync::atomic::{AtomicU64, Ordering};
++use std::time::{Duration, SystemTime, UNIX_EPOCH};
++
++const PROTOCOL_VERSION: u64 = 1;
++const MAX_TOKEN_BYTES: usize = 4096;
++const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
++const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
++const SETTINGS_SNAPSHOT_KIND: &str = "worklouderctl-codex-settings-snapshot";
++const SETTINGS_MUTATION_KIND: &str = "worklouderctl-codex-settings-mutation";
++const AGENT_KEYS_SNAPSHOT_KIND: &str = "worklouder-codex-agent-keys-snapshot";
++const AGENT_KEYS_STATE_KEY: &str = "codex-micro-custom-agent-assignments";
++const AGENT_KEYS_PREFIX: &[u8] = b"worklouder-codex-agent-keys-revision-v1\0";
++const AGENT_KEY_SLOTS: [&str; 6] = ["AG00", "AG01", "AG02", "AG03", "AG04", "AG05"];
++static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
++
++#[derive(Clone, Debug)]
++pub struct CodexBridgePaths {
++    pub socket: PathBuf,
++    pub token: PathBuf,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct CodexBridgeInspection {
++    pub protocol_version: u64,
++    pub bridge_version: String,
++    pub codex_version: String,
++    pub session_id: String,
++    pub capabilities: Vec<String>,
++    pub socket: PathBuf,
++}
++
++#[derive(Clone, Debug, Deserialize, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct AgentKeysSnapshot {
++    pub schema_version: u64,
++    pub kind: String,
++    pub global_state_key: String,
++    pub slots: Vec<String>,
++    pub assignments: BTreeMap<String, Value>,
++    pub global_state_revision: String,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SettingsSnapshotReceipt {
++    pub output: PathBuf,
++    pub source_path: PathBuf,
++    pub source_sha256: String,
++    pub settings_revision: String,
++    pub setting_count: usize,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SettingsMutationReceipt {
++    pub backup: PathBuf,
++    pub schema_version: u64,
++    pub kind: String,
++    pub operation: String,
++    pub idempotency_key: String,
++    pub idempotent_replay: bool,
++    pub changed: bool,
++    pub rollback_performed: bool,
++    pub before_source_sha256: String,
++    pub after_source_sha256: String,
++    pub before_settings_revision: String,
++    pub after_settings_revision: String,
++    pub target_settings_revision: String,
++}
++
++#[derive(Debug, Deserialize)]
++#[serde(rename_all = "camelCase")]
++struct Handshake {
++    protocol_version: u64,
++    bridge_version: String,
++    codex_version: String,
++    session_id: String,
++    capabilities: Vec<String>,
++}
++
++#[derive(Debug, Deserialize)]
++#[serde(rename_all = "camelCase")]
++struct RawSettingsSnapshot {
++    schema_version: u64,
++    kind: String,
++    file_path: PathBuf,
++    source_sha256: String,
++    settings: BTreeMap<String, Value>,
++    effective_settings: BTreeMap<String, Value>,
++    definitions: BTreeMap<String, Value>,
++    settings_revision: String,
++}
++
++#[derive(Debug, Deserialize)]
++#[serde(rename_all = "camelCase")]
++struct RawMutationResponse {
++    schema_version: u64,
++    kind: String,
++    operation: String,
++    idempotency_key: String,
++    idempotent_replay: bool,
++    changed: bool,
++    rollback_performed: bool,
++    before_source_sha256: String,
++    after_source_sha256: String,
++    before_settings_revision: String,
++    after_settings_revision: String,
++    target_settings_revision: String,
++}
++
++#[derive(Debug, Serialize)]
++struct RpcRequest<'a> {
++    jsonrpc: &'static str,
++    id: u64,
++    method: &'a str,
++    params: Value,
++}
++
++#[derive(Debug, Deserialize)]
++struct RpcResponse<T> {
++    jsonrpc: String,
++    id: u64,
++    result: Option<T>,
++    error: Option<RpcError>,
++}
++
++#[derive(Debug, Deserialize)]
++struct RpcError {
++    code: i64,
++    message: String,
++    data: Option<Value>,
++}
++
++struct Client {
++    writer: UnixStream,
++    reader: BufReader<UnixStream>,
++    next_id: u64,
++    handshake: Handshake,
++}
++
++pub fn paths(socket: Option<PathBuf>, token: Option<PathBuf>) -> CodexBridgePaths {
++    let support_root = env::var_os("HOME")
++        .map(PathBuf::from)
++        .unwrap_or_else(|| PathBuf::from("~"))
++        .join("Library/Application Support/Codex");
++    CodexBridgePaths {
++        socket: socket
++            .or_else(|| env::var_os("WORKLOUDERCTL_CODEX_BRIDGE_SOCKET").map(PathBuf::from))
++            .unwrap_or_else(|| support_root.join("worklouderctl-codex-bridge-v1.sock")),
++        token: token
++            .or_else(|| env::var_os("WORKLOUDERCTL_CODEX_BRIDGE_TOKEN_FILE").map(PathBuf::from))
++            .unwrap_or_else(|| support_root.join("worklouderctl-codex-bridge-v1.token")),
++    }
++}
++
++pub fn inspect(paths: &CodexBridgePaths) -> Result<CodexBridgeInspection> {
++    let client = Client::connect(paths)?;
++    Ok(CodexBridgeInspection {
++        protocol_version: client.handshake.protocol_version,
++        bridge_version: client.handshake.bridge_version,
++        codex_version: client.handshake.codex_version,
++        session_id: client.handshake.session_id,
++        capabilities: client.handshake.capabilities,
++        socket: paths.socket.clone(),
++    })
++}
++
++pub fn settings_snapshot(
++    paths: &CodexBridgePaths,
++    output: &Path,
++) -> Result<SettingsSnapshotReceipt> {
++    let mut client = Client::connect(paths)?;
++    let raw: RawSettingsSnapshot = client.call(
++        "codex.settings.snapshot",
++        "codex.settings.snapshot.v1",
++        json!({}),
++    )?;
++    let snapshot = validate_raw_snapshot(raw, &client.handshake.codex_version)?;
++    let revision = codex::settings_revision(&snapshot.settings)?;
++    write_snapshot_atomic(output, &snapshot)?;
++    Ok(SettingsSnapshotReceipt {
++        output: output.to_path_buf(),
++        source_path: snapshot.source_path,
++        source_sha256: snapshot.source_sha256,
++        settings_revision: revision,
++        setting_count: snapshot.settings.len(),
++    })
++}
++
++pub fn agent_keys_snapshot(paths: &CodexBridgePaths) -> Result<AgentKeysSnapshot> {
++    let mut client = Client::connect(paths)?;
++    let snapshot: AgentKeysSnapshot = client.call(
++        "codex.agentKeys.snapshot",
++        "codex.agentKeys.snapshot.v1",
++        json!({}),
++    )?;
++    validate_agent_keys(&snapshot)?;
++    Ok(snapshot)
++}
++
++pub fn settings_apply(
++    paths: &CodexBridgePaths,
++    input: &Path,
++    backup: &Path,
++    expected_source_sha256: Option<&str>,
++    expected_settings_revision: Option<&str>,
++    idempotency_key: Option<&str>,
++) -> Result<SettingsMutationReceipt> {
++    settings_mutate(
++        paths,
++        "apply",
++        "codex.settings.apply",
++        "codex.settings.apply.v1",
++        input,
++        backup,
++        expected_source_sha256,
++        expected_settings_revision,
++        idempotency_key,
++    )
++}
++
++pub fn settings_restore(
++    paths: &CodexBridgePaths,
++    input: &Path,
++    backup: &Path,
++    expected_source_sha256: Option<&str>,
++    expected_settings_revision: Option<&str>,
++    idempotency_key: Option<&str>,
++) -> Result<SettingsMutationReceipt> {
++    settings_mutate(
++        paths,
++        "restore",
++        "codex.settings.restore",
++        "codex.settings.restore.v1",
++        input,
++        backup,
++        expected_source_sha256,
++        expected_settings_revision,
++        idempotency_key,
++    )
++}
++
++#[allow(clippy::too_many_arguments)]
++fn settings_mutate(
++    paths: &CodexBridgePaths,
++    operation: &str,
++    method: &str,
++    capability: &str,
++    input: &Path,
++    backup: &Path,
++    expected_source_sha256: Option<&str>,
++    expected_settings_revision: Option<&str>,
++    idempotency_key: Option<&str>,
++) -> Result<SettingsMutationReceipt> {
++    ensure!(input != backup, "input and backup paths must differ");
++    let candidate = codex::read_snapshot(input)?;
++    let target_revision = codex::settings_revision(&candidate.settings)?;
++    let backup_snapshot = prepare_backup(paths, backup)?;
++    let expected_source = expected_source_sha256.unwrap_or(&backup_snapshot.source_sha256);
++    let backup_revision = codex::settings_revision(&backup_snapshot.settings)?;
++    let expected_revision = expected_settings_revision.unwrap_or(&backup_revision);
++    ensure!(
++        is_lower_sha256(expected_source),
++        "expected source SHA-256 is invalid"
++    );
++    ensure!(
++        is_lower_sha256(expected_revision),
++        "expected settings revision is invalid"
++    );
++    let key = idempotency_key
++        .map(str::to_owned)
++        .unwrap_or_else(|| generated_idempotency_key(operation, &target_revision));
++    ensure!(
++        !key.is_empty() && key.len() <= 256 && !key.contains('\0'),
++        "idempotency key is invalid"
++    );
++
++    let mut client = Client::connect(paths)?;
++    let response: RawMutationResponse = client.call(
++        method,
++        capability,
++        json!({
++            "expectedSourceSha256": expected_source,
++            "expectedSettingsRevision": expected_revision,
++            "targetSettingsRevision": target_revision,
++            "idempotencyKey": key,
++            "settings": candidate.settings,
++            "effectiveSettings": candidate.effective_settings,
++        }),
++    )?;
++    validate_mutation_response(
++        &response,
++        operation,
++        &key,
++        expected_source,
++        expected_revision,
++        &target_revision,
++    )?;
++    Ok(SettingsMutationReceipt {
++        backup: backup.to_path_buf(),
++        schema_version: response.schema_version,
++        kind: response.kind,
++        operation: response.operation,
++        idempotency_key: response.idempotency_key,
++        idempotent_replay: response.idempotent_replay,
++        changed: response.changed,
++        rollback_performed: response.rollback_performed,
++        before_source_sha256: response.before_source_sha256,
++        after_source_sha256: response.after_source_sha256,
++        before_settings_revision: response.before_settings_revision,
++        after_settings_revision: response.after_settings_revision,
++        target_settings_revision: response.target_settings_revision,
++    })
++}
++
++fn prepare_backup(paths: &CodexBridgePaths, backup: &Path) -> Result<codex::Snapshot> {
++    if backup.exists() {
++        return codex::read_snapshot(backup);
++    }
++    settings_snapshot(paths, backup)?;
++    codex::read_snapshot(backup)
++}
++
++fn validate_raw_snapshot(raw: RawSettingsSnapshot, codex_version: &str) -> Result<codex::Snapshot> {
++    ensure!(
++        raw.schema_version == 1,
++        "Codex bridge returned an unknown snapshot schema"
++    );
++    ensure!(
++        raw.kind == SETTINGS_SNAPSHOT_KIND,
++        "Codex bridge returned an unknown snapshot kind"
++    );
++    ensure!(
++        is_lower_sha256(&raw.source_sha256),
++        "Codex bridge returned an invalid source SHA-256"
++    );
++    ensure!(
++        is_lower_sha256(&raw.settings_revision),
++        "Codex bridge returned an invalid settings revision"
++    );
++    let computed = codex::settings_revision(&raw.settings)?;
++    ensure!(
++        computed == raw.settings_revision,
++        "Codex bridge settings revision readback differed"
++    );
++    codex::snapshot_from_bridge(
++        codex_version.to_owned(),
++        raw.file_path,
++        raw.source_sha256,
++        raw.settings,
++        raw.effective_settings,
++        raw.definitions,
++    )
++}
++
++fn validate_agent_keys(snapshot: &AgentKeysSnapshot) -> Result<()> {
++    ensure!(
++        snapshot.schema_version == 1,
++        "Codex bridge returned an unknown Agent Key schema"
++    );
++    ensure!(
++        snapshot.kind == AGENT_KEYS_SNAPSHOT_KIND,
++        "Codex bridge returned an unknown Agent Key kind"
++    );
++    ensure!(
++        snapshot.global_state_key == AGENT_KEYS_STATE_KEY,
++        "Codex bridge returned the wrong Agent Key state key"
++    );
++    ensure!(
++        snapshot
++            .slots
++            .iter()
++            .map(String::as_str)
++            .eq(AGENT_KEY_SLOTS),
++        "Codex bridge returned unexpected Agent Key slots"
++    );
++    ensure!(
++        snapshot.assignments.len() == AGENT_KEY_SLOTS.len(),
++        "Codex bridge returned incomplete Agent Key assignments"
++    );
++    for slot in AGENT_KEY_SLOTS {
++        validate_assignment(
++            snapshot
++                .assignments
++                .get(slot)
++                .context("Agent Key slot was missing")?,
++        )?;
++    }
++    let canonical = serde_json::to_vec(&canonical_json(&serde_json::to_value(
++        &snapshot.assignments,
++    )?))?;
++    let mut framed = AGENT_KEYS_PREFIX.to_vec();
++    framed.extend(canonical);
++    ensure!(
++        fsutil::sha256_bytes(&framed)? == snapshot.global_state_revision,
++        "Codex Agent Key revision readback differed"
++    );
++    Ok(())
++}
++
++fn validate_assignment(value: &Value) -> Result<()> {
++    if value.is_null() {
++        return Ok(());
++    }
++    let object = value
++        .as_object()
++        .context("Agent Key assignment must be an object")?;
++    let non_empty = |key: &str| {
++        object
++            .get(key)
++            .and_then(Value::as_str)
++            .map(|value| !value.is_empty())
++            .unwrap_or(false)
++    };
++    let valid = match object.get("type").and_then(Value::as_str) {
++        Some("command") => non_empty("commandId"),
++        Some("skill") => non_empty("skillName") && non_empty("skillPath"),
++        Some(_) => false,
++        None => {
++            non_empty("keycapId")
++                || (non_empty("hostId") && non_empty("threadKey") && non_empty("title"))
++        }
++    };
++    ensure!(
++        valid,
++        "Codex bridge returned an invalid Agent Key assignment"
++    );
++    Ok(())
++}
++
++fn validate_mutation_response(
++    response: &RawMutationResponse,
++    operation: &str,
++    idempotency_key: &str,
++    expected_source: &str,
++    expected_revision: &str,
++    target_revision: &str,
++) -> Result<()> {
++    ensure!(
++        response.schema_version == 1 && response.kind == SETTINGS_MUTATION_KIND,
++        "Codex bridge returned an unknown mutation result"
++    );
++    ensure!(
++        response.operation == operation,
++        "Codex bridge returned the wrong operation"
++    );
++    ensure!(
++        response.idempotency_key == idempotency_key,
++        "Codex bridge returned the wrong idempotency key"
++    );
++    ensure!(
++        response.before_source_sha256 == expected_source,
++        "Codex mutation began from an unexpected source SHA-256"
++    );
++    ensure!(
++        response.before_settings_revision == expected_revision,
++        "Codex mutation began from an unexpected settings revision"
++    );
++    ensure!(
++        response.after_settings_revision == target_revision
++            && response.target_settings_revision == target_revision,
++        "Codex mutation readback did not match the target revision"
++    );
++    ensure!(
++        is_lower_sha256(&response.after_source_sha256),
++        "Codex mutation returned an invalid source SHA-256"
++    );
++    ensure!(
++        response.changed != (expected_revision == target_revision),
++        "Codex mutation returned an inconsistent changed flag"
++    );
++    ensure!(
++        !response.rollback_performed,
++        "Codex bridge reported rollback for a successful mutation"
++    );
++    Ok(())
++}
++
++fn generated_idempotency_key(operation: &str, target_revision: &str) -> String {
++    let nonce = SystemTime::now()
++        .duration_since(UNIX_EPOCH)
++        .unwrap_or_default()
++        .as_nanos();
++    format!(
++        "worklouderctl-codex-{operation}-{}-{nonce}-{}",
++        std::process::id(),
++        &target_revision[..12]
++    )
++}
++
++fn write_snapshot_atomic(output: &Path, snapshot: &codex::Snapshot) -> Result<()> {
++    ensure!(
++        !output.exists(),
++        "Codex snapshot destination already exists: {}",
++        output.display()
++    );
++    let parent = output
++        .parent()
++        .filter(|path| !path.as_os_str().is_empty())
++        .unwrap_or_else(|| Path::new("."));
++    fs::create_dir_all(parent).with_context(|| format!("failed to create {}", parent.display()))?;
++    let name = output
++        .file_name()
++        .and_then(|value| value.to_str())
++        .context("snapshot destination had no UTF-8 file name")?;
++    let staging = output.with_file_name(format!(
++        ".{name}.worklouderctl-{}-{}.tmp",
++        std::process::id(),
++        NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed)
++    ));
++    let result = (|| -> Result<()> {
++        let mut bytes = serde_json::to_vec_pretty(snapshot)?;
++        bytes.push(b'\n');
++        let mut file = OpenOptions::new()
++            .write(true)
++            .create_new(true)
++            .open(&staging)?;
++        file.write_all(&bytes)?;
++        file.sync_all()?;
++        codex::read_snapshot(&staging)?;
++        fs::rename(&staging, output)?;
++        codex::read_snapshot(output)?;
++        Ok(())
++    })();
++    if result.is_err() && staging.exists() {
++        let _ = fs::remove_file(staging);
++    }
++    result
++}
++
++fn is_lower_sha256(value: &str) -> bool {
++    value.len() == 64
++        && value
++            .bytes()
++            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
++}
++
++fn canonical_json(value: &Value) -> Value {
++    match value {
++        Value::Object(object) => {
++            let sorted: BTreeMap<&String, &Value> = object.iter().collect();
++            let mut canonical = serde_json::Map::new();
++            for (key, value) in sorted {
++                canonical.insert(key.clone(), canonical_json(value));
++            }
++            Value::Object(canonical)
++        }
++        Value::Array(values) => Value::Array(values.iter().map(canonical_json).collect()),
++        value => value.clone(),
++    }
++}
++
++impl Client {
++    fn connect(paths: &CodexBridgePaths) -> Result<Self> {
++        validate_paths(paths)?;
++        let token_bytes = fs::read(&paths.token).with_context(|| {
++            format!(
++                "failed to read Codex bridge token {}",
++                paths.token.display()
++            )
++        })?;
++        ensure!(
++            (32..=MAX_TOKEN_BYTES).contains(&token_bytes.len()),
++            "Codex bridge token length was outside the supported range"
++        );
++        let token = String::from_utf8(token_bytes)
++            .context("Codex bridge token was not UTF-8")?
++            .trim()
++            .to_owned();
++        ensure!(token.len() >= 32, "Codex bridge token was too short");
++        let writer = UnixStream::connect(&paths.socket).with_context(|| {
++            format!(
++                "failed to connect to Codex bridge {}",
++                paths.socket.display()
++            )
++        })?;
++        writer.set_read_timeout(Some(REQUEST_TIMEOUT))?;
++        writer.set_write_timeout(Some(REQUEST_TIMEOUT))?;
++        let reader = BufReader::new(writer.try_clone()?);
++        let mut client = Self {
++            writer,
++            reader,
++            next_id: 1,
++            handshake: Handshake {
++                protocol_version: 0,
++                bridge_version: String::new(),
++                codex_version: String::new(),
++                session_id: String::new(),
++                capabilities: Vec::new(),
++            },
++        };
++        let handshake: Handshake = client.call_raw(
++            "bridge.hello",
++            json!({
++                "protocolVersion": PROTOCOL_VERSION,
++                "token": token,
++                "client": { "name": "worklouderctl", "version": env!("CARGO_PKG_VERSION") }
++            }),
++        )?;
++        ensure!(
++            handshake.protocol_version == PROTOCOL_VERSION,
++            "Codex bridge selected an unsupported protocol version"
++        );
++        ensure!(
++            handshake
++                .capabilities
++                .iter()
++                .any(|item| item == "bridge.handshake.v1"),
++            "Codex bridge omitted handshake capability"
++        );
++        client.handshake = handshake;
++        Ok(client)
++    }
++
++    fn call<T: DeserializeOwned>(
++        &mut self,
++        method: &str,
++        capability: &str,
++        params: Value,
++    ) -> Result<T> {
++        ensure!(
++            self.handshake
++                .capabilities
++                .iter()
++                .any(|item| item == capability),
++            "Codex bridge does not advertise required capability {capability}"
++        );
++        self.call_raw(method, params)
++    }
++
++    fn call_raw<T: DeserializeOwned>(&mut self, method: &str, params: Value) -> Result<T> {
++        let id = self.next_id;
++        self.next_id += 1;
++        serde_json::to_writer(
++            &mut self.writer,
++            &RpcRequest {
++                jsonrpc: "2.0",
++                id,
++                method,
++                params,
++            },
++        )?;
++        self.writer.write_all(b"\n")?;
++        self.writer.flush()?;
++        let mut line = String::new();
++        let bytes = self.reader.read_line(&mut line)?;
++        ensure!(bytes > 0, "Codex bridge closed before responding");
++        ensure!(
++            bytes <= MAX_RESPONSE_BYTES,
++            "Codex bridge response exceeded maximum size"
++        );
++        let response: RpcResponse<T> =
++            serde_json::from_str(line.trim()).context("Codex bridge returned invalid JSON-RPC")?;
++        ensure!(
++            response.jsonrpc == "2.0" && response.id == id,
++            "Codex bridge response envelope was invalid"
++        );
++        if let Some(error) = response.error {
++            let data = error
++                .data
++                .map(|value| format!("; data={value}"))
++                .unwrap_or_default();
++            bail!(
++                "Codex bridge method {method} failed with {}: {}{}",
++                error.code,
++                error.message,
++                data
++            );
++        }
++        response
++            .result
++            .context("Codex bridge response omitted result and error")
++    }
++}
++
++fn validate_paths(paths: &CodexBridgePaths) -> Result<()> {
++    let socket = fs::symlink_metadata(&paths.socket).with_context(|| {
++        format!(
++            "Codex bridge socket was not found at {}",
++            paths.socket.display()
++        )
++    })?;
++    let token = fs::symlink_metadata(&paths.token).with_context(|| {
++        format!(
++            "Codex bridge token was not found at {}",
++            paths.token.display()
++        )
++    })?;
++    ensure!(
++        socket.file_type().is_socket(),
++        "Codex bridge path is not a Unix socket"
++    );
++    ensure!(
++        token.file_type().is_file() && !token.file_type().is_symlink(),
++        "Codex bridge token is not a regular file"
++    );
++    let uid = unsafe { libc::geteuid() };
++    ensure!(
++        socket.uid() == uid && token.uid() == uid,
++        "Codex bridge socket and token must be owned by the current user"
++    );
++    ensure!(
++        socket.permissions().mode() & 0o077 == 0,
++        "Codex bridge socket permissions must be 0600"
++    );
++    ensure!(
++        token.permissions().mode() & 0o077 == 0,
++        "Codex bridge token permissions must be 0600"
++    );
++    Ok(())
++}
+diff --git a/src/lib.rs b/src/lib.rs
+index 5d0c872..1f7bf36 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,6 +1,7 @@
+ pub mod bridge;
+ pub mod cli;
+ pub mod codex;
++pub mod codex_bridge;
+ pub mod config;
+ pub mod contract;
+ pub mod device;
+@@ -14,13 +15,13 @@ use clap::CommandFactory;
+ use cli::{
+     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
+     AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
+-    CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexCommand,
+-    CodexCommandKeyCommand, Command, CompletionShell, ConfigCommand, ControlCommand, DeviceCommand,
+-    DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand, LayerCommand,
+-    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
+-    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
+-    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
+-    TierCommand,
++    CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand,
++    CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, Command, CompletionShell,
++    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
++    InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand, LightingEffect,
++    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
++    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
++    SmartActionType as CliSmartActionType, TierCommand,
+ };
+ use serde::Serialize;
+ use std::io::Write;
+@@ -1565,6 +1566,88 @@ fn optional_number(value: Option<u64>) -> String {
+ 
+ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<()> {
+     match command {
++        CodexCommand::Bridge {
++            socket,
++            token,
++            command,
++        } => match command {
++            CodexBridgeCommand::Inspect => {
++                let result = codex_bridge::inspect(&codex_bridge::paths(socket, token))?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "Codex bridge {} protocol={} codex={}",
++                        result.bridge_version, result.protocol_version, result.codex_version
++                    )?;
++                    writeln!(out, "socket={}", result.socket.display())?;
++                    writeln!(out, "session={}", result.session_id)?;
++                    for capability in result.capabilities {
++                        writeln!(out, "CAPABILITY\t{capability}")?;
++                    }
++                }
++            }
++        },
++        CodexCommand::Config {
++            socket,
++            token,
++            command,
++        } => {
++            let paths = codex_bridge::paths(socket, token);
++            match command {
++                CodexConfigCommand::Snapshot { output } => {
++                    let result = codex_bridge::settings_snapshot(&paths, &output)?;
++                    if json {
++                        write_json(&mut out, &result)?;
++                    } else {
++                        writeln!(
++                            out,
++                            "Saved Codex settings snapshot to {} (revision {})",
++                            result.output.display(),
++                            result.settings_revision
++                        )?;
++                        writeln!(out, "source-sha256={}", result.source_sha256)?;
++                    }
++                }
++                CodexConfigCommand::Apply {
++                    input,
++                    backup,
++                    expected_source_sha256,
++                    expected_settings_revision,
++                    idempotency_key,
++                } => write_codex_mutation_result(
++                    codex_bridge::settings_apply(
++                        &paths,
++                        &input,
++                        &backup,
++                        expected_source_sha256.as_deref(),
++                        expected_settings_revision.as_deref(),
++                        idempotency_key.as_deref(),
++                    )?,
++                    json,
++                    &mut out,
++                )?,
++                CodexConfigCommand::Restore {
++                    input,
++                    backup,
++                    expected_source_sha256,
++                    expected_settings_revision,
++                    idempotency_key,
++                } => write_codex_mutation_result(
++                    codex_bridge::settings_restore(
++                        &paths,
++                        &input,
++                        &backup,
++                        expected_source_sha256.as_deref(),
++                        expected_settings_revision.as_deref(),
++                        idempotency_key.as_deref(),
++                    )?,
++                    json,
++                    &mut out,
++                )?,
++            }
++        }
+         CodexCommand::Doctor {
+             strict,
+             config,
+@@ -1671,6 +1754,23 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
+             )?,
+         },
+         CodexCommand::AgentKey { command } => match command {
++            CodexAgentKeyCommand::Assignments { socket, token } => {
++                let result =
++                    codex_bridge::agent_keys_snapshot(&codex_bridge::paths(socket, token))?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    for slot in &result.slots {
++                        writeln!(
++                            out,
++                            "{}\t{}",
++                            slot,
++                            serde_json::to_string(&result.assignments[slot])?
++                        )?;
++                    }
++                    writeln!(out, "revision={}", result.global_state_revision)?;
++                }
++            }
+             CodexAgentKeyCommand::TapMode { command } => match command {
+                 CodexAgentTapModeCommand::Get { input } => {
+                     let result = codex::agent_tap_mode_get(&input)?;
+@@ -1764,6 +1864,32 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
+     Ok(())
+ }
+ 
++fn write_codex_mutation_result(
++    result: codex_bridge::SettingsMutationReceipt,
++    json: bool,
++    mut out: impl Write,
++) -> Result<()> {
++    if json {
++        write_json(&mut out, &result)?;
++    } else {
++        writeln!(
++            out,
++            "Codex settings {} {} (revision {} -> {})",
++            result.operation,
++            if result.changed {
++                "changed"
++            } else {
++                "unchanged"
++            },
++            result.before_settings_revision,
++            result.after_settings_revision
++        )?;
++        writeln!(out, "backup={}", result.backup.display())?;
++        writeln!(out, "idempotency-key={}", result.idempotency_key)?;
++    }
++    Ok(())
++}
++
+ fn codex_agent_source_value(value: CodexAgentSource) -> &'static str {
+     match value {
+         CodexAgentSource::Pinned => "pinned",
+diff --git a/tests/cli.rs b/tests/cli.rs
+index 6fde33b..ccf6259 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -60,6 +60,8 @@ fn help_lists_the_binary_and_version_command() {
+     assert!(stdout.contains("tier"));
+     assert!(stdout.contains("capability"));
+     assert!(stdout.contains("doctor"));
++    assert!(stdout.contains("bridge"));
++    assert!(stdout.contains("config"));
+     assert!(stdout.contains("codex"));
+     assert!(stdout.contains("device"));
+     assert!(stdout.contains("input"));
+@@ -315,12 +317,33 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
+     let stdout = String::from_utf8(codex.stdout).unwrap();
+ 
+     assert!(codex.status.success());
++    assert!(stdout.contains("bridge"));
++    assert!(stdout.contains("config"));
+     assert!(stdout.contains("doctor"));
+     assert!(stdout.contains("inspect"));
+     assert!(stdout.contains("export"));
+     assert!(stdout.contains("agent-source"));
+     assert!(stdout.contains("agent-key"));
+     assert!(stdout.contains("command-key"));
++
++    let config = binary()
++        .args(["codex", "config", "--help"])
++        .output()
++        .unwrap();
++    let config_stdout = String::from_utf8(config.stdout).unwrap();
++    assert!(config.status.success());
++    assert!(config_stdout.contains("snapshot"));
++    assert!(config_stdout.contains("apply"));
++    assert!(config_stdout.contains("restore"));
++
++    let agent_key = binary()
++        .args(["codex", "agent-key", "--help"])
++        .output()
++        .unwrap();
++    let agent_key_stdout = String::from_utf8(agent_key.stdout).unwrap();
++    assert!(agent_key.status.success());
++    assert!(agent_key_stdout.contains("assignments"));
++    assert!(agent_key_stdout.contains("tap-mode"));
+ }
+ 
+ #[test]

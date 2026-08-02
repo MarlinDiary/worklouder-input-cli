@@ -1,0 +1,216 @@
+WorkLouderCTL Codex Companion Bridge v1 verification record
+============================================================
+
+Scope
+-----
+Base commit: 1bc08b9ae41b1b7e557d4d8300a8148868b67370
+Feature commit: 121bc699a379b8e114a7eaf68f959cbf83a4e1c9
+Feature commits:
+  09fef1e spec: freeze Codex companion bridge
+  f5dd2d6 feat: add Codex companion bridge reference
+  abb4b68 feat: add Codex settings transaction CLI
+  121bc69 docs: publish Codex bridge workflow
+Changed CLI branches:
+  codex bridge inspect
+  codex config snapshot/apply/restore
+  codex agent-key assignments
+Changed semantic field in release E2E:
+  /settings/codex-micro-agent-source (recent -> custom -> recent)
+Read-only global-state fields:
+  codex-micro-custom-agent-assignments/{AG00,AG01,AG02,AG03,AG04,AG05}
+Codex GUI/runtime/config mutation during this verification: none. The installed
+app was read statically; all settings writes targeted an isolated fixture under
+/tmp through the reference main-process adapter.
+
+Installed Codex static boundary
+-------------------------------
+Commands:
+  /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+    /Applications/ChatGPT.app/Contents/Info.plist
+  /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
+    /Applications/ChatGPT.app/Contents/Info.plist
+  shasum -a 256 /Applications/ChatGPT.app/Contents/Resources/app.asar
+Literal output:
+  26.727.51351
+  com.openai.codex
+  a529edd72e10b08931c0d695b5e3e6a0be7f51874610dafc04f578436ab7d74d  /Applications/ChatGPT.app/Contents/Resources/app.asar
+Exit status: 0
+Static contract evidence frozen in spec/codex-companion-bridge-v1.json:
+  native handlers: settings-read, settings-write, get-global-state, set-global-state
+  renderer transport: POST vscode://codex/{method}
+  external listener observed: false
+
+Preserved original artifact
+---------------------------
+Source commit: 1bc08b9ae41b1b7e557d4d8300a8148868b67370
+Build command:
+  cargo build --release --locked --manifest-path BASE_WORKTREE/Cargo.toml
+Preserved path:
+  /tmp/worklouderctl-codex-companion-bridge-v1.EyOrVK/original/worklouderctl
+SHA-256:
+  1a1563be5bb56b97be85d80976470898ea234490af04a882ab02e212597f3801
+Command:
+  /tmp/worklouderctl-codex-companion-bridge-v1.EyOrVK/original/worklouderctl version
+Literal output:
+  worklouderctl 0.1.0
+Exit status: 0
+
+Functional baseline-red: Codex bridge
+-------------------------------------
+Command:
+  /tmp/worklouderctl-codex-companion-bridge-v1.EyOrVK/original/worklouderctl \
+    codex bridge --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'bridge' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl codex [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
+
+Functional baseline-red: Codex config
+-------------------------------------
+Command:
+  /tmp/worklouderctl-codex-companion-bridge-v1.EyOrVK/original/worklouderctl \
+    codex config --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'config' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl codex [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
+
+Modified behavior: CLI surface
+------------------------------
+Commands:
+  /tmp/worklouderctl-codex-companion-bridge-v1.EyOrVK/modified/worklouderctl \
+    codex bridge --help
+  /tmp/worklouderctl-codex-companion-bridge-v1.EyOrVK/modified/worklouderctl \
+    codex config --help
+Literal subcommands:
+  bridge: inspect
+  config: snapshot, apply, restore
+Exit status: 0 for both
+
+Modified behavior: authenticated settings transaction
+-----------------------------------------------------
+Command:
+  KEEP_CODEX_BRIDGE_E2E=1 \
+  WORKLOUDERCTL_BIN=/tmp/worklouderctl-codex-companion-bridge-v1.EyOrVK/modified/worklouderctl \
+    ./scripts/test-codex-bridge-e2e.sh
+Literal output:
+  {"status":"pass","baselineAgentSource":"recent","modifiedAgentSource":"custom","restoredAgentSource":"recent","baselineSourceSha256":"8d47e4f69727e8c5371e5b84d3578857a7255af3fb4e4b72bc171134ab4bcb00","modifiedSourceSha256":"5eed090cb9d71c269f48a7205025236e1bb0f32bf0ffb26ce864e719b65ac008","restoredSourceSha256":"8d47e4f69727e8c5371e5b84d3578857a7255af3fb4e4b72bc171134ab4bcb00","agentKeySlots":6}
+Exit status: 0
+Literal assertions:
+  bridge authentication and capability negotiation passed
+  baseline Agent source was recent
+  applied Agent source was custom
+  restored Agent source was recent
+  restored source SHA-256 equaled baseline source SHA-256
+  all six Agent Key slots passed typed validation
+  successful apply/restore reported rollbackPerformed=false
+
+Validation boundary
+-------------------
+Verified by Node adapter/transport tests:
+  token authentication; user-only socket/token modes
+  mutation capability absent without exact settings replacer
+  exact Codex settings snapshot validation
+  command, Skill, task, keycap, and empty Agent Key assignment shapes
+  source-SHA plus canonical-settings CAS
+  session-scoped idempotent replay and stale-CAS rejection
+  complete explicit-set apply and restore
+  exact explicit/effective settings readback
+  automatic rollback after a corrupt readback
+  Electron userData path and before-quit lifecycle
+Verified by Rust client and E2E:
+  frozen definitions equal Codex 26.727.51351 contract
+  recursive-key-sorted settings and Agent Key revisions
+  Unix socket/token type, owner, and permission checks
+  immutable backup creation/reopen
+  atomically published and reopened settings snapshots
+  candidate apply, post-apply snapshot, restore, and exact source-hash recovery
+Released-app boundary:
+  Codex 26.727.51351 does not publish the external socket.
+  Live write capabilities begin only when Codex installs the reference
+  integration and injects exact complete-setting replacement.
+
+Automated quality gates
+-----------------------
+Command: cargo fmt --check
+Literal output: (empty)
+Exit status: 0
+
+Command: cargo clippy --all-targets -- -D warnings
+Literal result:
+  Finished dev [unoptimized + debuginfo] target(s)
+Exit status: 0
+
+Command: cargo test --all-targets
+Literal result:
+  50 passed; 0 failed (library)
+  13 passed; 0 failed (CLI integration)
+  0 failed (binary)
+Exit status: 0
+Toolchain: rustc/cargo 1.61.0 active default
+
+Command: npm test --prefix companion
+Literal result:
+  tests 13
+  pass 13
+  fail 0
+Exit status: 0
+
+Command: ./scripts/test-bridge-e2e.sh
+Literal relevant output:
+  config_apply_readback=verified
+  config_idempotent_replay=verified
+  config_stale_cas_rejected=verified
+  config_restore_readback=verified
+Exit status: 0
+
+Command: ./scripts/test-codex-bridge-e2e.sh
+Literal output:
+  {"status":"pass","baselineAgentSource":"recent","modifiedAgentSource":"custom","restoredAgentSource":"recent","baselineSourceSha256":"8d47e4f69727e8c5371e5b84d3578857a7255af3fb4e4b72bc171134ab4bcb00","modifiedSourceSha256":"5eed090cb9d71c269f48a7205025236e1bb0f32bf0ffb26ce864e719b65ac008","restoredSourceSha256":"8d47e4f69727e8c5371e5b84d3578857a7255af3fb4e4b72bc171134ab4bcb00","agentKeySlots":6}
+Exit status: 0
+
+Modified artifact
+-----------------
+Build command:
+  cargo build --release --locked
+Repository path:
+  target/release/worklouderctl
+Preserved copy:
+  /tmp/worklouderctl-codex-companion-bridge-v1.EyOrVK/modified/worklouderctl
+SHA-256 (both paths):
+  3074ecd732daed017177c56960d16434f30dec4e21e2f65717eb829cc8507259
+Command:
+  ./target/release/worklouderctl version
+Literal output:
+  worklouderctl 0.1.0
+Exit status: 0
+
+Patch
+-----
+Path:
+  artifacts/verification/codex-companion-bridge-v1/codex-companion-bridge.patch
+SHA-256:
+  cec209ade54bd8f0ceb05f60415598e72656fc916ae11accfb0af3bbca8711b3
+Command:
+  git apply --check --reverse \
+    artifacts/verification/codex-companion-bridge-v1/codex-companion-bridge.patch
+Literal output: (empty)
+Exit status: 0
+
+Rollback
+--------
+Path:
+  artifacts/verification/codex-companion-bridge-v1/rollback.sh
+SHA-256:
+  7456c4be549c6d699d297df25eed53fcbd38757190b664ebef3bdf1bcc9495d5
+The isolated-worktree execution result is appended after the artifact commit.
