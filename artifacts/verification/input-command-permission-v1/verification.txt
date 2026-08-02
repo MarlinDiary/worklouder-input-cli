@@ -4,7 +4,7 @@ WorkLouderCTL Input command permission v1 verification record
 Scope
 -----
 Base commit: 2b2a6e275a799c1e79cc89a9025e4b7bcbfc1b62
-Feature commit: fe102849f5b5bd95afefead03ec3fe420b171893
+Feature commit: 991ee4177646638455169f5283fa0fb257ec9f29
 Feature commits:
   5b05f62 spec: freeze Input host settings
   5d72d5c spec: freeze Input command permission
