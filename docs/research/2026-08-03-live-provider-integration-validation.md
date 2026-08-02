@@ -27,7 +27,11 @@ simultaneously own the vendor HID session. It stops discovery and disconnects
 the releasing provider before acquiring the other provider. A failed
 acquisition automatically reacquires the provider that was released. Input's
 discovery cache is cleared during release so reacquisition emits a fresh
-device event without restarting Input.
+device event without restarting Input. A request for the current owner returns
+an idempotent result without re-enumerating HID, preventing redundant native
+discovery cycles. If the Input 0.18.0 node-hid worker exits during acquisition,
+the transaction waits for and releases any relaunched Input process before it
+reacquires Codex, so an error does not leave two active device owners.
 
 ## Baseline, mutation, readback, restore
 
@@ -94,9 +98,10 @@ Both directions were exercised:
    Codex reacquired USB with comm/API plus HID and joystick subscriptions.
 
 Final state is Codex-owned: lifecycle `started`, device `connected` over USB,
-comm/API present, and both input subscriptions present. Input remains running
-with its bridge and host authorities available, while its device discovery is
-paused until `provider-handoff.mjs input` is called.
+comm/API present, and both input subscriptions present. After the stress pass,
+Input was stopped and its complete official Developer ID bundle was restored
+and signature-verified. `provider-handoff.mjs input` performs the coordinated
+release/start/bridge path when Input authority is next required.
 
 ## Regression and packaging boundary
 

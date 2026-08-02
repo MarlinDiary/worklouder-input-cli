@@ -5,9 +5,10 @@ import {
   InspectorClient,
   assertEqual,
   exactProcessIds,
-  inspectorTarget,
+  inspectorTargetForProcess,
   plistValue,
   sha256File,
+  waitForInspectorPortRelease,
 } from "./live-bridge-cdp.mjs";
 
 const APP = "/Applications/ChatGPT.app";
@@ -33,17 +34,15 @@ assertEqual(
 );
 assertEqual(await sha256File(ASAR), EXPECTED_ASAR_SHA256, "Codex app.asar SHA-256");
 
-let target;
-try {
-  target = await inspectorTarget(PORT, 500);
-} catch {
-  const pids = await exactProcessIds(EXECUTABLE);
-  if (pids.length !== 1) {
-    throw new Error(`expected one running Codex main process, detected ${pids.length}`);
-  }
-  process.kill(pids[0], "SIGUSR1");
-  target = await inspectorTarget(PORT);
+const pids = await exactProcessIds(EXECUTABLE);
+if (pids.length !== 1) {
+  throw new Error(`expected one running Codex main process, detected ${pids.length}`);
 }
+const { target } = await inspectorTargetForProcess({
+  port: PORT,
+  pid: pids[0],
+  executable: EXECUTABLE,
+});
 
 const client = await InspectorClient.connect(target.webSocketDebuggerUrl);
 try {
@@ -60,10 +59,13 @@ try {
     console.log(JSON.stringify({ provider: "codex", action, ...result }, null, 2));
   }
 } finally {
-  await client
+  const closeScheduled = await client
     .evaluate(
       `(()=>{const inspector=process.getBuiltinModule("inspector");process.once("SIGUSR1",()=>inspector.open(${PORT},"127.0.0.1",false));setTimeout(()=>inspector.close(),250);return true})()`,
     )
     .catch(() => false);
   client.close();
+  if (closeScheduled) {
+    await waitForInspectorPortRelease(PORT);
+  }
 }

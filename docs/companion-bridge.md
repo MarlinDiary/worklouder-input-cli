@@ -43,6 +43,9 @@ node scripts/install-input-live-bridge.mjs
 node scripts/provider-handoff.mjs status
 node scripts/provider-handoff.mjs input # Input owns device configuration
 node scripts/provider-handoff.mjs codex # Codex owns hardware actions
+node scripts/provider-handoff.mjs status-codex # inspect one running provider
+node scripts/provider-handoff.mjs acquire-codex # recover Codex while Input is stopped
+node scripts/provider-handoff.mjs release-codex # release Codex before starting Input
 ```
 
 The two applications can stay open, but only one provider owns the physical
@@ -57,6 +60,13 @@ identities. Apply and restore therefore select the current live destination
 from the pre-mutation backup and accept older snapshots only when the bridge
 matches their stable PID, device type, and layout. This permits verified
 restore after a provider handoff without weakening the physical-model gate.
+Requesting the already-active provider is an idempotent no-op; it does not
+restart HID discovery or tear down a healthy subscription set.
+If one application is stopped, release the running provider before starting
+the other application so their automatic startup paths never enumerate the
+same HID device concurrently. The `status-*`, `acquire-*`, and `release-*`
+forms address one provider only, so recovery does not depend on the other
+application being healthy.
 
 ## Input 0.18.0 evidence
 

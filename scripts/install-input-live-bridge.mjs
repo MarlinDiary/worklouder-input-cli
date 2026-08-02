@@ -6,10 +6,11 @@ import {
   InspectorClient,
   assertEqual,
   exactProcessIds,
-  inspectorTarget,
+  inspectorTargetForProcess,
   plistValue,
   sha256File,
   unwrapRemoteResult,
+  waitForInspectorPortRelease,
 } from "./live-bridge-cdp.mjs";
 
 const APP = "/Applications/input.app";
@@ -53,15 +54,11 @@ if (pids.length !== 1) {
 }
 const pid = pids[0];
 
-let target;
-let openedInspector = false;
-try {
-  target = await inspectorTarget(PORT, 500);
-} catch {
-  process.kill(pid, "SIGUSR1");
-  openedInspector = true;
-  target = await inspectorTarget(PORT);
-}
+const { target, openedInspector } = await inspectorTargetForProcess({
+  port: PORT,
+  pid,
+  executable: EXECUTABLE,
+});
 
 const client = await InspectorClient.connect(target.webSocketDebuggerUrl);
 let closeScheduled = false;
@@ -110,6 +107,9 @@ try {
   }
 } finally {
   client.close();
+  if (closeScheduled) {
+    await waitForInspectorPortRelease(PORT);
+  }
   if (openedInspector && !closeScheduled) {
     process.stderr.write(
       "[input-live-bridge] inspector remains open after an interrupted installation\n",

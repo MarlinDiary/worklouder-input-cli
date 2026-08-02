@@ -30,22 +30,39 @@ export class InspectorClient {
     });
   }
 
-  async command(method, params = {}) {
+  async command(method, params = {}, { timeout = 60_000 } = {}) {
     const id = this.nextId++;
     const result = new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
     });
+    const keepAlive = setInterval(() => {}, Math.min(timeout, 1_000));
+    const deadline = setTimeout(() => {
+      const pending = this.pending.get(id);
+      if (!pending) return;
+      this.pending.delete(id);
+      pending.reject(new Error(`Timed out waiting for inspector command ${method}`));
+    }, timeout);
     this.socket.send(JSON.stringify({ id, method, params }));
-    return result;
+    try {
+      return await result;
+    } finally {
+      clearInterval(keepAlive);
+      clearTimeout(deadline);
+      this.pending.delete(id);
+    }
   }
 
   async evaluate(expression, { timeout = 30_000 } = {}) {
-    const response = await this.command("Runtime.evaluate", {
-      expression,
-      awaitPromise: true,
-      returnByValue: true,
-      timeout,
-    });
+    const response = await this.command(
+      "Runtime.evaluate",
+      {
+        expression,
+        awaitPromise: true,
+        returnByValue: true,
+        timeout,
+      },
+      { timeout: timeout + 5_000 },
+    );
     return unwrapRemoteResult(response);
   }
 
@@ -115,6 +132,61 @@ export async function inspectorTarget(port, timeoutMs = 15_000) {
   }
   throw new Error(
     `Inspector 127.0.0.1:${port} did not become ready: ${errorMessage(lastError)}`,
+  );
+}
+
+export async function inspectorTargetForProcess({
+  port,
+  pid,
+  executable,
+  existingTimeoutMs = 300,
+  releaseTimeoutMs = 5_000,
+}) {
+  let existing = null;
+  try {
+    existing = await inspectorTarget(port, existingTimeoutMs);
+  } catch {
+    // The requested process does not have an inspector open yet.
+  }
+  if (existing) {
+    const identity = await inspectorIdentity(existing);
+    if (identity.pid === pid && identity.executable === executable) {
+      return { target: existing, openedInspector: false };
+    }
+    await waitForInspectorPortRelease(port, releaseTimeoutMs, identity);
+  }
+
+  process.kill(pid, "SIGUSR1");
+  const target = await inspectorTarget(port);
+  const identity = await inspectorIdentity(target);
+  if (identity.pid !== pid || identity.executable !== executable) {
+    throw new Error(
+      `Inspector 127.0.0.1:${port} resolved to pid=${identity.pid} ` +
+        `${identity.executable}; expected pid=${pid} ${executable}`,
+    );
+  }
+  return { target, openedInspector: true };
+}
+
+export async function waitForInspectorPortRelease(
+  port,
+  timeoutMs = 5_000,
+  previousOwner = null,
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      await inspectorTarget(port, 120);
+    } catch {
+      return;
+    }
+    await sleep(50);
+  }
+  const owner = previousOwner
+    ? ` by pid=${previousOwner.pid} ${previousOwner.executable}`
+    : "";
+  throw new Error(
+    `Inspector 127.0.0.1:${port} remained occupied${owner}`,
   );
 }
 
@@ -190,6 +262,17 @@ export function unwrapRemoteResult(response) {
 export function assertEqual(actual, expected, label) {
   if (actual !== expected) {
     throw new Error(`${label} mismatch: expected ${expected}, detected ${actual}`);
+  }
+}
+
+async function inspectorIdentity(target) {
+  const client = await InspectorClient.connect(target.webSocketDebuggerUrl);
+  try {
+    return await client.evaluate(
+      `({pid:process.pid,executable:process.execPath})`,
+    );
+  } finally {
+    client.close();
   }
 }
 
