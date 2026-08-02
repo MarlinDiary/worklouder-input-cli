@@ -129,6 +129,15 @@ fn semantic_help_exposes_offline_candidate_workflow() {
         assert!(joystick_stdout.contains(command));
     }
 
+    let sectors = binary()
+        .args(["layer", "joystick", "sector", "--help"])
+        .output()
+        .unwrap();
+    let sectors_stdout = String::from_utf8(sectors.stdout).unwrap();
+    assert!(sectors.status.success());
+    assert!(sectors_stdout.contains("add"));
+    assert!(sectors_stdout.contains("delete"));
+
     let control = binary().args(["control", "--help"]).output().unwrap();
     let control_stdout = String::from_utf8(control.stdout).unwrap();
     assert!(control.status.success());
