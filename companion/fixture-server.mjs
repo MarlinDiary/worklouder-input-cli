@@ -15,13 +15,60 @@ const files = new Map([
         version: 1,
         activeProfileId: 0,
         fixtureExtension: { preserved: true },
+        macros: [
+          {
+            id: 3,
+            name: "Fixture Action",
+            color: null,
+            actions: [{ act: 1, delay: 0, kc: "KC_C" }],
+          },
+          {
+            id: 4,
+            name: "Unused Action",
+            color: null,
+            actions: [{ act: 1, delay: 0, kc: "KC_D" }],
+          },
+          {
+            id: 10,
+            name: "Two Digit Action",
+            color: null,
+            actions: [{ act: 1, delay: 0, kc: "KC_E" }],
+          },
+        ],
+        multiActions: [{ id: 1, name: "Fixture Multi", actions: [] }],
         profiles: [
           {
             id: 0,
             name: "Fixture Default",
+            macrosUsed: [10, 3],
+            multiActionsUsed: [1],
             layers: [
-              { id: 0, name: "Base", color: 0x112233, layout: {} },
-              { id: 1, name: "Tools", color: 0x445566, layout: {} },
+              {
+                id: 0,
+                name: "Base",
+                color: 0x112233,
+                layout: {
+                  keymap: [["KC_A", "KC_B"], ["KA_A10"]],
+                  encoders: [["KC_LEFT", "KC_RGHT", "KC_MUTE"]],
+                  joystick: {
+                    type: "RADIAL",
+                    sectors: [
+                      { a1: 0.0, a2: 1.5, k: "KA_A3" },
+                      { a1: 1.5, a2: 3.0, k: "KA_M1" },
+                    ],
+                  },
+                },
+              },
+              {
+                id: 1,
+                name: "Tools",
+                color: 0x445566,
+                layout: {
+                  keymap: [["KI_LM2", "KC_NONE"]],
+                  encoders: [],
+                  joystick: { type: "VENDOR", sectors: [] },
+                },
+              },
             ],
           },
           {

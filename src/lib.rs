@@ -13,8 +13,8 @@ use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
     BridgeCommand, CapabilityCommand, Cli, CodexCommand, Command, CompletionShell, ConfigCommand,
-    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, LayerCommand,
-    ProfileCommand, TierCommand,
+    ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand,
+    LayerCommand, ProfileCommand, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -72,6 +72,7 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Config { command } => run_config(command, cli.json, &mut out)?,
         Command::Profile { command } => run_profile(command, cli.json, &mut out)?,
         Command::Layer { command } => run_layer(command, cli.json, &mut out)?,
+        Command::Control { command } => run_control(command, cli.json, &mut out)?,
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
@@ -204,6 +205,72 @@ fn run_layer(command: LayerCommand, json: bool, mut out: impl Write) -> Result<(
             output,
         } => {
             let result = semantic::layer_color(&input, profile, id, &color, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+    }
+    Ok(())
+}
+
+fn run_control(command: ControlCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        ControlCommand::List {
+            input,
+            profile,
+            layer,
+        } => {
+            let result = semantic::control_list(&input, profile, layer)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "profile={}\t{}\nlayer={}\t{}",
+                    result.profile_id, result.profile_name, result.layer_id, result.layer_name
+                )?;
+                for control in result.controls {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}\t{}",
+                        control.id, control.kind, control.assignment_kind, control.assignment
+                    )?;
+                }
+            }
+        }
+        ControlCommand::Show {
+            input,
+            profile,
+            layer,
+            control,
+        } => {
+            let result = semantic::control_show(&input, profile, layer, &control)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "profile={}\t{}\nlayer={}\t{}",
+                    result.profile_id, result.profile_name, result.layer_id, result.layer_name
+                )?;
+                writeln!(
+                    out,
+                    "{}\t{}\t{}\t{}",
+                    result.control.id,
+                    result.control.kind,
+                    result.control.assignment_kind,
+                    result.control.assignment
+                )?;
+            }
+        }
+        ControlCommand::Set {
+            input,
+            profile,
+            layer,
+            control,
+            assignment,
+            output,
+        } => {
+            let result =
+                semantic::control_set(&input, profile, layer, &control, &assignment, &output)?;
             write_candidate_result(result, json, &mut out)?;
         }
     }

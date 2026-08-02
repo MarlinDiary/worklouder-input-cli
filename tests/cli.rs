@@ -39,6 +39,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("config"));
     assert!(stdout.contains("profile"));
     assert!(stdout.contains("layer"));
+    assert!(stdout.contains("control"));
     assert!(stdout.contains("completion"));
 }
 
@@ -59,6 +60,13 @@ fn semantic_help_exposes_offline_candidate_workflow() {
     assert!(layer_stdout.contains("show"));
     assert!(layer_stdout.contains("rename"));
     assert!(layer_stdout.contains("color"));
+
+    let control = binary().args(["control", "--help"]).output().unwrap();
+    let control_stdout = String::from_utf8(control.stdout).unwrap();
+    assert!(control.status.success());
+    assert!(control_stdout.contains("list"));
+    assert!(control_stdout.contains("show"));
+    assert!(control_stdout.contains("set"));
 }
 
 #[test]

@@ -1,6 +1,6 @@
 use crate::{device, fsutil};
 use anyhow::{bail, ensure, Context, Result};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
@@ -19,6 +19,7 @@ const MAX_TOTAL_BYTES: usize = 32 * 1024 * 1024;
 const MAX_LAYERS: usize = 6;
 const MAX_NAME_BYTES: usize = 64;
 const MAX_RGB: u64 = 0x00ff_ffff;
+const ASSIGNMENT_SPEC_JSON: &str = include_str!("../spec/input-assignment-tokens-0.18.0.json");
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize)]
@@ -90,6 +91,64 @@ pub struct LayoutSummary {
     pub keymap_rows: usize,
     pub encoder_entries: usize,
     pub joystick_fields: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ControlList {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub profile_id: u64,
+    pub profile_name: String,
+    pub layer_id: u64,
+    pub layer_name: String,
+    pub controls: Vec<ControlEntry>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ControlShow {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub profile_id: u64,
+    pub profile_name: String,
+    pub layer_id: u64,
+    pub layer_name: String,
+    pub control: ControlEntry,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ControlEntry {
+    pub id: String,
+    pub kind: &'static str,
+    pub assignment: String,
+    pub assignment_kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub a1: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub a2: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AssignmentSpec {
+    schema_version: u64,
+    kind: String,
+    input_version: String,
+    source_asar_sha256: String,
+    basic_tokens: Vec<String>,
+    internal_tokens: Vec<String>,
+    read_only_prefixes: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ControlAddress {
+    Key { row: usize, column: usize },
+    Encoder { index: usize, gesture: usize },
+    Joystick { sector: usize },
 }
 
 #[derive(Debug, Serialize)]
@@ -195,6 +254,108 @@ pub fn layer_show(input: &Path, profile_id: Option<u64>, layer_id: u64) -> Resul
         layer: layer_entry(layer)?,
         layout: layout_summary(layer),
     })
+}
+
+pub fn control_list(input: &Path, profile_id: Option<u64>, layer_id: u64) -> Result<ControlList> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
+    let profile = find_profile(&snapshot.keymap, selected_id)?;
+    let (_, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let layer = profile_layers(profile)?
+        .get(layer_index)
+        .context("layer disappeared during lookup")?;
+    Ok(ControlList {
+        schema_version: 1,
+        kind: "worklouderctl-control-list",
+        revision: snapshot.revision,
+        profile_id: selected_id,
+        profile_name: object_string(profile, "name", "profile")?.to_owned(),
+        layer_id,
+        layer_name: object_string(layer, "name", "layer")?.to_owned(),
+        controls: layer_controls(layer)?,
+    })
+}
+
+pub fn control_show(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+    control_id: &str,
+) -> Result<ControlShow> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
+    let profile = find_profile(&snapshot.keymap, selected_id)?;
+    let (_, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let layer = profile_layers(profile)?
+        .get(layer_index)
+        .context("layer disappeared during lookup")?;
+    let address = parse_control_id(control_id)?;
+    Ok(ControlShow {
+        schema_version: 1,
+        kind: "worklouderctl-control",
+        revision: snapshot.revision,
+        profile_id: selected_id,
+        profile_name: object_string(profile, "name", "profile")?.to_owned(),
+        layer_id,
+        layer_name: object_string(layer, "name", "layer")?.to_owned(),
+        control: control_entry(layer, address)?,
+    })
+}
+
+pub fn control_set(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+    control_id: &str,
+    assignment: &str,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
+    let address = parse_control_id(control_id)?;
+    let canonical_id = canonical_control_id(address);
+    ensure!(
+        canonical_id == control_id,
+        "control id must use canonical form {canonical_id}"
+    );
+    let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let assignment_path = control_json_path(profile_index, layer_index, address);
+    let previous = snapshot
+        .keymap
+        .get("profiles")
+        .and_then(Value::as_array)
+        .and_then(|items| items.get(profile_index))
+        .and_then(|profile| profile.get("layers"))
+        .and_then(Value::as_array)
+        .and_then(|items| items.get(layer_index))
+        .context("layer disappeared during candidate generation")
+        .and_then(|layer| control_entry(layer, address))?
+        .assignment;
+    let assignment_changed = previous != assignment;
+    if assignment_changed {
+        validate_writable_assignment(&snapshot.keymap, assignment)?;
+    }
+    let layer = snapshot
+        .keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .and_then(|items| items.get_mut(profile_index))
+        .and_then(|profile| profile.get_mut("layers"))
+        .and_then(Value::as_array_mut)
+        .and_then(|items| items.get_mut(layer_index))
+        .context("layer disappeared during candidate generation")?;
+    let target = control_assignment_mut(layer, address)?;
+    if assignment_changed {
+        *target = Value::String(assignment.to_owned());
+    }
+
+    let mut changed_paths = Vec::new();
+    if assignment_changed {
+        changed_paths.push(assignment_path);
+    }
+    sync_profile_usage(&mut snapshot.keymap, profile_index, &mut changed_paths)?;
+    let changed = !changed_paths.is_empty();
+    snapshot.publish(output, "control-set", changed, changed_paths)
 }
 
 pub fn profile_select(input: &Path, id: u64, output: &Path) -> Result<CandidateReceipt> {
@@ -513,6 +674,470 @@ impl SemanticSnapshot {
     }
 }
 
+fn assignment_spec() -> Result<AssignmentSpec> {
+    let spec: AssignmentSpec = serde_json::from_str(ASSIGNMENT_SPEC_JSON)
+        .context("embedded Input assignment catalog was invalid")?;
+    ensure!(
+        spec.schema_version == 1
+            && spec.kind == "worklouder-input-assignment-tokens"
+            && spec.input_version == "0.18.0"
+            && is_digest(&spec.source_asar_sha256, 64)
+            && spec.basic_tokens.len() == 184
+            && spec.internal_tokens.len() == 43
+            && spec.basic_tokens.iter().collect::<HashSet<_>>().len() == 184
+            && spec.internal_tokens.iter().collect::<HashSet<_>>().len() == 43,
+        "embedded Input assignment catalog identity was invalid"
+    );
+    Ok(spec)
+}
+
+fn parse_control_id(value: &str) -> Result<ControlAddress> {
+    let parts = value.split(':').collect::<Vec<_>>();
+    let parse_index = |raw: &str, kind: &str| -> Result<usize> {
+        let index = raw
+            .parse::<usize>()
+            .with_context(|| format!("{kind} index was not an unsigned integer"))?;
+        ensure!(
+            index.to_string() == raw,
+            "{kind} index must use canonical decimal form"
+        );
+        Ok(index)
+    };
+    match parts.as_slice() {
+        ["key", row, column] => Ok(ControlAddress::Key {
+            row: parse_index(row, "key row")?,
+            column: parse_index(column, "key column")?,
+        }),
+        ["encoder", index, gesture] => {
+            let gesture = match *gesture {
+                "ccw" => 0,
+                "cw" => 1,
+                "press" => 2,
+                _ => bail!("encoder gesture must be ccw, cw, or press"),
+            };
+            Ok(ControlAddress::Encoder {
+                index: parse_index(index, "encoder")?,
+                gesture,
+            })
+        }
+        ["joystick", sector] => Ok(ControlAddress::Joystick {
+            sector: parse_index(sector, "joystick sector")?,
+        }),
+        _ => bail!(
+            "control id must be key:ROW:COLUMN, encoder:INDEX:ccw|cw|press, or joystick:SECTOR"
+        ),
+    }
+}
+
+fn canonical_control_id(address: ControlAddress) -> String {
+    match address {
+        ControlAddress::Key { row, column } => format!("key:{row}:{column}"),
+        ControlAddress::Encoder { index, gesture } => format!(
+            "encoder:{index}:{}",
+            match gesture {
+                0 => "ccw",
+                1 => "cw",
+                _ => "press",
+            }
+        ),
+        ControlAddress::Joystick { sector } => format!("joystick:{sector}"),
+    }
+}
+
+fn control_json_path(profile_index: usize, layer_index: usize, address: ControlAddress) -> String {
+    let prefix = format!("/keymap.json/profiles/{profile_index}/layers/{layer_index}/layout");
+    match address {
+        ControlAddress::Key { row, column } => {
+            format!("{prefix}/keymap/{row}/{column}")
+        }
+        ControlAddress::Encoder { index, gesture } => {
+            format!("{prefix}/encoders/{index}/{gesture}")
+        }
+        ControlAddress::Joystick { sector } => {
+            format!("{prefix}/joystick/sectors/{sector}/k")
+        }
+    }
+}
+
+fn layer_layout(layer: &Value) -> Result<&Value> {
+    layer.get("layout").context("layer layout was missing")
+}
+
+fn layer_controls(layer: &Value) -> Result<Vec<ControlEntry>> {
+    let layout = layer_layout(layer)?;
+    let mut controls = Vec::new();
+    if let Some(rows) = layout.get("keymap").and_then(Value::as_array) {
+        for (row_index, row) in rows.iter().enumerate() {
+            for column_index in 0..row
+                .as_array()
+                .context("layout keymap row was not an array")?
+                .len()
+            {
+                controls.push(control_entry(
+                    layer,
+                    ControlAddress::Key {
+                        row: row_index,
+                        column: column_index,
+                    },
+                )?);
+            }
+        }
+    }
+    if let Some(encoders) = layout.get("encoders").and_then(Value::as_array) {
+        for index in 0..encoders.len() {
+            for gesture in 0..3 {
+                controls.push(control_entry(
+                    layer,
+                    ControlAddress::Encoder { index, gesture },
+                )?);
+            }
+        }
+    }
+    if let Some(sectors) = layout
+        .get("joystick")
+        .and_then(|joystick| joystick.get("sectors"))
+        .and_then(Value::as_array)
+    {
+        for sector in 0..sectors.len() {
+            controls.push(control_entry(layer, ControlAddress::Joystick { sector })?);
+        }
+    }
+    Ok(controls)
+}
+
+fn control_entry(layer: &Value, address: ControlAddress) -> Result<ControlEntry> {
+    let layout = layer_layout(layer)?;
+    let (kind, assignment, a1, a2) = match address {
+        ControlAddress::Key { row, column } => {
+            let token = layout
+                .get("keymap")
+                .and_then(Value::as_array)
+                .and_then(|rows| rows.get(row))
+                .and_then(Value::as_array)
+                .and_then(|columns| columns.get(column))
+                .and_then(Value::as_str)
+                .with_context(|| format!("key:{row}:{column} was not found"))?;
+            ("key", token, None, None)
+        }
+        ControlAddress::Encoder { index, gesture } => {
+            let token = layout
+                .get("encoders")
+                .and_then(Value::as_array)
+                .and_then(|encoders| encoders.get(index))
+                .and_then(Value::as_array)
+                .and_then(|gestures| gestures.get(gesture))
+                .and_then(Value::as_str)
+                .with_context(|| format!("{} was not found", canonical_control_id(address)))?;
+            ("encoder", token, None, None)
+        }
+        ControlAddress::Joystick { sector } => {
+            let entry = layout
+                .get("joystick")
+                .and_then(|joystick| joystick.get("sectors"))
+                .and_then(Value::as_array)
+                .and_then(|sectors| sectors.get(sector))
+                .with_context(|| format!("joystick:{sector} was not found"))?;
+            let token = entry
+                .get("k")
+                .and_then(Value::as_str)
+                .context("joystick sector assignment was not a string")?;
+            (
+                "joystick",
+                token,
+                entry.get("a1").and_then(Value::as_f64),
+                entry.get("a2").and_then(Value::as_f64),
+            )
+        }
+    };
+    Ok(ControlEntry {
+        id: canonical_control_id(address),
+        kind,
+        assignment: assignment.to_owned(),
+        assignment_kind: assignment_kind(assignment)?,
+        a1,
+        a2,
+    })
+}
+
+fn control_assignment_mut(layer: &mut Value, address: ControlAddress) -> Result<&mut Value> {
+    let layout = layer
+        .get_mut("layout")
+        .context("layer layout was missing")?;
+    match address {
+        ControlAddress::Key { row, column } => layout
+            .get_mut("keymap")
+            .and_then(Value::as_array_mut)
+            .and_then(|rows| rows.get_mut(row))
+            .and_then(Value::as_array_mut)
+            .and_then(|columns| columns.get_mut(column))
+            .with_context(|| format!("key:{row}:{column} was not found")),
+        ControlAddress::Encoder { index, gesture } => layout
+            .get_mut("encoders")
+            .and_then(Value::as_array_mut)
+            .and_then(|encoders| encoders.get_mut(index))
+            .and_then(Value::as_array_mut)
+            .and_then(|gestures| gestures.get_mut(gesture))
+            .with_context(|| format!("{} was not found", canonical_control_id(address))),
+        ControlAddress::Joystick { sector } => layout
+            .get_mut("joystick")
+            .and_then(|joystick| joystick.get_mut("sectors"))
+            .and_then(Value::as_array_mut)
+            .and_then(|sectors| sectors.get_mut(sector))
+            .and_then(|entry| entry.get_mut("k"))
+            .with_context(|| format!("joystick:{sector} was not found")),
+    }
+}
+
+fn resource_ids(keymap: &Value, field: &str) -> Result<HashSet<u64>> {
+    let resources = match keymap.get(field) {
+        Some(resources) => resources,
+        None => return Ok(HashSet::new()),
+    };
+    let resources = resources
+        .as_array()
+        .with_context(|| format!("keymap.json {field} was invalid"))?;
+    let mut ids = HashSet::new();
+    for resource in resources {
+        let id = object_u64(resource, "id", field)?;
+        ensure!(
+            ids.insert(id),
+            "keymap.json contained duplicate {field} id {id}"
+        );
+    }
+    Ok(ids)
+}
+
+fn reference_id(token: &str, prefix: &str) -> Result<Option<u64>> {
+    let raw = match token.strip_prefix(prefix) {
+        Some(raw) => raw,
+        None => return Ok(None),
+    };
+    ensure!(
+        !raw.is_empty() && raw.bytes().all(|byte| byte.is_ascii_digit()),
+        "assignment token {token} had an invalid reference id"
+    );
+    let id = raw
+        .parse::<u64>()
+        .with_context(|| format!("assignment token {token} reference id overflowed"))?;
+    ensure!(
+        id.to_string() == raw,
+        "assignment token {token} reference id was not canonical"
+    );
+    Ok(Some(id))
+}
+
+fn validate_assignment_token(
+    token: &str,
+    spec: &AssignmentSpec,
+    action_ids: &HashSet<u64>,
+    multi_action_ids: &HashSet<u64>,
+) -> Result<()> {
+    if spec.basic_tokens.iter().any(|item| item == token)
+        || spec.internal_tokens.iter().any(|item| item == token)
+    {
+        return Ok(());
+    }
+    if let Some(id) = reference_id(token, "KA_A")? {
+        ensure!(
+            action_ids.contains(&id),
+            "assignment referenced missing Action id {id}"
+        );
+        return Ok(());
+    }
+    if let Some(id) = reference_id(token, "KA_M")? {
+        ensure!(
+            multi_action_ids.contains(&id),
+            "assignment referenced missing Multi Action id {id}"
+        );
+        return Ok(());
+    }
+    for prefix in &spec.read_only_prefixes {
+        if let Some(suffix) = token.strip_prefix(prefix) {
+            ensure!(
+                !suffix.is_empty()
+                    && suffix.bytes().all(|byte| byte.is_ascii_uppercase()
+                        || byte.is_ascii_digit()
+                        || byte == b'_'),
+                "vendor assignment token {token} was malformed"
+            );
+            return Ok(());
+        }
+    }
+    bail!("assignment token {token} was not in the Input 0.18.0 catalog")
+}
+
+fn validate_writable_assignment(keymap: &Value, token: &str) -> Result<()> {
+    let spec = assignment_spec()?;
+    ensure!(
+        !spec
+            .read_only_prefixes
+            .iter()
+            .any(|prefix| token.starts_with(prefix)),
+        "vendor-reserved assignment token {token} is read-only"
+    );
+    validate_assignment_token(
+        token,
+        &spec,
+        &resource_ids(keymap, "macros")?,
+        &resource_ids(keymap, "multiActions")?,
+    )
+}
+
+fn assignment_kind(token: &str) -> Result<&'static str> {
+    let spec = assignment_spec()?;
+    if spec.basic_tokens.iter().any(|item| item == token) {
+        Ok("basic")
+    } else if spec.internal_tokens.iter().any(|item| item == token) {
+        Ok("internal")
+    } else if reference_id(token, "KA_A")?.is_some() {
+        Ok("action")
+    } else if reference_id(token, "KA_M")?.is_some() {
+        Ok("multiAction")
+    } else if spec
+        .read_only_prefixes
+        .iter()
+        .any(|prefix| token.starts_with(prefix))
+    {
+        Ok("vendor")
+    } else {
+        bail!("assignment token {token} was not classified")
+    }
+}
+
+fn for_each_assignment(layer: &Value, mut visit: impl FnMut(&str) -> Result<()>) -> Result<()> {
+    let layout = match layer.get("layout") {
+        Some(layout) => layout,
+        None => return Ok(()),
+    };
+    if let Some(rows) = layout.get("keymap") {
+        for row in rows.as_array().context("layout keymap was not an array")? {
+            for token in row
+                .as_array()
+                .context("layout keymap row was not an array")?
+            {
+                visit(token.as_str().context("key assignment was not a string")?)?;
+            }
+        }
+    }
+    if let Some(encoders) = layout.get("encoders") {
+        for encoder in encoders
+            .as_array()
+            .context("layout encoders was not an array")?
+        {
+            let gestures = encoder
+                .as_array()
+                .context("encoder entry was not an array")?;
+            ensure!(
+                gestures.len() == 3,
+                "encoder entry did not contain ccw, cw, press"
+            );
+            for token in gestures {
+                visit(
+                    token
+                        .as_str()
+                        .context("encoder assignment was not a string")?,
+                )?;
+            }
+        }
+    }
+    if let Some(joystick) = layout.get("joystick") {
+        let joystick = joystick
+            .as_object()
+            .context("layout joystick was not an object")?;
+        if let Some(sectors) = joystick.get("sectors") {
+            for sector in sectors
+                .as_array()
+                .context("joystick sectors was not an array")?
+            {
+                let sector = sector
+                    .as_object()
+                    .context("joystick sector was not an object")?;
+                sector
+                    .get("a1")
+                    .and_then(Value::as_f64)
+                    .context("joystick sector a1 was invalid")?;
+                sector
+                    .get("a2")
+                    .and_then(Value::as_f64)
+                    .context("joystick sector a2 was invalid")?;
+                visit(
+                    sector
+                        .get("k")
+                        .and_then(Value::as_str)
+                        .context("joystick sector assignment was not a string")?,
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn sync_profile_usage(
+    keymap: &mut Value,
+    profile_index: usize,
+    changed_paths: &mut Vec<String>,
+) -> Result<()> {
+    let profile = keymap
+        .get("profiles")
+        .and_then(Value::as_array)
+        .and_then(|profiles| profiles.get(profile_index))
+        .context("profile disappeared while collecting assignment references")?;
+    let mut actions = HashSet::new();
+    let mut multi_actions = HashSet::new();
+    for layer in profile_layers(profile)? {
+        for_each_assignment(layer, |token| {
+            if let Some(id) = reference_id(token, "KA_A")? {
+                actions.insert(id);
+            } else if let Some(id) = reference_id(token, "KA_M")? {
+                multi_actions.insert(id);
+            }
+            Ok(())
+        })?;
+    }
+    let mut actions = actions.into_iter().collect::<Vec<_>>();
+    let mut multi_actions = multi_actions.into_iter().collect::<Vec<_>>();
+    actions.sort_by_key(|id| id.to_string());
+    multi_actions.sort_by_key(|id| id.to_string());
+
+    let profile = keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .and_then(|profiles| profiles.get_mut(profile_index))
+        .and_then(Value::as_object_mut)
+        .context("profile disappeared while synchronizing assignment references")?;
+    sync_usage_field(
+        profile,
+        "macrosUsed",
+        &actions,
+        profile_index,
+        changed_paths,
+    )?;
+    sync_usage_field(
+        profile,
+        "multiActionsUsed",
+        &multi_actions,
+        profile_index,
+        changed_paths,
+    )?;
+    Ok(())
+}
+
+fn sync_usage_field(
+    profile: &mut Map<String, Value>,
+    field: &str,
+    ids: &[u64],
+    profile_index: usize,
+    changed_paths: &mut Vec<String>,
+) -> Result<()> {
+    let desired = Value::Array(ids.iter().copied().map(Value::from).collect());
+    let missing_empty = ids.is_empty() && !profile.contains_key(field);
+    if !missing_empty && profile.get(field) != Some(&desired) {
+        profile.insert(field.to_owned(), desired);
+        changed_paths.push(format!("/keymap.json/profiles/{profile_index}/{field}"));
+    }
+    Ok(())
+}
+
 fn validate_keymap(keymap: &Value) -> Result<()> {
     let object = keymap
         .as_object()
@@ -522,6 +1147,9 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
         "keymap.json version was not supported"
     );
     let active = active_profile_id(keymap)?;
+    let spec = assignment_spec()?;
+    let action_ids = resource_ids(keymap, "macros")?;
+    let multi_action_ids = resource_ids(keymap, "multiActions")?;
     let profiles = profiles(keymap)?;
     ensure!(!profiles.is_empty(), "keymap.json contained no profiles");
     let mut profile_ids = HashSet::new();
@@ -548,12 +1176,42 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
             );
             object_string(layer, "name", "layer")?;
             optional_color(layer)?;
+            for_each_assignment(layer, |token| {
+                validate_assignment_token(token, &spec, &action_ids, &multi_action_ids)
+            })?;
         }
+        validate_usage_field(profile, "macrosUsed", &action_ids)?;
+        validate_usage_field(profile, "multiActionsUsed", &multi_action_ids)?;
     }
     ensure!(
         active_exists,
         "activeProfileId did not identify an existing profile"
     );
+    Ok(())
+}
+
+fn validate_usage_field(profile: &Value, field: &str, valid_ids: &HashSet<u64>) -> Result<()> {
+    let values = match profile.get(field) {
+        Some(values) => values,
+        None => return Ok(()),
+    };
+    let values = values
+        .as_array()
+        .with_context(|| format!("profile {field} was not an array"))?;
+    let mut seen = HashSet::new();
+    for value in values {
+        let id = value
+            .as_u64()
+            .with_context(|| format!("profile {field} contained a non-integer id"))?;
+        ensure!(
+            seen.insert(id),
+            "profile {field} contained duplicate id {id}"
+        );
+        ensure!(
+            valid_ids.contains(&id),
+            "profile {field} referenced missing id {id}"
+        );
+    }
     Ok(())
 }
 
@@ -903,10 +1561,23 @@ mod tests {
             "version": 1,
             "activeProfileId": 0,
             "vendorFutureField": {"kept": true},
+            "macros": [
+                {"id": 3, "name": "Fixture Action", "color": null, "actions": [{"act": 1, "delay": 0, "kc": "KC_C"}]},
+                {"id": 4, "name": "Unused Action", "color": null, "actions": [{"act": 1, "delay": 0, "kc": "KC_D"}]},
+                {"id": 10, "name": "Two Digit Action", "color": null, "actions": [{"act": 1, "delay": 0, "kc": "KC_E"}]}
+            ],
+            "multiActions": [{"id": 1, "name": "Fixture Multi", "actions": []}],
             "profiles": [
-                {"id": 0, "name": "Alpha", "layers": [
-                    {"id": 0, "name": "Base", "color": 1122867, "layout": {"keymap": [[], []], "encoders": [{}], "joystick": {"x": 0, "y": 0}}},
-                    {"id": 1, "name": "Tools", "color": 4478310, "layout": {"keymap": [], "encoders": [], "joystick": {}}}
+                {"id": 0, "name": "Alpha", "macrosUsed": [10, 3], "multiActionsUsed": [1], "layers": [
+                    {"id": 0, "name": "Base", "color": 1122867, "layout": {
+                        "keymap": [["KC_A", "KC_B"], ["KA_A10"]],
+                        "encoders": [["KC_LEFT", "KC_RGHT", "KC_MUTE"]],
+                        "joystick": {"type": "RADIAL", "sectors": [
+                            {"a1": 0.0, "a2": 1.5, "k": "KA_A3"},
+                            {"a1": 1.5, "a2": 3.0, "k": "KA_M1"}
+                        ]}
+                    }},
+                    {"id": 1, "name": "Tools", "color": 4478310, "layout": {"keymap": [["KI_LM2", "KC_NONE"]], "encoders": [], "joystick": {"type": "VENDOR", "sectors": []}}}
                 ]},
                 {"id": 7, "name": "Beta", "layers": [{"id": 9, "name": "Other", "color": 7833753, "layout": {}}]}
             ]
@@ -1033,6 +1704,104 @@ mod tests {
         ] {
             fs::remove_file(path).unwrap();
         }
+    }
+
+    #[test]
+    fn controls_are_listed_and_shown_by_stable_physical_ids() {
+        let source = root("control-list");
+        write_fixture(&source);
+        let listed = control_list(&source, None, 0).unwrap();
+        assert_eq!(listed.profile_id, 0);
+        assert_eq!(listed.layer_id, 0);
+        assert_eq!(listed.controls.len(), 8);
+        assert_eq!(listed.controls[0].id, "key:0:0");
+        assert_eq!(listed.controls[0].assignment, "KC_A");
+        assert_eq!(listed.controls[0].assignment_kind, "basic");
+        assert_eq!(listed.controls[3].id, "encoder:0:ccw");
+        assert_eq!(listed.controls[6].id, "joystick:0");
+        assert_eq!(listed.controls[6].assignment_kind, "action");
+        assert_eq!(listed.controls[7].assignment_kind, "multiAction");
+
+        let shown = control_show(&source, Some(0), 0, "joystick:0").unwrap();
+        assert_eq!(shown.control.assignment, "KA_A3");
+        assert_eq!(shown.control.a1, Some(0.0));
+        assert_eq!(shown.control.a2, Some(1.5));
+        fs::remove_file(source).unwrap();
+    }
+
+    #[test]
+    fn control_candidates_change_one_assignment_and_synchronize_action_usage() {
+        let source = root("control-source");
+        let basic_output = root("control-basic");
+        let action_output = root("control-action");
+        let noop_output = root("control-noop");
+        write_fixture(&source);
+        let original = SemanticSnapshot::read(&source).unwrap();
+        let smart_before = original.file_bytes[1].clone();
+
+        let basic = control_set(
+            &source,
+            None,
+            0,
+            "encoder:0:press",
+            "KC_VOLU",
+            &basic_output,
+        )
+        .unwrap();
+        assert_eq!(
+            basic.changed_paths,
+            vec!["/keymap.json/profiles/0/layers/0/layout/encoders/0/2"]
+        );
+        let basic_candidate = SemanticSnapshot::read(&basic_output).unwrap();
+        assert_eq!(
+            basic_candidate.keymap["profiles"][0]["layers"][0]["layout"]["encoders"][0][2],
+            "KC_VOLU"
+        );
+        assert_eq!(basic_candidate.file_bytes[1], smart_before);
+
+        let action = control_set(&source, None, 0, "key:0:0", "KA_A4", &action_output).unwrap();
+        assert_eq!(
+            action.changed_paths,
+            vec![
+                "/keymap.json/profiles/0/layers/0/layout/keymap/0/0",
+                "/keymap.json/profiles/0/macrosUsed"
+            ]
+        );
+        let action_candidate = SemanticSnapshot::read(&action_output).unwrap();
+        assert_eq!(
+            action_candidate.keymap["profiles"][0]["macrosUsed"],
+            json!([10, 3, 4])
+        );
+        assert_eq!(action_candidate.file_bytes[1], smart_before);
+
+        let noop = control_set(&source, None, 0, "key:0:0", "KC_A", &noop_output).unwrap();
+        assert!(!noop.changed);
+        assert!(noop.changed_paths.is_empty());
+        assert_eq!(noop.before_revision, noop.after_revision);
+
+        for path in [&source, &basic_output, &action_output, &noop_output] {
+            fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn control_set_rejects_unknown_reserved_and_missing_assignments() {
+        let source = root("control-invalid");
+        write_fixture(&source);
+        for (control, assignment, needle) in [
+            ("key:0:0", "KC_NOT_REAL", "catalog"),
+            ("key:0:0", "KV_OAI_AG00", "read-only"),
+            ("key:0:0", "KA_A99", "missing Action"),
+            ("key:9:0", "KC_A", "not found"),
+        ] {
+            let output = root("control-rejected-output");
+            let error = control_set(&source, None, 0, control, assignment, &output)
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains(needle), "unexpected error: {error}");
+            assert!(!output.exists());
+        }
+        fs::remove_file(source).unwrap();
     }
 
     #[test]

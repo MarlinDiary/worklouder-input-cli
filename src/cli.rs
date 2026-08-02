@@ -107,6 +107,12 @@ pub enum Command {
         command: LayerCommand,
     },
 
+    /// Inspect or edit physical controls in an offline configuration snapshot.
+    Control {
+        #[clap(subcommand)]
+        command: ControlCommand,
+    },
+
     /// Generate a shell completion script on standard output.
     Completion {
         #[clap(value_enum)]
@@ -443,6 +449,50 @@ pub enum LayerCommand {
         /// RGB as #RRGGBB, 0xRRGGBB, or a decimal integer.
         #[clap(long)]
         color: String,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ControlCommand {
+    /// List keys, encoder gestures, and joystick sectors in one layer.
+    List {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        layer: u64,
+    },
+
+    /// Show one control and its exact Input assignment token.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        layer: u64,
+        /// key:ROW:COLUMN, encoder:INDEX:ccw|cw|press, or joystick:SECTOR.
+        #[clap(long)]
+        control: String,
+    },
+
+    /// Set one control token and write a complete candidate snapshot.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        layer: u64,
+        /// key:ROW:COLUMN, encoder:INDEX:ccw|cw|press, or joystick:SECTOR.
+        #[clap(long)]
+        control: String,
+        /// Input device token such as KC_C, KI_LM2, KA_A3, or KA_M1.
+        #[clap(long)]
+        assignment: String,
         #[clap(long, value_parser)]
         output: PathBuf,
     },
