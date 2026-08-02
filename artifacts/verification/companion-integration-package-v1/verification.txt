@@ -1,0 +1,131 @@
+WorkLouderCTL Companion integration package v1 verification record
+==================================================================
+
+Scope
+-----
+Base commit: 828f44c
+Feature commit: a946bf7
+Changed branch/field: deterministic provider integration bundle for both Codex and Input Companion Bridge v1
+Provider-owned behavior: released Codex/Input main-process adoption and complete-set writers
+CLI-owned driver, HID/BLE transport, firmware transport, GUI control, app-bundle patching: none
+
+Preserved original and baseline-red
+-----------------------------------
+Path: /tmp/worklouderctl-companion-baseline.nn7vz7/base
+Source commit: 828f44c
+Command: npm pack BASE/companion --pack-destination BASE_OUTPUT --json
+Literal summary:
+entryCount=14
+files=README.md,codex-fixture-server.mjs,codex-main-adapter.mjs,codex-main-bridge.mjs,codex-main-bridge.test.mjs,codex-main-integration.mjs,conformance.mjs,fixture-server.mjs,index.mjs,input-main-adapter.mjs,input-main-bridge.mjs,input-main-bridge.test.mjs,input-main-integration.mjs,package.json
+Exit status: 0
+Baseline behavior: the package has no production allowlist and ships fixture
+servers plus tests.
+
+Command: node BASE_EXTRACTED/package/conformance.mjs --help
+Literal stdout:
+
+Literal stderr:
+
+Exit status: 0
+Stdout bytes: 0
+Baseline behavior: a macOS /var versus /private/var real-path alias makes the
+installed executable silently skip main().
+
+Command: /bin/sh BASE/scripts/test-companion-package.py
+Literal stdout:
+
+Literal stderr:
+/bin/sh: BASE/scripts/test-companion-package.py: No such file or directory
+Exit status: 127
+
+Modified artifact
+-----------------
+Path: /Users/marlin/Documents/Codex/2026-07-31/cod/worklouder-input-cli/dist/companion-integration-v1-a946bf7/worklouder-input-companion-bridge-reference-0.1.0.tgz
+SHA-256: c378736b6e933662879d40eb433908d7c758a86999d138b913c0e13022994085
+Sidecar path: /Users/marlin/Documents/Codex/2026-07-31/cod/worklouder-input-cli/dist/companion-integration-v1-a946bf7/worklouder-input-companion-bridge-reference-0.1.0.tgz.sha256
+Sidecar SHA-256: e37eebeb7ca0b15282c08975a3db734733cf1b57a6cdbf4014abeba09eba9e39
+Sidecar verification output/status:
+worklouder-input-companion-bridge-reference-0.1.0.tgz: OK
+Exit status: 0
+
+Exact modified inventory
+------------------------
+All npm archive timestamps are fixed at Oct 26 1985. Files not listed here are
+rejected; paths must remain package-relative regular files without traversal,
+links, or special members.
+
+0644 package/LICENSE
+0644 package/README.md
+0644 package/codex-main-adapter.mjs
+0644 package/codex-main-bridge.mjs
+0644 package/codex-main-integration.mjs
+0755 package/conformance.mjs
+0644 package/index.mjs
+0644 package/input-main-adapter.mjs
+0644 package/input-main-bridge.mjs
+0644 package/input-main-integration.mjs
+0644 package/package.json
+
+Package integration gate
+------------------------
+Command: ./scripts/test-companion-package.py
+Literal stdout:
+companion_package_deterministic=verified
+companion_package_inventory=verified
+companion_package_install_import=verified
+companion_conformance_binary=verified
+Literal stderr:
+
+Exit status: 0
+Verified behavior: two independent packs are byte-identical; the exact safe
+inventory and modes match; the repository MIT license is preserved; the tgz
+installs with lifecycle scripts disabled; all 32 public exports import from the
+installed package; and the installed bin executes.
+
+Installed executable
+--------------------
+Command: INSTALLED/node_modules/.bin/input-companion-conformance --help
+Literal stdout:
+usage: input-companion-conformance [--socket PATH] [--token PATH] [--require CAPABILITY]...
+Literal stderr:
+
+Exit status: 0
+Verified behavior: main-module detection compares real paths and therefore
+works through npm bin links and macOS path aliases.
+
+Tagged-release boundary
+-----------------------
+Workflow: .github/workflows/release.yml
+Behavior: the publish job independently builds/installs the integration tgz,
+adds its sidecar to SHA256SUMS, emits build-provenance attestation, and attaches
+the tgz to the same GitHub release as the two native CLI archives.
+Registry boundary: package.json retains private=true; the reviewed GitHub
+release asset is the distribution mechanism.
+Upstream boundary: the package supplies one-call Codex/Input main-process
+installers and conformance; adoption into an official released app remains
+provider-owned and is not simulated by app-bundle patching.
+
+Patch/diff
+----------
+Path: artifacts/verification/companion-integration-package-v1/companion-integration-package.patch
+Command: git diff --binary 828f44c..a946bf7 -- . ':(exclude)artifacts/verification/companion-integration-package-v1'
+SHA-256 after reopen: 9eca45c81dc576905b431b81d64dd3c70f37aac0c4eed60e6fa0f9c55a59c342
+Reverse apply check exit status: 0
+
+Rollback
+--------
+Path: artifacts/verification/companion-integration-package-v1/rollback.sh
+SHA-256 after reopen: 1b5dfea0459d036a5fe90ad84bd5f20a89a7e95defd9edc0022a4c71a55f3a4d
+Verification command: execute rollback.sh against a detached copy of feature
+commit a946bf7 and compare it to base commit 828f44c, excluding this artifact
+directory.
+Literal stdout:
+rollback=verified
+base=828f44c
+feature=a946bf7
+Exit status: 0
+
+Modified behavior: a deterministic, minimal, installed-and-executed provider
+integration bundle is produced and attached to releases.
+Rollback behavior: the detached feature copy exactly matches 828f44c and
+returns to the broad development-directory npm package with the silent-bin bug.

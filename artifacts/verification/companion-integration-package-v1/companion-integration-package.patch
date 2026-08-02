@@ -1,0 +1,772 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 5a41ab7..9cf1e28 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -40,6 +40,8 @@ jobs:
+         run: cargo clippy --all-targets -- -D warnings
+       - name: Test companion bridge reference servers
+         run: npm test --prefix companion
++      - name: Verify deterministic Companion integration package
++        run: ./scripts/test-companion-package.py
+       - name: Verify deterministic sanitized fixtures
+         run: ./scripts/verify-sanitized-fixtures.sh
+       - name: Verify JSON contracts and unique object keys
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+index 8452d3b..b4b040d 100644
+--- a/.github/workflows/release.yml
++++ b/.github/workflows/release.yml
+@@ -138,6 +138,8 @@ jobs:
+     runs-on: macos-14
+     permissions:
+       contents: write
++      id-token: write
++      attestations: write
+     steps:
+       - uses: actions/checkout@v4
+       - uses: actions/download-artifact@v4
+@@ -150,6 +152,7 @@ jobs:
+         run: |
+           set -euo pipefail
+           version=${GITHUB_REF_NAME#v}
++          ./scripts/test-companion-package.py --output dist
+           arm=$(awk '{print $1}' "dist/worklouderctl-v$version-aarch64-apple-darwin.tar.gz.sha256")
+           intel=$(awk '{print $1}' "dist/worklouderctl-v$version-x86_64-apple-darwin.tar.gz.sha256")
+           ./scripts/render-homebrew-formula.py \
+@@ -158,8 +161,12 @@ jobs:
+             --arm64-sha256 "$arm" --x86-64-sha256 "$intel" \
+             --output dist/worklouderctl.rb
+           ruby -c dist/worklouderctl.rb
+-          cat dist/*.tar.gz.sha256 | sort -k2 > dist/SHA256SUMS
++          cat dist/*.tar.gz.sha256 dist/*.tgz.sha256 | sort -k2 > dist/SHA256SUMS
+           (cd dist && shasum -a 256 -c SHA256SUMS)
++      - name: Attest Companion integration package
++        uses: actions/attest-build-provenance@v2
++        with:
++          subject-path: dist/*.tgz
+       - name: Publish GitHub release
+         env:
+           GH_TOKEN: ${{ github.token }}
+diff --git a/README.md b/README.md
+index f5c4989..66038e9 100644
+--- a/README.md
++++ b/README.md
+@@ -551,23 +551,36 @@ node --test companion/input-main-bridge.test.mjs
+ ./scripts/test-transaction-rollback-e2e.sh
+ ```
+ 
+-## Additional planned mutation commands
++## Current coordinated mutation workflow
+ 
+-The intended binary name is `worklouderctl`:
++Offline editors produce immutable candidates; the coordinated transaction then
++binds all changed authorities into one plan, backup, receipt, and rollback
++boundary:
+ 
+ ```console
+ worklouderctl codex agent-source set --input codex.json priority --output codex-priority.json
+ worklouderctl codex command-key set --input codex-priority.json ACT06 \
+   --command toggleFastMode --output codex-fast.json
+-worklouderctl codex joystick set up --skill SKILL_ID
+-worklouderctl plan layout.yaml
+-worklouderctl apply layout.yaml
+-worklouderctl backup list
+-worklouderctl backup restore BACKUP_ID
++worklouderctl codex joystick set --input codex-fast.json --output codex-final.json \
++  up --skill-name Plan --skill-path /PATH/TO/SKILL.md
++worklouderctl transaction plan \
++  --codex-settings-base codex-before.json \
++  --codex-settings-candidate codex-final.json \
++  --input-config-base input-before.json \
++  --input-config-candidate input-final.json \
++  --output transaction-plan.json
++worklouderctl transaction apply --plan transaction-plan.json \
++  --backup-dir apply-backup --receipt apply-receipt.json \
++  --idempotency-key APPLY_KEY
++worklouderctl backup inspect --input apply-receipt.json
++worklouderctl transaction restore --apply-receipt apply-receipt.json \
++  --backup-dir restore-backup --receipt restore-receipt.json \
++  --idempotency-key RESTORE_KEY
+ ```
+ 
+-These examples document the remaining mutation interface. Follow the
+-[roadmap](docs/roadmap.md) for exact status.
++Socket/token options may be omitted when the installed providers expose their
++standard private bridge locations. The [transaction guide](docs/transactions.md)
++documents all four authority inputs, preflight, readback, and rollback.
+ 
+ ## Target capabilities
+ 
+@@ -634,7 +647,7 @@ CLI semantic parser.
+ | Milestone | Status |
+ | --- | --- |
+ | SEO/AIO and product documentation foundation | Complete |
+-| Sanitized research fixtures and schema model | Planned |
++| Sanitized research fixtures and schema model | Complete; deterministic regeneration, manifests, parsing, and sensitive-pattern gates verified |
+ | Rust CLI foundation, tier/capability contract, and JSON output | Complete |
+ | Provider `doctor` and Input `inspect`/exact-byte `export`/semantic cache snapshot | Complete |
+ | Bundle `validate` and structural `diff` | Complete |
+@@ -656,12 +669,13 @@ CLI semantic parser.
+ | Tier 4 permissions, firmware check, and diagnostic logs | Exact Input 0.18.0 authority paths frozen; bridge/CLI fixture verified with private sanitized bundle |
+ | Input-owned reset | Complete per-version/device/layout default candidate, immutable plan, CAS apply, exact readback, idempotent replay, and rollback fixture verified |
+ | Input-owned bootloader recovery | Backup-bound bootloader/release plan, delegated programmer/reconnect, exact configuration restore, postflight, receipt inspection, and idempotent replay fixture verified |
+-| Real-device mutation and rollback | Planned |
++| Official-provider real-device mutation and rollback | Released Codex/Input bridge integration and USB writer evidence pending upstream |
+ | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
+ | Input cache read adapter | Complete; byte-exact bridge-equivalent semantic snapshot |
+-| Input database synchronization | Planned |
++| Input database synchronization | Provider-owned reference adapter and rollback fixture complete; released Input integration pending |
+ | Deterministic macOS archives and signature-state verification | Complete; unsigned and ad-hoc builds locally executed |
+ | Developer ID signing/notarization and Homebrew formula pipeline | Complete and fail-closed; tagged publication credentials pending |
++| Deterministic provider integration kit | Complete; exact `.tgz` inventory, install/import, conformance executable, checksum, and provenance gates verified |
+ | First signed macOS release and stable Homebrew tap | Not published yet |
+ 
+ ## Frequently asked questions
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 271e37e..c55586e 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -450,18 +450,36 @@ node --test companion/input-main-bridge.test.mjs
+ ./scripts/test-bridge-e2e.sh
+ ```
+ 
+-## 其余计划中的写入命令
++## 当前跨 authority 写入流程
++
++离线 editor 生成 immutable candidate；随后由统一 transaction 把所有变化绑定到
++同一个 plan、backup、receipt 与 rollback boundary：
+ 
+ ```console
+ worklouderctl codex agent-source set --input codex.json priority --output codex-priority.json
+ worklouderctl codex command-key set --input codex-priority.json ACT06 \
+   --command toggleFastMode --output codex-fast.json
+-worklouderctl codex joystick set up --skill SKILL_ID
+-worklouderctl plan layout.yaml
+-worklouderctl apply layout.yaml
+-worklouderctl backup restore BACKUP_ID
++worklouderctl codex joystick set --input codex-fast.json --output codex-final.json \
++  up --skill-name Plan --skill-path /PATH/TO/SKILL.md
++worklouderctl transaction plan \
++  --codex-settings-base codex-before.json \
++  --codex-settings-candidate codex-final.json \
++  --input-config-base input-before.json \
++  --input-config-candidate input-final.json \
++  --output transaction-plan.json
++worklouderctl transaction apply --plan transaction-plan.json \
++  --backup-dir apply-backup --receipt apply-receipt.json \
++  --idempotency-key APPLY_KEY
++worklouderctl backup inspect --input apply-receipt.json
++worklouderctl transaction restore --apply-receipt apply-receipt.json \
++  --backup-dir restore-backup --receipt restore-receipt.json \
++  --idempotency-key RESTORE_KEY
+ ```
+ 
++当 installed provider 发布标准 private bridge location 时可以省略 socket/token
++参数；四个 authority 的完整输入、preflight、readback 与 rollback 见
++[transaction 指南](docs/transactions.md)。
++
+ ## 目标功能
+ 
+ - profiles 与六层 layouts；
+diff --git a/companion/LICENSE b/companion/LICENSE
+new file mode 100644
+index 0000000..0e07ca2
+--- /dev/null
++++ b/companion/LICENSE
+@@ -0,0 +1,21 @@
++MIT License
++
++Copyright (c) 2026 MarlinDiary
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++SOFTWARE.
+diff --git a/companion/README.md b/companion/README.md
+index fcece47..4719755 100644
+--- a/companion/README.md
++++ b/companion/README.md
+@@ -5,6 +5,26 @@ Companion Bridge. Input keeps its existing device session; `worklouderctl`
+ connects to the private bridge socket and never starts a competing device-kit
+ session.
+ 
++## Verified release asset
++
++Tagged WorkLouderCTL releases attach this directory as a deterministic `.tgz`
++integration kit alongside the native CLI archives. The package stays
++`private: true`: it is an explicit release asset for provider integration, not
++an independently published npm-registry product.
++
++Verify and install a downloaded kit without running lifecycle scripts:
++
++```sh
++shasum -a 256 -c worklouder-input-companion-bridge-reference-VERSION.tgz.sha256
++npm install --ignore-scripts --no-audit --no-fund \
++  ./worklouder-input-companion-bridge-reference-VERSION.tgz
++```
++
++`./scripts/test-companion-package.py` builds the kit twice, requires byte-for-byte
++identity, rejects unlisted archive members and unsafe paths, checks the exact
++file modes and exports, installs it into an isolated prefix, imports its public
++API, and executes the installed conformance binary.
++
+ ## One-call main-process installation
+ 
+ Install the bridge after Electron is ready and Input's service container has
+diff --git a/companion/conformance.mjs b/companion/conformance.mjs
+index e35fcbc..146148b 100755
+--- a/companion/conformance.mjs
++++ b/companion/conformance.mjs
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env node
+ 
+-import { readFile, stat } from "node:fs/promises";
++import { readFile, realpath, stat } from "node:fs/promises";
+ import { homedir } from "node:os";
+ import { createConnection } from "node:net";
+ import { join, resolve } from "node:path";
+@@ -258,10 +258,21 @@ function writeStream(stream, value) {
+   });
+ }
+ 
+-if (
+-  process.argv[1] &&
+-  resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
+-) {
++async function isMainModule() {
++  if (!process.argv[1]) {
++    return false;
++  }
++  try {
++    return (
++      (await realpath(resolve(process.argv[1]))) ===
++      (await realpath(fileURLToPath(import.meta.url)))
++    );
++  } catch {
++    return false;
++  }
++}
++
++if (await isMainModule()) {
+   try {
+     await main();
+   } catch (error) {
+diff --git a/companion/package.json b/companion/package.json
+index dcc3ff5..e967115 100644
+--- a/companion/package.json
++++ b/companion/package.json
+@@ -2,6 +2,22 @@
+   "name": "@worklouder/input-companion-bridge-reference",
+   "version": "0.1.0",
+   "private": true,
++  "description": "Reference Codex and Work Louder Input Companion Bridge integration kit for WorkLouderCTL",
++  "license": "MIT",
++  "repository": {
++    "type": "git",
++    "url": "git+https://github.com/MarlinDiary/worklouder-input-cli.git",
++    "directory": "companion"
++  },
++  "homepage": "https://github.com/MarlinDiary/worklouder-input-cli#readme",
++  "bugs": "https://github.com/MarlinDiary/worklouder-input-cli/issues",
++  "keywords": [
++    "work-louder",
++    "codex-micro",
++    "companion-bridge",
++    "electron",
++    "configuration"
++  ],
+   "type": "module",
+   "engines": {
+     "node": ">=18"
+@@ -9,6 +25,18 @@
+   "bin": {
+     "input-companion-conformance": "./conformance.mjs"
+   },
++  "files": [
++    "LICENSE",
++    "README.md",
++    "index.mjs",
++    "input-main-adapter.mjs",
++    "input-main-bridge.mjs",
++    "input-main-integration.mjs",
++    "codex-main-adapter.mjs",
++    "codex-main-bridge.mjs",
++    "codex-main-integration.mjs",
++    "conformance.mjs"
++  ],
+   "exports": {
+     ".": "./index.mjs",
+     "./adapter": "./input-main-adapter.mjs",
+diff --git a/docs/architecture.md b/docs/architecture.md
+index 3bb2bc4..833da1f 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -135,7 +135,14 @@ synchronizes them as one operation.
+ └──────────────────────────────┴─────────────────────────────┘
+ ```
+ 
+-## Planned write transaction
++## Implemented guarded write transaction
++
++The transaction core executes planning, CAS, backup, apply, readback,
++synchronization, and rollback against the packaged reference providers. A
++released Codex/Input integration supplies live discovery, runtime coordination,
++and the same complete-set writer boundary; it does not introduce a second
++transaction or a direct database/device write route. Physical device effects
++remain provider-owned and require the external evidence listed in the roadmap.
+ 
+ 1. Classify every requested field by tier and authority.
+ 2. Discover the exact Codex/Input installations, runtimes, and connected device.
+diff --git a/docs/compatibility.md b/docs/compatibility.md
+index 467f2b6..062e69a 100644
+--- a/docs/compatibility.md
++++ b/docs/compatibility.md
+@@ -26,9 +26,10 @@ claim-boundary, and required-gate inventory is added.
+ | Work Louder Input | 0.17.3 | Deterministic sanitized structural fixture; original installed bundle was superseded |
+ | Work Louder Input | 0.18.0 | Deterministic sanitized fixture plus exact bundled-kit live read adapter verified |
+ | Input Companion Bridge | Protocol v1 | Snapshot/CAS/apply/replay/restore/rollback fixture conformance verified; released Input writer pending |
++| Companion integration bundle | 0.1.0 | Deterministic exact-inventory tgz, installed exports, and conformance executable verified; attached by the tagged release workflow |
+ | Codex Micro firmware | v0.6.0 | Live status/files/export read boundary verified |
+-| USB | Observed | Release verification pending |
+-| Bluetooth | Observed | Live read boundary verified; mutation pending |
++| USB | Observed | Official-provider writer and physical rollback evidence pending external integration |
++| Bluetooth | Observed | Live read boundary verified; configuration mutation uses the same external provider gate |
+ 
+ The 2026-08-02 audit recorded Input updating from 0.17.3 to 0.18.0 during a
+ live session. Adapter selection therefore re-reads the installed and running
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index 4648c6e..ac20c94 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -61,7 +61,7 @@ Promises as failures even when the USB interface still enumerates.
+ | GUI surface | Configuration coverage | Planned command family | Current status |
+ | --- | --- | --- | --- |
+ | Profiles | create, duplicate, rename, select, delete, up to six | `profile` | full lifecycle candidate-verified; profile create included in combined fixture apply/readback/restore |
+-| Layers | create, duplicate, rename, reorder, delete, color, up to six | `layer` | lifecycle and ordering candidate-verified; layer create included in combined fixture transaction; live active-layer selection pending |
++| Layers | create, duplicate, rename, reorder, delete, color, up to six | `layer` | lifecycle, ordering, combined fixture transaction, and active-layer runtime observation verified; Input 0.18.0 has no persisted active-layer field or device RPC setter |
+ | Basic keys | all frozen Input 0.18.0 device tokens | `control list/show/set` | candidate-verified |
+ | Layer/profile keys | normal/temp layers and profiles 1–6 | `control list/show/set` | candidate-verified |
+ | Actions | simple/advanced events, delays, groups | `action` | list/show/create/rename/delete, event CRUD/reorder, and group metadata/member/orphan-cascade candidate-verified |
+@@ -111,3 +111,13 @@ One end-to-end parity fixture must combine:
+ 7. exact settings/device/cache/database readback;
+ 8. observed key, host action, layer transition, and lighting behavior;
+ 9. one rollback restoring all original hashes and behaviors.
++
++`./scripts/test-transaction-e2e.sh` now exercises this acceptance fixture across
++all four tiers. It requires a unified diff containing the Tier 1 settings and
++Agent Key changes, Tier 2 profile/layer/control/Action/lighting changes, Tier 3
++Smart Action/AppSense/host-settings changes, and a Tier 4 Input-owned firmware
++plan. It then verifies semantic post-state reads, complete four-authority
++readback, private backup inspection, idempotent retry, drift rejection, exact
++restore, and injected-failure automatic rollback. The observed-behavior claims
++are bounded to the isolated provider fixtures; released-app and physical-device
++behavior remain the explicit upstream gates above.
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index 82fd3d5..facba34 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -283,7 +283,7 @@ Codex Micro stores them in a separate `smart_actions.json` file.
+ ### Profiles and layers
+ 
+ - profile create, rename, select, and delete;
+-- layer create, rename, select, delete, and application link;
++- layer create, rename, reorder, delete, and application link;
+ - six normal layer selectors and six temporary layer selectors;
+ - six profile selectors;
+ - Mac/Windows label mode;
+diff --git a/docs/releases.md b/docs/releases.md
+index 5c84c5d..982672f 100644
+--- a/docs/releases.md
++++ b/docs/releases.md
+@@ -10,6 +10,12 @@ still a **source alpha** until the first version tag is signed, notarized, and
+ published. Do not interpret a local unsigned or ad-hoc build as an official
+ signed release.
+ 
++The same tagged release also contains a deterministic Companion Bridge `.tgz`
++integration kit. That package lets Codex/Input maintainers install the exact
++reference adapters, one-call main-process integrations, and read-only
++conformance executable without copying source files manually. It remains a
++private release asset rather than an npm-registry publication.
++
+ ## Verify a downloaded release
+ 
+ Download the archive and its adjacent `.sha256` file, then run:
+@@ -19,6 +25,8 @@ shasum -a 256 -c worklouderctl-vVERSION-TARGET.tar.gz.sha256
+ ./scripts/verify-release-archive.py \
+   worklouderctl-vVERSION-TARGET.tar.gz --expected-target TARGET --execute
+ ./scripts/verify-macos-release.sh worklouderctl-vVERSION-TARGET.tar.gz
++shasum -a 256 -c \
++  worklouder-input-companion-bridge-reference-VERSION.tgz.sha256
+ ```
+ 
+ `TARGET` is either `aarch64-apple-darwin` or `x86_64-apple-darwin`.
+@@ -26,6 +34,19 @@ Verification checks the sidecar checksum, exact archive inventory, manifest,
+ per-file hashes and modes, target, CLI execution, and the declared macOS code
+ signature state.
+ 
++Verify the integration package from a source checkout, or install the already
++checksum-verified release tgz directly:
++
++```console
++./scripts/test-companion-package.py
++npm install --ignore-scripts --no-audit --no-fund \
++  ./worklouder-input-companion-bridge-reference-VERSION.tgz
++./node_modules/.bin/input-companion-conformance --help
++```
++
++`private: true` blocks accidental npm-registry publication; the reviewed,
++checksum-pinned GitHub release asset is the distribution mechanism.
++
+ ## Signature states
+ 
+ The archive contract records one of five states; they are intentionally not
+@@ -85,9 +106,11 @@ tagged release:
+ 
+ The workflow imports the certificate into an ephemeral keychain, signs both
+ architectures, submits each binary to Apple notarization, verifies the release
+-archives, emits build-provenance attestations, renders the release-specific
+-Homebrew formula, recomputes `SHA256SUMS`, and finally creates the GitHub
+-release. Missing credentials or any verification mismatch stops publication.
++archives, builds and independently installs the Companion integration kit,
++emits build-provenance attestations for all three packages, renders the
++release-specific Homebrew formula, recomputes `SHA256SUMS`, and finally creates
++the GitHub release. Missing credentials or any verification mismatch stops
++publication.
+ 
+ ## Homebrew formula
+ 
+@@ -118,7 +141,9 @@ there is no stable `brew install` command to advertise yet.
+ 5. Require both architecture jobs, notarization, archive verification, and
+    provenance attestation to pass.
+ 6. Download and independently verify both published archives and checksums.
+-7. Install the generated formula into an isolated Homebrew prefix and run its
++7. Verify, install, import, and execute the Companion `.tgz` with
++   `./scripts/test-companion-package.py`'s exact inventory/export boundary.
++8. Install the generated formula into an isolated Homebrew prefix and run its
+    test before promoting it to a stable tap.
+ 
+ Rollback for an unpublished release is deletion of the local output directory.
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 3f598f8..e851d62 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -36,7 +36,6 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Cross-language bridge status/files/export conformance test
+ - [x] Revisioned config snapshot and live compare-and-swap validation
+ - [x] Fixture-verified bridge apply/restore, idempotent retry, and auto rollback
+-- [ ] Integrate the bridge adapter into an official Input release
+ - [x] Structural `validate` and `diff`
+ - [x] JSON output
+ - [x] Typed exit statuses and JSON error envelopes
+@@ -45,7 +44,6 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ 
+ - [x] Exact Codex 26.727.51351 read contract and settings-schema adapter
+ - [x] `settings-read` and `settings-write` bridge client/reference integration
+-- [ ] Integrate the Codex Companion Bridge into a released Codex build
+ - [x] Agent source and single-tap behavior offline candidates
+ - [x] Six Agent Key task/command/Skill/keycap assignment snapshot and validation
+ - [x] Six Agent Key offline get/set/clear plus bridge apply/restore transaction
+@@ -90,11 +88,11 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Input-owned cache/database adapter contract through configuration writer and ApplicationService; no direct LokiJS writes
+ - [x] Input process coordination through the in-process serialized bridge; direct compatibility reads retain explicit quit/reopen
+ - [x] Codex settings-bridge protocol, client, and reference process integration
+-- [ ] Released Codex process integration
+ - [x] Private backup catalog with atomic publication and mode-0700/0600 containment
+ - [x] Plan/apply all-authority CAS conflict detection and retry drift rejection
+ - [x] Exact provider readback plus coordinated all-authority postflight
+ - [x] Automatic reverse rollback and manual restore with roll-forward recovery
++- [x] One full-parity fixture spanning all four tiers, unified diff, semantic post-state, observed fixture behavior, and exact rollback
+ 
+ ## M5 — Stable distribution
+ 
+@@ -102,7 +100,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Explicit unsigned, ad-hoc, Apple Development, Developer ID, and notarized signature-state validation
+ - [x] Fail-closed Developer ID signing, Apple notarization, and build-provenance release workflow
+ - [x] Checksum-pinned Homebrew formula generation, syntax/style checks, isolated-prefix install, and execution test
+-- [ ] Publish the first signed/notarized macOS release and stable Homebrew tap
++- [x] Deterministic Companion integration bundle with exact inventory, installed exports, conformance binary, checksum, and provenance workflow
+ - [x] Deterministic Bash/Zsh/Fish completions and exhaustive generated command reference
+ - [x] Machine-readable compatibility matrix and Cargo-version gate for every release
+ - [x] Strict backup inspection and schema migration assessment tools
+@@ -116,10 +114,25 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Input-owned complete default/reset candidate per device/layout/version through the existing configuration transaction, with immutable plan, idempotent apply, readback, and exact rollback
+ - [x] Bootloader recovery authority and exact post-recovery configuration restore, with immutable backup-bound plan, Input programmer delegation, receipt inspection, and idempotent replay
+ 
++## External release gates
++
++These gates change vendor or credential-owned state rather than this
++repository. They are intentionally tracked separately from implementation:
++
++- an official Input release adopts the packaged Input Companion Bridge and
++  supplies its complete configuration writer;
++- a released Codex build adopts the packaged Codex Companion Bridge and
++  supplies exact settings and Agent Key replacers;
++- the project owner provisions Developer ID/notarization credentials, creates
++  the first version tag, verifies the published binaries, and promotes the
++  generated formula to a stable Homebrew tap;
++- official-provider USB mutation and physical-device rollback evidence is
++  frozen after those released integrations exist.
++
+ ## Later tracks
+ 
+ - Linux transport and packaging
+ - Windows transport and contention testing
+ - additional Work Louder devices through explicit adapters
+ - capability discovery for new Codex/Input versions
+-- delegated firmware update and recovery orchestration through Input
++- signed Windows/Linux distribution after their provider boundaries exist
+diff --git a/llms.txt b/llms.txt
+index 924d43d..90df809 100644
+--- a/llms.txt
++++ b/llms.txt
+@@ -23,6 +23,7 @@ Important: the project is currently a source alpha. The repository builds a work
+ - [Input-owned default reset](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/input-default-reset.md): version/device/layout-owned default candidate with immutable plan, CAS apply, exact readback, and rollback
+ - [Input-owned bootloader recovery](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/input-bootloader-recovery.md): complete-backup-bound bootloader/release plan with Input programmer delegation, exact configuration restore, postflight, and idempotent receipt
+ - [macOS releases and Homebrew packaging](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/releases.md): archive manifest, signature states, checksum verification, notarized tag workflow, Homebrew formula, and release checklist
++- [Companion integration kit](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/companion/README.md): deterministic private release asset for the Input/Codex reference adapters, one-call integrations, and conformance executable
+ - [Roadmap](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/roadmap.md): implementation milestones
+ - [Sanitized fixtures](https://github.com/MarlinDiary/worklouder-input-cli/tree/main/fixtures): deterministic Input 0.17.3/0.18.0 and Codex Micro firmware v0.6.0 schema fixtures
+ 
+diff --git a/scripts/test-companion-package.py b/scripts/test-companion-package.py
+new file mode 100755
+index 0000000..1dedff4
+--- /dev/null
++++ b/scripts/test-companion-package.py
+@@ -0,0 +1,213 @@
++#!/usr/bin/env python3
++"""Build, install, reopen, and verify the deterministic Companion integration kit."""
++
++import argparse
++import hashlib
++import json
++from pathlib import Path, PurePosixPath
++import re
++import shutil
++import subprocess
++import tarfile
++import tempfile
++
++
++EXPECTED_FILES = {
++    "package/LICENSE": 0o644,
++    "package/README.md": 0o644,
++    "package/codex-main-adapter.mjs": 0o644,
++    "package/codex-main-bridge.mjs": 0o644,
++    "package/codex-main-integration.mjs": 0o644,
++    "package/conformance.mjs": 0o755,
++    "package/index.mjs": 0o644,
++    "package/input-main-adapter.mjs": 0o644,
++    "package/input-main-bridge.mjs": 0o644,
++    "package/input-main-integration.mjs": 0o644,
++    "package/package.json": 0o644,
++}
++
++EXPECTED_EXPORTS = {
++    "BRIDGE_PROTOCOL_VERSION",
++    "BridgeError",
++    "CODEX_AGENT_KEYS_MUTATION_KIND",
++    "CODEX_AGENT_KEYS_SNAPSHOT_KIND",
++    "CODEX_AGENT_KEYS_STATE_KEY",
++    "CODEX_AGENT_KEY_SLOTS",
++    "CODEX_BRIDGE_PROTOCOL_VERSION",
++    "CODEX_SETTINGS_REVISION_ALGORITHM",
++    "CODEX_SETTINGS_SNAPSHOT_KIND",
++    "CODEX_SETTINGS_SNAPSHOT_SCHEMA_VERSION",
++    "CONFIG_REVISION_ALGORITHM",
++    "CONFIG_SNAPSHOT_KIND",
++    "CONFIG_SNAPSHOT_SCHEMA_VERSION",
++    "CodexBridgeError",
++    "HOST_SETTINGS_KIND",
++    "HOST_SETTINGS_REVISION_ALGORITHM",
++    "HOST_SETTINGS_SCHEMA_VERSION",
++    "PRESET_CATALOG_KIND",
++    "PRESET_CATALOG_REVISION_ALGORITHM",
++    "PRESET_CATALOG_SCHEMA_VERSION",
++    "agentKeysRevision",
++    "canonicalJson",
++    "createCodexMainAdapter",
++    "createInputMainAdapter",
++    "hostSettingsRevision",
++    "inspectInputCompanionBridge",
++    "installCodexCompanionBridge",
++    "installInputCompanionBridge",
++    "presetCatalogRevision",
++    "settingsRevision",
++    "startCodexCompanionBridge",
++    "startInputCompanionBridge",
++}
++
++
++def run(*args, cwd=None):
++    return subprocess.run(
++        args,
++        cwd=cwd,
++        check=True,
++        text=True,
++        stdout=subprocess.PIPE,
++        stderr=subprocess.PIPE,
++    )
++
++
++def pack(package, destination):
++    destination.mkdir()
++    result = run(
++        "npm",
++        "pack",
++        str(package),
++        "--pack-destination",
++        str(destination),
++        "--json",
++    )
++    report = json.loads(result.stdout)
++    if len(report) != 1:
++        raise SystemExit("npm pack returned an unexpected report count")
++    archive = destination / report[0]["filename"]
++    if not archive.is_file():
++        raise SystemExit("npm pack did not create the reported archive")
++    return archive
++
++
++def sha256(path):
++    digest = hashlib.sha256()
++    with path.open("rb") as source:
++        for block in iter(lambda: source.read(1024 * 1024), b""):
++            digest.update(block)
++    return digest.hexdigest()
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument(
++        "--output",
++        type=Path,
++        help="also publish the verified tgz and SHA-256 sidecar into this directory",
++    )
++    args = parser.parse_args()
++    repo = Path(__file__).resolve().parent.parent
++    package = repo / "companion"
++    cargo = (repo / "Cargo.toml").read_text()
++    version = re.search(r'^version = "([^"]+)"$', cargo, re.MULTILINE).group(1)
++    metadata = json.loads((package / "package.json").read_text())
++    if metadata["version"] != version:
++        raise SystemExit("Companion package and CLI versions differed")
++    if metadata.get("private") is not True or metadata.get("license") != "MIT":
++        raise SystemExit("Companion package publication/license boundary changed")
++
++    with tempfile.TemporaryDirectory(prefix="worklouderctl-companion-package.") as raw:
++        root = Path(raw)
++        first = pack(package, root / "one")
++        second = pack(package, root / "two")
++        if first.read_bytes() != second.read_bytes():
++            raise SystemExit("Companion package was not byte-for-byte deterministic")
++        digest = sha256(first)
++
++        with tarfile.open(first, "r:gz") as archive:
++            members = archive.getmembers()
++            files = {member.name: member.mode for member in members if member.isfile()}
++            if files != EXPECTED_FILES:
++                raise SystemExit(f"Companion package inventory changed: {files!r}")
++            allowed_directories = {"package"}
++            for name in EXPECTED_FILES:
++                parent = PurePosixPath(name).parent
++                while str(parent) not in {".", ""}:
++                    allowed_directories.add(str(parent))
++                    parent = parent.parent
++            for member in members:
++                path = PurePosixPath(member.name)
++                if path.is_absolute() or ".." in path.parts:
++                    raise SystemExit("Companion package contained an unsafe path")
++                if member.isfile() and member.name in EXPECTED_FILES:
++                    continue
++                if member.isdir() and member.name.rstrip("/") in allowed_directories:
++                    continue
++                raise SystemExit(
++                    f"Companion package contained an unexpected member: {member.name}"
++                )
++            # Only regular files and bounded directory entries survived the
++            # checks above; this remains compatible with Python before the
++            # tarfile extraction-filter argument was introduced.
++            archive.extractall(root / "extracted", members=members)
++
++        extracted = root / "extracted/package"
++        if (extracted / "LICENSE").read_bytes() != (repo / "LICENSE").read_bytes():
++            raise SystemExit("Companion package license differed from the repository")
++        help_result = run("node", str(extracted / "conformance.mjs"), "--help")
++        expected_help = (
++            "usage: input-companion-conformance [--socket PATH] [--token PATH] "
++            "[--require CAPABILITY]...\n"
++        )
++        if help_result.stdout != expected_help:
++            raise SystemExit(
++                "Companion conformance executable help changed: "
++                f"{help_result.stdout!r} stderr={help_result.stderr!r}"
++            )
++
++        install = root / "install"
++        run(
++            "npm",
++            "install",
++            "--ignore-scripts",
++            "--no-audit",
++            "--no-fund",
++            "--prefix",
++            str(install),
++            str(first),
++        )
++        import_result = run(
++            "node",
++            "--input-type=module",
++            "-e",
++            "const m=await import('@worklouder/input-companion-bridge-reference');"
++            "console.log(JSON.stringify(Object.keys(m).sort()))",
++            cwd=install,
++        )
++        exports = set(json.loads(import_result.stdout))
++        if exports != EXPECTED_EXPORTS:
++            raise SystemExit(f"Companion package exports changed: {sorted(exports)!r}")
++
++        if args.output:
++            args.output.mkdir(parents=True, exist_ok=True)
++            destination = args.output / first.name
++            sidecar = destination.with_name(destination.name + ".sha256")
++            if destination.exists() or sidecar.exists():
++                raise SystemExit("Companion package output already exists")
++            shutil.copyfile(first, destination)
++            destination.chmod(0o644)
++            sidecar.write_text(f"{digest}  {destination.name}\n")
++            sidecar.chmod(0o644)
++            print(f"companion_package={destination}")
++            print(f"companion_package_sha256={digest}")
++
++    print("companion_package_deterministic=verified")
++    print("companion_package_inventory=verified")
++    print("companion_package_install_import=verified")
++    print("companion_conformance_binary=verified")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/spec/compatibility-matrix-v1.json b/spec/compatibility-matrix-v1.json
+index 49bd5c0..73407c4 100644
+--- a/spec/compatibility-matrix-v1.json
++++ b/spec/compatibility-matrix-v1.json
+@@ -60,6 +60,7 @@
+       "requiredGates": [
+         "cargo test --locked",
+         "npm test --prefix companion",
++        "./scripts/test-companion-package.py",
+         "./scripts/verify-json-contracts.py",
+         "./scripts/verify-sanitized-fixtures.sh",
+         "./scripts/verify-compatibility-matrix.sh",
