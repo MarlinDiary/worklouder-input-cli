@@ -1380,6 +1380,60 @@ _arguments "${_arguments_options[@]}" \
     ;;
 esac
 ;;
+(reset)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__input__reset_commands" \
+"*::: :->reset" \
+&& ret=0
+
+    case $state in
+    (reset)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-input-reset-command-$line[1]:"
+        case $line[1] in
+            (plan)
+_arguments "${_arguments_options[@]}" \
+'*--plan=[Destination for the immutable reset plan]:PLAN:_files' \
+'*--candidate=[Destination for the complete default configuration snapshot]:CANDIDATE:_files' \
+'--device=[Select a connected device ID; defaults to the single Codex Micro]:DEVICE: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(apply)
+_arguments "${_arguments_options[@]}" \
+'*--plan=[Immutable plan produced by `input reset plan`]:PLAN:_files' \
+'*--candidate=[Complete default candidate produced with the plan]:CANDIDATE:_files' \
+'*--backup=[Immutable complete pre-reset configuration snapshot]:BACKUP:_files' \
+'*--receipt=[Destination for the verified reset receipt]:RECEIPT:_files' \
+'--expected-revision=[Require the live configuration to have this exact revision]:EXPECTED_REVISION: ' \
+'--idempotency-key=[Stable retry key; reuse it only with the same plan and candidate]:IDEMPOTENCY_KEY: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (logs)
 _arguments "${_arguments_options[@]}" \
 '-h[Print help information]' \
@@ -3712,6 +3766,11 @@ _worklouderctl__input__permission__command__apply_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl input permission command apply commands' commands "$@"
 }
+(( $+functions[_worklouderctl__input__reset__apply_commands] )) ||
+_worklouderctl__input__reset__apply_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input reset apply commands' commands "$@"
+}
 (( $+functions[_worklouderctl__transaction__apply_commands] )) ||
 _worklouderctl__transaction__apply_commands() {
     local commands; commands=()
@@ -4443,6 +4502,11 @@ _worklouderctl__input__preset__help_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl input preset help commands' commands "$@"
 }
+(( $+functions[_worklouderctl__input__reset__help_commands] )) ||
+_worklouderctl__input__reset__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input reset help commands' commands "$@"
+}
 (( $+functions[_worklouderctl__layer__help_commands] )) ||
 _worklouderctl__layer__help_commands() {
     local commands; commands=()
@@ -4537,6 +4601,7 @@ _worklouderctl__input_commands() {
 'permission:Inspect or change Input-owned host permission settings' \
 'permissions:Check the Input-owned OS permission required for device access' \
 'firmware:Inspect firmware availability through Input'\''s released update service' \
+'reset:Plan and apply an Input-owned complete default configuration' \
 'logs:Collect a bounded, sanitized diagnostic log bundle from Input' \
 'preset:Snapshot the Input-owned preset catalog through the companion bridge' \
 'help:Print this message or the help of the given subcommand(s)' \
@@ -4824,6 +4889,11 @@ _worklouderctl__input__firmware__plan_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl input firmware plan commands' commands "$@"
 }
+(( $+functions[_worklouderctl__input__reset__plan_commands] )) ||
+_worklouderctl__input__reset__plan_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input reset plan commands' commands "$@"
+}
 (( $+functions[_worklouderctl__transaction__plan_commands] )) ||
 _worklouderctl__transaction__plan_commands() {
     local commands; commands=()
@@ -4922,6 +4992,15 @@ _worklouderctl__codex__reset_commands() {
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'worklouderctl codex reset commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__reset_commands] )) ||
+_worklouderctl__input__reset_commands() {
+    local commands; commands=(
+'plan:Freeze the live revision and an Input-generated default candidate' \
+'apply:Apply the frozen candidate through the existing config transaction' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl input reset commands' commands "$@"
 }
 (( $+functions[_worklouderctl__codex__agent-key__restore_commands] )) ||
 _worklouderctl__codex__agent-key__restore_commands() {
