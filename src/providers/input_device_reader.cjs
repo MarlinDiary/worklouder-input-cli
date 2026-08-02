@@ -71,6 +71,9 @@ async function connect(appPath) {
 async function commonSnapshot(connected) {
   const firmwareVersion = await connected.api.getFirmwareVersion();
   const status = await connected.api.getDeviceStatus();
+  if (status.firmwareVersion && status.firmwareVersion !== firmwareVersion) {
+    throw new Error("sys.version and device.status firmware versions differed");
+  }
   if (!status.firmwareVersion) {
     status.firmwareVersion = firmwareVersion;
   }

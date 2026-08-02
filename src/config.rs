@@ -226,6 +226,11 @@ fn validate_device_bundle(bundle: &Path) -> Result<ValidationReport> {
             unique_paths.len()
         ),
     });
+    checks.push(ValidationCheck {
+        id: "manifest.non-empty".into(),
+        valid: !manifest.files.is_empty(),
+        summary: format!("manifest contains {} file record(s)", manifest.files.len()),
+    });
 
     for record in &manifest.files {
         let id = format!("file.{}", record.relative_path);
