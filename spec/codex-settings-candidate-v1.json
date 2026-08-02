@@ -75,6 +75,17 @@
     "lightingAutoOffSet": {
       "command": "codex lighting auto-off set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
       "changedPath": "/settings/codex-micro-lighting-auto-off"
+    },
+    "voiceGet": {
+      "command": "codex voice get --input SNAPSHOT.json",
+      "values": [
+        "push-to-talk",
+        "realtime"
+      ]
+    },
+    "voiceSet": {
+      "command": "codex voice set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
+      "changedPath": "/settings/codex-micro-layout/voiceButtonMode"
     }
   },
   "commandKeySlots": [
