@@ -48,6 +48,7 @@ const METHOD_DEFINITIONS = new Map([
     "input.firmware.status",
     ["input.firmware.status.v1", "getFirmwareStatus"],
   ],
+  ["input.firmware.plan", ["input.firmware.plan.v1", "getFirmwarePlan"]],
   ["input.logs.snapshot", ["input.logs.snapshot.v1", "snapshotLogs"]],
 ]);
 

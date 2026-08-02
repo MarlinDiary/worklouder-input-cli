@@ -180,6 +180,15 @@
       "resultKind": "worklouder-input-firmware-status"
     },
     {
+      "name": "input.firmware.plan",
+      "capability": "input.firmware.plan.v1",
+      "mutation": false,
+      "optionalParams": [
+        "deviceId"
+      ],
+      "resultKind": "worklouder-input-firmware-plan"
+    },
+    {
       "name": "input.logs.snapshot",
       "capability": "input.logs.snapshot.v1",
       "mutation": false,
@@ -344,7 +353,8 @@
       "authority": "Input DeviceFlashService release checker and existing device session",
       "network": "the check command may use Input's own release-service network request",
       "mutation": false,
-      "capabilityAdvertisement": "advertised only when firmwareAuthority supplies readStatus"
+      "plan": "freezes release, configuration revision, USB readiness, and the seven released renderer workflow phases",
+      "capabilityAdvertisement": "status and plan are advertised only when firmwareAuthority supplies readStatus"
     },
     "logs": {
       "authority": "Input WindowService in-memory renderer log ring",

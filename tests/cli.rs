@@ -64,6 +64,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("config"));
     assert!(stdout.contains("schema"));
     assert!(stdout.contains("backup"));
+    assert!(stdout.contains("agent"));
     assert!(stdout.contains("codex"));
     assert!(stdout.contains("device"));
     assert!(stdout.contains("input"));
@@ -79,6 +80,72 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("preset"));
     assert!(stdout.contains("radial"));
     assert!(stdout.contains("completion"));
+}
+
+#[test]
+fn agent_envelopes_execute_without_a_shell_and_capture_typed_statuses() {
+    let root = fixture_root();
+    fs::create_dir_all(&root).unwrap();
+    let version_envelope = root.join("version.json");
+    fs::write(
+        &version_envelope,
+        serde_json::to_vec(&serde_json::json!({
+            "schemaVersion": 1,
+            "argv": ["worklouderctl", "version"],
+            "output": "json",
+            "expectedExitStatuses": [0]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let validation = binary()
+        .args(["--json", "agent", "validate", "--input"])
+        .arg(&version_envelope)
+        .output()
+        .unwrap();
+    assert!(validation.status.success());
+    let validation: serde_json::Value = serde_json::from_slice(&validation.stdout).unwrap();
+    assert_eq!(
+        validation["normalizedArgv"],
+        serde_json::json!(["worklouderctl", "--json", "version"])
+    );
+
+    let execution = binary()
+        .args(["--json", "agent", "execute", "--input"])
+        .arg(&version_envelope)
+        .output()
+        .unwrap();
+    assert!(execution.status.success());
+    let execution: serde_json::Value = serde_json::from_slice(&execution.stdout).unwrap();
+    assert_eq!(execution["exitStatus"], 0);
+    assert_eq!(execution["success"], true);
+    assert_eq!(execution["accepted"], true);
+    assert_eq!(execution["stdout"]["name"], "worklouderctl");
+
+    let usage_envelope = root.join("usage.json");
+    fs::write(
+        &usage_envelope,
+        serde_json::to_vec(&serde_json::json!({
+            "schemaVersion": 1,
+            "argv": ["worklouderctl", "not-a-command"],
+            "output": "json",
+            "expectedExitStatuses": [2]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let usage = binary()
+        .args(["--json", "agent", "execute", "--input"])
+        .arg(&usage_envelope)
+        .output()
+        .unwrap();
+    assert!(usage.status.success());
+    let usage: serde_json::Value = serde_json::from_slice(&usage.stdout).unwrap();
+    assert_eq!(usage["exitStatus"], 2);
+    assert_eq!(usage["success"], false);
+    assert_eq!(usage["accepted"], true);
+    assert_eq!(usage["error"]["code"], "usage");
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -122,9 +189,10 @@ fn schemas_are_discoverable_and_machine_readable() {
         .unwrap();
     assert!(list.status.success());
     let summaries: serde_json::Value = serde_json::from_slice(&list.stdout).unwrap();
-    assert_eq!(summaries.as_array().unwrap().len(), 6);
-    assert_eq!(summaries[0]["name"], "backup-inspection-v1");
-    assert_eq!(summaries[2]["name"], "configuration-v1");
+    assert_eq!(summaries.as_array().unwrap().len(), 7);
+    assert_eq!(summaries[0]["name"], "agent-execution-v1");
+    assert_eq!(summaries[1]["name"], "backup-inspection-v1");
+    assert_eq!(summaries[3]["name"], "configuration-v1");
 
     let backup = binary()
         .args(["--json", "schema", "show", "backup-inspection-v1"])
@@ -420,6 +488,18 @@ fn input_operations_help_exposes_read_only_tier_four_workflows() {
     let logs_stdout = String::from_utf8(logs.stdout).unwrap();
     assert!(logs.status.success());
     assert!(logs_stdout.contains("collect"));
+}
+
+#[test]
+fn firmware_help_exposes_plan_before_delegated_update() {
+    let output = binary()
+        .args(["input", "firmware", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(output.status.success());
+    assert!(stdout.contains("check"));
+    assert!(stdout.contains("plan"));
 }
 
 #[test]

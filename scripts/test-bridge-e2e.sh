@@ -101,6 +101,7 @@ node "$repo/companion/conformance.mjs" \
   --require input.appsense.runtime.v1 \
   --require input.permissions.status.v1 \
   --require input.firmware.status.v1 \
+  --require input.firmware.plan.v1 \
   --require input.logs.snapshot.v1 \
   >"$root/node-conformance.json"
 "$bin" --json bridge --socket "$socket" --token "$token" status \
@@ -112,6 +113,11 @@ node "$repo/companion/conformance.mjs" \
   permissions --device fixture-device >"$root/input-permissions.json"
 "$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
   firmware check --device fixture-device >"$root/input-firmware.json"
+"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
+  firmware plan --device fixture-device --output "$root/input-firmware-plan.json" \
+  >"$root/input-firmware-plan-receipt.json"
+"$bin" --json backup inspect --input "$root/input-firmware-plan.json" \
+  >"$root/input-firmware-plan-inspection.json"
 "$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
   logs collect --output "$root/input-logs" --max-entries 2 \
   >"$root/input-logs-receipt.json"
@@ -505,6 +511,9 @@ bridge = json.loads((root / "bridge-status.json").read_text())
 status = json.loads((root / "device-status.json").read_text())
 input_permissions = json.loads((root / "input-permissions.json").read_text())
 input_firmware = json.loads((root / "input-firmware.json").read_text())
+input_firmware_plan = json.loads((root / "input-firmware-plan.json").read_text())
+input_firmware_plan_receipt = json.loads((root / "input-firmware-plan-receipt.json").read_text())
+input_firmware_plan_inspection = json.loads((root / "input-firmware-plan-inspection.json").read_text())
 input_logs_receipt = json.loads((root / "input-logs-receipt.json").read_text())
 input_logs_manifest = json.loads((root / "input-logs" / "manifest.json").read_text())
 input_logs = json.loads((root / "input-logs" / "logs.json").read_text())
@@ -704,6 +713,7 @@ assert "input.presets.snapshot.v1" in bridge["capabilities"]
 assert "input.appsense.runtime.v1" in bridge["capabilities"]
 assert "input.permissions.status.v1" in bridge["capabilities"]
 assert "input.firmware.status.v1" in bridge["capabilities"]
+assert "input.firmware.plan.v1" in bridge["capabilities"]
 assert "input.logs.snapshot.v1" in bridge["capabilities"]
 assert status["adapter"] == "input-companion-bridge-v1"
 assert status["status"]["selectedLayerIndex"] == 2
@@ -716,6 +726,17 @@ assert input_permissions["permission"] == {
 assert input_firmware["status"]["firmwareVersion"] == "v0.6.0-fixture"
 assert input_firmware["update"]["updateAvailable"] is True
 assert input_firmware["update"]["release"]["version"] == "v0.7.0-fixture"
+assert input_firmware_plan_inspection["artifactKind"] == "worklouder-input-firmware-plan"
+assert input_firmware_plan_inspection["migration"]["migrationRequired"] is False
+assert input_firmware_plan["kind"] == "worklouder-input-firmware-plan"
+assert input_firmware_plan["currentFirmwareVersion"] == "v0.6.0-fixture"
+assert input_firmware_plan["targetRelease"]["version"] == "v0.7.0-fixture"
+assert input_firmware_plan["configFileCount"] == 2
+assert input_firmware_plan["ready"] is False
+assert input_firmware_plan["blockers"] == ["usb-required"]
+assert len(input_firmware_plan["phases"]) == 7
+assert input_firmware_plan_receipt["revision"] == input_firmware_plan["revision"]
+assert input_firmware_plan_receipt["configRevision"] == input_firmware_plan["configRevision"]
 assert input_logs_receipt["output"] == str(root / "input-logs")
 assert input_logs_manifest["sanitized"] is True
 assert input_logs_manifest["exportedEntryCount"] == 2
@@ -1375,6 +1396,8 @@ print("semantic_appsense_runtime_focus_layer=verified")
 print("semantic_appsense_runtime_mismatch=typed-conflict")
 print("tier4_input_permission_status=verified")
 print("tier4_firmware_check=verified")
+print("tier4_firmware_plan=verified")
+print("tier4_firmware_plan_usb_gate=verified")
 print("tier4_sanitized_log_bundle=verified")
 print("semantic_control_list=verified")
 print("semantic_control_show=verified")

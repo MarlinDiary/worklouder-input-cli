@@ -103,12 +103,12 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [ ] Shell completions and generated command reference
 - [ ] Compatibility matrix for every release
 - [x] Strict backup inspection and schema migration assessment tools
-- [ ] Agent-facing protocol over the same transaction core
+- [x] Shell-free agent JSON envelope over the same parser, typed statuses, and transaction core
 
 ## M6 — Delegated Input operations
 
 - [x] Hash-pinned Input 0.18.0 permission, firmware-read, log, reset, and update-flow inventory
-- [x] Optional permission, firmware status, and sanitized log bridge authorities
+- [x] Optional permission, firmware status/plan, and sanitized log bridge authorities
 - [ ] Input-owned high-level firmware update authority with backup, USB/bootloader flash, reconnect, restore, and postflight
 - [ ] Complete default/reset candidate per device/layout/version through the existing configuration transaction
 - [ ] Bootloader recovery authority and exact post-recovery configuration restore

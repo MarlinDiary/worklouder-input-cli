@@ -576,7 +576,10 @@ test("Input adapter exposes AppSense focus forwarding and device layer state", a
 });
 
 test("Input adapter normalizes Tier 4 permission, firmware, and sanitized log state", async () => {
-  const device = configDevice("operations-device", new Map());
+  const device = configDevice(
+    "operations-device",
+    new Map([["keymap.json", Buffer.from('{"version":1}')]]),
+  );
   const adapter = createInputMainAdapter({
     devicesCommManager: { getDevices: () => [device] },
     deviceKitVersion: "0.1.29",
@@ -618,6 +621,16 @@ test("Input adapter normalizes Tier 4 permission, firmware, and sanitized log st
   const firmware = await adapter.getFirmwareStatus({ deviceId: null });
   assert.equal(firmware.status.firmwareVersion, "v0.6.0");
   assert.equal(firmware.update.release.version, "v0.7.0");
+
+  const plan = await adapter.getFirmwarePlan({ deviceId: null });
+  assert.equal(plan.kind, "worklouder-input-firmware-plan");
+  assert.equal(plan.currentFirmwareVersion, "v0.6.0");
+  assert.equal(plan.targetRelease.version, "v0.7.0");
+  assert.equal(plan.configFileCount, 1);
+  assert.equal(plan.ready, false);
+  assert.deepEqual(plan.blockers, ["usb-required"]);
+  assert.match(plan.revision, /^[0-9a-f]{64}$/);
+  assert.equal(plan.phases.length, 7);
 
   const logs = await adapter.snapshotLogs({ maxEntries: 10 });
   assert.equal(logs.sanitized, true);
@@ -742,6 +755,7 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
   assert.ok(integration.capabilities.includes("input.appsense.runtime.v1"));
   assert.ok(integration.capabilities.includes("input.permissions.status.v1"));
   assert.ok(integration.capabilities.includes("input.firmware.status.v1"));
+  assert.ok(integration.capabilities.includes("input.firmware.plan.v1"));
   assert.ok(integration.capabilities.includes("input.logs.snapshot.v1"));
   assert.equal(app.listenerCount("before-quit"), 1);
   await integration.stop();

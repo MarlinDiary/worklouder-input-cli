@@ -13,6 +13,10 @@ export const PRESET_CATALOG_SCHEMA_VERSION = 1;
 export const PRESET_CATALOG_KIND = "worklouder-input-preset-catalog";
 export const PRESET_CATALOG_REVISION_ALGORITHM =
   "sha256:recursive-key-sorted-presets-json-v1";
+export const FIRMWARE_PLAN_SCHEMA_VERSION = 1;
+export const FIRMWARE_PLAN_KIND = "worklouder-input-firmware-plan";
+export const FIRMWARE_PLAN_REVISION_ALGORITHM =
+  "sha256:recursive-key-sorted-firmware-plan-body-v1";
 
 const MAX_CONFIG_FILES = 4096;
 const MAX_CONFIG_FILE_BYTES = 16 * 1024 * 1024;
@@ -669,6 +673,20 @@ export function createInputMainAdapter({
         update: normalizeFirmwareStatus(update),
       };
     };
+    adapter.getFirmwarePlan = async ({ deviceId = null }) => {
+      const device = selectDevice(deviceId);
+      const [deviceStatus, update, config] = await Promise.all([
+        common(device),
+        firmwareAuthority.readStatus({ device }),
+        captureConfigSnapshot(device),
+      ]);
+      return firmwarePlan({
+        deviceId: String(device.id),
+        deviceStatus,
+        update: normalizeFirmwareStatus(update),
+        config,
+      });
+    };
   }
   if (logsAuthority) {
     adapter.snapshotLogs = async ({ maxEntries = MAX_LOG_ENTRIES }) => {
@@ -746,6 +764,64 @@ function normalizeFirmwareStatus(status) {
     throw new BridgeError(-32008, "Input reported an update without release metadata");
   }
   return { updateAvailable: status.updateAvailable, release };
+}
+
+function firmwarePlan({ deviceId, deviceStatus, update, config }) {
+  const blockers = [];
+  if (update.updateAvailable === null) {
+    blockers.push("update-availability-unknown");
+  } else if (update.updateAvailable === false) {
+    blockers.push("no-update-available");
+  }
+  if (update.release === null) {
+    blockers.push("release-unavailable");
+  }
+  if (!deviceStatus.device.isUsbConnection) {
+    blockers.push("usb-required");
+  }
+  const body = {
+    deviceId,
+    deviceKitVersion: deviceStatus.deviceKitVersion,
+    device: deviceStatus.device,
+    currentFirmwareVersion: safeBoundedString(
+      deviceStatus.status.firmwareVersion,
+      "current firmware version",
+      128,
+    ),
+    targetRelease: update.release,
+    configRevision: safeSha256(config.revision, "configuration revision"),
+    configFileCount: safeInteger(
+      config.files.length,
+      "configuration file count",
+      1,
+      MAX_CONFIG_FILES,
+    ),
+    ready: blockers.length === 0,
+    blockers,
+    phases: [
+      "backup-configuration",
+      "download-input-selected-release",
+      "enter-bootloader",
+      "flash-with-input-device-programmer",
+      "reconnect-original-device",
+      "restore-changed-configuration",
+      "verify-firmware-and-configuration",
+    ],
+  };
+  return {
+    schemaVersion: FIRMWARE_PLAN_SCHEMA_VERSION,
+    kind: FIRMWARE_PLAN_KIND,
+    revisionAlgorithm: FIRMWARE_PLAN_REVISION_ALGORITHM,
+    revision: firmwarePlanRevision(body),
+    ...body,
+  };
+}
+
+export function firmwarePlanRevision(body) {
+  return createHash("sha256")
+    .update("worklouder-input-firmware-plan-revision-v1\0", "utf8")
+    .update(canonicalJson(body), "utf8")
+    .digest("hex");
 }
 
 function normalizeLogsSnapshot(source, limit) {

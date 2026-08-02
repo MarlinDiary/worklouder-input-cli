@@ -190,6 +190,18 @@ fn inspect_file(input: &Path) -> Result<BackupInspection> {
                 Some("use as the input to input permission command restore".into()),
             ))
         }
+        "worklouder-input-firmware-plan" => {
+            let plan = bridge::read_firmware_plan(input)?;
+            Ok(report(
+                kind,
+                input,
+                plan.schema_version,
+                Some(plan.revision),
+                plan.phases.len(),
+                false,
+                None,
+            ))
+        }
         "worklouder-input-preset-catalog" => {
             let snapshot = bridge::read_preset_catalog_snapshot(input)?;
             Ok(report(

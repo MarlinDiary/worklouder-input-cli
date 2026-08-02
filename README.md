@@ -138,6 +138,7 @@ worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json 
 worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
 worklouderctl input permissions [--device DEVICE_ID]
 worklouderctl input firmware check [--device DEVICE_ID]
+worklouderctl input firmware plan --output FIRMWARE_PLAN.json [--device DEVICE_ID]
 worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
 worklouderctl input preset snapshot --output PRESET_CATALOG.json
 worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
@@ -225,6 +226,8 @@ worklouderctl --json schema list
 worklouderctl --json schema show configuration-v1
 worklouderctl --json backup inspect --input APPLY_RECEIPT.json
 worklouderctl --json backup migration-plan --input BACKUP_DIRECTORY
+worklouderctl --json agent validate --input COMMAND_ENVELOPE.json
+worklouderctl --json agent execute --input COMMAND_ENVELOPE.json
 worklouderctl completion bash|zsh|fish
 ```
 
@@ -472,7 +475,10 @@ compatibility gates.
 means the released `WLPermissions` Input Monitoring check (not a synthesized
 Accessibility result); on Linux it means read/write access to the selected HID
 path. `input firmware check` delegates release selection to Input's installed
-`DeviceFlashService`, and performs no flash. `input logs collect` requests a
+`DeviceFlashService`, and performs no flash. `input firmware plan` additionally
+freezes that release, the exact configuration revision, the USB gate, and the
+seven backup/download/bootloader/flash/reconnect/restore/postflight phases; it
+still performs no mutation. `input logs collect` requests a
 bounded suffix of Input's 5,000-entry in-memory log ring, redacts home paths,
 emails, and credential-shaped values inside Input, then atomically publishes
 and reopens a `0700` bundle of `0600` JSON/text files with SHA-256 records.
@@ -645,6 +651,7 @@ Read the complete [FAQ](docs/faq.md).
 - [Exit statuses and JSON error envelopes](docs/exit-statuses.md)
 - [JSON Schemas and agent invocation contract](docs/json-schemas.md)
 - [Backup inspection and migration](docs/backups-and-migrations.md)
+- [Shell-free agent JSON protocol](docs/agent-protocol.md)
 - [Configuration parity matrix](docs/configuration-parity.md)
 - [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
 - [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)

@@ -32,6 +32,12 @@ expose this sequence as one main-process method. A future mutation bridge must
 therefore receive one injected high-level Input-owned authority; the CLI will
 not duplicate the programmer or transport.
 
+`input firmware plan` combines the Input-selected release with a byte-exact
+configuration snapshot revision and the connected device's USB state. Its
+revision covers the complete recursively key-sorted plan body. The fixed phase
+list mirrors the observed renderer orchestration, while a Bluetooth session is
+published with the literal `usb-required` blocker and `ready=false`.
+
 ## Diagnostic log authority
 
 Input's Help menu reads the `WindowService.getWindowsLogs()` in-memory ring,

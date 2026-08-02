@@ -92,6 +92,7 @@ Promises as failures even when the USB interface still enumerates.
 | Device setup | identity, transport, battery, firmware | `doctor`, `device status` | read-verified |
 | Input permissions | exact platform permission used by Input (`Input Monitoring` on macOS; HID read/write on Linux) | `input permissions` | Input authority/bridge/CLI fixture-verified |
 | Firmware check | compatible release and Input-selected `.bin` metadata | `input firmware check` | Input authority/bridge/CLI fixture-verified; read-only |
+| Firmware plan | release, exact config revision, USB readiness, ordered update/reconnect/restore phases | `input firmware plan` | deterministic bridge/CLI plan and USB blocker fixture-verified; read-only |
 | Firmware update | delegate download/USB flash to Input, then verify readback | `input firmware update` | adapter-pending |
 | Reset settings | full backup, complete default candidate, post-state | `device reset` | renderer-only GUI flow classified; transaction adapter pending |
 | Logs | collect and sanitize diagnostic bundle | `input logs collect` | private `0700`/`0600` bundle and SHA-256 readback fixture-verified |

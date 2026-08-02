@@ -115,6 +115,12 @@ pub enum Command {
         command: BackupCommand,
     },
 
+    /// Validate or execute a shell-free JSON command envelope for agents.
+    Agent {
+        #[clap(subcommand)]
+        command: AgentCommand,
+    },
+
     /// Plan coordinated Codex and Input mutations with one unified diff.
     Transaction {
         #[clap(subcommand)]
@@ -280,6 +286,17 @@ pub enum InputCommand {
 pub enum InputFirmwareCommand {
     /// Check the connected device and the current compatible release.
     Check {
+        /// Select a connected device ID; defaults to the single Codex Micro.
+        #[clap(long)]
+        device: Option<String>,
+    },
+
+    /// Freeze the release, configuration revision, USB gate, and update phases.
+    Plan {
+        /// Destination JSON plan. It must not already exist.
+        #[clap(long, value_parser)]
+        output: PathBuf,
+
         /// Select a connected device ID; defaults to the single Codex Micro.
         #[clap(long)]
         device: Option<String>,
@@ -1168,6 +1185,21 @@ pub enum BackupCommand {
 
     /// Report whether a verified artifact requires a schema migration.
     MigrationPlan {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AgentCommand {
+    /// Validate and normalize a command envelope without executing it.
+    Validate {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Execute an envelope through the same in-process CLI and transaction core.
+    Execute {
         #[clap(long, value_parser)]
         input: PathBuf,
     },
@@ -2588,4 +2620,12 @@ where
     T: Into<std::ffi::OsString> + Clone,
 {
     Cli::parse_from(args)
+}
+
+pub fn try_parse_from<I, T>(args: I) -> Result<Cli, clap::Error>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<std::ffi::OsString> + Clone,
+{
+    Cli::try_parse_from(args)
 }

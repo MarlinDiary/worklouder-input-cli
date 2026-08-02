@@ -37,6 +37,7 @@
     "releaseFields": ["version", "fetchedAt", "changeLog", "downloadUrl"],
     "assetSelection": "first .bin asset from the device firmware repository",
     "bridgeCapability": "input.firmware.status.v1",
+    "planCapability": "input.firmware.plan.v1",
     "mutationInReadCapability": false
   },
   "firmwareUpdateWorkflow": {
@@ -54,6 +55,7 @@
       "read firmware and configuration post-state"
     ],
     "highLevelMainServiceMethodFound": false,
+    "planContract": "read-only plan freezes selected release, full configuration revision, USB blocker, and ordered renderer workflow",
     "cliMutationBoundary": "optional injected Input-owned high-level authority; no duplicated driver or programmer"
   },
   "logs": {

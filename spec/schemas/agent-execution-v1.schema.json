@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worklouderctl.dev/schemas/agent-execution-v1.schema.json",
+  "title": "WorkLouderCTL agent protocol results v1",
+  "oneOf": [
+    { "$ref": "#/$defs/validation" },
+    { "$ref": "#/$defs/execution" }
+  ],
+  "$defs": {
+    "output": { "enum": ["json", "text"] },
+    "statuses": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0, "maximum": 8 },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "valid", "normalizedArgv", "output", "expectedExitStatuses"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-agent-envelope-validation" },
+        "valid": { "const": true },
+        "normalizedArgv": { "type": "array", "items": { "type": "string" }, "minItems": 2 },
+        "output": { "$ref": "#/$defs/output" },
+        "expectedExitStatuses": { "$ref": "#/$defs/statuses" }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "argv", "output", "exitStatus", "success", "accepted"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-agent-execution" },
+        "argv": { "type": "array", "items": { "type": "string" }, "minItems": 2 },
+        "output": { "$ref": "#/$defs/output" },
+        "exitStatus": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "success": { "type": "boolean" },
+        "accepted": { "type": "boolean" },
+        "stdout": {},
+        "error": { "type": "object" }
+      }
+    }
+  }
+}

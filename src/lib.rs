@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod backup;
 pub mod bridge;
 pub mod cli;
@@ -19,7 +20,7 @@ pub mod transaction;
 use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
-    ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
+    ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand, AgentCommand,
     AppSenseCommand, BackupCommand, BridgeCommand, CapabilityCommand, CheatSheetBehavior,
     CheatSheetCommand, Cli, CodexAgentKeyCommand, CodexAgentSource, CodexAgentSourceCommand,
     CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand, CodexCommand,
@@ -106,6 +107,7 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Config { command } => run_config(command, cli.json, &mut out)?,
         Command::Schema { command } => run_schema(command, cli.json, &mut out)?,
         Command::Backup { command } => run_backup(command, cli.json, &mut out)?,
+        Command::Agent { command } => run_agent(command, cli.json, &mut out)?,
         Command::Transaction { command } => run_transaction(command, cli.json, &mut out)?,
         Command::Profile { command } => run_profile(command, cli.json, &mut out)?,
         Command::Layer { command } => run_layer(command, cli.json, &mut out)?,
@@ -120,6 +122,26 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
+    Ok(())
+}
+
+fn run_agent(command: AgentCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        AgentCommand::Validate { input } => {
+            let report = agent::validate_file(&input)?;
+            if json {
+                write_json(&mut out, &report)?;
+            } else {
+                writeln!(out, "valid={}", report.valid)?;
+                writeln!(out, "argv={}", report.normalized_argv.join(" "))?;
+                writeln!(out, "expected={:?}", report.expected_exit_statuses)?;
+            }
+        }
+        AgentCommand::Execute { input } => {
+            let report = agent::execute_file(&input)?;
+            write_json(&mut out, &report)?;
+        }
+    }
     Ok(())
 }
 
@@ -3337,6 +3359,30 @@ fn run_input(
                     if let Some(release) = result.update.release {
                         writeln!(out, "release={}", release.version)?;
                         writeln!(out, "download={}", release.download_url)?;
+                    }
+                }
+            }
+            InputFirmwareCommand::Plan { output, device } => {
+                let result = bridge::firmware_plan(&bridge_paths, device.as_deref(), &output)?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "Firmware plan {}: ready={} output={}",
+                        result.revision,
+                        result.ready,
+                        result.output.display()
+                    )?;
+                    writeln!(
+                        out,
+                        "firmware={} target={} configRevision={}",
+                        result.current_firmware_version,
+                        result.target_version.as_deref().unwrap_or("unavailable"),
+                        result.config_revision
+                    )?;
+                    for blocker in result.blockers {
+                        writeln!(out, "BLOCKER\t{blocker}")?;
                     }
                 }
             }

@@ -5,6 +5,7 @@
   "oneOf": [
     { "$ref": "#/$defs/permissions" },
     { "$ref": "#/$defs/firmware" },
+    { "$ref": "#/$defs/firmwarePlan" },
     { "$ref": "#/$defs/logBundle" }
   ],
   "$defs": {
@@ -12,6 +13,17 @@
     "device": {
       "type": "object",
       "required": ["devicePid", "deviceType", "layoutType", "connectionType", "isUsbConnection"]
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "fetchedAt", "downloadUrl", "changeLog"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "fetchedAt": { "type": "integer", "minimum": 0 },
+        "downloadUrl": { "type": "string", "pattern": "^https?://" },
+        "changeLog": { "type": ["string", "null"] }
+      }
     },
     "permissions": {
       "type": "object",
@@ -55,22 +67,75 @@
             "release": {
               "oneOf": [
                 { "type": "null" },
-                {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": ["version", "fetchedAt", "downloadUrl", "changeLog"],
-                  "properties": {
-                    "version": { "type": "string", "minLength": 1 },
-                    "fetchedAt": { "type": "integer", "minimum": 0 },
-                    "downloadUrl": { "type": "string", "pattern": "^https?://" },
-                    "changeLog": { "type": ["string", "null"] }
-                  }
-                }
+                { "$ref": "#/$defs/release" }
               ]
             }
           }
         },
         "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "firmwarePlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "revisionAlgorithm",
+        "revision",
+        "deviceId",
+        "deviceKitVersion",
+        "device",
+        "currentFirmwareVersion",
+        "targetRelease",
+        "configRevision",
+        "configFileCount",
+        "ready",
+        "blockers",
+        "phases"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouder-input-firmware-plan" },
+        "revisionAlgorithm": { "const": "sha256:recursive-key-sorted-firmware-plan-body-v1" },
+        "revision": { "$ref": "#/$defs/sha256" },
+        "deviceId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "deviceKitVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "device": { "$ref": "#/$defs/device" },
+        "currentFirmwareVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "targetRelease": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/release" }
+          ]
+        },
+        "configRevision": { "$ref": "#/$defs/sha256" },
+        "configFileCount": { "type": "integer", "minimum": 1, "maximum": 4096 },
+        "ready": { "type": "boolean" },
+        "blockers": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 4,
+          "items": {
+            "enum": [
+              "update-availability-unknown",
+              "no-update-available",
+              "release-unavailable",
+              "usb-required"
+            ]
+          }
+        },
+        "phases": {
+          "const": [
+            "backup-configuration",
+            "download-input-selected-release",
+            "enter-bootloader",
+            "flash-with-input-device-programmer",
+            "reconnect-original-device",
+            "restore-changed-configuration",
+            "verify-firmware-and-configuration"
+          ]
+        }
       }
     },
     "logBundleFile": {

@@ -80,11 +80,13 @@ profile/layer status. It does not focus an application or open an Input window.
 `permissionsAuthority.readStatus()`, `firmwareAuthority.readStatus()`, and
 `logsAuthority.readLogs()` enable the optional Tier 4 read capabilities
 `input.permissions.status.v1`, `input.firmware.status.v1`, and
-`input.logs.snapshot.v1`. The one-call integration derives them from
+`input.firmware.plan.v1`, and `input.logs.snapshot.v1`. The one-call integration derives them from
 `ApplicationService.checkAppPermissions`, `DeviceFlashService`, and
 `WindowService.getWindowsLogs` when those exact released services are supplied.
 Logs are bounded and sanitized by the adapter before transport. Firmware status
-is read-only; flashing requires a separate high-level Input-owned authority.
+and planning are read-only. A plan freezes the Input-selected release, exact
+configuration revision, USB readiness, and the seven released workflow phases;
+flashing still requires a separate high-level Input-owned authority.
 
 The reference adapter owns the surrounding transaction: validate every byte
 and digest, capture a pre-mutation snapshot, compare the live revision, invoke
@@ -110,6 +112,7 @@ node companion/conformance.mjs \
   --require input.appsense.runtime.v1 \
   --require input.permissions.status.v1 \
   --require input.firmware.status.v1 \
+  --require input.firmware.plan.v1 \
   --require input.logs.snapshot.v1
 ```
 

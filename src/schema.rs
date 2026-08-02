@@ -2,6 +2,7 @@ use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use serde_json::Value;
 
+const AGENT_EXECUTION: &str = include_str!("../spec/schemas/agent-execution-v1.schema.json");
 const BACKUP_INSPECTION: &str = include_str!("../spec/schemas/backup-inspection-v1.schema.json");
 const COMMAND_ENVELOPE: &str = include_str!("../spec/schemas/command-envelope-v1.schema.json");
 const CONFIGURATION: &str = include_str!("../spec/schemas/configuration-v1.schema.json");
@@ -23,6 +24,14 @@ struct SchemaEntry {
 }
 
 const ENTRIES: &[SchemaEntry] = &[
+    SchemaEntry {
+        summary: SchemaSummary {
+            name: "agent-execution-v1",
+            id: "https://worklouderctl.dev/schemas/agent-execution-v1.schema.json",
+            description: "Shell-free agent validation and execution results",
+        },
+        source: AGENT_EXECUTION,
+    },
     SchemaEntry {
         summary: SchemaSummary {
             name: "backup-inspection-v1",
@@ -108,7 +117,7 @@ mod tests {
     #[test]
     fn registry_is_sorted_and_every_document_reopens() {
         let summaries = list();
-        assert_eq!(summaries.len(), 6);
+        assert_eq!(summaries.len(), 7);
         let names = summaries
             .iter()
             .map(|summary| summary.name)

@@ -88,6 +88,7 @@ Protocol version 1 defines:
 - `input.appsense.runtime`
 - `input.permissions.status`
 - `input.firmware.status`
+- `input.firmware.plan`
 - `input.logs.snapshot`
 
 File content uses base64 inside JSON. Device SHA-1 and host SHA-256 remain
@@ -131,7 +132,9 @@ existing device session; the CLI does not synthesize focus or control a GUI.
 `input.permissions.status` delegates to Input's installed permission service and
 reports the exact platform meaning of its single boolean. `input.firmware.status`
 delegates update compatibility and release selection to Input's installed
-firmware service but never flashes. `input.logs.snapshot` returns at most 5,000
+firmware service but never flashes. `input.firmware.plan` additionally freezes
+the exact configuration revision, Input-selected release, USB readiness, and
+the seven ordered renderer workflow phases. `input.logs.snapshot` returns at most 5,000
 newest in-memory renderer entries, with home paths, email addresses, and common
 credential forms redacted before bridge transport. Each capability is advertised
 only when its matching Input-owned authority is available.
@@ -144,6 +147,7 @@ worklouderctl device config validate --input config-snapshot.json \
   --expected-revision REVISION
 worklouderctl input permissions
 worklouderctl input firmware check
+worklouderctl input firmware plan --output firmware-plan.json
 worklouderctl input logs collect --output input-log-bundle
 ```
 

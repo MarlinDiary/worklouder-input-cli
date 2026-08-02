@@ -244,6 +244,38 @@ pub struct FirmwareStatusReport {
     pub warnings: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct FirmwarePlan {
+    pub schema_version: u64,
+    pub kind: String,
+    pub revision_algorithm: String,
+    pub revision: String,
+    pub device_id: String,
+    pub device_kit_version: String,
+    pub device: DeviceInfo,
+    pub current_firmware_version: String,
+    pub target_release: Option<FirmwareRelease>,
+    pub config_revision: String,
+    pub config_file_count: usize,
+    pub ready: bool,
+    pub blockers: Vec<String>,
+    pub phases: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FirmwarePlanReceipt {
+    pub output: PathBuf,
+    pub revision: String,
+    pub device_id: String,
+    pub current_firmware_version: String,
+    pub target_version: Option<String>,
+    pub config_revision: String,
+    pub ready: bool,
+    pub blockers: Vec<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct InputLogEntry {
@@ -573,6 +605,36 @@ pub fn firmware_status(
     })
 }
 
+pub fn firmware_plan(
+    paths: &BridgePaths,
+    device_id: Option<&str>,
+    output: &Path,
+) -> Result<FirmwarePlanReceipt> {
+    let mut client = BridgeClient::connect(paths)?;
+    let plan: FirmwarePlan = client.call(
+        "input.firmware.plan",
+        "input.firmware.plan.v1",
+        json!({ "deviceId": device_id }),
+    )?;
+    validate_firmware_plan(&plan)?;
+    write_atomic_json(output, &serde_json::to_value(&plan)?)?;
+    let reopened = read_firmware_plan(output)?;
+    ensure!(
+        reopened.revision == plan.revision,
+        "published firmware plan readback differed"
+    );
+    Ok(FirmwarePlanReceipt {
+        output: output.to_path_buf(),
+        revision: plan.revision,
+        device_id: plan.device_id,
+        current_firmware_version: plan.current_firmware_version,
+        target_version: plan.target_release.map(|release| release.version),
+        config_revision: plan.config_revision,
+        ready: plan.ready,
+        blockers: plan.blockers,
+    })
+}
+
 pub fn collect_logs(
     paths: &BridgePaths,
     output: &Path,
@@ -747,6 +809,124 @@ fn validate_firmware_update(update: &FirmwareUpdateState) -> Result<()> {
         }
     }
     Ok(())
+}
+
+pub fn read_firmware_plan(input: &Path) -> Result<FirmwarePlan> {
+    let metadata = fs::symlink_metadata(input)
+        .with_context(|| format!("failed to inspect firmware plan {}", input.display()))?;
+    ensure!(
+        metadata.file_type().is_file() && !metadata.file_type().is_symlink(),
+        "firmware plan must be a regular file"
+    );
+    ensure!(
+        metadata.len() <= 2 * 1024 * 1024,
+        "firmware plan exceeded 2 MiB"
+    );
+    let plan: FirmwarePlan = serde_json::from_slice(
+        &fs::read(input)
+            .with_context(|| format!("failed to read firmware plan {}", input.display()))?,
+    )
+    .with_context(|| format!("firmware plan was invalid JSON: {}", input.display()))?;
+    validate_firmware_plan(&plan)?;
+    Ok(plan)
+}
+
+fn validate_firmware_plan(plan: &FirmwarePlan) -> Result<()> {
+    ensure!(
+        plan.schema_version == 1
+            && plan.kind == "worklouder-input-firmware-plan"
+            && plan.revision_algorithm == "sha256:recursive-key-sorted-firmware-plan-body-v1",
+        "Input firmware plan header was invalid"
+    );
+    ensure!(
+        !plan.device_id.is_empty()
+            && plan.device_id.len() <= 512
+            && !plan.device_id.contains('\0')
+            && !plan.device_kit_version.is_empty()
+            && plan.device_kit_version.len() <= 128
+            && !plan.device_kit_version.contains('\0')
+            && !plan.current_firmware_version.is_empty()
+            && plan.current_firmware_version.len() <= 128
+            && !plan.current_firmware_version.contains('\0'),
+        "Input firmware plan identity was invalid"
+    );
+    ensure!(
+        is_sha256(&plan.config_revision) && (1..=4096).contains(&plan.config_file_count),
+        "Input firmware plan configuration metadata was invalid"
+    );
+    validate_firmware_update(&FirmwareUpdateState {
+        update_available: plan.target_release.as_ref().map(|_| true),
+        release: plan.target_release.clone(),
+    })?;
+    let availability_unknown = plan
+        .blockers
+        .iter()
+        .any(|blocker| blocker == "update-availability-unknown");
+    let no_update = plan
+        .blockers
+        .iter()
+        .any(|blocker| blocker == "no-update-available");
+    let release_unavailable = plan
+        .blockers
+        .iter()
+        .any(|blocker| blocker == "release-unavailable");
+    let usb_required = plan
+        .blockers
+        .iter()
+        .any(|blocker| blocker == "usb-required");
+    ensure!(
+        plan.blockers.len() <= 4
+            && plan.blockers.iter().enumerate().all(|(index, blocker)| {
+                [
+                    "update-availability-unknown",
+                    "no-update-available",
+                    "release-unavailable",
+                    "usb-required",
+                ]
+                .contains(&blocker.as_str())
+                    && !plan.blockers[..index].contains(blocker)
+            })
+            && !(availability_unknown && no_update)
+            && (plan.target_release.is_none() == release_unavailable)
+            && (plan.device.is_usb_connection != usb_required)
+            && plan.ready == plan.blockers.is_empty(),
+        "Input firmware plan blockers were inconsistent"
+    );
+    let expected_phases = [
+        "backup-configuration",
+        "download-input-selected-release",
+        "enter-bootloader",
+        "flash-with-input-device-programmer",
+        "reconnect-original-device",
+        "restore-changed-configuration",
+        "verify-firmware-and-configuration",
+    ];
+    ensure!(
+        plan.phases
+            == expected_phases
+                .iter()
+                .map(|phase| (*phase).to_owned())
+                .collect::<Vec<_>>(),
+        "Input firmware plan phases differed from the delegated workflow"
+    );
+    ensure!(
+        plan.revision == firmware_plan_revision(plan)?,
+        "Input firmware plan revision did not match content"
+    );
+    Ok(())
+}
+
+fn firmware_plan_revision(plan: &FirmwarePlan) -> Result<String> {
+    let mut body = serde_json::to_value(plan)?;
+    let object = body
+        .as_object_mut()
+        .context("firmware plan body was not an object")?;
+    for field in ["schemaVersion", "kind", "revisionAlgorithm", "revision"] {
+        object.remove(field);
+    }
+    let mut bytes = b"worklouder-input-firmware-plan-revision-v1\0".to_vec();
+    bytes.extend(serde_json::to_vec(&canonical_json(&body))?);
+    fsutil::sha256_bytes(&bytes)
 }
 
 fn validate_log_snapshot(snapshot: &InputLogSnapshot, limit: usize) -> Result<()> {
