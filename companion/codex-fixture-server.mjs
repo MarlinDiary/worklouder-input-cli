@@ -15,7 +15,7 @@ const contract = JSON.parse(await readFile(resolve(here, "../spec/codex-settings
 const sourcePath = join(dirname(socketPath), "codex-fixture-config.toml");
 let settings = Object.fromEntries(Object.entries(contract.definitions).map(([key, definition]) => [key, structuredClone(definition.default)]));
 let effectiveSettings = structuredClone(settings);
-const assignments = {
+let assignments = {
   AG00: { type: "command", commandId: "fixture.command" },
   AG01: null,
   AG02: null,
@@ -38,6 +38,11 @@ const request = async (method, params) => {
     if (params.key !== "codex-micro-custom-agent-assignments") throw new Error("unknown fixture state key");
     return { value: structuredClone(assignments) };
   }
+  if (method === "set-global-state") {
+    if (params.key !== "codex-micro-custom-agent-assignments") throw new Error("unknown fixture state key");
+    assignments = structuredClone(params.value);
+    return { success: true };
+  }
   throw new Error("unsupported fixture request: " + method);
 };
 const adapter = createCodexMainAdapter({
@@ -52,10 +57,16 @@ const adapter = createCodexMainAdapter({
       await persist();
     },
   },
+  agentKeysWriter: {
+    async replaceAssignments({ key, assignments }) {
+      const result = await request("set-global-state", { key, value: assignments });
+      if (result.success !== true) throw new Error("fixture global-state write failed");
+    },
+  },
 });
 const bridge = await startCodexCompanionBridge({
   adapter,
-  codexVersion: contract.appVersion + "-fixture",
+  codexVersion: contract.appVersion,
   bridgeVersion: "0.1.0-fixture",
   socketPath,
   tokenPath,

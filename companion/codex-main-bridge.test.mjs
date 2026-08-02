@@ -39,6 +39,7 @@ test("Codex bridge authenticates, gates mutations, and dispatches snapshots", as
     assert.equal(hello.result.codexVersion, "26.727.51351-test");
     assert.ok(hello.result.capabilities.includes("codex.settings.snapshot.v1"));
     assert.ok(!hello.result.capabilities.includes("codex.settings.apply.v1"));
+    assert.ok(!hello.result.capabilities.includes("codex.agentKeys.apply.v1"));
     const snapshot = await client.request("codex.settings.snapshot", {});
     assert.equal(snapshot.result.marker, "settings-from-codex-session");
     const mutation = await client.request("codex.settings.apply", mutationParams({}));
@@ -77,7 +78,7 @@ test("Codex bridge rejects a mismatched token before dispatch", async () => {
 test("Codex adapter snapshots settings and validates all Agent Key assignment types", async () => {
   const state = testState();
   state.assignments = {
-    AG00: { type: "command", commandId: "composer.togglePlanMode" },
+    AG00: { type: "command", commandId: "composer.togglePlanMode", futureField: "preserved" },
     AG01: { type: "skill", skillName: "Review", skillPath: "/tmp/review/SKILL.md" },
     AG02: { hostId: "host", threadKey: "thread", title: "Task" },
     AG03: { keycapId: "GIT" },
@@ -89,7 +90,63 @@ test("Codex adapter snapshots settings and validates all Agent Key assignment ty
   const keys = await adapter.snapshotAgentKeys({});
   assert.deepEqual(Object.keys(keys.assignments), ["AG00", "AG01", "AG02", "AG03", "AG04", "AG05"]);
   assert.equal(keys.assignments.AG04, null);
+  assert.equal(keys.assignments.AG00.futureField, "preserved");
   assert.equal(keys.globalStateRevision, agentKeysRevision(keys.assignments));
+});
+
+test("Codex adapter applies, replays, rejects stale CAS, and restores Agent Keys", async () => {
+  const state = testState();
+  const adapter = testAdapter(state);
+  const baseline = await adapter.snapshotAgentKeys({});
+  const assignments = structuredClone(baseline.assignments);
+  assignments.AG01 = { type: "skill", skillName: "Review", skillPath: "/tmp/review/SKILL.md" };
+  const targetRevision = agentKeysRevision(assignments);
+  const params = agentMutationParams({
+    expectedGlobalStateRevision: baseline.globalStateRevision,
+    targetGlobalStateRevision: targetRevision,
+    idempotencyKey: "agent-apply-1",
+    assignments,
+  });
+  const apply = await adapter.applyAgentKeys(params);
+  assert.equal(apply.changed, true);
+  assert.equal(apply.afterGlobalStateRevision, targetRevision);
+  const replay = await adapter.applyAgentKeys(params);
+  assert.equal(replay.idempotentReplay, true);
+  await assert.rejects(
+    adapter.applyAgentKeys(agentMutationParams({
+      ...params,
+      idempotencyKey: "agent-stale",
+    })),
+    (error) => error.code === -32005,
+  );
+  const live = await adapter.snapshotAgentKeys({});
+  const restore = await adapter.restoreAgentKeys(agentMutationParams({
+    expectedGlobalStateRevision: live.globalStateRevision,
+    targetGlobalStateRevision: baseline.globalStateRevision,
+    idempotencyKey: "agent-restore-1",
+    assignments: baseline.assignments,
+  }));
+  assert.equal(restore.changed, true);
+  assert.equal(restore.afterGlobalStateRevision, baseline.globalStateRevision);
+});
+
+test("Codex adapter rolls back Agent Keys after exact readback failure", async () => {
+  const state = testState();
+  const adapter = testAdapter(state, { corruptAgentOnce: true });
+  const baseline = await adapter.snapshotAgentKeys({});
+  const assignments = structuredClone(baseline.assignments);
+  assignments.AG02 = { keycapId: "GIT" };
+  await assert.rejects(
+    adapter.applyAgentKeys(agentMutationParams({
+      expectedGlobalStateRevision: baseline.globalStateRevision,
+      targetGlobalStateRevision: agentKeysRevision(assignments),
+      idempotencyKey: "agent-corrupt-readback",
+      assignments,
+    })),
+    (error) => error.code === -32008 && error.data.rollbackPerformed === true,
+  );
+  const restored = await adapter.snapshotAgentKeys({});
+  assert.equal(restored.globalStateRevision, baseline.globalStateRevision);
 });
 
 test("Codex adapter applies, replays, rejects stale CAS, and restores", async () => {
@@ -175,6 +232,7 @@ test("Codex integration uses the Codex userData boundary and lifecycle", async (
     assert.equal(bridge.socketPath, root + "/worklouderctl-codex-bridge-v1.sock");
     assert.ok(bridge.capabilities.includes("codex.settings.snapshot.v1"));
     assert.ok(!bridge.capabilities.includes("codex.settings.apply.v1"));
+    assert.ok(!bridge.capabilities.includes("codex.agentKeys.apply.v1"));
   } finally {
     await bridge.stop();
   }
@@ -215,8 +273,9 @@ function makeRequest(state) {
   };
 }
 
-function testAdapter(state, { corruptOnce = false } = {}) {
+function testAdapter(state, { corruptOnce = false, corruptAgentOnce = false } = {}) {
   let corrupt = corruptOnce;
+  let corruptAgent = corruptAgentOnce;
   return createCodexMainAdapter({
     request: makeRequest(state),
     readSettingsSource: async () => state.source,
@@ -231,6 +290,15 @@ function testAdapter(state, { corruptOnce = false } = {}) {
         }
       },
     },
+    agentKeysWriter: {
+      async replaceAssignments({ assignments, operation }) {
+        state.assignments = structuredClone(assignments);
+        if (corruptAgent && operation !== "automatic-rollback") {
+          corruptAgent = false;
+          state.assignments.AG05 = { keycapId: "CORRUPT" };
+        }
+      },
+    },
   });
 }
 
@@ -242,6 +310,16 @@ function mutationParams(overrides) {
     idempotencyKey: "test",
     settings: {},
     effectiveSettings: {},
+    ...overrides,
+  };
+}
+
+function agentMutationParams(overrides) {
+  return {
+    expectedGlobalStateRevision: "0".repeat(64),
+    targetGlobalStateRevision: "0".repeat(64),
+    idempotencyKey: "agent-test",
+    assignments: {},
     ...overrides,
   };
 }

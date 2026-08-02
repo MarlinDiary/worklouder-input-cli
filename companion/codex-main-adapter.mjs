@@ -5,7 +5,8 @@ import { CodexBridgeError } from "./codex-main-bridge.mjs";
 export const CODEX_SETTINGS_SNAPSHOT_SCHEMA_VERSION = 1;
 export const CODEX_SETTINGS_SNAPSHOT_KIND = "worklouderctl-codex-settings-snapshot";
 export const CODEX_SETTINGS_REVISION_ALGORITHM = "codex-settings-revision-v1";
-export const CODEX_AGENT_KEYS_SNAPSHOT_KIND = "worklouder-codex-agent-keys-snapshot";
+export const CODEX_AGENT_KEYS_SNAPSHOT_KIND = "worklouderctl-codex-agent-keys-snapshot";
+export const CODEX_AGENT_KEYS_MUTATION_KIND = "worklouderctl-codex-agent-keys-mutation";
 export const CODEX_AGENT_KEYS_STATE_KEY = "codex-micro-custom-agent-assignments";
 export const CODEX_AGENT_KEY_SLOTS = Object.freeze([
   "AG00", "AG01", "AG02", "AG03", "AG04", "AG05",
@@ -18,6 +19,7 @@ const MAX_IDEMPOTENCY_ENTRIES = 256;
 export function createCodexMainAdapter({
   request,
   settingsReplacer,
+  agentKeysWriter,
   readSettingsSource = (path) => readFile(path),
 }) {
   if (typeof request !== "function") throw new TypeError("request is required");
@@ -30,7 +32,14 @@ export function createCodexMainAdapter({
   if (typeof readSettingsSource !== "function") {
     throw new TypeError("readSettingsSource must be a function");
   }
-  const idempotencyCache = new Map();
+  if (
+    agentKeysWriter !== undefined &&
+    (!agentKeysWriter || typeof agentKeysWriter.replaceAssignments !== "function")
+  ) {
+    throw new TypeError("agentKeysWriter.replaceAssignments is required");
+  }
+  const settingsIdempotencyCache = new Map();
+  const agentKeysIdempotencyCache = new Map();
 
   const snapshotSettings = async () => {
     const result = await request("settings-read", {});
@@ -96,7 +105,7 @@ export function createCodexMainAdapter({
       settings,
       effectiveSettings,
     })));
-    const cached = idempotencyCache.get(idempotencyKey);
+    const cached = settingsIdempotencyCache.get(idempotencyKey);
     if (cached) {
       if (cached.requestDigest !== requestDigest) {
         throw new CodexBridgeError(-32602, "idempotency key was reused with a different mutation");
@@ -121,7 +130,7 @@ export function createCodexMainAdapter({
         throw new CodexBridgeError(-32602, "target effectiveSettings differed from live settings");
       }
       const result = mutationResult({ operation, idempotencyKey, before, after: before, changed: false });
-      cacheMutation(idempotencyCache, idempotencyKey, requestDigest, result);
+      cacheMutation(settingsIdempotencyCache, idempotencyKey, requestDigest, result);
       return result;
     }
 
@@ -134,7 +143,7 @@ export function createCodexMainAdapter({
       const after = await snapshotSettings();
       assertReadback(after, { settings, effectiveSettings, targetSettingsRevision });
       const result = mutationResult({ operation, idempotencyKey, before, after, changed: true });
-      cacheMutation(idempotencyCache, idempotencyKey, requestDigest, result);
+      cacheMutation(settingsIdempotencyCache, idempotencyKey, requestDigest, result);
       return result;
     } catch (mutationError) {
       let restored;
@@ -167,10 +176,106 @@ export function createCodexMainAdapter({
     }
   };
 
+  const runAgentKeysMutation = async ({
+    operation,
+    expectedGlobalStateRevision,
+    targetGlobalStateRevision,
+    idempotencyKey,
+    assignments,
+  }) => {
+    validateSha(expectedGlobalStateRevision, "expectedGlobalStateRevision");
+    validateSha(targetGlobalStateRevision, "targetGlobalStateRevision");
+    const targetAssignments = normalizeAssignments(assignments);
+    if (agentKeysRevision(targetAssignments) !== targetGlobalStateRevision) {
+      throw new CodexBridgeError(-32602, "targetGlobalStateRevision did not match assignments");
+    }
+    const requestDigest = sha256(Buffer.from(canonicalJson({
+      operation,
+      expectedGlobalStateRevision,
+      targetGlobalStateRevision,
+      assignments: targetAssignments,
+    })));
+    const cached = agentKeysIdempotencyCache.get(idempotencyKey);
+    if (cached) {
+      if (cached.requestDigest !== requestDigest) {
+        throw new CodexBridgeError(-32602, "idempotency key was reused with a different mutation");
+      }
+      return { ...cached.result, idempotentReplay: true };
+    }
+
+    const before = await snapshotAgentKeys();
+    if (before.globalStateRevision !== expectedGlobalStateRevision) {
+      throw new CodexBridgeError(-32005, "Codex Agent Key revision conflict", {
+        expectedGlobalStateRevision,
+        liveGlobalStateRevision: before.globalStateRevision,
+      });
+    }
+    if (before.globalStateRevision === targetGlobalStateRevision) {
+      const result = agentKeysMutationResult({
+        operation,
+        idempotencyKey,
+        before,
+        after: before,
+        changed: false,
+      });
+      cacheMutation(agentKeysIdempotencyCache, idempotencyKey, requestDigest, result);
+      return result;
+    }
+
+    try {
+      await agentKeysWriter.replaceAssignments({
+        key: CODEX_AGENT_KEYS_STATE_KEY,
+        assignments: structuredClone(targetAssignments),
+        operation,
+        targetGlobalStateRevision,
+      });
+      const after = await snapshotAgentKeys();
+      assertAgentKeysReadback(after, targetAssignments, targetGlobalStateRevision);
+      const result = agentKeysMutationResult({
+        operation,
+        idempotencyKey,
+        before,
+        after,
+        changed: true,
+      });
+      cacheMutation(agentKeysIdempotencyCache, idempotencyKey, requestDigest, result);
+      return result;
+    } catch (mutationError) {
+      let restored;
+      try {
+        await agentKeysWriter.replaceAssignments({
+          key: CODEX_AGENT_KEYS_STATE_KEY,
+          assignments: structuredClone(before.assignments),
+          operation: "automatic-rollback",
+          targetGlobalStateRevision: before.globalStateRevision,
+        });
+        restored = await snapshotAgentKeys();
+        assertAgentKeysReadback(restored, before.assignments, before.globalStateRevision);
+      } catch (rollbackError) {
+        throw new CodexBridgeError(-32008, "Agent Key mutation and rollback failed", {
+          mutationError: errorMessage(mutationError),
+          rollbackError: errorMessage(rollbackError),
+        });
+      }
+      throw new CodexBridgeError(-32008, "Agent Key mutation failed and was rolled back", {
+        operation,
+        beforeGlobalStateRevision: before.globalStateRevision,
+        targetGlobalStateRevision,
+        rollbackGlobalStateRevision: restored.globalStateRevision,
+        rollbackPerformed: true,
+        mutationError: errorMessage(mutationError),
+      });
+    }
+  };
+
   const adapter = { snapshotSettings, snapshotAgentKeys };
   if (settingsReplacer) {
     adapter.applySettings = (params) => runMutation({ ...params, operation: "apply" });
     adapter.restoreSettings = (params) => runMutation({ ...params, operation: "restore" });
+  }
+  if (agentKeysWriter) {
+    adapter.applyAgentKeys = (params) => runAgentKeysMutation({ ...params, operation: "apply" });
+    adapter.restoreAgentKeys = (params) => runAgentKeysMutation({ ...params, operation: "restore" });
   }
   return adapter;
 }
@@ -203,15 +308,15 @@ function normalizeAssignment(value, slot) {
   if (value === undefined || value === null) return null;
   if (!isRecord(value)) throw invalidAssignment(slot);
   if (value.type === "command" && nonEmpty(value.commandId)) {
-    return { type: "command", commandId: value.commandId };
+    return structuredClone(value);
   }
   if (value.type === "skill" && nonEmpty(value.skillName) && nonEmpty(value.skillPath)) {
-    return { type: "skill", skillName: value.skillName, skillPath: value.skillPath };
+    return structuredClone(value);
   }
   if (nonEmpty(value.hostId) && nonEmpty(value.threadKey) && nonEmpty(value.title)) {
-    return { hostId: value.hostId, threadKey: value.threadKey, title: value.title };
+    return structuredClone(value);
   }
-  if (nonEmpty(value.keycapId)) return { keycapId: value.keycapId };
+  if (nonEmpty(value.keycapId)) return structuredClone(value);
   throw invalidAssignment(slot);
 }
 
@@ -243,6 +348,30 @@ function mutationResult({ operation, idempotencyKey, before, after, changed }) {
     beforeSettingsRevision: before.settingsRevision,
     afterSettingsRevision: after.settingsRevision,
     targetSettingsRevision: after.settingsRevision,
+  };
+}
+
+function assertAgentKeysReadback(after, assignments, targetGlobalStateRevision) {
+  if (
+    after.globalStateRevision !== targetGlobalStateRevision ||
+    canonicalJson(after.assignments) !== canonicalJson(assignments)
+  ) {
+    throw new Error("Codex exact Agent Key readback did not match the target");
+  }
+}
+
+function agentKeysMutationResult({ operation, idempotencyKey, before, after, changed }) {
+  return {
+    schemaVersion: 1,
+    kind: CODEX_AGENT_KEYS_MUTATION_KIND,
+    operation,
+    idempotencyKey,
+    idempotentReplay: false,
+    changed,
+    rollbackPerformed: false,
+    beforeGlobalStateRevision: before.globalStateRevision,
+    afterGlobalStateRevision: after.globalStateRevision,
+    targetGlobalStateRevision: after.globalStateRevision,
   };
 }
 

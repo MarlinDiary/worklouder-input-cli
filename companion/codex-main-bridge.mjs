@@ -19,11 +19,15 @@ const METHOD_DEFINITIONS = new Map([
   ["codex.settings.apply", ["codex.settings.apply.v1", "applySettings"]],
   ["codex.settings.restore", ["codex.settings.restore.v1", "restoreSettings"]],
   ["codex.agentKeys.snapshot", ["codex.agentKeys.snapshot.v1", "snapshotAgentKeys"]],
+  ["codex.agentKeys.apply", ["codex.agentKeys.apply.v1", "applyAgentKeys"]],
+  ["codex.agentKeys.restore", ["codex.agentKeys.restore.v1", "restoreAgentKeys"]],
 ]);
 
 const MUTATION_METHODS = new Set([
   "codex.settings.apply",
   "codex.settings.restore",
+  "codex.agentKeys.apply",
+  "codex.agentKeys.restore",
 ]);
 
 export class CodexBridgeError extends Error {
@@ -164,7 +168,7 @@ export async function startCodexCompanionBridge({
       }
       try {
         if (MUTATION_METHODS.has(request.method)) {
-          validateMutationParams(request.params);
+          validateMutationParams(request.method, request.params);
         }
         const result = await enqueue(() => adapter[adapterMethod](request.params));
         writeResult(socket, id, result, maxResponseBytes);
@@ -269,7 +273,11 @@ function validateHello(params, expectedToken) {
   }
 }
 
-function validateMutationParams(params) {
+function validateMutationParams(method, params) {
+  if (method.startsWith("codex.agentKeys.")) {
+    validateAgentKeysMutationParams(params);
+    return;
+  }
   for (const name of [
     "expectedSourceSha256",
     "expectedSettingsRevision",
@@ -291,6 +299,28 @@ function validateMutationParams(params) {
     if (!isRecord(params[name])) {
       throw new CodexBridgeError(-32602, name + " is required");
     }
+  }
+}
+
+function validateAgentKeysMutationParams(params) {
+  for (const name of [
+    "expectedGlobalStateRevision",
+    "targetGlobalStateRevision",
+  ]) {
+    if (typeof params[name] !== "string" || !/^[0-9a-f]{64}$/.test(params[name])) {
+      throw new CodexBridgeError(-32602, name + " is invalid");
+    }
+  }
+  if (
+    typeof params.idempotencyKey !== "string" ||
+    params.idempotencyKey.length === 0 ||
+    Buffer.byteLength(params.idempotencyKey) > 256 ||
+    params.idempotencyKey.includes("\0")
+  ) {
+    throw new CodexBridgeError(-32602, "idempotencyKey is invalid");
+  }
+  if (!isRecord(params.assignments)) {
+    throw new CodexBridgeError(-32602, "assignments is required");
   }
 }
 
