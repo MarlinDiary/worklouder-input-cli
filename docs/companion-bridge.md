@@ -127,6 +127,11 @@ worklouderctl layer rename --input config-snapshot.json \
   --profile 0 --id 1 --name Build --output candidate.json
 worklouderctl layer color --input config-snapshot.json \
   --profile 0 --id 1 --color '#EDF6FF' --output color-candidate.json
+worklouderctl control list --input config-snapshot.json --profile 0 --layer 1
+worklouderctl control show --input config-snapshot.json --profile 0 --layer 1 \
+  --control encoder:0:press
+worklouderctl control set --input config-snapshot.json --profile 0 --layer 1 \
+  --control encoder:0:press --assignment KC_MUTE --output control-candidate.json
 ```
 
 Before publishing, the editor independently verifies every file's canonical
@@ -212,7 +217,7 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
 - `companion/input-main-bridge.test.mjs` — authentication, dispatch, and service
   adapter tests;
 - `scripts/test-bridge-e2e.sh` — Rust CLI handshake, status, file list, exact
-  export, semantic profile/layer inspection and color candidates, independent candidate rehash,
+  export, semantic profile/layer/control inspection and candidates, independent candidate rehash,
   apply/readback, idempotent retry, stale-CAS rejection, restore, and dual-hash
   conformance test.
 

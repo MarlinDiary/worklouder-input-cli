@@ -59,12 +59,13 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Layer list/show, rename, and 24-bit RGB metadata candidate generation
 - [ ] Profile create and delete
 - [ ] Layer create, select, delete, and remaining lighting metadata
-- [ ] Keys and keycodes
-- [ ] Encoder rotation and press
-- [ ] Joystick sectors
+- [x] Existing keys and frozen Input 0.18.0 assignment tokens
+- [x] Encoder rotation and press assignments
+- [x] Existing joystick sector assignments
+- [x] Action and Multi Action reference validation plus profile usage synchronization
 - [ ] Layer lighting
 - [ ] Actions/macros and groups
-- [ ] Multi Actions and reference validation
+- [ ] Multi Action CRUD and timing
 - [ ] Linked apps
 
 ## M4 — Full cross-authority transaction

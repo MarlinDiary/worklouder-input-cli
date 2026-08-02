@@ -23,7 +23,7 @@
 > `worklouderctl` binary with provider diagnostics, Codex Micro settings
 > inspection/export, Input inspection/exact-byte export, validation, structural
 > diff, live device status/file reads, verified device export, revisioned bridge
-> snapshots/CAS validation, offline profile/layer candidate generation,
+> snapshots/CAS validation, offline profile/layer/control candidate generation,
 > fixture-verified apply/restore transactions, JSON output, and shell completions.
 > There is no packaged release yet.
 > The bridge transaction engine now verifies backup, apply, idempotent retry,
@@ -105,6 +105,9 @@ worklouderctl layer list --input CONFIG.json [--profile PROFILE_ID]
 worklouderctl layer show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
 worklouderctl layer rename --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --name NAME --output CANDIDATE.json
 worklouderctl layer color --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --color '#RRGGBB' --output CANDIDATE.json
+worklouderctl control list --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID
+worklouderctl control show --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control key:ROW:COLUMN
+worklouderctl control set --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control encoder:INDEX:press --assignment KC_MUTE --output CANDIDATE.json
 worklouderctl device --transport direct --input-mode require-closed status
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
@@ -146,7 +149,7 @@ full revision readback, and automatic rollback. These commands are advertised
 only when the running Input version supplies a verified configuration writer;
 the current cross-language evidence uses the isolated reference writer.
 
-`profile` and `layer` commands are offline semantic editors. They strictly
+`profile`, `layer`, and `control` commands are offline semantic editors. They strictly
 validate every embedded size, SHA-1, SHA-256, canonical base64 payload, safe
 path, keymap ID, and the full snapshot revision before producing a new complete
 candidate. A candidate preserves unknown JSON fields and unrelated file bytes,
@@ -162,6 +165,16 @@ worklouderctl device --transport bridge config apply \
   --input candidate.json --backup pre-apply.json \
   --expected-revision REVISION --idempotency-key layer-color-1
 ```
+
+Physical controls use stable IDs: `key:ROW:COLUMN`,
+`encoder:INDEX:ccw|cw|press`, and `joystick:SECTOR`. `control set` accepts the
+frozen Input 0.18.0 assignment grammar (`KC_*`, `KI_*`, existing `KA_A<ID>`
+Actions, and existing `KA_M<ID>` Multi Actions). Existing `KV_*` vendor tokens
+are readable and preserved; writable assignments draw from the catalog and
+validated references. When
+an Action reference changes, the candidate synchronizes `macrosUsed` and
+`multiActionsUsed` using Input's ordering before the normal full-snapshot
+rehash and atomic readback.
 
 The repository includes an executable Input-main reference server, a service
 adapter for the Input 0.18.0 service shape, authentication tests, and a
@@ -263,7 +276,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Companion Bridge integration in a released Input build | Upstream integration pending |
 | Codex live settings-bridge write client | Planned |
 | Semantic profile/layer candidates | List/show/select/rename/color implemented and fixture-verified |
-| Semantic control commands | Planned |
+| Semantic physical controls | List/show/set for keys, encoder gestures, and existing joystick sectors; candidate/apply/restore fixture-verified |
 | Real-device mutation and rollback | Planned |
 | Input cache/database and Smart Actions synchronization | Planned |
 | Signed macOS release and Homebrew installation | Planned |
@@ -274,7 +287,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 
 WorkLouderCTL is an open-source full-configuration CLI project for Codex, Work
 Louder Input, and Codex Micro. The source alpha can inspect both apps,
-read/export live Codex Micro state, generate validated profile/layer candidates,
+read/export live Codex Micro state, generate validated profile/layer/control candidates,
 and exercise apply/restore against the isolated bridge writer; packaged
 binaries and released-Input writer integration are upcoming.
 

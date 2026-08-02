@@ -1734,6 +1734,8 @@ mod tests {
         let source = root("control-source");
         let basic_output = root("control-basic");
         let action_output = root("control-action");
+        let internal_output = root("control-internal");
+        let multi_output = root("control-multi");
         let noop_output = root("control-noop");
         write_fixture(&source);
         let original = SemanticSnapshot::read(&source).unwrap();
@@ -1774,12 +1776,36 @@ mod tests {
         );
         assert_eq!(action_candidate.file_bytes[1], smart_before);
 
+        let internal =
+            control_set(&source, None, 0, "key:0:1", "KI_LM3", &internal_output).unwrap();
+        assert_eq!(internal.changed_paths.len(), 1);
+        assert_eq!(
+            SemanticSnapshot::read(&internal_output).unwrap().keymap["profiles"][0]["layers"][0]
+                ["layout"]["keymap"][0][1],
+            "KI_LM3"
+        );
+
+        let multi = control_set(&source, None, 0, "key:0:1", "KA_M1", &multi_output).unwrap();
+        assert_eq!(multi.changed_paths.len(), 1);
+        assert_eq!(
+            SemanticSnapshot::read(&multi_output).unwrap().keymap["profiles"][0]
+                ["multiActionsUsed"],
+            json!([1])
+        );
+
         let noop = control_set(&source, None, 0, "key:0:0", "KC_A", &noop_output).unwrap();
         assert!(!noop.changed);
         assert!(noop.changed_paths.is_empty());
         assert_eq!(noop.before_revision, noop.after_revision);
 
-        for path in [&source, &basic_output, &action_output, &noop_output] {
+        for path in [
+            &source,
+            &basic_output,
+            &action_output,
+            &internal_output,
+            &multi_output,
+            &noop_output,
+        ] {
             fs::remove_file(path).unwrap();
         }
     }
@@ -1792,6 +1818,7 @@ mod tests {
             ("key:0:0", "KC_NOT_REAL", "catalog"),
             ("key:0:0", "KV_OAI_AG00", "read-only"),
             ("key:0:0", "KA_A99", "missing Action"),
+            ("key:0:0", "KA_M99", "missing Multi Action"),
             ("key:9:0", "KC_A", "not found"),
         ] {
             let output = root("control-rejected-output");

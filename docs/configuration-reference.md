@@ -199,6 +199,12 @@ worklouderctl layer rename --input SNAPSHOT.json [--profile ID] \
   --id ID --name NAME --output CANDIDATE.json
 worklouderctl layer color --input SNAPSHOT.json [--profile ID] \
   --id ID --color '#RRGGBB' --output CANDIDATE.json
+worklouderctl control list --input SNAPSHOT.json [--profile ID] --layer ID
+worklouderctl control show --input SNAPSHOT.json [--profile ID] \
+  --layer ID --control key:ROW:COLUMN
+worklouderctl control set --input SNAPSHOT.json [--profile ID] \
+  --layer ID --control encoder:INDEX:press --assignment KC_MUTE \
+  --output CANDIDATE.json
 ```
 
 These commands validate the entire snapshot offline, preserve unknown fields
@@ -218,6 +224,20 @@ metadata; backlight and underglow objects remain separate lighting surfaces.
 - encoder counter-clockwise, clockwise, and click;
 - planar joystick sectors/radial assignments;
 - touch-sensor behavior where exposed by the device adapter.
+
+The implemented physical IDs are `key:ROW:COLUMN`,
+`encoder:INDEX:ccw|cw|press`, and `joystick:SECTOR`. List/show report the exact
+device token and classify it as `basic`, `internal`, `action`, `multiAction`,
+or `vendor`. Set modifies only an existing physical slot; joystick sector
+angles remain byte-for-byte equivalent in the semantic document.
+
+`spec/input-assignment-tokens-0.18.0.json` freezes 184 `KC_*` tokens and 43
+`KI_*` tokens recovered from the Input 0.18.0 ASAR, plus `KA_A<ID>` and
+`KA_M<ID>` reference formats. Reference IDs must exist in root `macros` or
+`multiActions`; profile usage arrays are recomputed in Input's string order.
+The catalog records the source ASAR SHA-256 and the observed Codex Micro
+`[2,4,4,3]` key matrix. Existing `KV_*` assignments are accepted for strict
+read/preservation but rejected as new user assignments.
 
 ### Basic keys
 

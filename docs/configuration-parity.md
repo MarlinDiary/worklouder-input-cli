@@ -50,12 +50,12 @@ the runtime reloaded the new value.
 | --- | --- | --- | --- |
 | Profiles | create, rename, select, delete | `profile` | candidate-verified for list/show/rename/select; create/delete pending |
 | Layers | create, rename, select, delete, color, up to six | `layer` | candidate-verified for list/show/rename/color; create/select/delete pending |
-| Basic keys | all device-supported keycodes | `key set` | researched |
-| Layer/profile keys | normal/temp layers and profiles 1–6 | `key set` | researched |
+| Basic keys | all frozen Input 0.18.0 device tokens | `control list/show/set` | candidate-verified |
+| Layer/profile keys | normal/temp layers and profiles 1–6 | `control list/show/set` | candidate-verified |
 | Actions | simple/advanced events, delays, groups | `action` | researched |
 | Multi Actions | tap, double tap, hold, tap-hold, timing | `multi-action` | researched |
-| Encoder | counter-clockwise, clockwise, click | `encoder` | researched |
-| Joystick sectors | radial sectors and targets | `joystick sector` | researched |
+| Encoder | counter-clockwise, clockwise, click | `control list/show/set` | candidate/apply/restore fixture-verified |
+| Joystick sectors | existing radial sectors and targets | `control list/show/set` | candidate-verified; sector CRUD pending |
 | Backlight | effect, brightness, speed, magic, color | `lighting backlight` | researched |
 | Underglow | effect, brightness, speed, magic, color | `lighting underglow` | researched |
 | AppSense links | application-to-layer mapping | `appsense` | researched |
