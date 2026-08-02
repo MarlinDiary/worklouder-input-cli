@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouder-input-cache-snapshot-adapter",
+  "inputBaselineVersion": "0.18.0",
+  "command": "worklouderctl input config snapshot",
+  "sourceAuthority": {
+    "root": "Input application support directory",
+    "deviceSelection": "explicit device id or the only cached device directory",
+    "requiredFiles": ["devices/<deviceId>/keymap.json"],
+    "optionalFiles": ["devices/<deviceId>/smart_actions.json"],
+    "excludedFiles": ["input_storage.json"],
+    "processInteraction": "none",
+    "deviceInteraction": "none"
+  },
+  "output": {
+    "schemaVersion": 1,
+    "kind": "worklouder-input-config-snapshot",
+    "revisionAlgorithm": "sha256:path-u32be-path-bytes-size-u64be-content-v1",
+    "normalizedPaths": ["keymap.json", "smart_actions.json"],
+    "fileRecordFields": [
+      "relativePath",
+      "size",
+      "deviceChecksumSha1",
+      "sha256",
+      "dataBase64"
+    ],
+    "compatibleConsumers": [
+      "profile",
+      "layer",
+      "appsense",
+      "control",
+      "action",
+      "multi-action",
+      "smart-action",
+      "device config validate/apply/restore"
+    ]
+  },
+  "integrity": {
+    "preserveExactSourceBytes": true,
+    "rejectSymlinkSourceFiles": true,
+    "readSourceAgainBeforePublish": true,
+    "readSourceAgainAfterPublish": true,
+    "validateSemanticSnapshotBeforePublish": true,
+    "atomicallyPublishAndReopen": true,
+    "destinationMustNotExist": true
+  }
+}
