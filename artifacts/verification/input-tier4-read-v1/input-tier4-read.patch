@@ -1,0 +1,3196 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 9ebf656..b5ebe22 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -39,6 +39,8 @@ jobs:
+         run: cargo clippy --all-targets -- -D warnings
+       - name: Test companion bridge reference servers
+         run: npm test --prefix companion
++      - name: Verify deterministic sanitized fixtures
++        run: ./scripts/verify-sanitized-fixtures.sh
+       - name: Test Input bridge CLI end to end
+         run: ./scripts/test-bridge-e2e.sh
+       - name: Test Codex bridge CLI end to end
+diff --git a/README.md b/README.md
+index bea2f49..f20c17e 100644
+--- a/README.md
++++ b/README.md
+@@ -136,6 +136,9 @@ worklouderctl input permission command get --input HOST_SETTINGS.json
+ worklouderctl input permission command set --input HOST_SETTINGS.json enabled --output HOST_SETTINGS_ENABLED.json
+ worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json
+ worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
++worklouderctl input permissions [--device DEVICE_ID]
++worklouderctl input firmware check [--device DEVICE_ID]
++worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
+ worklouderctl input preset snapshot --output PRESET_CATALOG.json
+ worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
+ worklouderctl preset show --catalog PRESET_CATALOG.json --id PRESET_ID
+@@ -218,6 +221,8 @@ worklouderctl device --transport direct --input-mode require-closed status
+ worklouderctl config validate BACKUP_DIRECTORY
+ worklouderctl config diff BASE CANDIDATE
+ worklouderctl --json input inspect
++worklouderctl --json schema list
++worklouderctl --json schema show configuration-v1
+ worklouderctl completion bash|zsh|fish
+ ```
+ 
+@@ -461,6 +466,15 @@ GUI; the positive transition state and typed timeout conflict are fixture-
+ verified. Released Input integration and a real A/B focus transition remain
+ compatibility gates.
+ 
++`input permissions` reads Input's own platform permission check. On macOS this
++means the released `WLPermissions` Input Monitoring check (not a synthesized
++Accessibility result); on Linux it means read/write access to the selected HID
++path. `input firmware check` delegates release selection to Input's installed
++`DeviceFlashService`, and performs no flash. `input logs collect` requests a
++bounded suffix of Input's 5,000-entry in-memory log ring, redacts home paths,
++emails, and credential-shaped values inside Input, then atomically publishes
++and reopens a `0700` bundle of `0600` JSON/text files with SHA-256 records.
++
+ `transaction plan/show/apply/restore` now coordinates Codex settings, Codex
+ Agent Keys, Input device configuration, and Input host settings behind one
+ canonical revision and rollback boundary. It preflights all authorities before
+@@ -554,6 +568,11 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
+ [Codex Micro product page](https://worklouder.cc/codex-micro), and the official
+ [Codex Micro setup guide](https://worklouder.cc/openai-micro-setup).
+ 
++The checked-in [`fixtures/`](fixtures/) tree is deterministic and sanitized;
++`./scripts/verify-sanitized-fixtures.sh` regenerates it, recomputes all manifest
++hashes, scans sensitive patterns, and reopens both Input snapshots through the
++CLI semantic parser.
++
+ ## Project status
+ 
+ | Milestone | Status |
+@@ -578,6 +597,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
+ | Semantic Actions | List/show/create/rename/delete and event add/set/delete/move; cascade/apply/restore fixture-verified |
+ | Input presets | Catalog snapshot/list/show/preview plus exact offline install remapping; all 17 bundled defaults candidate-verified and fixture apply/readback/restore verified |
+ | Input radial menu | Sector/angle inspection and referenced resource resolution verified; edits reuse joystick/control transactions and the overlay remains Input-owned |
++| Tier 4 permissions, firmware check, and diagnostic logs | Exact Input 0.18.0 authority paths frozen; bridge/CLI fixture verified with private sanitized bundle |
+ | Real-device mutation and rollback | Planned |
+ | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
+ | Input cache read adapter | Complete; byte-exact bridge-equivalent semantic snapshot |
+@@ -621,6 +641,7 @@ Read the complete [FAQ](docs/faq.md).
+ - [Complete configuration reference](docs/configuration-reference.md)
+ - [Cross-authority transaction guide](docs/transactions.md)
+ - [Exit statuses and JSON error envelopes](docs/exit-statuses.md)
++- [JSON Schemas and agent invocation contract](docs/json-schemas.md)
+ - [Configuration parity matrix](docs/configuration-parity.md)
+ - [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
+ - [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 3bf7866..e31cb53 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -105,6 +105,9 @@ worklouderctl input permission command get --input HOST_SETTINGS.json
+ worklouderctl input permission command set --input HOST_SETTINGS.json enabled --output HOST_SETTINGS_ENABLED.json
+ worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json
+ worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
++worklouderctl input permissions [--device DEVICE_ID]
++worklouderctl input firmware check [--device DEVICE_ID]
++worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
+ worklouderctl input preset snapshot --output PRESET_CATALOG.json
+ worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
+ worklouderctl preset show --catalog PRESET_CATALOG.json --id PRESET_ID
+@@ -393,6 +396,14 @@ collector、最后一次转发给 firmware 的应用 identity、已注册 device
+ timeout 的 typed conflict 已由 fixture 验证，released Input 集成与真实 A/B focus
+ transition 仍是 compatibility gate。
+ 
++`input permissions` 读取 Input 自己的 platform permission check：macOS 对应 released
++`WLPermissions` 的 Input Monitoring 结果（不会虚构一个 Accessibility 结果），Linux
++对应 selected HID path 的读写权限。`input firmware check` 把 release 选择完全委派给已安装
++Input 的 `DeviceFlashService`，不会执行 flash。`input logs collect` 从 Input 的 5,000 条
++内存 log ring 读取有界后缀，先在 Input 内遮蔽 home path、email 与 credential-shaped
++值，再原子发布并 reopen 一个 `0700` bundle；其中 JSON/text 与 SHA-256 manifest 均为
++`0600`。
++
+ 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
+ adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
+ 
+@@ -435,6 +446,10 @@ worklouderctl backup restore BACKUP_ID
+ 
+ 以上是当前研究基线；正式支持范围会通过版本适配器、fixtures 和真实硬件 readback 明确记录。
+ 
++仓库中的 [`fixtures/`](fixtures/) 为确定性、已脱敏的 synthetic 最小样例；
++`./scripts/verify-sanitized-fixtures.sh` 会重新生成全部文件、复算 manifest SHA-256、
++扫描敏感模式，并通过 CLI 语义解析器重新打开两个 Input snapshot。
++
+ ## 与 Codex 和 Input 的关系
+ 
+ WorkLouderCTL 是 **Full-configuration CLI**：
+@@ -464,6 +479,8 @@ install candidate 与 fixture transaction，keys、
+ encoder gestures 的 control list/show/set、joystick mode 与 2–8 sector
+ lifecycle/assignment/精确 angle rebalance，以及 Action
+ list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
++permission status、firmware check 与 sanitized diagnostic log bundle 也已通过 bridge/CLI
++fixture；Input
+ release 集成、Codex released-app bridge 集成、可安装 binary 与 Homebrew formula
+ 仍在后续里程碑中。
+ 
+diff --git a/companion/README.md b/companion/README.md
+index 8422c11..120b875 100644
+--- a/companion/README.md
++++ b/companion/README.md
+@@ -77,6 +77,15 @@ This read-only method returns collector/registration state, the native focused
+ application, the last payload forwarded to firmware, and the selected device
+ profile/layer status. It does not focus an application or open an Input window.
+ 
++`permissionsAuthority.readStatus()`, `firmwareAuthority.readStatus()`, and
++`logsAuthority.readLogs()` enable the optional Tier 4 read capabilities
++`input.permissions.status.v1`, `input.firmware.status.v1`, and
++`input.logs.snapshot.v1`. The one-call integration derives them from
++`ApplicationService.checkAppPermissions`, `DeviceFlashService`, and
++`WindowService.getWindowsLogs` when those exact released services are supplied.
++Logs are bounded and sanitized by the adapter before transport. Firmware status
++is read-only; flashing requires a separate high-level Input-owned authority.
++
+ The reference adapter owns the surrounding transaction: validate every byte
+ and digest, capture a pre-mutation snapshot, compare the live revision, invoke
+ the writer, read back the complete revision, and automatically restore and
+@@ -98,7 +107,10 @@ node companion/conformance.mjs \
+   --require input.host-settings.apply.v1 \
+   --require input.host-settings.restore.v1 \
+   --require input.presets.snapshot.v1 \
+-  --require input.appsense.runtime.v1
++  --require input.appsense.runtime.v1 \
++  --require input.permissions.status.v1 \
++  --require input.firmware.status.v1 \
++  --require input.logs.snapshot.v1
+ ```
+ 
+ Nonstandard paths can be supplied with `--socket` and `--token`, or with
+diff --git a/companion/fixture-server.mjs b/companion/fixture-server.mjs
+index 67c4153..92c8ad1 100644
+--- a/companion/fixture-server.mjs
++++ b/companion/fixture-server.mjs
+@@ -317,6 +317,45 @@ const adapter = createInputMainAdapter({
+       };
+     },
+   },
++  permissionsAuthority: {
++    async readStatus() {
++      return {
++        platform: "darwin",
++        requiredPermission: "input-monitoring",
++        granted: true,
++        checkedDevicePaths: [],
++      };
++    },
++  },
++  firmwareAuthority: {
++    async readStatus() {
++      return {
++        updateAvailable: true,
++        release: {
++          version: "v0.7.0-fixture",
++          fetchedAt: 1785680000000,
++          changeLog: "Fixture firmware release",
++          downloadUrl: "https://example.test/codex-micro-v0.7.0.bin",
++        },
++      };
++    },
++  },
++  logsAuthority: {
++    async readLogs() {
++      return [
++        {
++          time: "2026-08-03T00:00:00.000Z",
++          level: "info",
++          message: "Input fixture ready at /Users/fixture/Library token=fixture-secret",
++        },
++        {
++          time: "2026-08-03T00:00:01.000Z",
++          level: "warn",
++          message: "fixture@example.test requested diagnostic snapshot",
++        },
++      ];
++    },
++  },
+ });
+ 
+ const bridge = await startInputCompanionBridge({
+diff --git a/companion/input-main-adapter.mjs b/companion/input-main-adapter.mjs
+index 7c1fce1..d2f9b5f 100644
+--- a/companion/input-main-adapter.mjs
++++ b/companion/input-main-adapter.mjs
+@@ -19,6 +19,8 @@ const MAX_CONFIG_FILE_BYTES = 16 * 1024 * 1024;
+ const MAX_CONFIG_TOTAL_BYTES = 32 * 1024 * 1024;
+ const MAX_PRESETS = 1024;
+ const MAX_PRESET_CATALOG_BYTES = 32 * 1024 * 1024;
++const MAX_LOG_ENTRIES = 5000;
++const MAX_LOG_MESSAGE_BYTES = 8192;
+ 
+ export function createInputMainAdapter({
+   devicesCommManager,
+@@ -27,6 +29,9 @@ export function createInputMainAdapter({
+   hostSettingsAuthority,
+   presetCatalogAuthority,
+   appsenseRuntimeAuthority,
++  permissionsAuthority,
++  firmwareAuthority,
++  logsAuthority,
+ }) {
+   if (
+     !devicesCommManager ||
+@@ -70,6 +75,25 @@ export function createInputMainAdapter({
+   ) {
+     throw new TypeError("appsenseRuntimeAuthority.readState must be a function");
+   }
++  if (
++    permissionsAuthority !== undefined &&
++    (!permissionsAuthority ||
++      typeof permissionsAuthority.readStatus !== "function")
++  ) {
++    throw new TypeError("permissionsAuthority.readStatus must be a function");
++  }
++  if (
++    firmwareAuthority !== undefined &&
++    (!firmwareAuthority || typeof firmwareAuthority.readStatus !== "function")
++  ) {
++    throw new TypeError("firmwareAuthority.readStatus must be a function");
++  }
++  if (
++    logsAuthority !== undefined &&
++    (!logsAuthority || typeof logsAuthority.readLogs !== "function")
++  ) {
++    throw new TypeError("logsAuthority.readLogs must be a function");
++  }
+   const idempotencyCache = new Map();
+   const hostSettingsIdempotencyCache = new Map();
+ 
+@@ -616,9 +640,219 @@ export function createInputMainAdapter({
+       };
+     };
+   }
++  if (permissionsAuthority) {
++    adapter.getPermissionsStatus = async ({ deviceId = null }) => {
++      const device = selectDevice(deviceId);
++      const status = normalizePermissionsStatus(
++        await permissionsAuthority.readStatus({ device }),
++      );
++      return {
++        schemaVersion: 1,
++        kind: "worklouder-input-permissions-status",
++        deviceKitVersion,
++        device: publicDevice(device.info),
++        permission: status,
++      };
++    };
++  }
++  if (firmwareAuthority) {
++    adapter.getFirmwareStatus = async ({ deviceId = null }) => {
++      const device = selectDevice(deviceId);
++      const [deviceStatus, update] = await Promise.all([
++        common(device),
++        firmwareAuthority.readStatus({ device }),
++      ]);
++      return {
++        schemaVersion: 1,
++        kind: "worklouder-input-firmware-status",
++        ...deviceStatus,
++        update: normalizeFirmwareStatus(update),
++      };
++    };
++  }
++  if (logsAuthority) {
++    adapter.snapshotLogs = async ({ maxEntries = MAX_LOG_ENTRIES }) => {
++      const limit = safeInteger(maxEntries, "maxEntries", 1, MAX_LOG_ENTRIES);
++      const source = await logsAuthority.readLogs({ maxEntries: limit });
++      return normalizeLogsSnapshot(source, limit);
++    };
++  }
+   return adapter;
+ }
+ 
++function normalizePermissionsStatus(status) {
++  if (!status || typeof status !== "object" || Array.isArray(status)) {
++    throw new BridgeError(-32008, "Input permission status was invalid");
++  }
++  const platform = safeBoundedString(status.platform, "permission platform", 32);
++  const requiredPermission = safeBoundedString(
++    status.requiredPermission,
++    "required permission",
++    64,
++  );
++  if (![
++    "input-monitoring",
++    "hid-read-write",
++    "none",
++  ].includes(requiredPermission)) {
++    throw new BridgeError(-32008, "Input required permission was unknown");
++  }
++  if (typeof status.granted !== "boolean") {
++    throw new BridgeError(-32008, "Input permission grant was invalid");
++  }
++  const checkedDevicePaths = Array.isArray(status.checkedDevicePaths)
++    ? [...new Set(status.checkedDevicePaths.map((path) =>
++      safeBoundedString(path, "checked device path", 4096),
++    ))].sort()
++    : [];
++  if (checkedDevicePaths.length > 256) {
++    throw new BridgeError(-32008, "Input permission path list was too large");
++  }
++  return { platform, requiredPermission, granted: status.granted, checkedDevicePaths };
++}
++
++function normalizeFirmwareStatus(status) {
++  if (!status || typeof status !== "object" || Array.isArray(status)) {
++    throw new BridgeError(-32008, "Input firmware status was invalid");
++  }
++  if (
++    status.updateAvailable !== null &&
++    typeof status.updateAvailable !== "boolean"
++  ) {
++    throw new BridgeError(-32008, "Input firmware update availability was invalid");
++  }
++  let release = null;
++  if (status.release !== null && status.release !== undefined) {
++    if (typeof status.release !== "object" || Array.isArray(status.release)) {
++      throw new BridgeError(-32008, "Input firmware release was invalid");
++    }
++    release = {
++      version: safeBoundedString(status.release.version, "firmware version", 128),
++      fetchedAt: safeInteger(
++        status.release.fetchedAt,
++        "firmware fetchedAt",
++        0,
++        Number.MAX_SAFE_INTEGER,
++      ),
++      downloadUrl: safeHttpUrl(status.release.downloadUrl, "firmware download URL"),
++      changeLog: optionalBoundedString(
++        status.release.changeLog,
++        "firmware change log",
++        1024 * 1024,
++      ),
++    };
++  }
++  if (status.updateAvailable === true && release === null) {
++    throw new BridgeError(-32008, "Input reported an update without release metadata");
++  }
++  return { updateAvailable: status.updateAvailable, release };
++}
++
++function normalizeLogsSnapshot(source, limit) {
++  if (!Array.isArray(source)) {
++    throw new BridgeError(-32008, "Input logs were not an array");
++  }
++  const selected = source.slice(-limit);
++  let redactionCount = 0;
++  const entries = selected.map((entry) => {
++    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
++      throw new BridgeError(-32008, "Input log entry was invalid");
++    }
++    const message = redactLogMessage(
++      safeBoundedString(entry.message, "log message", MAX_LOG_MESSAGE_BYTES),
++    );
++    redactionCount += message.redactionCount;
++    return {
++      time: safeBoundedString(entry.time, "log timestamp", 128),
++      level: safeBoundedString(entry.level, "log level", 32).toLowerCase(),
++      message: message.value,
++    };
++  });
++  return {
++    schemaVersion: 1,
++    kind: "worklouder-input-log-snapshot",
++    sanitized: true,
++    sourceEntryCount: source.length,
++    truncated: source.length > selected.length,
++    redactionCount,
++    entries,
++  };
++}
++
++function redactLogMessage(value) {
++  let redactionCount = 0;
++  const replace = (pattern, replacement) => {
++    value = value.replace(pattern, (...args) => {
++      redactionCount += 1;
++      return typeof replacement === "function" ? replacement(...args) : replacement;
++    });
++  };
++  replace(/\/Users\/[^/\s"']+/g, "$HOME");
++  replace(/[A-Za-z]:\\Users\\[^\\\s"']+/g, "$HOME");
++  replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "<REDACTED_EMAIL>");
++  replace(/\bBearer\s+[^\s,;]+/gi, "Bearer <REDACTED>");
++  replace(
++    /\b(authorization|token|api[_-]?key|password|secret|device[_-]?id|serial)(\s*[:=]\s*)([^\s,;]+)/gi,
++    (_match, name, separator) => `${name}${separator}<REDACTED>`,
++  );
++  replace(
++    /([?&](?:token|api[_-]?key|password|secret)=)[^&#\s]+/gi,
++    "$1<REDACTED>",
++  );
++  replace(
++    /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi,
++    "<REDACTED_UUID>",
++  );
++  return { value, redactionCount };
++}
++
++function safeBoundedString(value, label, maxBytes) {
++  if (
++    typeof value !== "string" ||
++    value.length === 0 ||
++    Buffer.byteLength(value, "utf8") > maxBytes ||
++    value.includes("\0")
++  ) {
++    throw new BridgeError(-32008, `${label} was invalid`);
++  }
++  return value;
++}
++
++function optionalBoundedString(value, label, maxBytes) {
++  if (value === null || value === undefined) {
++    return null;
++  }
++  if (
++    typeof value !== "string" ||
++    Buffer.byteLength(value, "utf8") > maxBytes ||
++    value.includes("\0")
++  ) {
++    throw new BridgeError(-32008, `${label} was invalid`);
++  }
++  return value;
++}
++
++function safeInteger(value, label, minimum, maximum) {
++  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
++    throw new BridgeError(-32602, `${label} was invalid`);
++  }
++  return value;
++}
++
++function safeHttpUrl(value, label) {
++  const url = safeBoundedString(value, label, 8192);
++  let parsed;
++  try {
++    parsed = new URL(url);
++  } catch {
++    throw new BridgeError(-32008, `${label} was invalid`);
++  }
++  if (!["https:", "http:"].includes(parsed.protocol)) {
++    throw new BridgeError(-32008, `${label} used an unsupported protocol`);
++  }
++  return parsed.toString();
++}
++
+ function normalizeAppSenseRuntime(runtime, selectedDeviceId) {
+   if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) {
+     throw new BridgeError(-32008, "AppSense runtime state was invalid");
+diff --git a/companion/input-main-bridge.mjs b/companion/input-main-bridge.mjs
+index af301ef..d2ae6d2 100644
+--- a/companion/input-main-bridge.mjs
++++ b/companion/input-main-bridge.mjs
+@@ -40,6 +40,15 @@ const METHOD_DEFINITIONS = new Map([
+     "input.appsense.runtime",
+     ["input.appsense.runtime.v1", "getAppSenseRuntime"],
+   ],
++  [
++    "input.permissions.status",
++    ["input.permissions.status.v1", "getPermissionsStatus"],
++  ],
++  [
++    "input.firmware.status",
++    ["input.firmware.status.v1", "getFirmwareStatus"],
++  ],
++  ["input.logs.snapshot", ["input.logs.snapshot.v1", "snapshotLogs"]],
+ ]);
+ 
+ const MUTATION_METHODS = new Set([
+diff --git a/companion/input-main-bridge.test.mjs b/companion/input-main-bridge.test.mjs
+index 70daca2..bd15c6e 100644
+--- a/companion/input-main-bridge.test.mjs
++++ b/companion/input-main-bridge.test.mjs
+@@ -575,6 +575,60 @@ test("Input adapter exposes AppSense focus forwarding and device layer state", a
+   );
+ });
+ 
++test("Input adapter normalizes Tier 4 permission, firmware, and sanitized log state", async () => {
++  const device = configDevice("operations-device", new Map());
++  const adapter = createInputMainAdapter({
++    devicesCommManager: { getDevices: () => [device] },
++    deviceKitVersion: "0.1.29",
++    permissionsAuthority: {
++      readStatus: async () => ({
++        platform: "darwin",
++        requiredPermission: "input-monitoring",
++        granted: true,
++        checkedDevicePaths: [],
++      }),
++    },
++    firmwareAuthority: {
++      readStatus: async () => ({
++        updateAvailable: true,
++        release: {
++          version: "v0.7.0",
++          fetchedAt: 1234,
++          changeLog: "Fixture",
++          downloadUrl: "https://example.test/firmware.bin",
++        },
++      }),
++    },
++    logsAuthority: {
++      readLogs: async () => [
++        {
++          time: "2026-08-03T00:00:00.000Z",
++          level: "INFO",
++          message:
++            "path=/Users/alice/Library token=secret alice@example.test",
++        },
++      ],
++    },
++  });
++
++  const permissions = await adapter.getPermissionsStatus({ deviceId: null });
++  assert.equal(permissions.permission.requiredPermission, "input-monitoring");
++  assert.equal(permissions.permission.granted, true);
++
++  const firmware = await adapter.getFirmwareStatus({ deviceId: null });
++  assert.equal(firmware.status.firmwareVersion, "v0.6.0");
++  assert.equal(firmware.update.release.version, "v0.7.0");
++
++  const logs = await adapter.snapshotLogs({ maxEntries: 10 });
++  assert.equal(logs.sanitized, true);
++  assert.equal(logs.entries[0].level, "info");
++  assert.equal(
++    logs.entries[0].message,
++    "path=$HOME/Library token=<REDACTED> <REDACTED_EMAIL>",
++  );
++  assert.equal(logs.redactionCount, 3);
++});
++
+ test("one-call Input integration owns discovery and lifecycle paths", async () => {
+   const root = await mkdtemp("/tmp/wlb-integration-");
+   class FixtureApp extends EventEmitter {
+@@ -649,6 +703,20 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
+           },
+         }),
+       },
++      permissionsAuthority: {
++        readStatus: () => ({
++          platform: "darwin",
++          requiredPermission: "input-monitoring",
++          granted: true,
++          checkedDevicePaths: [],
++        }),
++      },
++      firmwareAuthority: {
++        readStatus: () => ({ updateAvailable: false, release: null }),
++      },
++      logsAuthority: {
++        readLogs: () => [],
++      },
+     },
+     deviceKitVersion: "0.1.29-integration",
+     bridgeVersion: "0.1.0-integration",
+@@ -672,6 +740,9 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
+   );
+   assert.ok(integration.capabilities.includes("input.presets.snapshot.v1"));
+   assert.ok(integration.capabilities.includes("input.appsense.runtime.v1"));
++  assert.ok(integration.capabilities.includes("input.permissions.status.v1"));
++  assert.ok(integration.capabilities.includes("input.firmware.status.v1"));
++  assert.ok(integration.capabilities.includes("input.logs.snapshot.v1"));
+   assert.equal(app.listenerCount("before-quit"), 1);
+   await integration.stop();
+   assert.equal(app.listenerCount("before-quit"), 0);
+diff --git a/companion/input-main-integration.mjs b/companion/input-main-integration.mjs
+index 50f8fd6..6f7d238 100644
+--- a/companion/input-main-integration.mjs
++++ b/companion/input-main-integration.mjs
+@@ -1,4 +1,5 @@
+ import { join } from "node:path";
++import { platform } from "node:os";
+ import { createInputMainAdapter } from "./input-main-adapter.mjs";
+ import { startInputCompanionBridge } from "./input-main-bridge.mjs";
+ 
+@@ -35,6 +36,22 @@ export async function installInputCompanionBridge({
+           services.focusAppService,
+         )
+       : undefined);
++  const permissionsAuthority =
++    services.permissionsAuthority ??
++    (services.applicationService
++      ? inputPermissionAuthority(services.applicationService)
++      : undefined);
++  const firmwareAuthority =
++    services.firmwareAuthority ??
++    (services.deviceFlashService && services.applicationService
++      ? inputFirmwareAuthority(
++          services.deviceFlashService,
++          services.applicationService,
++        )
++      : undefined);
++  const logsAuthority =
++    services.logsAuthority ??
++    (services.windowService ? inputWindowLogsAuthority(services.windowService) : undefined);
+   const adapter = createInputMainAdapter({
+     devicesCommManager: services.devicesCommManager,
+     deviceKitVersion,
+@@ -42,6 +59,9 @@ export async function installInputCompanionBridge({
+     hostSettingsAuthority,
+     presetCatalogAuthority: services.presetCatalogAuthority,
+     appsenseRuntimeAuthority,
++    permissionsAuthority,
++    firmwareAuthority,
++    logsAuthority,
+   });
+   const bridge = await startInputCompanionBridge({
+     adapter,
+@@ -71,6 +91,81 @@ export async function installInputCompanionBridge({
+   };
+ }
+ 
++function inputPermissionAuthority(applicationService) {
++  if (typeof applicationService.checkAppPermissions !== "function") {
++    return undefined;
++  }
++  return {
++    async readStatus({ device }) {
++      const currentPlatform = platform();
++      const devicePaths = device.info.portPath
++        ? [String(device.info.portPath)]
++        : [];
++      return {
++        platform: currentPlatform,
++        requiredPermission:
++          currentPlatform === "darwin"
++            ? "input-monitoring"
++            : currentPlatform === "linux"
++              ? "hid-read-write"
++              : "none",
++        granted: Boolean(
++          await applicationService.checkAppPermissions(devicePaths),
++        ),
++        checkedDevicePaths: currentPlatform === "linux" ? devicePaths : [],
++      };
++    },
++  };
++}
++
++function inputFirmwareAuthority(deviceFlashService, applicationService) {
++  if (
++    typeof deviceFlashService.checkForFwUpdates !== "function" ||
++    typeof deviceFlashService.getLatestFwRelease !== "function"
++  ) {
++    return undefined;
++  }
++  return {
++    async readStatus({ device }) {
++      const currentVersion = await device.rpcService.getFirmwareVersion();
++      const available = await deviceFlashService.checkForFwUpdates(
++        currentVersion,
++        device.info.deviceType,
++      );
++      let release = null;
++      if (available === true) {
++        const appVersion =
++          typeof applicationService.appVersion === "function"
++            ? await applicationService.appVersion()
++            : "";
++        release =
++          (await deviceFlashService.getLatestFwRelease(
++            device.info.deviceType,
++            String(appVersion).includes("rc"),
++          )) ?? null;
++      }
++      return {
++        updateAvailable:
++          available === undefined || available === null
++            ? null
++            : Boolean(available),
++        release,
++      };
++    },
++  };
++}
++
++function inputWindowLogsAuthority(windowService) {
++  if (typeof windowService.getWindowsLogs !== "function") {
++    return undefined;
++  }
++  return {
++    async readLogs() {
++      return windowService.getWindowsLogs();
++    },
++  };
++}
++
+ function inputFocusServiceRuntimeAuthority(nativeService, focusAppService) {
+   if (typeof nativeService.getWindowInFocus !== "function") {
+     throw new TypeError("nativeService.getWindowInFocus must be a function");
+diff --git a/docs/companion-bridge.md b/docs/companion-bridge.md
+index 2dfb1be..d439c1f 100644
+--- a/docs/companion-bridge.md
++++ b/docs/companion-bridge.md
+@@ -86,6 +86,9 @@ Protocol version 1 defines:
+ - `input.host-settings.snapshot`
+ - `input.presets.snapshot`
+ - `input.appsense.runtime`
++- `input.permissions.status`
++- `input.firmware.status`
++- `input.logs.snapshot`
+ 
+ File content uses base64 inside JSON. Device SHA-1 and host SHA-256 remain
+ separate fields so a CLI export can independently verify both authorities.
+@@ -125,12 +128,23 @@ raw selected profile/layer status. The one-call integration delegates to
+ Input 0.18.0 `nativeService.getWindowInFocus`, `focusAppService`, and the
+ existing device session; the CLI does not synthesize focus or control a GUI.
+ 
++`input.permissions.status` delegates to Input's installed permission service and
++reports the exact platform meaning of its single boolean. `input.firmware.status`
++delegates update compatibility and release selection to Input's installed
++firmware service but never flashes. `input.logs.snapshot` returns at most 5,000
++newest in-memory renderer entries, with home paths, email addresses, and common
++credential forms redacted before bridge transport. Each capability is advertised
++only when its matching Input-owned authority is available.
++
+ ```sh
+ worklouderctl input config snapshot --output config-snapshot.json
+ worklouderctl device config snapshot --output config-snapshot.json
+ worklouderctl device config validate --input config-snapshot.json
+ worklouderctl device config validate --input config-snapshot.json \
+   --expected-revision REVISION
++worklouderctl input permissions
++worklouderctl input firmware check
++worklouderctl input logs collect --output input-log-bundle
+ ```
+ 
+ The first command reads Input's current cache with no bridge/device transport
+diff --git a/docs/compatibility.md b/docs/compatibility.md
+index d675744..acc52b0 100644
+--- a/docs/compatibility.md
++++ b/docs/compatibility.md
+@@ -15,8 +15,8 @@ not a public support guarantee.
+ | Host OS | macOS | Initial target |
+ | Codex app | 26.727.51351 | Exact Tier 1 settings read/offline candidate adapter and service-only runtime recovery contract verified; external settings bridge integration pending |
+ | Codex Companion Bridge | Protocol v1 | Settings and six-slot Agent Key snapshot/CAS/apply/restore/rollback fixture verified |
+-| Work Louder Input | 0.17.3 | Earlier schema fixture |
+-| Work Louder Input | 0.18.0 | Exact bundled-kit live read adapter verified |
++| Work Louder Input | 0.17.3 | Deterministic sanitized structural fixture; original installed bundle was superseded |
++| Work Louder Input | 0.18.0 | Deterministic sanitized fixture plus exact bundled-kit live read adapter verified |
+ | Input Companion Bridge | Protocol v1 | Snapshot/CAS/apply/replay/restore/rollback fixture conformance verified; released Input writer pending |
+ | Codex Micro firmware | v0.6.0 | Live status/files/export read boundary verified |
+ | USB | Observed | Release verification pending |
+@@ -26,6 +26,12 @@ The 2026-08-02 audit recorded Input updating from 0.17.3 to 0.18.0 during a
+ live session. Adapter selection therefore re-reads the installed and running
+ version immediately before planning and immediately before writing.
+ 
++The public `fixtures/` tree is regenerated byte-for-byte by
++`scripts/build-sanitized-fixtures.py`. Its manifests recompute every size and
++SHA-256, both Input snapshots pass structural and semantic CLI parsing, and a
++sensitive-pattern scan gates the checked-in files. The fixtures are synthetic
++minimum schemas rather than copies of observed user configuration.
++
+ For Codex 26.727.51351, `codex-config-toml-read-v1` has live read-only evidence:
+ the five explicit Codex Micro settings validated, inherited layout defaults
+ were reconstructed, an atomic typed snapshot was reopened, and the source
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index 3e5af68..2e66789 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -90,11 +90,11 @@ Promises as failures even when the USB interface still enumerates.
+ | GUI surface | Configuration coverage | Planned command family | Current status |
+ | --- | --- | --- | --- |
+ | Device setup | identity, transport, battery, firmware | `doctor`, `device status` | read-verified |
+-| Input permissions | Input Monitoring and Accessibility | `input permissions` | researched |
+-| Firmware check | compatible release and requirements | `firmware check` | researched |
++| Input permissions | exact platform permission used by Input (`Input Monitoring` on macOS; HID read/write on Linux) | `input permissions` | Input authority/bridge/CLI fixture-verified |
++| Firmware check | compatible release and Input-selected `.bin` metadata | `input firmware check` | Input authority/bridge/CLI fixture-verified; read-only |
+ | Firmware update | delegate download/USB flash to Input, then verify readback | `input firmware update` | adapter-pending |
+-| Reset settings | full backup, reset, post-state | `device reset` | researched |
+-| Logs | collect and sanitize diagnostic bundle | `logs collect` | researched |
++| Reset settings | full backup, complete default candidate, post-state | `device reset` | renderer-only GUI flow classified; transaction adapter pending |
++| Logs | collect and sanitize diagnostic bundle | `input logs collect` | private `0700`/`0600` bundle and SHA-256 readback fixture-verified |
+ | Recovery | restore files or firmware recovery | `device recover` | adapter-pending |
+ 
+ ## Cross-authority acceptance test
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index f22e6c9..3350b06 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -718,6 +718,23 @@ The installed Input updater/flasher remains the implementation provider. The
+ CLI invokes and observes that provider rather than owning a second firmware or
+ transport implementation.
+ 
++The first read-only operational commands are implemented:
++
++```sh
++worklouderctl input permissions [--device DEVICE_ID]
++worklouderctl input firmware check [--device DEVICE_ID]
++worklouderctl input logs collect --output INPUT_LOG_BUNDLE \
++  [--max-entries 5000]
++```
++
++On macOS, the permission result is Input's one released Input Monitoring
++boolean; it is not expanded into an Accessibility claim. Firmware check uses
++Input's current compatibility and `.bin` release selection. Log collection
++sanitizes inside the Input adapter before bridge transport, then publishes a
++private, hash-verified bundle. Firmware flashing, reset, and bootloader recovery
++remain separate high-level Input-owned mutation authorities so the CLI does not
++reimplement the released updater sequence.
++
+ ## Verification levels
+ 
+ Each capability records one of four evidence levels:
+diff --git a/docs/json-schemas.md b/docs/json-schemas.md
+new file mode 100644
+index 0000000..addfdbb
+--- /dev/null
++++ b/docs/json-schemas.md
+@@ -0,0 +1,51 @@
++# JSON Schemas
++
++WorkLouderCTL embeds its public automation schemas in the binary. This keeps
++the documents version-matched with the command that consumes or emits the
++artifacts.
++
++```console
++worklouderctl --json schema list
++worklouderctl --json schema show command-envelope-v1
++worklouderctl --json schema show configuration-v1
++worklouderctl --json schema show input-operations-v1
++worklouderctl --json schema show transaction-v1
++worklouderctl --json schema show error-v1
++```
++
++`schema show` writes the schema document itself, rather than wrapping it in a
++second response object. The checked-in sources live under `spec/schemas/` and
++use JSON Schema Draft 2020-12.
++
++| Registry name | Contract |
++| --- | --- |
++| `command-envelope-v1` | shell-free `argv`, output mode, and accepted exit statuses |
++| `configuration-v1` | Codex settings, Codex Agent Keys, Input device configuration, and Input host settings snapshots |
++| `transaction-v1` | coordinated plan, transaction receipt, and private backup catalog |
++| `error-v1` | typed JSON error written to stderr |
++| `input-operations-v1` | Input permission/firmware status and sanitized diagnostic log bundle |
++
++Schemas are additive within a version. A field removal, changed meaning, or
++stricter accepted value creates a new registry name and `$id`. Unknown
++configuration kinds and newer schema versions remain inspection-only until a
++matching adapter and fixture are present.
++
++## Agent invocation
++
++Automation should construct an argv array and execute it without a shell. Add
++`--json` before the subcommand whenever the selected command supports JSON.
++Status `0` means success; statuses `1` through `8` follow
++[`exit-statuses.md`](exit-statuses.md). A runtime error uses `error-v1` on
++stderr. Clap syntax errors retain status `2` and their human usage text.
++
++Mutation agents use one path only:
++
++1. create offline candidates;
++2. create and reopen a coordinated `transaction plan`;
++3. call `transaction apply` with an immutable idempotency key;
++4. inspect the receipt and exact provider readback;
++5. call `transaction restore` with a new idempotency key when rollback is
++   requested.
++
++This protocol uses the same transaction core as the human CLI. It does not
++introduce a daemon, a second device session, or a hidden mutation channel.
+diff --git a/docs/research/2026-08-03-input-operations-contract.md b/docs/research/2026-08-03-input-operations-contract.md
+new file mode 100644
+index 0000000..acd6c39
+--- /dev/null
++++ b/docs/research/2026-08-03-input-operations-contract.md
+@@ -0,0 +1,52 @@
++# Input operational read contract (Input 0.18.0)
++
++This note freezes the first non-mutating Tier 4 surface recovered from the exact
++installed Input 0.18.0 build. Inspection and all fixture verification were done
++without opening, focusing, or closing Input windows.
++
++## Permission authority
++
++Input's `common-check-app-permissions` handler calls
++`ApplicationService.checkAppPermissions(devicePaths)`, which constructs the
++installed device kit's `WLPermissions`. On macOS that class calls the bundled
++native addon's `hasInputMonitoringPermission()` and returns one boolean. No
++separate Accessibility check exists in this released path. On Linux the same
++class checks read/write access for each supplied HID node; other platforms
++return true. `input permissions` reports this exact platform-dependent meaning
++instead of inferring broader macOS consent state.
++
++## Firmware read authority
++
++The connected-device manager obtains `sys.version`, then
++`DeviceFlashService.checkForFwUpdates(currentVersion, deviceType)`. When an
++update exists, `getLatestFwRelease` returns Input's selected `.bin` release with
++`version`, `fetchedAt`, `changeLog`, and `downloadUrl`. `input firmware check`
++uses only those Input-owned services and the existing connected session. The
++CLI neither downloads nor parses release feeds itself.
++
++The renderer's complete update sequence is separately recorded in
++`spec/input-operations-0.18.0.json`: device-file backup, Input-selected download,
++bootloader transition/discovery, Input/WLDeviceProgrammer flash, original PID
++rediscovery, backup restore, and post-state readback. Input 0.18.0 does not
++expose this sequence as one main-process method. A future mutation bridge must
++therefore receive one injected high-level Input-owned authority; the CLI will
++not duplicate the programmer or transport.
++
++## Diagnostic log authority
++
++Input's Help menu reads the `WindowService.getWindowsLogs()` in-memory ring,
++which is capped at 5,000 renderer entries. The bridge snapshots a caller-bounded
++suffix and redacts user-home prefixes, email addresses, and common credential/device-identifier
++forms before any response leaves Input. `input logs collect` independently
++validates the sanitized DTO and atomically publishes a private `0700` bundle
++containing `0600` JSON/text files plus a checksum manifest; every file and the
++manifest are reopened after publication.
++
++## Reset boundary
++
++The Setup “Reset settings” control resets renderer atoms and enters the default
++layout flow. Static inspection found no standalone Input main-process reset
++service. It is not represented as a generic device erase call. A later reset
++mutation must be expressed as a complete configuration candidate and use the
++existing snapshot/CAS/readback/rollback transaction, or be supplied by a new
++Input-owned high-level authority.
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index d9d05bc..d4daa3a 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -12,8 +12,8 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Baseline checksums and reconnect verification record
+ - [x] Machine-readable capability registry
+ - [x] Full Codex + Input configuration parity contract
+-- [ ] Publish sanitized Input 0.17.3/0.18.0 and firmware v0.6.0 fixtures
+-- [ ] CLI command and configuration JSON schemas
++- [x] Publish deterministic sanitized Input 0.17.3/0.18.0 and firmware v0.6.0 fixtures with manifest verification
++- [x] CLI command, configuration, transaction, and error JSON Schema registry
+ 
+ ## M1 — Read-only alpha
+ 
+@@ -79,6 +79,9 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Cheat Sheet show/hold/hide/toggle catalog and binding candidates
+ - [x] Preset catalog snapshot/list/show/preview and exact Input 0.18.0 install remapping; all 17 bundled defaults candidate-verified
+ - [x] Radial-menu sector inspection and Action/Multi Action/Smart Action label resolution; mutation reuses verified joystick/control transactions
++- [x] Input-owned OS permission status with exact platform semantics
++- [x] Input-owned compatible firmware release check without duplicated release parsing
++- [x] Bounded sanitized Input log bundle with private modes and checksum readback
+ 
+ ## M4 — Full cross-authority transaction
+ 
+@@ -102,6 +105,14 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [ ] Migration and backup inspection tools
+ - [ ] Agent-facing protocol over the same transaction core
+ 
++## M6 — Delegated Input operations
++
++- [x] Hash-pinned Input 0.18.0 permission, firmware-read, log, reset, and update-flow inventory
++- [x] Optional permission, firmware status, and sanitized log bridge authorities
++- [ ] Input-owned high-level firmware update authority with backup, USB/bootloader flash, reconnect, restore, and postflight
++- [ ] Complete default/reset candidate per device/layout/version through the existing configuration transaction
++- [ ] Bootloader recovery authority and exact post-recovery configuration restore
++
+ ## Later tracks
+ 
+ - Linux transport and packaging
+diff --git a/fixtures/README.md b/fixtures/README.md
+new file mode 100644
+index 0000000..a96d8e9
+--- /dev/null
++++ b/fixtures/README.md
+@@ -0,0 +1,23 @@
++# Sanitized compatibility fixtures
++
++These fixtures are deterministic, synthetic minimum examples for adapter and
++schema regression. They contain no exported user configuration, device serial,
++account, application identity, log, credential, or firmware binary.
++
++- `input/0.17.3/codex-micro-v0.6.0` freezes the legacy minimum keymap family.
++- `input/0.18.0/codex-micro-v0.6.0` adds the separate Smart Action file and
++  current layer-lighting shape.
++- `firmware/codex-micro-v0.6.0` freezes a sanitized status DTO only.
++
++Every directory has a manifest of exact sizes and SHA-256 digests. Regenerate
++and verify the complete tree with:
++
++```sh
++./scripts/verify-sanitized-fixtures.sh
++```
++
++The 0.17.3 fixture is a structural compatibility boundary because its original
++application bundle was superseded during research. The 0.18.0 read contract
++has separate hash-pinned installed-package and live-device evidence in
++`spec/` and `docs/research/`; this synthetic tree deliberately does not copy
++the observed device configuration.
+diff --git a/fixtures/firmware/codex-micro-v0.6.0/manifest.json b/fixtures/firmware/codex-micro-v0.6.0/manifest.json
+new file mode 100644
+index 0000000..c598fcd
+--- /dev/null
++++ b/fixtures/firmware/codex-micro-v0.6.0/manifest.json
+@@ -0,0 +1,15 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouderctl-sanitized-firmware-fixture",
++  "fixtureClass": "synthetic-status",
++  "firmwareVersion": "v0.6.0",
++  "containsFirmwareBinary": false,
++  "containsDeviceIdentity": false,
++  "files": [
++    {
++      "relativePath": "status.json",
++      "size": 599,
++      "sha256": "8ee07b4d8de355ea30c5fcc4827b9d546a1867accf4ecc7c3432235c9f87185c"
++    }
++  ]
++}
+diff --git a/fixtures/firmware/codex-micro-v0.6.0/status.json b/fixtures/firmware/codex-micro-v0.6.0/status.json
+new file mode 100644
+index 0000000..94a9132
+--- /dev/null
++++ b/fixtures/firmware/codex-micro-v0.6.0/status.json
+@@ -0,0 +1,24 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouderctl-device-status",
++  "adapter": "sanitized-fixture-v1",
++  "inputAppVersion": "0.18.0",
++  "deviceKitVersion": "0.1.29",
++  "device": {
++    "devicePid": "SANITIZED_PID",
++    "deviceType": "codex_micro",
++    "layoutType": "universal",
++    "connectionType": "hid",
++    "isUsbConnection": false
++  },
++  "status": {
++    "firmwareVersion": "v0.6.0",
++    "selectedProfileIndex": 0,
++    "selectedLayerIndex": 1,
++    "batteryPercentage": 100,
++    "isCharging": false
++  },
++  "warnings": [
++    "synthetic status fixture; no device identity or live power state"
++  ]
++}
+diff --git a/fixtures/input/0.17.3/codex-micro-v0.6.0/config-snapshot.json b/fixtures/input/0.17.3/codex-micro-v0.6.0/config-snapshot.json
+new file mode 100644
+index 0000000..7dd1d1d
+--- /dev/null
++++ b/fixtures/input/0.17.3/codex-micro-v0.6.0/config-snapshot.json
+@@ -0,0 +1,16 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouder-input-config-snapshot",
++  "revisionAlgorithm": "sha256:path-u32be-path-bytes-size-u64be-content-v1",
++  "revision": "b883484f7ef17689b329b666bec5ccf7ed31bd93efccb8e054bbc81abe678dfd",
++  "deviceId": "sanitized-codex-micro-0.17.3",
++  "files": [
++    {
++      "relativePath": "keymap.json",
++      "size": 692,
++      "deviceChecksumSha1": "18e4b381e6b542773f955c39eb45d0c0a98d549d",
++      "sha256": "ffcd8ce140c2ac62bdee9d42651c86a53e30e8046056ce379bafbfcb70389f94",
++      "dataBase64": "ewogICJ2ZXJzaW9uIjogMSwKICAiYWN0aXZlUHJvZmlsZUlkIjogMCwKICAibGlua2VkQXBwcyI6IFtdLAogICJtYWNyb3MiOiBbXSwKICAibWFjcm9zR3JvdXBzIjogW10sCiAgIm11bHRpQWN0aW9ucyI6IFtdLAogICJtdWx0aUFjdGlvbnNHcm91cHMiOiBbXSwKICAicHJvZmlsZXMiOiBbCiAgICB7CiAgICAgICJpZCI6IDAsCiAgICAgICJuYW1lIjogIlNhbml0aXplZCBQcm9maWxlIiwKICAgICAgImxheWVycyI6IFsKICAgICAgICB7CiAgICAgICAgICAiaWQiOiAwLAogICAgICAgICAgIm5hbWUiOiAiU2FuaXRpemVkIEJhc2UiLAogICAgICAgICAgImNvbG9yIjogMTU1OTUyNjMsCiAgICAgICAgICAibGF5b3V0IjogewogICAgICAgICAgICAia2V5bWFwIjogWwogICAgICAgICAgICAgIFsKICAgICAgICAgICAgICAgICJLQ19BIiwKICAgICAgICAgICAgICAgICJLQ19CIiwKICAgICAgICAgICAgICAgICJLQ19DIiwKICAgICAgICAgICAgICAgICJLQ19EIgogICAgICAgICAgICAgIF0KICAgICAgICAgICAgXSwKICAgICAgICAgICAgImVuY29kZXJzIjogW10sCiAgICAgICAgICAgICJqb3lzdGljayI6IHsKICAgICAgICAgICAgICAidHlwZSI6ICJWRU5ET1IiLAogICAgICAgICAgICAgICJzZWN0b3JzIjogW10KICAgICAgICAgICAgfQogICAgICAgICAgfQogICAgICAgIH0KICAgICAgXQogICAgfQogIF0KfQo="
++    }
++  ]
++}
+diff --git a/fixtures/input/0.17.3/codex-micro-v0.6.0/device-files/keymap.json b/fixtures/input/0.17.3/codex-micro-v0.6.0/device-files/keymap.json
+new file mode 100644
+index 0000000..8b8ee36
+--- /dev/null
++++ b/fixtures/input/0.17.3/codex-micro-v0.6.0/device-files/keymap.json
+@@ -0,0 +1,37 @@
++{
++  "version": 1,
++  "activeProfileId": 0,
++  "linkedApps": [],
++  "macros": [],
++  "macrosGroups": [],
++  "multiActions": [],
++  "multiActionsGroups": [],
++  "profiles": [
++    {
++      "id": 0,
++      "name": "Sanitized Profile",
++      "layers": [
++        {
++          "id": 0,
++          "name": "Sanitized Base",
++          "color": 15595263,
++          "layout": {
++            "keymap": [
++              [
++                "KC_A",
++                "KC_B",
++                "KC_C",
++                "KC_D"
++              ]
++            ],
++            "encoders": [],
++            "joystick": {
++              "type": "VENDOR",
++              "sectors": []
++            }
++          }
++        }
++      ]
++    }
++  ]
++}
+diff --git a/fixtures/input/0.17.3/codex-micro-v0.6.0/manifest.json b/fixtures/input/0.17.3/codex-micro-v0.6.0/manifest.json
+new file mode 100644
+index 0000000..48e0d3a
+--- /dev/null
++++ b/fixtures/input/0.17.3/codex-micro-v0.6.0/manifest.json
+@@ -0,0 +1,22 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouderctl-sanitized-input-fixture",
++  "fixtureClass": "synthetic-structural",
++  "inputVersion": "0.17.3",
++  "firmwareVersion": "v0.6.0",
++  "deviceType": "codex_micro",
++  "containsUserConfiguration": false,
++  "claim": "deterministic minimum schema fixture; it is not an export of a user device",
++  "files": [
++    {
++      "relativePath": "device-files/keymap.json",
++      "size": 692,
++      "sha256": "ffcd8ce140c2ac62bdee9d42651c86a53e30e8046056ce379bafbfcb70389f94"
++    },
++    {
++      "relativePath": "config-snapshot.json",
++      "size": 1465,
++      "sha256": "be7b39dd2419f966bea2a76b0785c6032f03ffbedcbc371288ccc08977a089cd"
++    }
++  ]
++}
+diff --git a/fixtures/input/0.18.0/codex-micro-v0.6.0/config-snapshot.json b/fixtures/input/0.18.0/codex-micro-v0.6.0/config-snapshot.json
+new file mode 100644
+index 0000000..cae8a88
+--- /dev/null
++++ b/fixtures/input/0.18.0/codex-micro-v0.6.0/config-snapshot.json
+@@ -0,0 +1,23 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouder-input-config-snapshot",
++  "revisionAlgorithm": "sha256:path-u32be-path-bytes-size-u64be-content-v1",
++  "revision": "41d74a2702fb69ffb5ee2a2c6258c7b24ab895f56cd25f373ef7c512c63b175a",
++  "deviceId": "sanitized-codex-micro-0.18.0",
++  "files": [
++    {
++      "relativePath": "keymap.json",
++      "size": 1116,
++      "deviceChecksumSha1": "dcbd3d5904b993d74038c4c5c0119e1cad7deabf",
++      "sha256": "020aef0649e5e5168690677b4370d737e5d38338bb13d881a2cea069af0b81de",
++      "dataBase64": "ewogICJ2ZXJzaW9uIjogMSwKICAiYWN0aXZlUHJvZmlsZUlkIjogMCwKICAibGlua2VkQXBwcyI6IFtdLAogICJtYWNyb3MiOiBbXSwKICAibWFjcm9zR3JvdXBzIjogW10sCiAgIm11bHRpQWN0aW9ucyI6IFtdLAogICJtdWx0aUFjdGlvbnNHcm91cHMiOiBbXSwKICAicHJvZmlsZXMiOiBbCiAgICB7CiAgICAgICJpZCI6IDAsCiAgICAgICJuYW1lIjogIlNhbml0aXplZCBQcm9maWxlIiwKICAgICAgImxheWVycyI6IFsKICAgICAgICB7CiAgICAgICAgICAiaWQiOiAwLAogICAgICAgICAgIm5hbWUiOiAiU2FuaXRpemVkIEJhc2UiLAogICAgICAgICAgImNvbG9yIjogMTU1OTUyNjMsCiAgICAgICAgICAibGF5b3V0IjogewogICAgICAgICAgICAia2V5bWFwIjogWwogICAgICAgICAgICAgIFsKICAgICAgICAgICAgICAgICJLQ19BIiwKICAgICAgICAgICAgICAgICJLQ19CIiwKICAgICAgICAgICAgICAgICJLQ19DIiwKICAgICAgICAgICAgICAgICJLQ19EIgogICAgICAgICAgICAgIF0KICAgICAgICAgICAgXSwKICAgICAgICAgICAgImVuY29kZXJzIjogW10sCiAgICAgICAgICAgICJqb3lzdGljayI6IHsKICAgICAgICAgICAgICAidHlwZSI6ICJWRU5ET1IiLAogICAgICAgICAgICAgICJzZWN0b3JzIjogW10KICAgICAgICAgICAgfQogICAgICAgICAgfSwKICAgICAgICAgICJsaWdodHMiOiB7CiAgICAgICAgICAgICJiYWNrbGlnaHQiOiB7CiAgICAgICAgICAgICAgImVmZmVjdCI6ICJzb2xpZCIsCiAgICAgICAgICAgICAgImJyaWdodG5lc3MiOiAxLjAsCiAgICAgICAgICAgICAgInNwZWVkIjogMC41LAogICAgICAgICAgICAgICJtYWdpYyI6IDAuMCwKICAgICAgICAgICAgICAiY29sb3IiOiAxNTU5NTI2MwogICAgICAgICAgICB9LAogICAgICAgICAgICAidW5kZXJnbG93IjogewogICAgICAgICAgICAgICJlZmZlY3QiOiAib2ZmIiwKICAgICAgICAgICAgICAiYnJpZ2h0bmVzcyI6IDAuMCwKICAgICAgICAgICAgICAic3BlZWQiOiAwLjUsCiAgICAgICAgICAgICAgIm1hZ2ljIjogMC4wLAogICAgICAgICAgICAgICJjb2xvciI6IDE1NTk1MjYzCiAgICAgICAgICAgIH0KICAgICAgICAgIH0KICAgICAgICB9CiAgICAgIF0KICAgIH0KICBdCn0K"
++    },
++    {
++      "relativePath": "smart_actions.json",
++      "size": 68,
++      "deviceChecksumSha1": "6109a014beda086e5518e903a2491e0a8bea77fc",
++      "sha256": "799d5a10a89a3aeb1cfd39cf5206b7c5b778b22791aed611a9268cc6e658a155",
++      "dataBase64": "ewogICJ2ZXJzaW9uIjogMSwKICAic21hcnRBY3Rpb25zIjoge30sCiAgInNtYXJ0QWN0aW9uR3JvdXBzIjogW10KfQo="
++    }
++  ]
++}
+diff --git a/fixtures/input/0.18.0/codex-micro-v0.6.0/device-files/keymap.json b/fixtures/input/0.18.0/codex-micro-v0.6.0/device-files/keymap.json
+new file mode 100644
+index 0000000..e20d1e2
+--- /dev/null
++++ b/fixtures/input/0.18.0/codex-micro-v0.6.0/device-files/keymap.json
+@@ -0,0 +1,53 @@
++{
++  "version": 1,
++  "activeProfileId": 0,
++  "linkedApps": [],
++  "macros": [],
++  "macrosGroups": [],
++  "multiActions": [],
++  "multiActionsGroups": [],
++  "profiles": [
++    {
++      "id": 0,
++      "name": "Sanitized Profile",
++      "layers": [
++        {
++          "id": 0,
++          "name": "Sanitized Base",
++          "color": 15595263,
++          "layout": {
++            "keymap": [
++              [
++                "KC_A",
++                "KC_B",
++                "KC_C",
++                "KC_D"
++              ]
++            ],
++            "encoders": [],
++            "joystick": {
++              "type": "VENDOR",
++              "sectors": []
++            }
++          },
++          "lights": {
++            "backlight": {
++              "effect": "solid",
++              "brightness": 1.0,
++              "speed": 0.5,
++              "magic": 0.0,
++              "color": 15595263
++            },
++            "underglow": {
++              "effect": "off",
++              "brightness": 0.0,
++              "speed": 0.5,
++              "magic": 0.0,
++              "color": 15595263
++            }
++          }
++        }
++      ]
++    }
++  ]
++}
+diff --git a/fixtures/input/0.18.0/codex-micro-v0.6.0/device-files/smart_actions.json b/fixtures/input/0.18.0/codex-micro-v0.6.0/device-files/smart_actions.json
+new file mode 100644
+index 0000000..60fe982
+--- /dev/null
++++ b/fixtures/input/0.18.0/codex-micro-v0.6.0/device-files/smart_actions.json
+@@ -0,0 +1,5 @@
++{
++  "version": 1,
++  "smartActions": {},
++  "smartActionGroups": []
++}
+diff --git a/fixtures/input/0.18.0/codex-micro-v0.6.0/manifest.json b/fixtures/input/0.18.0/codex-micro-v0.6.0/manifest.json
+new file mode 100644
+index 0000000..b6bcef8
+--- /dev/null
++++ b/fixtures/input/0.18.0/codex-micro-v0.6.0/manifest.json
+@@ -0,0 +1,27 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouderctl-sanitized-input-fixture",
++  "fixtureClass": "synthetic-structural",
++  "inputVersion": "0.18.0",
++  "firmwareVersion": "v0.6.0",
++  "deviceType": "codex_micro",
++  "containsUserConfiguration": false,
++  "claim": "deterministic minimum schema fixture; it is not an export of a user device",
++  "files": [
++    {
++      "relativePath": "device-files/keymap.json",
++      "size": 1116,
++      "sha256": "020aef0649e5e5168690677b4370d737e5d38338bb13d881a2cea069af0b81de"
++    },
++    {
++      "relativePath": "device-files/smart_actions.json",
++      "size": 68,
++      "sha256": "799d5a10a89a3aeb1cfd39cf5206b7c5b778b22791aed611a9268cc6e658a155"
++    },
++    {
++      "relativePath": "config-snapshot.json",
++      "size": 2376,
++      "sha256": "16292864f0d8717649e06b5e53c119af472a8a6df63d06d656eebc131c25e829"
++    }
++  ]
++}
+diff --git a/llms.txt b/llms.txt
+index 88cf878..a1ef705 100644
+--- a/llms.txt
++++ b/llms.txt
+@@ -17,6 +17,7 @@ Important: the project is currently a source alpha. The repository builds a work
+ - [Architecture](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/architecture.md): device, cache, database, transaction, and rollback model
+ - [Codex Companion Bridge](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/codex-companion-bridge.md): authenticated Tier 1 settings and Agent Key transaction protocol
+ - [Roadmap](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/roadmap.md): implementation milestones
++- [Sanitized fixtures](https://github.com/MarlinDiary/worklouder-input-cli/tree/main/fixtures): deterministic Input 0.17.3/0.18.0 and Codex Micro firmware v0.6.0 schema fixtures
+ 
+ ## Canonical facts
+ 
+@@ -31,6 +32,7 @@ Important: the project is currently a source alpha. The repository builds a work
+ - Provider strategy: delegate driver, BLE/HID, firmware, and host runtime behavior to the installed Codex/Input versions
+ - Non-goal: implementing a replacement hardware driver or firmware protocol
+ - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
++- Public fixture boundary: deterministic synthetic Input 0.17.3/0.18.0 configuration snapshots and a firmware v0.6.0 status DTO, with regenerated SHA-256 manifests and sensitive-pattern checks
+ - Current maturity: source alpha; read paths and isolated bridge apply/restore transaction conformance implemented; no packaged release
+ - Current Codex commands: `codex doctor/inspect/export`, `codex bridge inspect`, `codex config snapshot/apply/restore`, six-slot `codex agent-key assignments/snapshot/get/set/clear/apply/restore`, `codex lighting brightness/auto-off get/set`, and `codex voice get/set`
+ - Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`, global lighting, and voice mode provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; six-slot Agent Key candidates preserve untargeted unknown fields and use a separate global-state revision; the Codex Companion Bridge fixture verifies complete settings and Agent Key apply/readback/restore/rollback while released-Codex integration remains pending
+diff --git a/scripts/build-sanitized-fixtures.py b/scripts/build-sanitized-fixtures.py
+new file mode 100755
+index 0000000..b5c2f1a
+--- /dev/null
++++ b/scripts/build-sanitized-fixtures.py
+@@ -0,0 +1,215 @@
++#!/usr/bin/env python3
++"""Build deterministic, identity-free Input and firmware fixtures."""
++
++import argparse
++import base64
++import hashlib
++import json
++import struct
++from pathlib import Path
++
++
++README = """# Sanitized compatibility fixtures
++
++These fixtures are deterministic, synthetic minimum examples for adapter and
++schema regression. They contain no exported user configuration, device serial,
++account, application identity, log, credential, or firmware binary.
++
++- `input/0.17.3/codex-micro-v0.6.0` freezes the legacy minimum keymap family.
++- `input/0.18.0/codex-micro-v0.6.0` adds the separate Smart Action file and
++  current layer-lighting shape.
++- `firmware/codex-micro-v0.6.0` freezes a sanitized status DTO only.
++
++Every directory has a manifest of exact sizes and SHA-256 digests. Regenerate
++and verify the complete tree with:
++
++```sh
++./scripts/verify-sanitized-fixtures.sh
++```
++
++The 0.17.3 fixture is a structural compatibility boundary because its original
++application bundle was superseded during research. The 0.18.0 read contract
++has separate hash-pinned installed-package and live-device evidence in
++`spec/` and `docs/research/`; this synthetic tree deliberately does not copy
++the observed device configuration.
++"""
++
++
++def json_bytes(value):
++    return (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode()
++
++
++def config_revision(files):
++    digest = hashlib.sha256(b"worklouder-input-config-revision-v1\0")
++    for relative_path, content in sorted(files.items()):
++        path_bytes = relative_path.encode()
++        digest.update(struct.pack(">I", len(path_bytes)))
++        digest.update(path_bytes)
++        digest.update(struct.pack(">Q", len(content)))
++        digest.update(content)
++    return digest.hexdigest()
++
++
++def snapshot(input_version, files):
++    records = []
++    for relative_path, content in sorted(files.items()):
++        records.append(
++            {
++                "relativePath": relative_path,
++                "size": len(content),
++                "deviceChecksumSha1": hashlib.sha1(content).hexdigest(),
++                "sha256": hashlib.sha256(content).hexdigest(),
++                "dataBase64": base64.b64encode(content).decode(),
++            }
++        )
++    return {
++        "schemaVersion": 1,
++        "kind": "worklouder-input-config-snapshot",
++        "revisionAlgorithm": "sha256:path-u32be-path-bytes-size-u64be-content-v1",
++        "revision": config_revision(files),
++        "deviceId": f"sanitized-codex-micro-{input_version}",
++        "files": records,
++    }
++
++
++def keymap(input_version):
++    layer = {
++        "id": 0,
++        "name": "Sanitized Base",
++        "color": 15595263,
++        "layout": {
++            "keymap": [["KC_A", "KC_B", "KC_C", "KC_D"]],
++            "encoders": [],
++            "joystick": {"type": "VENDOR", "sectors": []},
++        },
++    }
++    if input_version == "0.18.0":
++        layer["lights"] = {
++            "backlight": {
++                "effect": "solid",
++                "brightness": 1.0,
++                "speed": 0.5,
++                "magic": 0.0,
++                "color": 15595263,
++            },
++            "underglow": {
++                "effect": "off",
++                "brightness": 0.0,
++                "speed": 0.5,
++                "magic": 0.0,
++                "color": 15595263,
++            },
++        }
++    return {
++        "version": 1,
++        "activeProfileId": 0,
++        "linkedApps": [],
++        "macros": [],
++        "macrosGroups": [],
++        "multiActions": [],
++        "multiActionsGroups": [],
++        "profiles": [
++            {
++                "id": 0,
++                "name": "Sanitized Profile",
++                "layers": [layer],
++            }
++        ],
++    }
++
++
++def write(path, content):
++    path.parent.mkdir(parents=True, exist_ok=True)
++    path.write_bytes(content)
++
++
++def file_record(root, path):
++    content = path.read_bytes()
++    return {
++        "relativePath": path.relative_to(root).as_posix(),
++        "size": len(content),
++        "sha256": hashlib.sha256(content).hexdigest(),
++    }
++
++
++def build_input_fixture(root, input_version):
++    fixture = root / "input" / input_version / "codex-micro-v0.6.0"
++    files = {"keymap.json": json_bytes(keymap(input_version))}
++    if input_version == "0.18.0":
++        files["smart_actions.json"] = json_bytes(
++            {"version": 1, "smartActions": {}, "smartActionGroups": []}
++        )
++    for relative_path, content in files.items():
++        write(fixture / "device-files" / relative_path, content)
++    write(fixture / "config-snapshot.json", json_bytes(snapshot(input_version, files)))
++    tracked = sorted((fixture / "device-files").glob("*.json")) + [
++        fixture / "config-snapshot.json"
++    ]
++    manifest = {
++        "schemaVersion": 1,
++        "kind": "worklouderctl-sanitized-input-fixture",
++        "fixtureClass": "synthetic-structural",
++        "inputVersion": input_version,
++        "firmwareVersion": "v0.6.0",
++        "deviceType": "codex_micro",
++        "containsUserConfiguration": False,
++        "claim": (
++            "deterministic minimum schema fixture; it is not an export of a user device"
++        ),
++        "files": [file_record(fixture, path) for path in tracked],
++    }
++    write(fixture / "manifest.json", json_bytes(manifest))
++
++
++def build_firmware_fixture(root):
++    fixture = root / "firmware" / "codex-micro-v0.6.0"
++    status = {
++        "schemaVersion": 1,
++        "kind": "worklouderctl-device-status",
++        "adapter": "sanitized-fixture-v1",
++        "inputAppVersion": "0.18.0",
++        "deviceKitVersion": "0.1.29",
++        "device": {
++            "devicePid": "SANITIZED_PID",
++            "deviceType": "codex_micro",
++            "layoutType": "universal",
++            "connectionType": "hid",
++            "isUsbConnection": False,
++        },
++        "status": {
++            "firmwareVersion": "v0.6.0",
++            "selectedProfileIndex": 0,
++            "selectedLayerIndex": 1,
++            "batteryPercentage": 100,
++            "isCharging": False,
++        },
++        "warnings": ["synthetic status fixture; no device identity or live power state"],
++    }
++    status_path = fixture / "status.json"
++    write(status_path, json_bytes(status))
++    manifest = {
++        "schemaVersion": 1,
++        "kind": "worklouderctl-sanitized-firmware-fixture",
++        "fixtureClass": "synthetic-status",
++        "firmwareVersion": "v0.6.0",
++        "containsFirmwareBinary": False,
++        "containsDeviceIdentity": False,
++        "files": [file_record(fixture, status_path)],
++    }
++    write(fixture / "manifest.json", json_bytes(manifest))
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument("--output", type=Path, required=True)
++    args = parser.parse_args()
++    if args.output.exists():
++        raise SystemExit(f"destination already exists: {args.output}")
++    write(args.output / "README.md", README.encode())
++    build_input_fixture(args.output, "0.17.3")
++    build_input_fixture(args.output, "0.18.0")
++    build_firmware_fixture(args.output)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/scripts/test-bridge-e2e.sh b/scripts/test-bridge-e2e.sh
+index c8d6e60..c2cf7b2 100755
+--- a/scripts/test-bridge-e2e.sh
++++ b/scripts/test-bridge-e2e.sh
+@@ -99,12 +99,22 @@ node "$repo/companion/conformance.mjs" \
+   --require input.host-settings.restore.v1 \
+   --require input.presets.snapshot.v1 \
+   --require input.appsense.runtime.v1 \
++  --require input.permissions.status.v1 \
++  --require input.firmware.status.v1 \
++  --require input.logs.snapshot.v1 \
+   >"$root/node-conformance.json"
+ "$bin" --json bridge --socket "$socket" --token "$token" status \
+   >"$root/bridge-status.json"
+ "$bin" --json device --transport bridge \
+   --bridge-socket "$socket" --bridge-token "$token" status \
+   >"$root/device-status.json"
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  permissions --device fixture-device >"$root/input-permissions.json"
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  firmware check --device fixture-device >"$root/input-firmware.json"
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  logs collect --output "$root/input-logs" --max-entries 2 \
++  >"$root/input-logs-receipt.json"
+ "$bin" --json appsense test \
+   --bridge-socket "$socket" --bridge-token "$token" \
+   --device fixture-device \
+@@ -491,6 +501,11 @@ root = pathlib.Path(sys.argv[1])
+ conformance = json.loads((root / "node-conformance.json").read_text())
+ bridge = json.loads((root / "bridge-status.json").read_text())
+ status = json.loads((root / "device-status.json").read_text())
++input_permissions = json.loads((root / "input-permissions.json").read_text())
++input_firmware = json.loads((root / "input-firmware.json").read_text())
++input_logs_receipt = json.loads((root / "input-logs-receipt.json").read_text())
++input_logs_manifest = json.loads((root / "input-logs" / "manifest.json").read_text())
++input_logs = json.loads((root / "input-logs" / "logs.json").read_text())
+ appsense_runtime_test = json.loads((root / "appsense-runtime-test.json").read_text())
+ appsense_runtime_mismatch = json.loads((root / "appsense-runtime-mismatch.json").read_text())
+ files = json.loads((root / "device-files.json").read_text())
+@@ -684,8 +699,34 @@ assert "input.host-settings.apply.v1" in bridge["capabilities"]
+ assert "input.host-settings.restore.v1" in bridge["capabilities"]
+ assert "input.presets.snapshot.v1" in bridge["capabilities"]
+ assert "input.appsense.runtime.v1" in bridge["capabilities"]
++assert "input.permissions.status.v1" in bridge["capabilities"]
++assert "input.firmware.status.v1" in bridge["capabilities"]
++assert "input.logs.snapshot.v1" in bridge["capabilities"]
+ assert status["adapter"] == "input-companion-bridge-v1"
+ assert status["status"]["selectedLayerIndex"] == 2
++assert input_permissions["permission"] == {
++    "platform": "darwin",
++    "requiredPermission": "input-monitoring",
++    "granted": True,
++    "checkedDevicePaths": [],
++}
++assert input_firmware["status"]["firmwareVersion"] == "v0.6.0-fixture"
++assert input_firmware["update"]["updateAvailable"] is True
++assert input_firmware["update"]["release"]["version"] == "v0.7.0-fixture"
++assert input_logs_receipt["output"] == str(root / "input-logs")
++assert input_logs_manifest["sanitized"] is True
++assert input_logs_manifest["exportedEntryCount"] == 2
++assert input_logs_manifest["redactionCount"] == 3
++assert input_logs["entries"][0]["message"] == (
++    "Input fixture ready at $HOME/Library token=<REDACTED>"
++)
++assert input_logs["entries"][1]["message"].startswith("<REDACTED_EMAIL>")
++assert (root / "input-logs").stat().st_mode & 0o777 == 0o700
++for record in input_logs_manifest["files"]:
++    path = root / "input-logs" / record["relativePath"]
++    assert path.stat().st_mode & 0o777 == 0o600
++    assert len(path.read_bytes()) == record["size"]
++    assert hashlib.sha256(path.read_bytes()).hexdigest() == record["sha256"]
+ assert appsense_runtime_test["matched"] is True
+ assert appsense_runtime_test["samples"] == 1
+ assert appsense_runtime_test["state"]["runtime"]["collecting"] is True
+@@ -1326,6 +1367,9 @@ print("semantic_appsense_link_set_unlink=verified")
+ print("semantic_appsense_apply_readback_restore=verified")
+ print("semantic_appsense_runtime_focus_layer=verified")
+ print("semantic_appsense_runtime_mismatch=typed-conflict")
++print("tier4_input_permission_status=verified")
++print("tier4_firmware_check=verified")
++print("tier4_sanitized_log_bundle=verified")
+ print("semantic_control_list=verified")
+ print("semantic_control_show=verified")
+ print("semantic_control_set=verified")
+diff --git a/scripts/verify-sanitized-fixtures.sh b/scripts/verify-sanitized-fixtures.sh
+new file mode 100755
+index 0000000..4ea0af8
+--- /dev/null
++++ b/scripts/verify-sanitized-fixtures.sh
+@@ -0,0 +1,55 @@
++#!/bin/sh
++set -eu
++
++repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
++fixtures="$repo/fixtures"
++tmp=$(mktemp -d "${TMPDIR:-/tmp}/worklouderctl-fixtures.XXXXXX")
++trap 'rm -rf "$tmp"' EXIT HUP INT TERM
++
++python3 "$repo/scripts/build-sanitized-fixtures.py" --output "$tmp/generated"
++diff -ru "$fixtures" "$tmp/generated"
++
++find "$fixtures" -type f -name '*.json' -exec jq -e . {} \; >/dev/null
++
++python3 - "$fixtures" <<'PY'
++import hashlib
++import json
++import pathlib
++import re
++import sys
++
++root = pathlib.Path(sys.argv[1])
++for manifest_path in root.rglob("manifest.json"):
++    manifest = json.loads(manifest_path.read_text())
++    for record in manifest["files"]:
++        path = manifest_path.parent / record["relativePath"]
++        content = path.read_bytes()
++        assert len(content) == record["size"], path
++        assert hashlib.sha256(content).hexdigest() == record["sha256"], path
++
++for path in root.rglob("*"):
++    if not path.is_file():
++        continue
++    text = path.read_text(errors="strict")
++    assert not re.search(r"/Users/[^$<]", text), path
++    assert not re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text), path
++    assert not re.search(r'(?i)(token|api[_-]?key|password|secret)\s*[:=]\s*[^<\s]', text), path
++PY
++
++cargo build --locked --manifest-path "$repo/Cargo.toml" >/dev/null
++bin="$repo/target/debug/worklouderctl"
++for version in 0.17.3 0.18.0; do
++  snapshot="$fixtures/input/$version/codex-micro-v0.6.0/config-snapshot.json"
++  "$bin" --json config validate "$snapshot" >"$tmp/validate-$version.json"
++  jq -e '.valid == true and .kind == "json-file"' "$tmp/validate-$version.json" >/dev/null
++  "$bin" --json profile list --input "$snapshot" >"$tmp/profiles-$version.json"
++  jq -e '.kind == "worklouderctl-profile-list" and (.profiles | length == 1) and .profiles[0].name == "Sanitized Profile"' "$tmp/profiles-$version.json" >/dev/null
++done
++
++printf '%s\n' \
++  'fixture_generation=deterministic' \
++  'fixture_manifests=sha256-verified' \
++  'fixture_sensitive_patterns=absent' \
++  'input_0.17.3_snapshot=valid' \
++  'input_0.18.0_snapshot=valid' \
++  'firmware_v0.6.0_status=valid-json'
+diff --git a/spec/input-companion-bridge-v1.json b/spec/input-companion-bridge-v1.json
+index 3f0488e..6db976e 100644
+--- a/spec/input-companion-bridge-v1.json
++++ b/spec/input-companion-bridge-v1.json
+@@ -160,6 +160,33 @@
+         "deviceId"
+       ],
+       "resultKind": "worklouder-input-appsense-runtime"
++    },
++    {
++      "name": "input.permissions.status",
++      "capability": "input.permissions.status.v1",
++      "mutation": false,
++      "optionalParams": [
++        "deviceId"
++      ],
++      "resultKind": "worklouder-input-permissions-status"
++    },
++    {
++      "name": "input.firmware.status",
++      "capability": "input.firmware.status.v1",
++      "mutation": false,
++      "optionalParams": [
++        "deviceId"
++      ],
++      "resultKind": "worklouder-input-firmware-status"
++    },
++    {
++      "name": "input.logs.snapshot",
++      "capability": "input.logs.snapshot.v1",
++      "mutation": false,
++      "optionalParams": [
++        "maxEntries"
++      ],
++      "resultKind": "worklouder-input-log-snapshot"
+     }
+   ],
+   "errors": {
+@@ -299,9 +326,38 @@
+       "rpcReadFile",
+       "connDeviceChangeDeviceConfig",
+       "common-get-app-settings",
+-      "common-send-app-settings"
++      "common-send-app-settings",
++      "common-check-app-permissions",
++      "devsManGetLatestFwRelease"
+     ],
+     "quitCleanup": "devicesCommManager.disconnectAllDevices()",
+     "externalTransportFound": false
++  },
++  "tier4ReadAuthorities": {
++    "permissions": {
++      "authority": "Input ApplicationService.checkAppPermissions backed by WLPermissions",
++      "macosMeaning": "Input Monitoring permission for the running Input process",
++      "linuxMeaning": "read/write access to the selected HID device path",
++      "capabilityAdvertisement": "advertised only when permissionsAuthority supplies readStatus"
++    },
++    "firmware": {
++      "authority": "Input DeviceFlashService release checker and existing device session",
++      "network": "the check command may use Input's own release-service network request",
++      "mutation": false,
++      "capabilityAdvertisement": "advertised only when firmwareAuthority supplies readStatus"
++    },
++    "logs": {
++      "authority": "Input WindowService in-memory renderer log ring",
++      "maximumEntries": 5000,
++      "maximumMessageBytes": 8192,
++      "sanitizedBeforeBridgeResponse": true,
++      "redactions": [
++        "macOS and Windows user home prefixes",
++        "email addresses",
++        "authorization, bearer, token, API key, password, and secret values",
++        "device IDs, serial values, and UUIDs"
++      ],
++      "capabilityAdvertisement": "advertised only when logsAuthority supplies readLogs"
++    }
+   }
+ }
+diff --git a/spec/input-operations-0.18.0.json b/spec/input-operations-0.18.0.json
+new file mode 100644
+index 0000000..b32029e
+--- /dev/null
++++ b/spec/input-operations-0.18.0.json
+@@ -0,0 +1,71 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouder-input-operations-model",
++  "inputVersion": "0.18.0",
++  "source": {
++    "asarPath": "/Applications/input.app/Contents/Resources/app.asar",
++    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
++    "mainRelativePath": "dist-electron/main/index.js",
++    "mainSha256": "7c16191956acb8d0d89c50eb940dc9b757bf6966b19c56499ca2d60d8743154a",
++    "updateRendererRelativePath": "dist/assets/Main-t727T3s1.js",
++    "updateRendererSha256": "5e3daafb76372722cd4a1d65d338ed04fef618f7205acb40c84f537e4a52cf06",
++    "deviceConfigRendererRelativePath": "dist/assets/device_config_data-BMUs-0m4.js",
++    "deviceConfigRendererSha256": "c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e",
++    "deviceKitVersion": "0.1.29",
++    "deviceKitIndexSha256": "c0c25fce60054c8bee49e71dd31e2e38ffc2edade02a825191991bcd9f413729",
++    "darwinPermissionsAddonSha256": "86fc0ee18b2152dca382250627426a1b2722562cd992c0c1ae32ba042b759c6a"
++  },
++  "permissions": {
++    "mainMethodOffset": 71349,
++    "deviceKitClassOffset": 510565,
++    "darwinCheckOffset": 511212,
++    "darwinNativeCallOffset": 511484,
++    "mainCall": "ApplicationService.checkAppPermissions(devicePaths)",
++    "deviceKitCall": "WLPermissions.check(devicePaths)",
++    "darwinMeaning": "permissions.node hasInputMonitoringPermission for the Input process",
++    "linuxMeaning": "R_OK and W_OK for every unique supplied HID path",
++    "windowsMeaning": "true",
++    "accessibilitySeparateCheckFound": false,
++    "bridgeCapability": "input.permissions.status.v1"
++  },
++  "firmwareRead": {
++    "mainServiceClassOffset": 188230,
++    "checkMethodOffset": 188634,
++    "latestReleaseMethodOffset": 188960,
++    "flashMethodOffset": 189059,
++    "updateInfoReadOffset": 12506,
++    "releaseFields": ["version", "fetchedAt", "changeLog", "downloadUrl"],
++    "assetSelection": "first .bin asset from the device firmware repository",
++    "bridgeCapability": "input.firmware.status.v1",
++    "mutationInReadCapability": false
++  },
++  "firmwareUpdateWorkflow": {
++    "backupOffset": 15693,
++    "bootloaderOffset": 13429,
++    "flashOffset": 14683,
++    "restoreOffset": 15560,
++    "orderedSteps": [
++      "backup every non-empty device file",
++      "download Input-selected release asset",
++      "enter and rediscover bootloader",
++      "flash through Input DeviceFlashService/WLDeviceProgrammer",
++      "rediscover the original devicePid",
++      "restore changed backup files",
++      "read firmware and configuration post-state"
++    ],
++    "highLevelMainServiceMethodFound": false,
++    "cliMutationBoundary": "optional injected Input-owned high-level authority; no duplicated driver or programmer"
++  },
++  "logs": {
++    "mainReadMethodOffset": 80661,
++    "authority": "WindowService.getWindowsLogs in-memory ring",
++    "ringLimit": 5000,
++    "bridgeCapability": "input.logs.snapshot.v1",
++    "sanitizedBeforeTransport": true
++  },
++  "reset": {
++    "rendererResetHookOffset": 10224466,
++    "classification": "renderer state/default-layout flow rather than a standalone main-process reset service",
++    "highLevelMainServiceMethodFound": false
++  }
++}
+diff --git a/spec/schemas/command-envelope-v1.schema.json b/spec/schemas/command-envelope-v1.schema.json
+new file mode 100644
+index 0000000..a4eb1f7
+--- /dev/null
++++ b/spec/schemas/command-envelope-v1.schema.json
+@@ -0,0 +1,29 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "https://worklouderctl.dev/schemas/command-envelope-v1.schema.json",
++  "title": "WorkLouderCTL command envelope v1",
++  "description": "Deterministic argv envelope for invoking one worklouderctl command without a shell.",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["schemaVersion", "argv"],
++  "properties": {
++    "schemaVersion": { "const": 1 },
++    "argv": {
++      "type": "array",
++      "minItems": 2,
++      "items": { "type": "string", "minLength": 1 },
++      "prefixItems": [{ "const": "worklouderctl" }]
++    },
++    "output": {
++      "type": "string",
++      "enum": ["json", "text"],
++      "default": "json"
++    },
++    "expectedExitStatuses": {
++      "type": "array",
++      "items": { "type": "integer", "minimum": 0, "maximum": 8 },
++      "uniqueItems": true,
++      "default": [0]
++    }
++  }
++}
+diff --git a/spec/schemas/configuration-v1.schema.json b/spec/schemas/configuration-v1.schema.json
+new file mode 100644
+index 0000000..fe9e0bf
+--- /dev/null
++++ b/spec/schemas/configuration-v1.schema.json
+@@ -0,0 +1,121 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "https://worklouderctl.dev/schemas/configuration-v1.schema.json",
++  "title": "WorkLouderCTL configuration snapshots v1",
++  "description": "Complete snapshot formats accepted by the four coordinated configuration authorities.",
++  "oneOf": [
++    { "$ref": "#/$defs/codexSettings" },
++    { "$ref": "#/$defs/codexAgentKeys" },
++    { "$ref": "#/$defs/inputConfig" },
++    { "$ref": "#/$defs/inputHostSettings" }
++  ],
++  "$defs": {
++    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
++    "device": {
++      "type": "object",
++      "required": ["devicePid", "deviceType", "layoutType", "connectionType", "isUsbConnection"],
++      "properties": {
++        "devicePid": { "type": "string" },
++        "deviceType": { "type": "string" },
++        "layoutType": { "type": "string" },
++        "connectionType": { "type": "string" },
++        "isUsbConnection": { "type": "boolean" }
++      }
++    },
++    "deviceStatus": {
++      "type": "object",
++      "required": ["firmwareVersion", "selectedProfileIndex", "selectedLayerIndex", "batteryPercentage", "isCharging"],
++      "properties": {
++        "firmwareVersion": { "type": ["string", "null"] },
++        "selectedProfileIndex": { "type": ["integer", "null"], "minimum": 0 },
++        "selectedLayerIndex": { "type": ["integer", "null"], "minimum": 0 },
++        "batteryPercentage": { "type": ["integer", "null"], "minimum": 0 },
++        "isCharging": { "type": ["boolean", "null"] }
++      }
++    },
++    "codexSettings": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["schemaVersion", "kind", "adapter", "contractAppVersion", "sourcePath", "sourceSha256", "settings", "effectiveSettings", "definitions", "warnings"],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouderctl-codex-settings-snapshot" },
++        "adapter": { "type": "string", "minLength": 1 },
++        "contractAppVersion": { "type": "string", "minLength": 1 },
++        "installedAppVersion": { "type": "string", "minLength": 1 },
++        "sourcePath": { "type": "string" },
++        "sourceSha256": { "$ref": "#/$defs/sha256" },
++        "settings": { "type": "object" },
++        "effectiveSettings": { "type": "object" },
++        "definitions": { "type": "object" },
++        "warnings": { "type": "array", "items": { "type": "string" } }
++      }
++    },
++    "codexAgentKeys": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["schemaVersion", "kind", "adapter", "contractAppVersion", "installedAppVersion", "globalStateKey", "slots", "assignments", "globalStateRevision", "warnings"],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouderctl-codex-agent-keys-snapshot" },
++        "adapter": { "type": "string", "minLength": 1 },
++        "contractAppVersion": { "type": "string", "minLength": 1 },
++        "installedAppVersion": { "type": "string", "minLength": 1 },
++        "globalStateKey": { "type": "string", "minLength": 1 },
++        "slots": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
++        "assignments": { "type": "object" },
++        "globalStateRevision": { "$ref": "#/$defs/sha256" },
++        "warnings": { "type": "array", "items": { "type": "string" } }
++      }
++    },
++    "inputConfigFile": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["relativePath", "size", "deviceChecksumSha1", "sha256", "dataBase64"],
++      "properties": {
++        "relativePath": { "type": "string", "minLength": 1 },
++        "size": { "type": "integer", "minimum": 0, "maximum": 16777216 },
++        "deviceChecksumSha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
++        "sha256": { "$ref": "#/$defs/sha256" },
++        "dataBase64": { "type": "string" }
++      }
++    },
++    "inputConfig": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["schemaVersion", "kind", "revisionAlgorithm", "revision", "deviceId", "files"],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouder-input-config-snapshot" },
++        "revisionAlgorithm": { "const": "sha256:path-u32be-path-bytes-size-u64be-content-v1" },
++        "revision": { "$ref": "#/$defs/sha256" },
++        "deviceId": { "type": "string", "minLength": 1 },
++        "deviceKitVersion": { "type": "string", "minLength": 1 },
++        "device": { "$ref": "#/$defs/device" },
++        "status": { "$ref": "#/$defs/deviceStatus" },
++        "files": { "type": "array", "items": { "$ref": "#/$defs/inputConfigFile" }, "minItems": 1, "maxItems": 4096 }
++      }
++    },
++    "inputHostSettings": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["schemaVersion", "kind", "revisionAlgorithm", "revision", "settings"],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouder-input-host-settings" },
++        "revisionAlgorithm": { "const": "sha256:input-host-settings-three-booleans-v1" },
++        "revision": { "$ref": "#/$defs/sha256" },
++        "settings": {
++          "type": "object",
++          "additionalProperties": false,
++          "required": ["showedAnalyticsPopUp", "analyticsConsented", "smartActionCmdEnabled"],
++          "properties": {
++            "showedAnalyticsPopUp": { "type": "boolean" },
++            "analyticsConsented": { "type": "boolean" },
++            "smartActionCmdEnabled": { "type": "boolean" }
++          }
++        }
++      }
++    }
++  }
++}
+diff --git a/spec/schemas/error-v1.schema.json b/spec/schemas/error-v1.schema.json
+new file mode 100644
+index 0000000..115cf64
+--- /dev/null
++++ b/spec/schemas/error-v1.schema.json
+@@ -0,0 +1,27 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "https://worklouderctl.dev/schemas/error-v1.schema.json",
++  "title": "WorkLouderCTL error v1",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["schemaVersion", "kind", "code", "exitStatus", "message", "causes"],
++  "properties": {
++    "schemaVersion": { "const": 1 },
++    "kind": { "const": "worklouderctl-error" },
++    "code": {
++      "type": "string",
++      "enum": [
++        "unexpected",
++        "provider-unavailable",
++        "invalid-data",
++        "conflict",
++        "operation-rolled-back",
++        "rollback-failed",
++        "permission-denied"
++      ]
++    },
++    "exitStatus": { "type": "integer", "minimum": 1, "maximum": 8 },
++    "message": { "type": "string", "minLength": 1 },
++    "causes": { "type": "array", "items": { "type": "string" } }
++  }
++}
+diff --git a/spec/schemas/input-operations-v1.schema.json b/spec/schemas/input-operations-v1.schema.json
+new file mode 100644
+index 0000000..ff9ac50
+--- /dev/null
++++ b/spec/schemas/input-operations-v1.schema.json
+@@ -0,0 +1,104 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "https://worklouderctl.dev/schemas/input-operations-v1.schema.json",
++  "title": "WorkLouderCTL Input operations v1",
++  "oneOf": [
++    { "$ref": "#/$defs/permissions" },
++    { "$ref": "#/$defs/firmware" },
++    { "$ref": "#/$defs/logBundle" }
++  ],
++  "$defs": {
++    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
++    "device": {
++      "type": "object",
++      "required": ["devicePid", "deviceType", "layoutType", "connectionType", "isUsbConnection"]
++    },
++    "permissions": {
++      "type": "object",
++      "required": ["schemaVersion", "kind", "adapter", "inputAppVersion", "deviceKitVersion", "device", "permission"],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouderctl-input-permissions-status" },
++        "adapter": { "const": "input-companion-bridge-v1" },
++        "inputAppVersion": { "type": "string" },
++        "deviceKitVersion": { "type": "string" },
++        "device": { "$ref": "#/$defs/device" },
++        "permission": {
++          "type": "object",
++          "additionalProperties": false,
++          "required": ["platform", "requiredPermission", "granted", "checkedDevicePaths"],
++          "properties": {
++            "platform": { "type": "string", "minLength": 1, "maxLength": 32 },
++            "requiredPermission": { "enum": ["input-monitoring", "hid-read-write", "none"] },
++            "granted": { "type": "boolean" },
++            "checkedDevicePaths": { "type": "array", "items": { "type": "string" }, "maxItems": 256 }
++          }
++        }
++      }
++    },
++    "firmware": {
++      "type": "object",
++      "required": ["schemaVersion", "kind", "adapter", "inputAppVersion", "deviceKitVersion", "device", "status", "update", "warnings"],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouderctl-input-firmware-status" },
++        "adapter": { "const": "input-companion-bridge-v1" },
++        "inputAppVersion": { "type": "string" },
++        "deviceKitVersion": { "type": "string" },
++        "device": { "$ref": "#/$defs/device" },
++        "status": { "type": "object" },
++        "update": {
++          "type": "object",
++          "required": ["updateAvailable", "release"],
++          "properties": {
++            "updateAvailable": { "type": ["boolean", "null"] },
++            "release": {
++              "oneOf": [
++                { "type": "null" },
++                {
++                  "type": "object",
++                  "additionalProperties": false,
++                  "required": ["version", "fetchedAt", "downloadUrl", "changeLog"],
++                  "properties": {
++                    "version": { "type": "string", "minLength": 1 },
++                    "fetchedAt": { "type": "integer", "minimum": 0 },
++                    "downloadUrl": { "type": "string", "pattern": "^https?://" },
++                    "changeLog": { "type": ["string", "null"] }
++                  }
++                }
++              ]
++            }
++          }
++        },
++        "warnings": { "type": "array", "items": { "type": "string" } }
++      }
++    },
++    "logBundleFile": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["relativePath", "size", "sha256"],
++      "properties": {
++        "relativePath": { "enum": ["logs.json", "logs.txt"] },
++        "size": { "type": "integer", "minimum": 0 },
++        "sha256": { "$ref": "#/$defs/sha256" }
++      }
++    },
++    "logBundle": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["schemaVersion", "kind", "adapter", "inputAppVersion", "sanitized", "sourceEntryCount", "exportedEntryCount", "truncated", "redactionCount", "files"],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouderctl-input-log-bundle" },
++        "adapter": { "const": "input-companion-bridge-v1" },
++        "inputAppVersion": { "type": "string" },
++        "sanitized": { "const": true },
++        "sourceEntryCount": { "type": "integer", "minimum": 0 },
++        "exportedEntryCount": { "type": "integer", "minimum": 0, "maximum": 5000 },
++        "truncated": { "type": "boolean" },
++        "redactionCount": { "type": "integer", "minimum": 0 },
++        "files": { "type": "array", "items": { "$ref": "#/$defs/logBundleFile" }, "minItems": 2, "maxItems": 2 }
++      }
++    }
++  }
++}
+diff --git a/spec/schemas/transaction-v1.schema.json b/spec/schemas/transaction-v1.schema.json
+new file mode 100644
+index 0000000..e707ccd
+--- /dev/null
++++ b/spec/schemas/transaction-v1.schema.json
+@@ -0,0 +1,107 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "https://worklouderctl.dev/schemas/transaction-v1.schema.json",
++  "title": "WorkLouderCTL coordinated transaction artifacts v1",
++  "oneOf": [
++    { "$ref": "#/$defs/plan" },
++    { "$ref": "#/$defs/receipt" },
++    { "$ref": "#/$defs/catalog" }
++  ],
++  "$defs": {
++    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
++    "path": { "type": "string", "minLength": 1 },
++    "authorityPlan": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["id", "tier", "provider", "baseline", "candidate", "baselineSha256", "candidateSha256", "beforeRevision", "targetRevision", "changed", "changes"],
++      "properties": {
++        "id": { "type": "string", "enum": ["codex-settings", "codex-agent-keys", "input-config", "input-host-settings"] },
++        "tier": { "type": "integer", "minimum": 1, "maximum": 4 },
++        "provider": { "type": "string", "minLength": 1 },
++        "baseline": { "$ref": "#/$defs/path" },
++        "candidate": { "$ref": "#/$defs/path" },
++        "baselineSha256": { "$ref": "#/$defs/sha256" },
++        "candidateSha256": { "$ref": "#/$defs/sha256" },
++        "beforeRevision": { "$ref": "#/$defs/sha256" },
++        "targetRevision": { "$ref": "#/$defs/sha256" },
++        "changed": { "type": "boolean" },
++        "expectedSourceSha256": { "$ref": "#/$defs/sha256" },
++        "deviceId": { "type": "string", "minLength": 1 },
++        "changes": { "type": "array", "items": { "type": "object" } }
++      }
++    },
++    "plan": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["schemaVersion", "kind", "revisionAlgorithm", "revision", "authorities"],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouderctl-cross-authority-plan" },
++        "revisionAlgorithm": { "const": "sha256:recursive-key-sorted-plan-authorities-json-v1" },
++        "revision": { "$ref": "#/$defs/sha256" },
++        "authorities": { "type": "array", "items": { "$ref": "#/$defs/authorityPlan" }, "minItems": 1, "maxItems": 4 }
++      }
++    },
++    "mutation": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["id", "operation", "changed", "beforeRevision", "afterRevision", "targetRevision", "backup", "providerReceipt"],
++      "properties": {
++        "id": { "type": "string", "minLength": 1 },
++        "operation": { "type": "string", "enum": ["apply", "restore", "skip"] },
++        "changed": { "type": "boolean" },
++        "beforeRevision": { "$ref": "#/$defs/sha256" },
++        "afterRevision": { "$ref": "#/$defs/sha256" },
++        "targetRevision": { "$ref": "#/$defs/sha256" },
++        "backup": { "$ref": "#/$defs/path" },
++        "providerReceipt": {}
++      }
++    },
++    "receipt": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["schemaVersion", "kind", "operation", "status", "planRevision", "plan", "backupCatalog", "idempotencyKey", "mutations", "rollbackMutations"],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouderctl-cross-authority-transaction" },
++        "operation": { "type": "string", "enum": ["apply", "restore"] },
++        "status": { "type": "string", "enum": ["applied", "restored", "rolled-back", "rollback-failed"] },
++        "planRevision": { "$ref": "#/$defs/sha256" },
++        "plan": { "$ref": "#/$defs/path" },
++        "backupCatalog": { "$ref": "#/$defs/path" },
++        "idempotencyKey": { "type": "string", "minLength": 1 },
++        "mutations": { "type": "array", "items": { "$ref": "#/$defs/mutation" } },
++        "rollbackMutations": { "type": "array", "items": { "$ref": "#/$defs/mutation" } },
++        "failure": { "type": "string", "minLength": 1 }
++      }
++    },
++    "catalogEntry": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["id", "baseline", "candidate", "baselineSha256", "candidateSha256", "beforeRevision", "targetRevision"],
++      "properties": {
++        "id": { "type": "string", "minLength": 1 },
++        "baseline": { "$ref": "#/$defs/path" },
++        "candidate": { "$ref": "#/$defs/path" },
++        "baselineSha256": { "$ref": "#/$defs/sha256" },
++        "candidateSha256": { "$ref": "#/$defs/sha256" },
++        "beforeRevision": { "$ref": "#/$defs/sha256" },
++        "targetRevision": { "$ref": "#/$defs/sha256" }
++      }
++    },
++    "catalog": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["schemaVersion", "kind", "operation", "planRevision", "plan", "planSha256", "authorities"],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouderctl-private-backup-catalog" },
++        "operation": { "type": "string", "enum": ["apply", "restore"] },
++        "planRevision": { "$ref": "#/$defs/sha256" },
++        "plan": { "$ref": "#/$defs/path" },
++        "planSha256": { "$ref": "#/$defs/sha256" },
++        "authorities": { "type": "array", "items": { "$ref": "#/$defs/catalogEntry" }, "minItems": 1, "maxItems": 4 }
++      }
++    }
++  }
++}
+diff --git a/src/bridge.rs b/src/bridge.rs
+index a30349a..1ada39f 100644
+--- a/src/bridge.rs
++++ b/src/bridge.rs
+@@ -10,7 +10,7 @@ use serde_json::{json, Value};
+ use std::env;
+ use std::fs::{self, OpenOptions};
+ use std::io::{BufRead, BufReader, Write};
+-use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
++use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt};
+ use std::os::unix::net::UnixStream;
+ use std::path::{Path, PathBuf};
+ use std::sync::atomic::{AtomicU64, Ordering};
+@@ -193,6 +193,107 @@ pub struct AppSenseRuntimeReport {
+     pub warnings: Vec<String>,
+ }
+ 
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++pub struct InputPermissionState {
++    pub platform: String,
++    pub required_permission: String,
++    pub granted: bool,
++    pub checked_device_paths: Vec<String>,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct InputPermissionsReport {
++    pub schema_version: u64,
++    pub kind: String,
++    pub adapter: String,
++    pub input_app_version: String,
++    pub device_kit_version: String,
++    pub device: DeviceInfo,
++    pub permission: InputPermissionState,
++}
++
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++pub struct FirmwareRelease {
++    pub version: String,
++    pub fetched_at: u64,
++    pub download_url: String,
++    pub change_log: Option<String>,
++}
++
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++pub struct FirmwareUpdateState {
++    pub update_available: Option<bool>,
++    pub release: Option<FirmwareRelease>,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct FirmwareStatusReport {
++    pub schema_version: u64,
++    pub kind: String,
++    pub adapter: String,
++    pub input_app_version: String,
++    pub device_kit_version: String,
++    pub device: DeviceInfo,
++    pub status: DeviceStatus,
++    pub update: FirmwareUpdateState,
++    pub warnings: Vec<String>,
++}
++
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++pub struct InputLogEntry {
++    pub time: String,
++    pub level: String,
++    pub message: String,
++}
++
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++pub struct InputLogSnapshot {
++    pub schema_version: u64,
++    pub kind: String,
++    pub sanitized: bool,
++    pub source_entry_count: usize,
++    pub truncated: bool,
++    pub redaction_count: usize,
++    pub entries: Vec<InputLogEntry>,
++}
++
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++pub struct InputLogBundleFile {
++    pub relative_path: String,
++    pub size: u64,
++    pub sha256: String,
++}
++
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++pub struct InputLogBundleManifest {
++    pub schema_version: u64,
++    pub kind: String,
++    pub adapter: String,
++    pub input_app_version: String,
++    pub sanitized: bool,
++    pub source_entry_count: usize,
++    pub exported_entry_count: usize,
++    pub truncated: bool,
++    pub redaction_count: usize,
++    pub files: Vec<InputLogBundleFile>,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct InputLogBundleReceipt {
++    pub output: PathBuf,
++    pub manifest: InputLogBundleManifest,
++}
++
+ #[derive(Clone, Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ struct ConfigMutationResponse {
+@@ -259,6 +360,29 @@ struct BridgeAppSenseRuntimeReport {
+     warnings: Vec<String>,
+ }
+ 
++#[derive(Debug, Deserialize)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++struct BridgePermissionsReport {
++    schema_version: u64,
++    kind: String,
++    device_kit_version: String,
++    device: DeviceInfo,
++    permission: InputPermissionState,
++}
++
++#[derive(Debug, Deserialize)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++struct BridgeFirmwareStatusReport {
++    schema_version: u64,
++    kind: String,
++    device_kit_version: String,
++    device: DeviceInfo,
++    status: DeviceStatus,
++    update: FirmwareUpdateState,
++    #[serde(default)]
++    warnings: Vec<String>,
++}
++
+ #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ struct BridgeFileList {
+@@ -395,6 +519,327 @@ pub fn appsense_runtime(
+     })
+ }
+ 
++pub fn permissions_status(
++    paths: &BridgePaths,
++    device_id: Option<&str>,
++) -> Result<InputPermissionsReport> {
++    let mut client = BridgeClient::connect(paths)?;
++    let report: BridgePermissionsReport = client.call(
++        "input.permissions.status",
++        "input.permissions.status.v1",
++        json!({ "deviceId": device_id }),
++    )?;
++    ensure!(
++        report.schema_version == 1 && report.kind == "worklouder-input-permissions-status",
++        "Input permissions response header was invalid"
++    );
++    validate_permission_state(&report.permission)?;
++    Ok(InputPermissionsReport {
++        schema_version: 1,
++        kind: "worklouderctl-input-permissions-status".into(),
++        adapter: ADAPTER.into(),
++        input_app_version: client.handshake.input_version,
++        device_kit_version: report.device_kit_version,
++        device: report.device,
++        permission: report.permission,
++    })
++}
++
++pub fn firmware_status(
++    paths: &BridgePaths,
++    device_id: Option<&str>,
++) -> Result<FirmwareStatusReport> {
++    let mut client = BridgeClient::connect(paths)?;
++    let report: BridgeFirmwareStatusReport = client.call(
++        "input.firmware.status",
++        "input.firmware.status.v1",
++        json!({ "deviceId": device_id }),
++    )?;
++    ensure!(
++        report.schema_version == 1 && report.kind == "worklouder-input-firmware-status",
++        "Input firmware response header was invalid"
++    );
++    validate_firmware_update(&report.update)?;
++    Ok(FirmwareStatusReport {
++        schema_version: 1,
++        kind: "worklouderctl-input-firmware-status".into(),
++        adapter: ADAPTER.into(),
++        input_app_version: client.handshake.input_version,
++        device_kit_version: report.device_kit_version,
++        device: report.device,
++        status: report.status,
++        update: report.update,
++        warnings: report.warnings,
++    })
++}
++
++pub fn collect_logs(
++    paths: &BridgePaths,
++    output: &Path,
++    max_entries: u32,
++) -> Result<InputLogBundleReceipt> {
++    ensure!(
++        (1..=5000).contains(&max_entries),
++        "log entry limit must be from 1 through 5000"
++    );
++    ensure!(
++        !output.exists(),
++        "log bundle destination already exists: {}",
++        output.display()
++    );
++    let mut client = BridgeClient::connect(paths)?;
++    let snapshot: InputLogSnapshot = client.call(
++        "input.logs.snapshot",
++        "input.logs.snapshot.v1",
++        json!({ "maxEntries": max_entries }),
++    )?;
++    validate_log_snapshot(&snapshot, max_entries as usize)?;
++    let input_app_version = client.handshake.input_version.clone();
++
++    let parent = output
++        .parent()
++        .filter(|path| !path.as_os_str().is_empty())
++        .unwrap_or_else(|| Path::new("."));
++    fs::create_dir_all(parent)
++        .with_context(|| format!("failed to create log bundle parent {}", parent.display()))?;
++    let staging = device::staging_path(output)?;
++    fs::create_dir(&staging).with_context(|| {
++        format!(
++            "failed to create log staging directory {}",
++            staging.display()
++        )
++    })?;
++    fs::set_permissions(&staging, fs::Permissions::from_mode(0o700))?;
++
++    let result = (|| -> Result<InputLogBundleReceipt> {
++        let snapshot_path = staging.join("logs.json");
++        let mut snapshot_bytes = serde_json::to_vec_pretty(&snapshot)?;
++        snapshot_bytes.push(b'\n');
++        write_private_file(&snapshot_path, &snapshot_bytes)?;
++
++        let text_path = staging.join("logs.txt");
++        let mut text_bytes = Vec::new();
++        for entry in &snapshot.entries {
++            let message = entry.message.replace('\r', "\\r").replace('\n', "\\n");
++            writeln!(
++                &mut text_bytes,
++                "{}\t{}\t{}",
++                entry.time, entry.level, message
++            )?;
++        }
++        write_private_file(&text_path, &text_bytes)?;
++
++        let files = ["logs.json", "logs.txt"]
++            .into_iter()
++            .map(|name| {
++                let path = staging.join(name);
++                Ok(InputLogBundleFile {
++                    relative_path: name.into(),
++                    size: fs::metadata(&path)?.len(),
++                    sha256: fsutil::sha256(&path)?,
++                })
++            })
++            .collect::<Result<Vec<_>>>()?;
++        let manifest = InputLogBundleManifest {
++            schema_version: 1,
++            kind: "worklouderctl-input-log-bundle".into(),
++            adapter: ADAPTER.into(),
++            input_app_version,
++            sanitized: snapshot.sanitized,
++            source_entry_count: snapshot.source_entry_count,
++            exported_entry_count: snapshot.entries.len(),
++            truncated: snapshot.truncated,
++            redaction_count: snapshot.redaction_count,
++            files,
++        };
++        let manifest_path = staging.join("manifest.json");
++        let mut manifest_bytes = serde_json::to_vec_pretty(&manifest)?;
++        manifest_bytes.push(b'\n');
++        write_private_file(&manifest_path, &manifest_bytes)?;
++        validate_log_bundle(&staging, &manifest)?;
++        ensure!(
++            !output.exists(),
++            "log bundle destination appeared during capture"
++        );
++        fs::rename(&staging, output).with_context(|| {
++            format!(
++                "failed to atomically publish {} as {}",
++                staging.display(),
++                output.display()
++            )
++        })?;
++        validate_log_bundle(output, &manifest)?;
++        Ok(InputLogBundleReceipt {
++            output: output.to_path_buf(),
++            manifest,
++        })
++    })();
++    if result.is_err() && staging.exists() {
++        let _ = fs::remove_dir_all(&staging);
++    }
++    result
++}
++
++fn validate_permission_state(permission: &InputPermissionState) -> Result<()> {
++    ensure!(
++        !permission.platform.is_empty()
++            && permission.platform.len() <= 32
++            && !permission.platform.contains('\0'),
++        "Input permission platform was invalid"
++    );
++    ensure!(
++        ["input-monitoring", "hid-read-write", "none"]
++            .contains(&permission.required_permission.as_str()),
++        "Input required permission was unknown"
++    );
++    ensure!(
++        permission.checked_device_paths.len() <= 256
++            && permission
++                .checked_device_paths
++                .windows(2)
++                .all(|pair| pair[0] < pair[1])
++            && permission
++                .checked_device_paths
++                .iter()
++                .all(|path| { !path.is_empty() && path.len() <= 4096 && !path.contains('\0') }),
++        "Input checked device paths were invalid"
++    );
++    ensure!(
++        permission.required_permission == "hid-read-write"
++            || permission.checked_device_paths.is_empty(),
++        "Input returned device paths for a permission that does not use them"
++    );
++    Ok(())
++}
++
++fn validate_firmware_update(update: &FirmwareUpdateState) -> Result<()> {
++    ensure!(
++        update.update_available != Some(true) || update.release.is_some(),
++        "Input reported a firmware update without release metadata"
++    );
++    if let Some(release) = &update.release {
++        ensure!(
++            !release.version.is_empty()
++                && release.version.len() <= 128
++                && !release.version.contains('\0'),
++            "Input firmware version was invalid"
++        );
++        ensure!(
++            (release.download_url.starts_with("https://")
++                || release.download_url.starts_with("http://"))
++                && release.download_url.len() <= 8192
++                && !release
++                    .download_url
++                    .bytes()
++                    .any(|byte| byte.is_ascii_whitespace())
++                && release
++                    .download_url
++                    .split_once("://")
++                    .map(|(_, rest)| !rest.is_empty() && !rest.starts_with('/'))
++                    .unwrap_or(false),
++            "Input firmware download URL used an unsupported origin"
++        );
++        if let Some(change_log) = &release.change_log {
++            ensure!(
++                change_log.len() <= 1024 * 1024 && !change_log.contains('\0'),
++                "Input firmware change log was invalid"
++            );
++        }
++    }
++    Ok(())
++}
++
++fn validate_log_snapshot(snapshot: &InputLogSnapshot, limit: usize) -> Result<()> {
++    ensure!(
++        snapshot.schema_version == 1
++            && snapshot.kind == "worklouder-input-log-snapshot"
++            && snapshot.sanitized,
++        "Input log snapshot header was invalid"
++    );
++    ensure!(
++        snapshot.entries.len() <= limit
++            && snapshot.entries.len() <= snapshot.source_entry_count
++            && snapshot.truncated == (snapshot.source_entry_count > snapshot.entries.len()),
++        "Input log snapshot counts were inconsistent"
++    );
++    for entry in &snapshot.entries {
++        ensure!(
++            !entry.time.is_empty()
++                && entry.time.len() <= 128
++                && !entry.time.contains('\0')
++                && !entry.level.is_empty()
++                && entry.level.len() <= 32
++                && entry
++                    .level
++                    .bytes()
++                    .all(|byte| byte.is_ascii_lowercase() || byte == b'-')
++                && !entry.message.is_empty()
++                && entry.message.len() <= 8192
++                && !entry.message.contains('\0'),
++            "Input log entry was invalid"
++        );
++        ensure!(
++            !entry.message.contains("/Users/")
++                && !entry.message.to_ascii_lowercase().contains(":\\users\\"),
++            "Input log snapshot contained an unredacted home path"
++        );
++    }
++    Ok(())
++}
++
++fn write_private_file(path: &Path, bytes: &[u8]) -> Result<()> {
++    let mut file = OpenOptions::new()
++        .write(true)
++        .create_new(true)
++        .mode(0o600)
++        .open(path)
++        .with_context(|| format!("failed to create {}", path.display()))?;
++    file.write_all(bytes)?;
++    file.sync_all()?;
++    ensure!(
++        fs::metadata(path)?.permissions().mode() & 0o777 == 0o600,
++        "private artifact mode was not 0600"
++    );
++    Ok(())
++}
++
++fn validate_log_bundle(root: &Path, expected: &InputLogBundleManifest) -> Result<()> {
++    let metadata = fs::symlink_metadata(root)?;
++    ensure!(
++        metadata.is_dir() && !metadata.file_type().is_symlink(),
++        "log bundle must be a regular directory"
++    );
++    ensure!(
++        metadata.permissions().mode() & 0o777 == 0o700,
++        "log bundle mode was not 0700"
++    );
++    let manifest_path = root.join("manifest.json");
++    let reopened: InputLogBundleManifest = serde_json::from_slice(&fs::read(&manifest_path)?)?;
++    ensure!(
++        &reopened == expected,
++        "log bundle manifest readback differed"
++    );
++    ensure!(
++        fs::metadata(&manifest_path)?.permissions().mode() & 0o777 == 0o600,
++        "log bundle manifest mode was not 0600"
++    );
++    for record in &reopened.files {
++        let relative = device::safe_relative_path(&record.relative_path)?;
++        let path = root.join(relative);
++        let file_metadata = fs::symlink_metadata(&path)?;
++        ensure!(
++            file_metadata.is_file()
++                && !file_metadata.file_type().is_symlink()
++                && file_metadata.permissions().mode() & 0o777 == 0o600
++                && file_metadata.len() == record.size
++                && fsutil::sha256(&path)? == record.sha256,
++            "log bundle file verification failed for {}",
++            record.relative_path
++        );
++    }
++    Ok(())
++}
++
+ fn validate_appsense_runtime(runtime: &AppSenseRuntimeState) -> Result<()> {
+     ensure!(
+         runtime.device_ids.len() <= 256
+diff --git a/src/cli.rs b/src/cli.rs
+index 02e9bbf..a145fb5 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -103,6 +103,12 @@ pub enum Command {
+         command: ConfigCommand,
+     },
+ 
++    /// Discover the versioned JSON Schemas used by automation clients.
++    Schema {
++        #[clap(subcommand)]
++        command: SchemaCommand,
++    },
++
+     /// Plan coordinated Codex and Input mutations with one unified diff.
+     Transaction {
+         #[clap(subcommand)]
+@@ -238,6 +244,25 @@ pub enum InputCommand {
+         command: InputPermissionCommand,
+     },
+ 
++    /// Check the Input-owned OS permission required for device access.
++    Permissions {
++        /// Select a connected device ID; defaults to the single Codex Micro.
++        #[clap(long)]
++        device: Option<String>,
++    },
++
++    /// Inspect firmware availability through Input's released update service.
++    Firmware {
++        #[clap(subcommand)]
++        command: InputFirmwareCommand,
++    },
++
++    /// Collect a bounded, sanitized diagnostic log bundle from Input.
++    Logs {
++        #[clap(subcommand)]
++        command: InputLogsCommand,
++    },
++
+     /// Snapshot the Input-owned preset catalog through the companion bridge.
+     Preset {
+         #[clap(subcommand)]
+@@ -245,6 +270,30 @@ pub enum InputCommand {
+     },
+ }
+ 
++#[derive(Debug, Subcommand)]
++pub enum InputFirmwareCommand {
++    /// Check the connected device and the current compatible release.
++    Check {
++        /// Select a connected device ID; defaults to the single Codex Micro.
++        #[clap(long)]
++        device: Option<String>,
++    },
++}
++
++#[derive(Debug, Subcommand)]
++pub enum InputLogsCommand {
++    /// Write sanitized JSON/text logs and a checksum manifest atomically.
++    Collect {
++        /// Destination directory. It must not already exist.
++        #[clap(long, value_parser)]
++        output: PathBuf,
++
++        /// Maximum newest log entries to request from Input.
++        #[clap(long, default_value_t = 5000, value_parser = clap::value_parser!(u32).range(1..=5000))]
++        max_entries: u32,
++    },
++}
++
+ #[derive(Debug, Subcommand)]
+ pub enum InputPresetCommand {
+     /// Save the merged saved/default preset catalog without editing Input storage.
+@@ -1091,6 +1140,18 @@ pub enum ConfigCommand {
+     },
+ }
+ 
++#[derive(Debug, Subcommand)]
++pub enum SchemaCommand {
++    /// List every embedded public schema and its stable identifier.
++    List,
++
++    /// Print one complete JSON Schema document.
++    Show {
++        /// Schema registry name, for example configuration-v1.
++        name: String,
++    },
++}
++
+ #[derive(Debug, Subcommand)]
+ pub enum TransactionCommand {
+     /// Validate authority baselines/candidates and publish an immutable coordinated plan.
+diff --git a/src/lib.rs b/src/lib.rs
+index 61377f9..cad62d6 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -11,6 +11,7 @@ pub mod doctor;
+ pub mod exit_status;
+ pub mod fsutil;
+ pub mod input;
++pub mod schema;
+ pub mod semantic;
+ pub mod transaction;
+ 
+@@ -27,12 +28,13 @@ use cli::{
+     CodexResetCommand, CodexRuntimeCommand, CodexVoiceCommand, CodexVoiceMode, Command,
+     CompletionShell, ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand,
+     DeviceTransport, InputCommand, InputCommandPermissionCommand, InputCommandPermissionValue,
+-    InputConfigCommand, InputPermissionCommand, InputPresetCommand, LayerCommand,
+-    LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand, LayerJoystickSectorCommand,
+-    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
+-    MultiActionGroupCommand, MultiActionGroupMemberCommand, PresetCommand, ProfileCommand,
+-    RadialCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+-    SmartActionType as CliSmartActionType, TierCommand, TransactionCommand,
++    InputConfigCommand, InputFirmwareCommand, InputLogsCommand, InputPermissionCommand,
++    InputPresetCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
++    LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect,
++    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
++    PresetCommand, ProfileCommand, RadialCommand, SchemaCommand, SmartActionCommand,
++    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
++    TierCommand, TransactionCommand,
+ };
+ use serde::Serialize;
+ use std::io::Write;
+@@ -100,6 +102,7 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
+             command,
+         } => run_bridge(command, socket, token, cli.json, &mut out)?,
+         Command::Config { command } => run_config(command, cli.json, &mut out)?,
++        Command::Schema { command } => run_schema(command, cli.json, &mut out)?,
+         Command::Transaction { command } => run_transaction(command, cli.json, &mut out)?,
+         Command::Profile { command } => run_profile(command, cli.json, &mut out)?,
+         Command::Layer { command } => run_layer(command, cli.json, &mut out)?,
+@@ -117,6 +120,31 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
+     Ok(())
+ }
+ 
++fn run_schema(command: SchemaCommand, json: bool, mut out: impl Write) -> Result<()> {
++    match command {
++        SchemaCommand::List => {
++            let schemas = schema::list();
++            if json {
++                write_json(&mut out, &schemas)?;
++            } else {
++                for schema in schemas {
++                    writeln!(
++                        out,
++                        "{}\t{}\t{}",
++                        schema.name, schema.id, schema.description
++                    )?;
++                }
++            }
++        }
++        SchemaCommand::Show { name } => {
++            let document = schema::show(&name)?;
++            serde_json::to_writer_pretty(&mut out, &document)?;
++            writeln!(out)?;
++        }
++    }
++    Ok(())
++}
++
+ fn run_transaction(command: TransactionCommand, json: bool, mut out: impl Write) -> Result<()> {
+     match command {
+         TransactionCommand::Plan {
+@@ -3233,6 +3261,75 @@ fn run_input(
+                 }
+             },
+         },
++        InputCommand::Permissions { device } => {
++            let result = bridge::permissions_status(&bridge_paths, device.as_deref())?;
++            if json {
++                write_json(&mut out, &result)?;
++            } else {
++                writeln!(
++                    out,
++                    "{}={} platform={} device={}",
++                    result.permission.required_permission,
++                    if result.permission.granted {
++                        "granted"
++                    } else {
++                        "missing"
++                    },
++                    result.permission.platform,
++                    result.device.device_pid
++                )?;
++                for path in result.permission.checked_device_paths {
++                    writeln!(out, "PATH\t{path}")?;
++                }
++            }
++        }
++        InputCommand::Firmware { command } => match command {
++            InputFirmwareCommand::Check { device } => {
++                let result = bridge::firmware_status(&bridge_paths, device.as_deref())?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "firmware={} update={}",
++                        result
++                            .status
++                            .firmware_version
++                            .as_deref()
++                            .unwrap_or("unknown"),
++                        match result.update.update_available {
++                            Some(true) => "available",
++                            Some(false) => "current",
++                            None => "unknown",
++                        }
++                    )?;
++                    if let Some(release) = result.update.release {
++                        writeln!(out, "release={}", release.version)?;
++                        writeln!(out, "download={}", release.download_url)?;
++                    }
++                }
++            }
++        },
++        InputCommand::Logs { command } => match command {
++            InputLogsCommand::Collect {
++                output,
++                max_entries,
++            } => {
++                let result = bridge::collect_logs(&bridge_paths, &output, max_entries)?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "Collected {} sanitized Input log entries to {}",
++                        result.manifest.exported_entry_count,
++                        result.output.display()
++                    )?;
++                    writeln!(out, "redactions={}", result.manifest.redaction_count)?;
++                    writeln!(out, "truncated={}", result.manifest.truncated)?;
++                }
++            }
++        },
+         InputCommand::Preset { command } => match command {
+             InputPresetCommand::Snapshot { output } => {
+                 let result = bridge::preset_catalog_snapshot(&bridge_paths, &output)?;
+diff --git a/src/schema.rs b/src/schema.rs
+new file mode 100644
+index 0000000..e08e201
+--- /dev/null
++++ b/src/schema.rs
+@@ -0,0 +1,127 @@
++use anyhow::{bail, Context, Result};
++use serde::Serialize;
++use serde_json::Value;
++
++const COMMAND_ENVELOPE: &str = include_str!("../spec/schemas/command-envelope-v1.schema.json");
++const CONFIGURATION: &str = include_str!("../spec/schemas/configuration-v1.schema.json");
++const ERROR: &str = include_str!("../spec/schemas/error-v1.schema.json");
++const INPUT_OPERATIONS: &str = include_str!("../spec/schemas/input-operations-v1.schema.json");
++const TRANSACTION: &str = include_str!("../spec/schemas/transaction-v1.schema.json");
++
++#[derive(Clone, Copy, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SchemaSummary {
++    pub name: &'static str,
++    pub id: &'static str,
++    pub description: &'static str,
++}
++
++struct SchemaEntry {
++    summary: SchemaSummary,
++    source: &'static str,
++}
++
++const ENTRIES: &[SchemaEntry] = &[
++    SchemaEntry {
++        summary: SchemaSummary {
++            name: "command-envelope-v1",
++            id: "https://worklouderctl.dev/schemas/command-envelope-v1.schema.json",
++            description: "Shell-free argv envelope and expected exit statuses",
++        },
++        source: COMMAND_ENVELOPE,
++    },
++    SchemaEntry {
++        summary: SchemaSummary {
++            name: "configuration-v1",
++            id: "https://worklouderctl.dev/schemas/configuration-v1.schema.json",
++            description: "Four-authority Codex and Input configuration snapshots",
++        },
++        source: CONFIGURATION,
++    },
++    SchemaEntry {
++        summary: SchemaSummary {
++            name: "error-v1",
++            id: "https://worklouderctl.dev/schemas/error-v1.schema.json",
++            description: "Typed machine-readable error envelope",
++        },
++        source: ERROR,
++    },
++    SchemaEntry {
++        summary: SchemaSummary {
++            name: "input-operations-v1",
++            id: "https://worklouderctl.dev/schemas/input-operations-v1.schema.json",
++            description: "Input permissions, firmware status, and sanitized log bundles",
++        },
++        source: INPUT_OPERATIONS,
++    },
++    SchemaEntry {
++        summary: SchemaSummary {
++            name: "transaction-v1",
++            id: "https://worklouderctl.dev/schemas/transaction-v1.schema.json",
++            description: "Coordinated plan, receipt, and private backup catalog",
++        },
++        source: TRANSACTION,
++    },
++];
++
++pub fn list() -> Vec<SchemaSummary> {
++    ENTRIES.iter().map(|entry| entry.summary).collect()
++}
++
++pub fn show(name: &str) -> Result<Value> {
++    let entry = ENTRIES.iter().find(|entry| entry.summary.name == name);
++    let entry = match entry {
++        Some(entry) => entry,
++        None => {
++            let names = ENTRIES
++                .iter()
++                .map(|entry| entry.summary.name)
++                .collect::<Vec<_>>()
++                .join(", ");
++            bail!("unknown schema {name}; expected one of: {names}")
++        }
++    };
++    let document: Value = serde_json::from_str(entry.source)
++        .with_context(|| format!("embedded schema {} was invalid", entry.summary.name))?;
++    if document.get("$id").and_then(Value::as_str) != Some(entry.summary.id) {
++        bail!(
++            "embedded schema {} had an unexpected $id",
++            entry.summary.name
++        );
++    }
++    Ok(document)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn registry_is_sorted_and_every_document_reopens() {
++        let summaries = list();
++        assert_eq!(summaries.len(), 5);
++        let names = summaries
++            .iter()
++            .map(|summary| summary.name)
++            .collect::<Vec<_>>();
++        let mut sorted = names.clone();
++        sorted.sort_unstable();
++        assert_eq!(names, sorted);
++
++        for summary in summaries {
++            let document = show(summary.name).unwrap();
++            assert_eq!(
++                document["$schema"],
++                "https://json-schema.org/draft/2020-12/schema"
++            );
++            assert_eq!(document["$id"], summary.id);
++        }
++    }
++
++    #[test]
++    fn unknown_schema_is_a_bounded_error() {
++        let error = show("missing-v1").unwrap_err().to_string();
++        assert!(error.starts_with("unknown schema missing-v1; expected one of:"));
++        assert!(error.contains("configuration-v1"));
++    }
++}
+diff --git a/tests/cli.rs b/tests/cli.rs
+index bc343d8..0106bc6 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -62,6 +62,7 @@ fn help_lists_the_binary_and_version_command() {
+     assert!(stdout.contains("doctor"));
+     assert!(stdout.contains("bridge"));
+     assert!(stdout.contains("config"));
++    assert!(stdout.contains("schema"));
+     assert!(stdout.contains("codex"));
+     assert!(stdout.contains("device"));
+     assert!(stdout.contains("input"));
+@@ -79,6 +80,34 @@ fn help_lists_the_binary_and_version_command() {
+     assert!(stdout.contains("completion"));
+ }
+ 
++#[test]
++fn schemas_are_discoverable_and_machine_readable() {
++    let list = binary()
++        .args(["--json", "schema", "list"])
++        .output()
++        .unwrap();
++    assert!(list.status.success());
++    let summaries: serde_json::Value = serde_json::from_slice(&list.stdout).unwrap();
++    assert_eq!(summaries.as_array().unwrap().len(), 5);
++    assert_eq!(summaries[1]["name"], "configuration-v1");
++
++    let show = binary()
++        .args(["--json", "schema", "show", "configuration-v1"])
++        .output()
++        .unwrap();
++    assert!(show.status.success());
++    let document: serde_json::Value = serde_json::from_slice(&show.stdout).unwrap();
++    assert_eq!(
++        document["$schema"],
++        "https://json-schema.org/draft/2020-12/schema"
++    );
++    assert_eq!(document["oneOf"].as_array().unwrap().len(), 4);
++    assert_eq!(
++        document["$defs"]["inputHostSettings"]["properties"]["kind"]["const"],
++        "worklouder-input-host-settings"
++    );
++}
++
+ #[test]
+ fn transaction_help_exposes_cross_authority_plan_workflow() {
+     let output = binary().args(["transaction", "--help"]).output().unwrap();
+@@ -284,6 +313,9 @@ fn input_and_config_help_expose_read_only_workflow() {
+     assert!(input_stdout.contains("export"));
+     assert!(input_stdout.contains("config"));
+     assert!(input_stdout.contains("permission"));
++    assert!(input_stdout.contains("permissions"));
++    assert!(input_stdout.contains("firmware"));
++    assert!(input_stdout.contains("logs"));
+     assert!(input_stdout.contains("preset"));
+ 
+     let input_config = binary()
+@@ -319,6 +351,31 @@ fn input_and_config_help_expose_read_only_workflow() {
+     assert!(config_stdout.contains("diff"));
+ }
+ 
++#[test]
++fn input_operations_help_exposes_read_only_tier_four_workflows() {
++    let permissions = binary()
++        .args(["input", "permissions", "--help"])
++        .output()
++        .unwrap();
++    assert!(permissions.status.success());
++    assert!(String::from_utf8(permissions.stdout)
++        .unwrap()
++        .contains("device"));
++
++    let firmware = binary()
++        .args(["input", "firmware", "--help"])
++        .output()
++        .unwrap();
++    let firmware_stdout = String::from_utf8(firmware.stdout).unwrap();
++    assert!(firmware.status.success());
++    assert!(firmware_stdout.contains("check"));
++
++    let logs = binary().args(["input", "logs", "--help"]).output().unwrap();
++    let logs_stdout = String::from_utf8(logs.stdout).unwrap();
++    assert!(logs.status.success());
++    assert!(logs_stdout.contains("collect"));
++}
++
+ #[test]
+ fn preset_help_exposes_catalog_and_offline_install_workflow() {
+     let output = binary().args(["preset", "--help"]).output().unwrap();

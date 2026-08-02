@@ -1,0 +1,188 @@
+WorkLouderCTL Input Tier 4 read operations v1 verification record
+=================================================================
+
+Scope
+-----
+Base commit: 51610680ce7b6ba86d9dafe60135e0be42cb0630
+Feature commit: 7aff905cacac5d78ea2652a59b8670252266c6e1
+Feature commits:
+  f69ebee feat: publish automation JSON schemas
+  a745bb9 feat: expose Input operational diagnostics
+  3554854 test: add sanitized compatibility fixtures
+  7aff905 docs: publish fixture compatibility boundary
+Changed authorities:
+  Input permissions / Input-owned platform permission status
+  Input firmware / Input-owned release selection and update availability
+  Input logs / Input-owned diagnostic snapshot, sanitized before transport
+Input GUI, LokiJS database, physical device, firmware flash, and host action: none
+Supporting additions:
+  strict JSON schemas and deterministic identity-free compatibility fixtures
+
+Released behavior contract
+--------------------------
+Exact installed Input boundary:
+  Input version: 0.18.0
+  app.asar SHA-256: 8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8
+  main bundle SHA-256: 7c16191956acb8d0d89c50eb940dc9b757bf6966b19c56499ca2d60d8743154a
+  update renderer SHA-256: 5e3daafb76372722cd4a1d65d338ed04fef618f7205acb40c84f537e4a52cf06
+  device-config renderer SHA-256: c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e
+  device kit index SHA-256: c0c25fce60054c8bee49e71dd31e2e38ffc2edade02a825191991bcd9f413729
+  permissions native addon SHA-256: 86fc0ee18b2152dca382250627426a1b2722562cd992c0c1ae32ba042b759c6a
+Frozen specs:
+  spec/input-operations-0.18.0.json
+  spec/input-companion-bridge-v1.json
+  spec/schemas/input-operations-v1.schema.json
+On macOS Input 0.18.0 exposes one Input Monitoring boolean. Firmware check
+uses DeviceFlashService.checkForFwUpdates/getLatestFwRelease and does not
+flash. Logs use WindowService.getWindowsLogs and are redacted before bridge
+transport and independently rejected by Rust if a home path survives.
+
+Preserved original artifact and baseline-red
+--------------------------------------------
+Source commit: 51610680ce7b6ba86d9dafe60135e0be42cb0630
+Build command:
+  CARGO_TARGET_DIR=/tmp/worklouderctl-input-tier4-read-v1.58ylS9/base-target cargo build --release --locked --manifest-path /tmp/worklouderctl-input-tier4-read-v1.58ylS9/base-worktree/Cargo.toml
+Path:
+  /tmp/worklouderctl-input-tier4-read-v1.58ylS9/original/worklouderctl
+SHA-256 after reopen/execute:
+  3832d83ebe643512acbec92f6c070dd9d9ad9e7e28d013277911fa121a6979fa
+Command:
+  ORIGINAL_BIN input permissions --help
+Literal stdout: (empty)
+Literal stderr:
+  error: The subcommand 'permissions' wasn't recognized
+
+          Did you mean 'permission'?
+
+  If you believe you received this message in error, try re-running with 'worklouderctl input -- permissions'
+
+  USAGE:
+      worklouderctl input [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
+Focused baseline test command:
+  cargo test --test cli input_operations_help_exposes_read_only_tier_four_workflows -- --exact
+Literal result:
+  assertion failed: permissions.status.success()
+Exit status: 101
+
+Modified isolated bridge E2E
+----------------------------
+Fixture:
+  companion/fixture-server.mjs
+Transport:
+  authenticated temporary Unix socket and token
+Commands:
+  MODIFIED_BIN --json input --bridge-socket SOCKET --bridge-token TOKEN permissions --device fixture-device
+  MODIFIED_BIN --json input --bridge-socket SOCKET --bridge-token TOKEN firmware check --device fixture-device
+  MODIFIED_BIN --json input --bridge-socket SOCKET --bridge-token TOKEN logs collect --output LOG_BUNDLE --max-entries 2
+Exit status: 0 for every command
+Literal permission result:
+  platform=darwin
+  requiredPermission=input-monitoring
+  granted=true
+  checkedDevicePaths=[]
+Literal firmware result:
+  currentVersion=v0.6.0-fixture
+  updateAvailable=true
+  releaseVersion=v0.7.0-fixture
+  downloadUrl=https://example.test/codex-micro-v0.7.0.bin
+Literal log result:
+  sourceEntryCount=2
+  exportedEntryCount=2
+  sanitized=true
+  redactionCount=3
+  message1=Input fixture ready at $HOME/Library token=<REDACTED>
+  message2=<REDACTED_EMAIL> requested diagnostic snapshot
+Literal bundle hashes:
+  logs.json=f32d79d15e5fc0b8ca74a4ba1c6a2d428bc9f3445e981a80903cf3950b8ac422
+  logs.txt=13d3c7585bd8ba8d3504f8d06e71961965565f0895b09bb719823ac875446c75
+  manifest.json=dfc5ad363fe478bf86e3336e2f452567633f4252f15cd13e5375cfe4c2a757d1
+Literal permissions after reopen:
+  log-bundle=0700
+  logs.json=0600
+  logs.txt=0600
+  manifest.json=0600
+
+Automated quality gates
+-----------------------
+Command: cargo fmt --all -- --check
+Exit status: 0
+Command: cargo clippy --locked --all-targets --all-features -- -D warnings
+Literal result: Finished dev
+Exit status: 0
+Command: cargo test --all-targets --locked
+Literal result:
+  74 passed; 0 failed (library)
+  26 passed; 0 failed (CLI integration)
+  0 failed (binary and doc tests)
+Exit status: 0
+Command: cd companion && npm test
+Literal result: 20 passed; 0 failed
+Exit status: 0
+Command: ./scripts/test-bridge-e2e.sh
+Literal result:
+  tier4_input_permission_status=verified
+  tier4_firmware_check=verified
+  tier4_sanitized_log_bundle=verified
+Exit status: 0
+Command: ./scripts/verify-sanitized-fixtures.sh
+Literal result:
+  fixture_generation=deterministic
+  fixture_manifests=sha256-verified
+  fixture_sensitive_patterns=absent
+  input_0.17.3_snapshot=valid
+  input_0.18.0_snapshot=valid
+  firmware_v0.6.0_status=valid-json
+Exit status: 0
+Command: find spec -type f -name '*.json' -print0 | xargs -0 -n1 jq -e .
+Exit status: 0
+Command: git diff --check
+Exit status: 0
+
+Tested boundaries
+-----------------
+  Input 0.18.0 hash-pinned static permission, updater, and log contracts
+  optional capability advertisement only when each Input authority is injected
+  strict DTO normalization and bounded URLs/strings/entry counts
+  macOS Input Monitoring semantics and fixture firmware release selection
+  pre-transport secret/home/email/device-identity log redaction
+  atomic private log bundle, exact SHA-256 manifest, and reopen verification
+  deterministic sanitized Input 0.17.3/0.18.0 plus firmware status fixtures
+  no live Input app, GUI, database, device, firmware, or host-command mutation
+
+Modified artifact
+-----------------
+Path:
+  target/release/worklouderctl
+Preserved copy:
+  /tmp/worklouderctl-input-tier4-read-v1.58ylS9/modified/worklouderctl
+SHA-256 after reopen/execute:
+  28d2fb2ac5cf33dd9c398d805578e4a8558bc0d0da1d48c8ec28263fc7d14971
+Reopen/execute command:
+  MODIFIED_BIN input permissions --help
+Literal first line:
+  worklouderctl-input-permissions 0.1.0
+Exit status: 0
+
+Patch
+-----
+Path:
+  artifacts/verification/input-tier4-read-v1/input-tier4-read.patch
+SHA-256:
+  8c8f19c6ecacaea135eabca2216263db0eeb7cdfa68d0430c4708d27c3fcb564
+Command:
+  git apply --check --reverse artifacts/verification/input-tier4-read-v1/input-tier4-read.patch
+Exit status: 0
+
+Rollback
+--------
+Path:
+  artifacts/verification/input-tier4-read-v1/rollback.sh
+SHA-256:
+  e60d2b7665aa768992c4746e8e228f9a130c0043a6078ab80238d87c4b84de26
+Syntax command:
+  sh -n artifacts/verification/input-tier4-read-v1/rollback.sh
+Exit status: 0
+The isolated rollback execution is appended after the artifact commit.
