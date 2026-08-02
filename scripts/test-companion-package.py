@@ -4,7 +4,7 @@
 import argparse
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import shutil
 import subprocess
@@ -127,17 +127,31 @@ def main():
         digest = sha256(first)
 
         with tarfile.open(first, "r:gz") as archive:
-            files = {
-                member.name: member.mode
-                for member in archive.getmembers()
-                if member.isfile()
-            }
+            members = archive.getmembers()
+            files = {member.name: member.mode for member in members if member.isfile()}
             if files != EXPECTED_FILES:
                 raise SystemExit(f"Companion package inventory changed: {files!r}")
-            # The exact regular-file allowlist above makes extraction bounded
-            # while retaining compatibility with Python versions before the
-            # tarfile extraction-filter argument was added.
-            archive.extractall(root / "extracted")
+            allowed_directories = {"package"}
+            for name in EXPECTED_FILES:
+                parent = PurePosixPath(name).parent
+                while str(parent) not in {".", ""}:
+                    allowed_directories.add(str(parent))
+                    parent = parent.parent
+            for member in members:
+                path = PurePosixPath(member.name)
+                if path.is_absolute() or ".." in path.parts:
+                    raise SystemExit("Companion package contained an unsafe path")
+                if member.isfile() and member.name in EXPECTED_FILES:
+                    continue
+                if member.isdir() and member.name.rstrip("/") in allowed_directories:
+                    continue
+                raise SystemExit(
+                    f"Companion package contained an unexpected member: {member.name}"
+                )
+            # Only regular files and bounded directory entries survived the
+            # checks above; this remains compatible with Python before the
+            # tarfile extraction-filter argument was introduced.
+            archive.extractall(root / "extracted", members=members)
 
         extracted = root / "extracted/package"
         if (extracted / "LICENSE").read_bytes() != (repo / "LICENSE").read_bytes():
