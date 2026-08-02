@@ -1,10 +1,6 @@
 # WorkLouderCTL — Work Louder Input CLI for Codex Micro
 
 <p align="center">
-  <img src=".github/social-preview.png" alt="WorkLouderCTL — companion CLI for Work Louder Input and Codex Micro" width="100%">
-</p>
-
-<p align="center">
   <strong>The open-source companion CLI for Work Louder Input and Codex Micro.</strong>
 </p>
 
