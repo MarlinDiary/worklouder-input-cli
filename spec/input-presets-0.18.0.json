@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouder-input-preset-model",
+  "inputVersion": "0.18.0",
+  "source": {
+    "asarPath": "/Applications/input.app/Contents/Resources/app.asar",
+    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
+    "rendererChunk": "device_config_data-BMUs-0m4.js",
+    "rendererChunkSha256": "c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e",
+    "mainBundle": "dist-electron/main/index.js",
+    "mainBundleSha256": "7c16191956acb8d0d89c50eb940dc9b757bf6966b19c56499ca2d60d8743154a"
+  },
+  "catalog": {
+    "defaultPresetCount": 17,
+    "defaultPresetIds": [
+      9001,
+      9002,
+      9003,
+      9004,
+      9005,
+      9006,
+      9007,
+      9008,
+      9009,
+      9010,
+      9011,
+      9012,
+      9013,
+      9014,
+      9015,
+      9016,
+      90017
+    ],
+    "defaultNames": [
+      "Framer Mac",
+      "Figma Mac",
+      "Illustrator Mac",
+      "Photoshop Mac",
+      "Premiere Mac",
+      "Blender Mac",
+      "Procreate iPad",
+      "DaVinci Mac",
+      "Affinity Mac",
+      "Framer Win",
+      "Figma Win",
+      "Illustrator Win",
+      "Photoshop Win",
+      "Premiere Win",
+      "Blender Win",
+      "DaVinci Win",
+      "Affinity Win"
+    ],
+    "savedCollection": "presets",
+    "readChannel": "localStorageGetPresets",
+    "saveChannel": "localStorageSavePreset",
+    "mergeOrder": [
+      "saved presets",
+      "bundled default presets"
+    ],
+    "filters": {
+      "device": "preset.devices includes selected deviceType",
+      "layout": "preset.keyboardLayoutTypes includes selected layoutType",
+      "os": "preset.os includes 0 for macOS or 1 for Windows",
+      "search": "case-insensitive substring of name or any tag"
+    }
+  },
+  "presetDtoFields": [
+    "id",
+    "name",
+    "tags",
+    "description",
+    "author",
+    "base64Image",
+    "os",
+    "keyboardLayoutTypes",
+    "devices",
+    "layer",
+    "actionGroups",
+    "multiactionGroups",
+    "actions",
+    "multiactions",
+    "previewImg"
+  ],
+  "install": {
+    "maximumLayers": 6,
+    "appendLayer": true,
+    "newLayerId": "maximum existing layer id plus one",
+    "selectAppendedLayerInRenderer": true,
+    "persistedActiveLayerField": false,
+    "presetTagsAddedToImportedGroups": true,
+    "actionOrder": "ascending imported id",
+    "actionReuseEquality": [
+      "name",
+      "color",
+      "keyInputs"
+    ],
+    "actionAllocation": "last existing action id plus additions length plus one",
+    "multiActionOrder": "ascending imported id",
+    "multiActionReuseEquality": [
+      "name",
+      "color",
+      "tap",
+      "tapHold",
+      "onHold",
+      "doubleTap"
+    ],
+    "multiActionAllocation": "last existing Multi Action id plus additions length plus one",
+    "referenceRemapPrefixes": [
+      "KA_",
+      "KM_"
+    ],
+    "groupReuseEquality": [
+      "name",
+      "color",
+      "actionIds"
+    ],
+    "groupAllocation": "maximum existing group id plus one",
+    "smartActionsInPresetDto": false
+  },
+  "activeLayerBoundary": {
+    "runtimeRead": "device.status.selectedLayerIndex",
+    "rendererSelectionAfterInstall": "last appended layer index",
+    "persistedSetterFound": false,
+    "deviceRpcSetterFound": false,
+    "classification": "runtime selection, not a persisted preset or layer configuration field"
+  },
+  "candidateBoundary": {
+    "directDatabaseWrite": false,
+    "catalogAuthority": "injected Input preset catalog provider",
+    "installAuthority": "existing complete device config transaction",
+    "preserveUnknownFields": true,
+    "compareAndSwap": "canonical complete snapshot revision",
+    "readbackAfterApply": true,
+    "rollbackOnFailure": true
+  }
+}
