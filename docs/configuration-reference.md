@@ -38,6 +38,15 @@ worklouderctl codex config [--socket PATH] [--token PATH] snapshot --output FILE
 worklouderctl codex config [--socket PATH] [--token PATH] apply --input CANDIDATE.json --backup BEFORE.json
 worklouderctl codex config [--socket PATH] [--token PATH] restore --input BEFORE.json --backup CURRENT.json
 worklouderctl codex agent-key assignments [--socket PATH] [--token PATH]
+worklouderctl codex agent-key snapshot --output AGENT_KEYS.json [--socket PATH] [--token PATH]
+worklouderctl codex agent-key get --input AGENT_KEYS.json SLOT
+worklouderctl codex agent-key set --input AGENT_KEYS.json SLOT --command COMMAND_ID --output CANDIDATE.json
+worklouderctl codex agent-key set --input AGENT_KEYS.json SLOT --skill-name NAME --skill-path PATH --output CANDIDATE.json
+worklouderctl codex agent-key set --input AGENT_KEYS.json SLOT --thread-host HOST --thread-key KEY --title TITLE --output CANDIDATE.json
+worklouderctl codex agent-key set --input AGENT_KEYS.json SLOT --keycap KEYCAP_ID --output CANDIDATE.json
+worklouderctl codex agent-key clear --input AGENT_KEYS.json SLOT --output CANDIDATE.json
+worklouderctl codex agent-key apply --input CANDIDATE.json --backup BEFORE.json [--socket PATH] [--token PATH]
+worklouderctl codex agent-key restore --input BEFORE.json --backup CURRENT.json [--socket PATH] [--token PATH]
 worklouderctl codex agent-source get --input SNAPSHOT.json
 worklouderctl codex agent-source set --input SNAPSHOT.json VALUE --output CANDIDATE.json
 worklouderctl codex agent-key tap-mode get --input SNAPSHOT.json
@@ -58,6 +67,15 @@ exclusive, and reset from the frozen slot default. The source TOML SHA-256 is
 retained as the online transaction's source CAS value. The bridge also compares
 the canonical settings revision, performs complete explicit-setting replacement,
 and verifies exact explicit/effective readback before reporting success.
+
+Agent Key snapshots use the separate `codex-agent-keys-revision-v1` global-state
+revision. Offline set/clear changes one `AG00`–`AG05` slot, preserves the other
+five values and their unknown fields, atomically publishes, and reopens the
+candidate. Apply/restore replaces the complete six-slot object through
+`set-global-state` with revision CAS, immutable backup, session idempotency,
+exact readback, stale-CAS rejection, and automatic rollback. The custom
+assignment object does not imply `codex-micro-agent-source=custom`; source
+selection remains an explicit settings candidate and transaction.
 
 ### Persisted setting keys
 

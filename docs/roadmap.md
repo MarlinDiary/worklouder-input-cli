@@ -48,7 +48,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [ ] Integrate the Codex Companion Bridge into a released Codex build
 - [x] Agent source and single-tap behavior offline candidates
 - [x] Six Agent Key task/command/Skill/keycap assignment snapshot and validation
-- [ ] Six Agent Key assignment mutation commands
+- [x] Six Agent Key offline get/set/clear plus bridge apply/restore transaction
 - [x] Six Command Key slots get/set/reset offline candidates
 - [ ] voice mode
 - [ ] dial modes and custom gestures

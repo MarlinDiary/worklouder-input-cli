@@ -11,7 +11,8 @@
 > live device status/files、双哈希验证导出、带 revision 的 bridge snapshot、
 > live CAS 校验、离线 profile/layer/AppSense/control/Action/Smart Action candidate
 > 生成、fixture 验证的 Input/Codex apply/restore transaction、六个 Codex Agent
-> Key assignment 的 live snapshot、结构化 diff、JSON 输出和 shell completion。
+> Key assignment 的 snapshot/get/set/clear/apply/restore、结构化 diff、JSON 输出和
+> shell completion。
 > 尚未发布打包版本；bridge transaction 已通过隔离 writer fixture
 > 验证，真实设备写入仍以 Input writer adapter 与硬件 rollback 验证为启用条件。
 
@@ -63,6 +64,12 @@ worklouderctl codex config snapshot --output CODEX_SNAPSHOT.json
 worklouderctl codex config apply --input CODEX_CANDIDATE.json --backup CODEX_BEFORE.json
 worklouderctl codex config restore --input CODEX_BEFORE.json --backup CODEX_CURRENT.json
 worklouderctl codex agent-key assignments
+worklouderctl codex agent-key snapshot --output AGENT_KEYS.json
+worklouderctl codex agent-key get --input AGENT_KEYS.json AG00
+worklouderctl codex agent-key set --input AGENT_KEYS.json AG01 --command COMMAND_ID --output AGENT_CANDIDATE.json
+worklouderctl codex agent-key clear --input AGENT_CANDIDATE.json AG00 --output AGENT_CLEARED.json
+worklouderctl codex agent-key apply --input AGENT_CLEARED.json --backup AGENT_BEFORE.json
+worklouderctl codex agent-key restore --input AGENT_BEFORE.json --backup AGENT_CURRENT.json
 worklouderctl codex agent-source get --input CODEX_SNAPSHOT.json
 worklouderctl codex agent-source set --input CODEX_SNAPSHOT.json priority --output CODEX_CANDIDATE.json
 worklouderctl codex agent-key tap-mode get --input CODEX_SNAPSHOT.json
@@ -154,8 +161,13 @@ receipt 中的 `expectedSourceSha256` 供 Codex `settings-write` CAS transaction
 `codex config apply/restore` 通过认证的 Codex Companion Bridge 消费这些
 candidate，执行 source SHA + canonical settings revision 双 CAS、complete explicit
 settings replacement、explicit/effective exact readback、immutable backup、
-session idempotency 和 automatic rollback。`codex agent-key assignments` 会校验
-六个 live slots 以及 command、Skill、task、keycap 和 empty assignment shape。
+session idempotency 和 automatic rollback。`codex agent-key
+snapshot/get/set/clear` 会校验六个 slots 以及 command、Skill、task、keycap 和 empty
+assignment shape，并保留未修改 slot 的未知字段。`codex agent-key apply/restore`
+使用独立的 global-state revision CAS、immutable backup、session idempotency、exact
+readback、stale-CAS rejection 与 automatic rollback。assignment storage 和
+`codex-micro-agent-source=custom` 是两个独立 authority，因此 assignment transaction
+不会隐式改变 source ordering。
 
 仓库已经包含 Codex main-process reference adapter 和 Electron integration。
 静态检查确认 Codex 26.727.51351 内部有 `settings-read`、`settings-write` 与
@@ -319,7 +331,7 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 contract/client/reference server、
 revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
 Input 自动恢复、Codex Companion Bridge settings snapshot/CAS/apply/restore/rollback
-与六键 Agent assignment snapshot，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
+与六键 Agent assignment snapshot/get/set/clear/apply/restore transaction，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
 与 per-layer lighting、AppSense linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线 candidate 生成，keys、
 encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
 list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input

@@ -25,7 +25,7 @@
 > diff, live device status/file reads, verified device export, revisioned bridge
 > snapshots/CAS validation, offline profile/layer/AppSense/control/Action/Smart
 > Action candidate generation, fixture-verified Input and Codex apply/restore
-> transactions, live Codex Agent Key assignment snapshots, JSON output, and
+> transactions, six-slot Codex Agent Key candidates and transactions, JSON output, and
 > shell completions.
 > There is no packaged release yet.
 > The bridge transaction engine now verifies backup, apply, idempotent retry,
@@ -95,6 +95,12 @@ worklouderctl codex config snapshot --output CODEX_SNAPSHOT.json
 worklouderctl codex config apply --input CODEX_CANDIDATE.json --backup CODEX_BEFORE.json
 worklouderctl codex config restore --input CODEX_BEFORE.json --backup CODEX_CURRENT.json
 worklouderctl codex agent-key assignments
+worklouderctl codex agent-key snapshot --output AGENT_KEYS.json
+worklouderctl codex agent-key get --input AGENT_KEYS.json AG00
+worklouderctl codex agent-key set --input AGENT_KEYS.json AG01 --command COMMAND_ID --output AGENT_CANDIDATE.json
+worklouderctl codex agent-key clear --input AGENT_CANDIDATE.json AG00 --output AGENT_CLEARED.json
+worklouderctl codex agent-key apply --input AGENT_CLEARED.json --backup AGENT_BEFORE.json
+worklouderctl codex agent-key restore --input AGENT_BEFORE.json --backup AGENT_CURRENT.json
 worklouderctl codex agent-source get --input CODEX_SNAPSHOT.json
 worklouderctl codex agent-source set --input CODEX_SNAPSHOT.json priority --output CODEX_CANDIDATE.json
 worklouderctl codex agent-key tap-mode get --input CODEX_SNAPSHOT.json
@@ -193,8 +199,13 @@ state unchanged. `codex config apply/restore` consumes those candidates through
 the authenticated Codex Companion Bridge with source-SHA and canonical
 settings-revision CAS, complete explicit-setting replacement, exact
 explicit/effective readback, immutable backup, session idempotency, and
-automatic rollback. `codex agent-key assignments` validates all six live slots
-and the command, Skill, task, keycap, and empty assignment shapes.
+automatic rollback. `codex agent-key snapshot/get/set/clear` validates all six
+slots and the command, Skill, task, keycap, and empty assignment shapes while
+preserving untargeted unknown fields. `codex agent-key apply/restore` adds a
+separate global-state revision CAS, immutable backup, idempotent retry, exact
+six-slot readback, stale-CAS rejection, and automatic rollback. Assignment
+storage and the `codex-micro-agent-source=custom` setting remain independently
+controlled, so applying assignments never changes source ordering implicitly.
 
 The repository ships the reference Codex main-process adapter and Electron
 integration. The inspected Codex 26.727.51351 release exposes its internal

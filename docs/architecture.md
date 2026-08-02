@@ -42,12 +42,15 @@ process over a user-only Unix socket. Its snapshot adapter delegates to Codex's
 `settings-read` and `get-global-state` handlers, validates the exact frozen
 definitions and all six Agent Key slots, and produces offline-editor-compatible
 snapshots. When Codex injects complete explicit-setting replacement, the bridge
-advertises apply/restore and serializes source-SHA plus settings-revision CAS,
-immutable backup, exact explicit/effective readback, idempotency, restore, and
-automatic rollback. The cross-language fixture verifies `recent -> custom ->
-recent` and exact source SHA recovery. Codex 26.727.51351 contains the internal
-handlers but does not yet ship the external listener, leaving released-app
-integration as the next upstream milestone.
+advertises settings apply/restore and serializes source-SHA plus settings-revision
+CAS, immutable backup, exact explicit/effective readback, idempotency, restore,
+and automatic rollback. A separate injected Agent Key replacer advertises
+complete six-slot global-state apply/restore with its own revision CAS, backup,
+idempotency, exact readback, restore, and rollback. The cross-language fixture
+verifies `recent -> custom -> recent`, every Agent Key assignment type, exact
+Agent Key revision recovery, and exact source SHA recovery. Codex 26.727.51351
+contains the internal handlers but does not yet ship the external listener,
+leaving released-app integration as the next upstream milestone.
 
 ## Implemented Input Companion Bridge path
 

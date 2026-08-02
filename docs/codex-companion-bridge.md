@@ -52,6 +52,8 @@ one authenticated `bridge.hello` request and negotiates named capabilities.
 | `codex.settings.apply` | `codex.settings.apply.v1` | complete-set CAS apply with readback and rollback |
 | `codex.settings.restore` | `codex.settings.restore.v1` | complete-set CAS restore with readback and rollback |
 | `codex.agentKeys.snapshot` | `codex.agentKeys.snapshot.v1` | read and validate all six custom Agent Key slots |
+| `codex.agentKeys.apply` | `codex.agentKeys.apply.v1` | complete six-slot global-state CAS apply |
+| `codex.agentKeys.restore` | `codex.agentKeys.restore.v1` | complete six-slot global-state CAS restore |
 
 ## CLI workflow
 
@@ -67,6 +69,16 @@ worklouderctl codex config restore \
   --input before.json --backup pre-restore.json \
   --idempotency-key agent-source-restore-1
 worklouderctl codex agent-key assignments
+worklouderctl codex agent-key snapshot --output agent-before.json
+worklouderctl codex agent-key set \
+  --input agent-before.json AG01 --command COMMAND_ID \
+  --output agent-candidate.json
+worklouderctl codex agent-key apply \
+  --input agent-candidate.json --backup agent-pre-apply.json \
+  --idempotency-key agent-key-command-1
+worklouderctl codex agent-key restore \
+  --input agent-before.json --backup agent-pre-restore.json \
+  --idempotency-key agent-key-restore-1
 ```
 
 Pass `--socket PATH --token PATH` after `codex bridge` or `codex config`, or
@@ -109,8 +121,22 @@ The global-state key is `codex-micro-custom-agent-assignments`. Slots are
 - a task `{ "hostId": "...", "threadKey": "...", "title": "..." }`;
 - a keycap `{ "keycapId": "..." }`.
 
-The bridge normalizes all six slots and hashes recursive-key-sorted compact JSON
-with the frozen `codex-agent-keys-revision-v1` framing.
+The bridge normalizes all six slots, preserves unknown fields inside valid
+assignment objects, and hashes recursive-key-sorted compact JSON with the frozen
+`codex-agent-keys-revision-v1` framing.
+
+Agent Key apply/restore takes `expectedGlobalStateRevision`,
+`targetGlobalStateRevision`, `idempotencyKey`, and the complete six-slot
+`assignments` object. Codex performs exact complete-object replacement through
+`set-global-state`; the adapter snapshots, checks CAS, writes, snapshots again,
+and compares the exact assignments and revision. A failed write/readback
+restores and verifies the pre-mutation object. Mutation capabilities appear only
+when the main-process integration injects `agentKeysWriter.replaceAssignments`.
+
+The assignment object and `codex-micro-agent-source` setting are separate Codex
+authorities. Use `codex agent-source set ... custom` plus `codex config apply`
+when the custom slots should become the active Agent Key source. Agent Key
+mutation itself does not silently change that setting.
 
 ## Reference integration
 
@@ -123,11 +149,15 @@ const bridge = await installCodexCompanionBridge({
   settingsReplacer: {
     replaceSettings: ({ settings }) => replaceCompleteCodexMicroSettings(settings),
   },
+  agentKeysWriter: {
+    replaceAssignments: ({ key, assignments }) =>
+      nativeRequest("set-global-state", { key, value: assignments }),
+  },
 });
 ```
 
-Omit `settingsReplacer` for a snapshot-only integration. The handshake then
-excludes `codex.settings.apply.v1` and `codex.settings.restore.v1`.
+Omit either writer for a snapshot-only integration of that authority. The
+handshake excludes the corresponding apply/restore capabilities.
 
 ## Verification
 
@@ -139,5 +169,7 @@ WORKLOUDERCTL_BIN=./target/release/worklouderctl \
   ./scripts/test-codex-bridge-e2e.sh
 ```
 
-The E2E test proves `recent -> custom -> recent`, validates six Agent Key slots,
-and requires the restored source SHA-256 to equal the baseline source SHA-256.
+The E2E test proves `recent -> custom -> recent`, applies command/Skill/task/
+keycap/empty Agent Key assignments, verifies idempotent replay and stale-CAS
+rejection, restores the exact six-slot revision, and requires the restored
+settings source SHA-256 to equal the baseline source SHA-256.

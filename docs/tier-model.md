@@ -53,6 +53,9 @@ worklouderctl codex export
 worklouderctl codex bridge inspect
 worklouderctl codex config snapshot|apply|restore
 worklouderctl codex agent-key assignments
+worklouderctl codex agent-key snapshot --output SNAPSHOT.json
+worklouderctl codex agent-key get|set|clear --input SNAPSHOT.json AG00
+worklouderctl codex agent-key apply|restore --input SNAPSHOT.json --backup BACKUP.json
 worklouderctl codex diff CONFIG
 worklouderctl codex agent-source get|set --input SNAPSHOT
 worklouderctl codex agent-key get|set|clear AG00

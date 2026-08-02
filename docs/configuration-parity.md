@@ -24,7 +24,7 @@ parity contract.
 | GUI surface | Configuration coverage | Planned command family | Current status |
 | --- | --- | --- | --- |
 | Agent source | pinned, recent, priority, custom | `codex agent-source get/set` | strict candidate plus bridge `recent -> custom -> recent` apply/readback/restore fixture verified |
-| Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key assignments`, future set/clear | six-slot bridge snapshot and every assignment shape verified; mutation pending |
+| Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key snapshot/get/set/clear/apply/restore` | strict candidate, all assignment types, CAS, idempotency, stale rejection, exact readback, restore, and rollback fixture verified |
 | Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | strict offline candidate verified; generic complete-settings bridge transaction verified |
 | Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; generic complete-settings bridge transaction verified |
 | Voice button | push-to-talk, Voice Chat | `codex voice get/set` | researched |

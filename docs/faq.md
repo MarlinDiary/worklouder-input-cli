@@ -60,6 +60,16 @@ Yes, through the deterministic JSON contract. Human and agent clients share
 the same transaction model: inspect, plan, diff, apply, verify, and
 rollback. There will be no separate unverified AI write path.
 
+## Can it configure all six Codex Agent Keys?
+
+Yes. The source-built CLI snapshots all six `AG00`-`AG05` assignments, reads or
+edits one slot offline, supports command, Skill, task, keycap, and empty values,
+then applies or restores the complete object through the Codex Companion Bridge.
+The transaction uses a canonical global-state revision, immutable backup,
+idempotent retry, stale-state rejection, exact readback, and automatic rollback.
+Selecting those custom assignments remains a separate explicit
+`codex-micro-agent-source=custom` settings transaction.
+
 ## How will WorkLouderCTL protect an existing layout?
 
 The safety contract requires:
@@ -92,12 +102,14 @@ performs the older graceful quit/read/reopen cycle.
 ## How can the CLI coexist with Codex while it is open?
 
 The Codex Companion Bridge keeps the running Codex main process authoritative.
-It delegates settings/global-state reads to Codex and advertises settings writes
-only when Codex injects exact complete-setting replacement. The CLI performs
-source-SHA and settings-revision CAS, immutable backup, exact readback, restore,
-and rollback over a private authenticated Unix socket. The current Codex release
-contains the internal handlers but has not yet installed this external listener;
-the repository includes the reference integration and complete fixture E2E.
+It delegates settings/global-state reads to Codex and advertises each mutation
+capability only when Codex injects the corresponding exact complete-object
+replacer. Settings use source-SHA plus settings-revision CAS; Agent Keys use a
+separate global-state revision CAS. Both paths provide immutable backup, exact
+readback, restore, and rollback over a private authenticated Unix socket. The
+current Codex release contains the internal handlers but has not yet installed
+this external listener; the repository includes the reference integration and
+complete fixture E2E.
 
 ## Will it support Smart Actions?
 

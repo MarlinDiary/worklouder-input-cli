@@ -99,6 +99,7 @@ import pathlib
 import sys
 
 root = pathlib.Path(sys.argv[1])
+bridge = json.loads((root / "bridge.json").read_text())
 baseline = json.loads((root / "baseline.json").read_text())
 modified = json.loads((root / "modified.json").read_text())
 restored = json.loads((root / "restored.json").read_text())
@@ -113,6 +114,8 @@ agent_replay = json.loads((root / "agent-apply-replay.json").read_text())
 agent_restore = json.loads((root / "agent-restore.json").read_text())
 
 assert baseline["settings"]["codex-micro-agent-source"] == "recent"
+assert "codex.agentKeys.apply.v1" in bridge["capabilities"]
+assert "codex.agentKeys.restore.v1" in bridge["capabilities"]
 assert modified["settings"]["codex-micro-agent-source"] == "custom"
 assert apply["changed"] is True and apply["rollbackPerformed"] is False
 assert restore["changed"] is True and restore["rollbackPerformed"] is False
