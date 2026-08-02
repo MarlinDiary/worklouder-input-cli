@@ -77,6 +77,7 @@ worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled -
 worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
 worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
 worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
+worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
 worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
 worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
 worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
@@ -177,6 +178,12 @@ assignment shape，并保留未修改 slot 的未知字段。`codex agent-key ap
 readback、stale-CAS rejection 与 automatic rollback。assignment storage 和
 `codex-micro-agent-source=custom` 是两个独立 authority，因此 assignment transaction
 不会隐式改变 source ordering。
+
+`codex config diff BASE.json CANDIDATE.json` 会先校验两个 frozen-contract
+snapshot，再只比较 explicit `settings`。transport metadata、warnings、definitions
+与派生的 effective view 不进入差异，但未知 settings 仍会完整显示。human output
+按确定顺序列出 JSON Pointer paths；`--json` 还包含 typed before/after values 和
+两侧 canonical settings revisions。该命令只读文件，不打开 bridge 或 app。
 
 `codex runtime status` 是 released app 的 Tier 1 liveness probe：先核对冻结的 Codex
 版本与 bundle hashes，再经 loopback 附加到 Codex main process，读取唯一的

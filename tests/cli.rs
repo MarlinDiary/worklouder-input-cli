@@ -335,6 +335,7 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
     let config_stdout = String::from_utf8(config.stdout).unwrap();
     assert!(config.status.success());
     assert!(config_stdout.contains("snapshot"));
+    assert!(config_stdout.contains("diff"));
     assert!(config_stdout.contains("apply"));
     assert!(config_stdout.contains("restore"));
 

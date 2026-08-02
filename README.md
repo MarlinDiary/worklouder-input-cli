@@ -108,6 +108,7 @@ worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled -
 worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
 worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
 worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
+worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
 worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
 worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
 worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
@@ -215,6 +216,13 @@ separate global-state revision CAS, immutable backup, idempotent retry, exact
 six-slot readback, stale-CAS rejection, and automatic rollback. Assignment
 storage and the `codex-micro-agent-source=custom` setting remain independently
 controlled, so applying assignments never changes source ordering implicitly.
+
+`codex config diff BASE.json CANDIDATE.json` validates both frozen-contract
+snapshots and compares only their explicit `settings`. Transport metadata,
+warnings, definitions, and the derived effective view are excluded, while
+unknown settings remain visible. Human output lists deterministic JSON Pointer
+paths; `--json` also includes typed before/after values and both canonical
+settings revisions. The command is file-only and never opens a bridge or app.
 
 `codex runtime status` is the released-app Tier 1 liveness probe. It requires
 the exact frozen Codex version and bundle hashes, attaches to the Codex main

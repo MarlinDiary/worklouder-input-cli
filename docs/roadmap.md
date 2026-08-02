@@ -55,7 +55,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [ ] joystick directions and Skills
 - [x] global brightness and auto-off
 - [x] Codex settings backup, apply, readback, restore, and automatic rollback fixture
-- [ ] Codex settings structural diff command
+- [x] Codex settings-only structural diff with revisions and typed before/after values
 
 ## M3 — Input semantic configuration beta
 

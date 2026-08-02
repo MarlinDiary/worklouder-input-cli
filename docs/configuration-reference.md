@@ -35,6 +35,7 @@ worklouderctl codex inspect [--config PATH] [--app PATH]
 worklouderctl codex export --output FILE [--config PATH] [--app PATH]
 worklouderctl codex bridge [--socket PATH] [--token PATH] inspect
 worklouderctl codex config [--socket PATH] [--token PATH] snapshot --output FILE
+worklouderctl codex config diff BASE.json CANDIDATE.json
 worklouderctl codex config [--socket PATH] [--token PATH] apply --input CANDIDATE.json --backup BEFORE.json
 worklouderctl codex config [--socket PATH] [--token PATH] restore --input BEFORE.json --backup CURRENT.json
 worklouderctl codex agent-key assignments [--socket PATH] [--token PATH]

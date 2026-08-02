@@ -367,7 +367,7 @@ pub enum CodexCommand {
         command: CodexBridgeCommand,
     },
 
-    /// Snapshot, apply, or restore settings through the running Codex authority.
+    /// Snapshot, diff, apply, or restore Codex settings.
     Config {
         /// Override the Codex Companion Bridge Unix socket path.
         #[clap(long, value_parser)]
