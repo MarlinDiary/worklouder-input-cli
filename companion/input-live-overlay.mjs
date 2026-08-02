@@ -21,11 +21,12 @@ export async function installInputLiveOverlay({
   if (!services || typeof services !== "object") {
     throw new TypeError("Input services are required");
   }
-  const integratedServices = {
-    ...services,
-    configurationWriter:
-      services.configurationWriter ?? createInputConfigurationWriter(services),
-  };
+  // Input's service container publishes its authorities through prototype
+  // getters backed by private underscore fields. Preserve that prototype
+  // chain instead of flattening only enumerable storage fields.
+  const integratedServices = Object.create(services);
+  integratedServices.configurationWriter =
+    services.configurationWriter ?? createInputConfigurationWriter(services);
   return installInputCompanionBridge({
     app,
     services: integratedServices,

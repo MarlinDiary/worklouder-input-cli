@@ -6,6 +6,7 @@ import {
   createCodexNativeRequest,
 } from "./codex-live-overlay.mjs";
 import { createInputConfigurationWriter } from "./input-live-overlay.mjs";
+import { installInputLiveOverlay } from "./input-live-overlay.mjs";
 
 test("Codex live request uses the official renderer message bridge", async () => {
   const calls = [];
@@ -118,6 +119,46 @@ test("Input live writer stops before cache refresh on a provider write failure",
     /failed to write keymap\.json/,
   );
   assert.equal(refreshed, false);
+});
+
+test("Input live overlay preserves Input service-container prototype getters", async () => {
+  const root = await import("node:fs/promises").then(({ mkdtemp }) =>
+    mkdtemp("/tmp/wlb-input-live-getters-"),
+  );
+  const lifecycle = new Map();
+  const device = {
+    id: "getter-device",
+    info: { devicePid: 33632, deviceType: "codex_micro" },
+    isConnected: () => true,
+    rpcService: {},
+  };
+  class InputServices {
+    get devicesCommManager() {
+      return { getDevices: () => [device] };
+    }
+    get deviceFileService() {
+      return { fetchDeviceFiles: async () => {} };
+    }
+  }
+  const app = {
+    getVersion: () => "0.18.0",
+    getPath: () => root,
+    once: (event, listener) => lifecycle.set(event, listener),
+    removeListener: (event) => lifecycle.delete(event),
+  };
+  const bridge = await installInputLiveOverlay({
+    app,
+    services: new InputServices(),
+    socketPath: root + "/bridge.sock",
+    tokenPath: root + "/bridge.token",
+  });
+  try {
+    const { stat } = await import("node:fs/promises");
+    assert.equal((await stat(bridge.socketPath)).isSocket(), true);
+    assert.equal((await stat(bridge.tokenPath)).isFile(), true);
+  } finally {
+    await bridge.stop();
+  }
 });
 
 function browserWindow({ visible, execute }) {
