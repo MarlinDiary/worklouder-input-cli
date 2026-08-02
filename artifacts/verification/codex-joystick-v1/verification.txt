@@ -1,0 +1,178 @@
+WorkLouderCTL Codex joystick v1 verification record
+===================================================
+
+Scope
+-----
+Base commit: d7fb0964b171285ce5b84d9cd049fc129049f77c
+Feature commit: 8e719b34a0e071bf329b13f86099f4beb205e29a
+Feature commits:
+  f309e6d spec: freeze Codex joystick behavior
+  e1c3cf4 feat: add Codex joystick candidates
+  8e719b3 docs: publish Codex joystick workflow
+Changed branches:
+  codex joystick get/set/clear
+Changed fields:
+  /settings/codex-micro-layout/analogStick/{up,right,down,left}
+Source settings, GUI, bridge, device, and runtime mutation: none
+
+Released behavior contract
+--------------------------
+Exact Codex 26.727.51351 static inspection shows four directions:
+  up, right, down, left
+The frozen defaults are composer.togglePlanMode, navigateForward, toggleSidebar,
+and navigateBack. Each direction stores a command, Skill, or null independently
+of dial mode.
+
+Preserved original artifact and baseline-red
+--------------------------------------------
+Source commit: d7fb0964b171285ce5b84d9cd049fc129049f77c
+Build command:
+  cargo build --release --locked --manifest-path BASE_WORKTREE/Cargo.toml
+Path:
+  /tmp/worklouderctl-codex-joystick-v1.rx42IT/original/worklouderctl
+SHA-256:
+  a5f63df9ff39f448dc5ce5f7b40722fd10d5ce15d4dfb28b10509cd6044ca3f2
+Command:
+  ORIGINAL_BIN codex joystick --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'joystick' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl codex [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
+
+Modified release E2E
+--------------------
+Input:
+  /tmp/worklouderctl-codex-joystick-v1.rx42IT/e2e/config.toml
+Literal input:
+  [desktop]
+  codex-micro-agent-source = "recent"
+  codex-micro-future = "preserved"
+Source SHA-256 before and after:
+  774fd6612a603c9e959f78fcbb6345d80837aecdb72e2d18abbef128d89cda5c
+
+Commands:
+  MODIFIED_BIN --json codex export --config E2E/config.toml \
+    --app E2E/missing.app --output E2E/baseline.json
+  MODIFIED_BIN --json codex joystick get --input E2E/baseline.json up
+  MODIFIED_BIN --json codex joystick set --input E2E/baseline.json up \
+    --skill-name "Plan Skill" --skill-path /tmp/plan/SKILL.md \
+    --output E2E/skill.json
+  MODIFIED_BIN --json codex joystick set --input E2E/skill.json right \
+    --command fixture.navigate --output E2E/command.json
+  MODIFIED_BIN --json codex joystick get --input E2E/command.json up
+  MODIFIED_BIN --json codex joystick get --input E2E/command.json right
+  MODIFIED_BIN --json codex joystick clear --input E2E/command.json down \
+    --output E2E/cleared.json
+  MODIFIED_BIN --json codex joystick get --input E2E/cleared.json down
+Exit status: 0 for all commands
+
+Literal inherited default readback:
+  direction=up
+  assignmentType=command
+  commandId=composer.togglePlanMode
+  inherited=true
+  revision=b4ada82ceb161b08536cc50532b93c9a70c741d88108c925c8244e3c5c6f95a9
+Literal Skill receipt:
+  changedPaths=["/settings/codex-micro-layout/analogStick/up"]
+  beforeRevision=b4ada82ceb161b08536cc50532b93c9a70c741d88108c925c8244e3c5c6f95a9
+  afterRevision=f631aa9f4a11e4ac0d5bc3b8e369d4ea332d3bed46ca246af9de087e27d89874
+Literal Skill readback:
+  direction=up
+  assignmentType=skill
+  skillName=Plan Skill
+  skillPath=/tmp/plan/SKILL.md
+  inherited=false
+Literal command receipt:
+  changedPaths=["/settings/codex-micro-layout/analogStick/right"]
+  beforeRevision=f631aa9f4a11e4ac0d5bc3b8e369d4ea332d3bed46ca246af9de087e27d89874
+  afterRevision=a09af89bb7d9ff3edc6bb1f52ed41b874f35c90b6e0eaee22e81a6c86158041c
+Literal command readback:
+  direction=right
+  assignmentType=command
+  commandId=fixture.navigate
+  inherited=false
+Literal clear receipt:
+  changedPaths=["/settings/codex-micro-layout/analogStick/down"]
+  beforeRevision=a09af89bb7d9ff3edc6bb1f52ed41b874f35c90b6e0eaee22e81a6c86158041c
+  afterRevision=63381e9ed3fe72c5e06cf0baad7b3e88cefec0245ac6d7cf9e2951720584e24d
+Literal clear readback:
+  direction=down
+  assignmentType=empty
+  inherited=false
+Literal assertions:
+  assertions=pass
+  source bytes unchanged
+  up Skill and right command preserved after down clear
+  unknown codex-micro-future preserved
+
+Mutually-exclusive assignment rejection
+----------------------------------------
+Command:
+  MODIFIED_BIN codex joystick set --input E2E/cleared.json left \
+    --command fixture.command --skill-name Fixture \
+    --skill-path /tmp/fixture/SKILL.md --output E2E/invalid.json
+Literal stderr:
+  error: select exactly one joystick assignment: --command or --skill-name with --skill-path
+Exit status: 1
+Output file created: false
+
+Automated quality gates
+-----------------------
+Command: cargo fmt --all -- --check
+Exit status: 0
+Command: cargo clippy --locked --all-targets --all-features -- -D warnings
+Literal result: Finished dev
+Exit status: 0
+Command: cargo test --locked
+Literal result:
+  63 passed; 0 failed (library)
+  17 passed; 0 failed (CLI integration)
+  0 failed (binary and doc tests)
+Exit status: 0
+Command: cargo build --release --locked
+Literal result: Finished release
+Exit status: 0
+
+Tested boundaries:
+  all four directions
+  inherited frozen defaults and default no-op
+  command and Skill assignments
+  clear changes one leaf
+  invalid direction and mutually exclusive assignment rejected
+  other directions, unknown fields, and source hash preserved
+  atomic publish and final reopen
+
+Modified artifact
+-----------------
+Path:
+  target/release/worklouderctl
+Preserved copy:
+  /tmp/worklouderctl-codex-joystick-v1.rx42IT/modified/worklouderctl
+SHA-256:
+  ca28f38ebaf2e568fdca471fbef6202aa34dee6ddbb902c81ed118caa97ae7b6
+Reopen/execute command:
+  ./target/release/worklouderctl codex joystick --help
+Exit status: 0
+
+Patch
+-----
+Path:
+  artifacts/verification/codex-joystick-v1/codex-joystick.patch
+SHA-256:
+  ae309525244588dd1c3c954ebcdd9de304458f7fd547ace6fbce304206746025
+Command:
+  git apply --check --reverse artifacts/verification/codex-joystick-v1/codex-joystick.patch
+Exit status: 0
+
+Rollback
+--------
+Path:
+  artifacts/verification/codex-joystick-v1/rollback.sh
+SHA-256:
+  e0151a579fa78b9b5e9581342e667d473ccf39c660bed8635bdd32a5a7f72e1b
+The isolated rollback execution is appended after the artifact commit.

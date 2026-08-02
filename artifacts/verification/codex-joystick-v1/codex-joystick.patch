@@ -1,0 +1,903 @@
+diff --git a/README.md b/README.md
+index 3b27778..651b73b 100644
+--- a/README.md
++++ b/README.md
+@@ -114,6 +114,10 @@ worklouderctl codex dial gesture set --input CODEX_DIAL.json left --command navi
+ worklouderctl codex dial gesture set --input CODEX_DIAL_LEFT.json right --skill-name Review --skill-path /PATH/TO/SKILL.md --output CODEX_DIAL_RIGHT.json
+ worklouderctl codex dial gesture get --input CODEX_DIAL_RIGHT.json right
+ worklouderctl codex dial gesture clear --input CODEX_DIAL_RIGHT.json left --output CODEX_DIAL_CLEARED.json
++worklouderctl codex joystick get --input CODEX_SNAPSHOT.json up
++worklouderctl codex joystick set --input CODEX_SNAPSHOT.json up --skill-name Plan --skill-path /PATH/TO/SKILL.md --output CODEX_JOYSTICK_UP.json
++worklouderctl codex joystick set --input CODEX_JOYSTICK_UP.json right --command navigateForward --output CODEX_JOYSTICK_RIGHT.json
++worklouderctl codex joystick clear --input CODEX_JOYSTICK_RIGHT.json down --output CODEX_JOYSTICK_CLEARED.json
+ worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
+ worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
+@@ -205,7 +209,7 @@ effective view. `codex export` atomically publishes and reopens a typed JSON
+ snapshot. Neither command serializes unrelated Codex settings.
+ 
+ `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`,
+-`codex dial`, `codex lighting`, and `codex voice` are strict offline Tier 1 editors. They
++`codex dial`, `codex joystick`, `codex lighting`, and `codex voice` are strict offline Tier 1 editors. They
+ validate the embedded frozen definitions,
+ recompute effective settings and a recursive-key-sorted revision, preserve
+ unknown `codex-micro-*` values, publish atomically, and reopen the result. Each
+@@ -230,6 +234,11 @@ In custom mode, `dial gesture get/set/clear` edits exactly one of `left`,
+ edits reject inactive non-custom snapshots, preserve the other three gestures
+ and unknown layout fields, and leave the source settings bytes unchanged.
+ 
++`codex joystick get/set/clear` covers `up`, `right`, `down`, and `left`. Each
++direction can store a Codex command, Skill, or empty mapping. Every candidate
++changes one `analogStick` leaf, preserves the other three directions plus
++unknown layout fields, and keeps the source settings bytes unchanged.
++
+ `codex config diff BASE.json CANDIDATE.json` validates both frozen-contract
+ snapshots and compares only their explicit `settings`. Transport metadata,
+ warnings, definitions, and the derived effective view are excluded, while
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 5c5740a..61ba221 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -83,6 +83,10 @@ worklouderctl codex dial gesture set --input CODEX_DIAL.json left --command navi
+ worklouderctl codex dial gesture set --input CODEX_DIAL_LEFT.json right --skill-name Review --skill-path /PATH/TO/SKILL.md --output CODEX_DIAL_RIGHT.json
+ worklouderctl codex dial gesture get --input CODEX_DIAL_RIGHT.json right
+ worklouderctl codex dial gesture clear --input CODEX_DIAL_RIGHT.json left --output CODEX_DIAL_CLEARED.json
++worklouderctl codex joystick get --input CODEX_SNAPSHOT.json up
++worklouderctl codex joystick set --input CODEX_SNAPSHOT.json up --skill-name Plan --skill-path /PATH/TO/SKILL.md --output CODEX_JOYSTICK_UP.json
++worklouderctl codex joystick set --input CODEX_JOYSTICK_UP.json right --command navigateForward --output CODEX_JOYSTICK_RIGHT.json
++worklouderctl codex joystick clear --input CODEX_JOYSTICK_RIGHT.json down --output CODEX_JOYSTICK_CLEARED.json
+ worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
+ worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
+@@ -169,7 +173,7 @@ view 中递归补齐继承的默认值。`codex export` 原子发布并重新打
+ snapshot；两者都不会序列化其他 Codex 设置。
+ 
+ `codex agent-source`、`codex agent-key tap-mode`、`codex command-key`、
+-`codex dial`、`codex lighting` 与 `codex voice` 是严格的
++`codex dial`、`codex joystick`、`codex lighting` 与 `codex voice` 是严格的
+ Tier 1 离线 editor：核对内嵌 frozen definitions，重算 effective settings 与
+ recursive-key-sorted revision，保留未知 `codex-micro-*` 值，原子发布并重新打开。
+ receipt 中的 `expectedSourceSha256` 供 Codex `settings-write` CAS transaction
+@@ -191,6 +195,11 @@ mode 后，`dial gesture get/set/clear` 可以把 `left`、`right`、`click` 或
+ `long-press` 中的一个设为 command、Skill 或 empty。gesture edit 会拒绝非 custom
+ snapshot，同时保留另外三个 gestures、未知 layout fields 与源 settings 原字节。
+ 
++`codex joystick get/set/clear` 覆盖 `up`、`right`、`down` 与 `left`。每个
++direction 都可以保存 Codex command、Skill 或 empty mapping。每次 candidate 只改变
++一个 `analogStick` leaf，并保留另外三个 directions、未知 layout fields 与源
++settings 原字节。
++
+ `codex config diff BASE.json CANDIDATE.json` 会先校验两个 frozen-contract
+ snapshot，再只比较 explicit `settings`。transport metadata、warnings、definitions
+ 与派生的 effective view 不进入差异，但未知 settings 仍会完整显示。human output
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index cd3ca19..6c6239e 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -30,7 +30,7 @@ parity contract.
+ | Voice button | push-to-talk, Voice Chat | `codex voice get/set` | strict offline candidate plus `push-to-talk -> realtime -> push-to-talk` bridge apply/readback/restore fixture verified |
+ | Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | strict candidate verified; mode changes preserve custom gesture mappings |
+ | Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | command/Skill/empty custom-mode candidates, one-leaf paths, preservation, and source immutability verified |
+-| Joystick | up, right, down, left command/Skill/empty | `codex joystick get/set/clear` | researched |
++| Joystick | up, right, down, left command/Skill/empty | `codex joystick get/set/clear` | strict candidate verified; one-leaf paths, default inheritance, no-op detection, preservation, and source immutability verified |
+ | Lighting brightness | integer 0–100 | `codex lighting brightness get/set` | strict offline candidate plus `100 -> 37 -> 100` bridge apply/readback/restore fixture verified |
+ | Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | strict offline candidate plus `3-minutes -> 10-minutes -> 3-minutes` bridge apply/readback/restore fixture verified |
+ | Layout reset | installed-build default layout | `codex reset layout` | researched |
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index 81093a0..44c428f 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -63,6 +63,10 @@ worklouderctl codex dial gesture get --input SNAPSHOT.json left|right|click|long
+ worklouderctl codex dial gesture set --input SNAPSHOT.json GESTURE \
+   [--command COMMAND_ID | --skill-name NAME --skill-path PATH] --output CANDIDATE.json
+ worklouderctl codex dial gesture clear --input SNAPSHOT.json GESTURE --output CANDIDATE.json
++worklouderctl codex joystick get --input SNAPSHOT.json up|right|down|left
++worklouderctl codex joystick set --input SNAPSHOT.json DIRECTION \
++  [--command COMMAND_ID | --skill-name NAME --skill-path PATH] --output CANDIDATE.json
++worklouderctl codex joystick clear --input SNAPSHOT.json DIRECTION --output CANDIDATE.json
+ worklouderctl codex lighting brightness get --input SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input SNAPSHOT.json VALUE --output CANDIDATE.json
+ worklouderctl codex lighting auto-off get --input SNAPSHOT.json
+@@ -148,6 +152,11 @@ gesture mappings. In custom mode, each gesture stores a command object, Skill
+ object, or `null`; outside custom mode the built-in runtime behavior remains
+ authoritative.
+ 
++Joystick direction editing is independent of dial mode. Each direction stores
++a command object, Skill object, or `null`. An inherited default is reported
++until a candidate materializes the frozen layout; setting a direction to its
++effective default is a no-op and leaves that layout implicit.
++
+ ### Codex command/keycap catalog
+ 
+ The inspected build contains 38 keycap identifiers:
+diff --git a/docs/research/2026-08-02-codex-joystick-contract.md b/docs/research/2026-08-02-codex-joystick-contract.md
+new file mode 100644
+index 0000000..fc227ef
+--- /dev/null
++++ b/docs/research/2026-08-02-codex-joystick-contract.md
+@@ -0,0 +1,17 @@
++# Codex joystick candidate contract (Codex 26.727.51351)
++
++The Codex-native analog stick is stored under
++`codex-micro-layout.analogStick` with four directions: `up`, `right`, `down`,
++and `left`. Each direction is a command object, Skill object, or `null`.
++
++The frozen defaults are plan-mode toggle, forward navigation, sidebar toggle,
++and back navigation respectively. Released UI and runtime inspection shows that
++these mappings are independent of the Input radial-menu/joystick-sector model;
++they remain Tier 1 Codex actions resolved by the Codex runtime.
++
++`codex joystick get/set/clear` validates the full frozen snapshot, reads or
++changes one direction leaf, preserves the other three directions and unknown
++layout fields, recomputes effective settings and the canonical revision, and
++atomically publishes/reopens the candidate. Candidate generation stays
++file-only; apply/readback/rollback remains a separate complete-settings Codex
++Companion Bridge transaction.
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 7b10e03..10b4208 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -52,7 +52,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Six Command Key slots get/set/reset offline candidates
+ - [x] voice mode
+ - [x] dial modes and command/Skill/empty custom gestures
+-- [ ] joystick directions and Skills
++- [x] joystick directions and command/Skill/empty candidates
+ - [x] global brightness and auto-off
+ - [x] Codex settings backup, apply, readback, restore, and automatic rollback fixture
+ - [x] Codex settings-only structural diff with revisions and typed before/after values
+diff --git a/docs/tier-model.md b/docs/tier-model.md
+index 436837a..d420fb2 100644
+--- a/docs/tier-model.md
++++ b/docs/tier-model.md
+@@ -63,7 +63,7 @@ worklouderctl codex agent-key tap-mode get|set --input SNAPSHOT
+ worklouderctl codex command-key get|set|reset --input SNAPSHOT ACT06
+ worklouderctl codex dial mode get|set --input SNAPSHOT
+ worklouderctl codex dial gesture get|set|clear --input SNAPSHOT GESTURE
+-worklouderctl codex joystick get|set|reset
++worklouderctl codex joystick get|set|clear --input SNAPSHOT up|right|down|left
+ worklouderctl codex voice get|set --input SNAPSHOT
+ worklouderctl codex lighting brightness get|set --input SNAPSHOT
+ worklouderctl codex lighting auto-off get|set --input SNAPSHOT
+diff --git a/spec/codex-settings-26.727.51351.json b/spec/codex-settings-26.727.51351.json
+index e0b21f8..5b977d6 100644
+--- a/spec/codex-settings-26.727.51351.json
++++ b/spec/codex-settings-26.727.51351.json
+@@ -180,6 +180,12 @@
+       "click",
+       "longPress"
+     ],
++    "analogDirections": [
++      "up",
++      "right",
++      "down",
++      "left"
++    ],
+     "voiceButtonModes": [
+       "push-to-talk",
+       "realtime"
+diff --git a/spec/codex-settings-candidate-v1.json b/spec/codex-settings-candidate-v1.json
+index 6fd9f34..2449919 100644
+--- a/spec/codex-settings-candidate-v1.json
++++ b/spec/codex-settings-candidate-v1.json
+@@ -76,6 +76,17 @@
+       "value": null,
+       "requiresMode": "custom"
+     },
++    "joystickGet": {
++      "command": "codex joystick get --input SNAPSHOT.json DIRECTION"
++    },
++    "joystickSet": {
++      "command": "codex joystick set --input SNAPSHOT.json DIRECTION [--command COMMAND_ID | --skill-name NAME --skill-path PATH] --output CANDIDATE.json",
++      "changedPathTemplate": "/settings/codex-micro-layout/analogStick/{direction}"
++    },
++    "joystickClear": {
++      "command": "codex joystick clear --input SNAPSHOT.json DIRECTION --output CANDIDATE.json",
++      "value": null
++    },
+     "lightingBrightnessGet": {
+       "command": "codex lighting brightness get --input SNAPSHOT.json",
+       "type": "integer",
+@@ -150,6 +161,21 @@
+     "longPressUsesCustomActionOnlyInCustomMode": true,
+     "nonCustomLongPressOpensCodexMicroSettings": true
+   },
++  "joystickRules": {
++    "directions": [
++      "up",
++      "right",
++      "down",
++      "left"
++    ],
++    "actionTypes": [
++      "command",
++      "skill",
++      "empty"
++    ],
++    "oneDirectionPerCandidate": true,
++    "preserveUntargetedDirections": true
++  },
+   "candidateBoundary": {
+     "contactsCodex": false,
+     "contactsInput": false,
+diff --git a/src/cli.rs b/src/cli.rs
+index f1c8664..75e1110 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -460,6 +460,12 @@ pub enum CodexCommand {
+         command: CodexDialCommand,
+     },
+ 
++    /// Inspect or edit Codex-native joystick directions in an offline snapshot.
++    Joystick {
++        #[clap(subcommand)]
++        command: CodexJoystickCommand,
++    },
++
+     /// Inspect or edit Codex-native global lighting in an offline snapshot.
+     Lighting {
+         #[clap(subcommand)]
+@@ -885,6 +891,54 @@ pub enum CodexDialGestureCommand {
+     },
+ }
+ 
++#[derive(Clone, Copy, Debug, ValueEnum)]
++pub enum CodexJoystickDirection {
++    Up,
++    Right,
++    Down,
++    Left,
++}
++
++#[derive(Debug, Subcommand)]
++pub enum CodexJoystickCommand {
++    /// Read one effective joystick direction assignment.
++    Get {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(value_enum)]
++        direction: CodexJoystickDirection,
++    },
++
++    /// Assign one Codex command or Skill to a joystick direction.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(value_enum)]
++        direction: CodexJoystickDirection,
++        /// Assign a Codex command ID.
++        #[clap(long)]
++        command: Option<String>,
++        /// Assign a Skill display name; pair with --skill-path.
++        #[clap(long)]
++        skill_name: Option<String>,
++        /// Assign a Skill path; pair with --skill-name.
++        #[clap(long)]
++        skill_path: Option<String>,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Clear one joystick direction while preserving the other directions.
++    Clear {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(value_enum)]
++        direction: CodexJoystickDirection,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++}
++
+ #[derive(Debug, Subcommand)]
+ pub enum ConfigCommand {
+     /// Validate an export bundle or JSON configuration file.
+diff --git a/src/codex.rs b/src/codex.rs
+index ee1281e..02bbb74 100644
+--- a/src/codex.rs
++++ b/src/codex.rs
+@@ -51,6 +51,7 @@ struct LayoutContract {
+     keycaps: Vec<String>,
+     encoder_modes: Vec<String>,
+     encoder_gestures: Vec<String>,
++    analog_directions: Vec<String>,
+     voice_button_modes: Vec<String>,
+ }
+ 
+@@ -183,6 +184,30 @@ pub struct DialGestureUpdate<'a> {
+     pub skill_path: Option<&'a str>,
+ }
+ 
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct JoystickView {
++    pub schema_version: u8,
++    pub kind: &'static str,
++    pub revision: String,
++    pub direction: String,
++    pub assignment_type: String,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub command_id: Option<String>,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub skill_name: Option<String>,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub skill_path: Option<String>,
++    pub inherited: bool,
++}
++
++#[derive(Clone, Copy, Debug)]
++pub struct JoystickUpdate<'a> {
++    pub command: Option<&'a str>,
++    pub skill_name: Option<&'a str>,
++    pub skill_path: Option<&'a str>,
++}
++
+ struct ParsedActionView {
+     assignment_type: String,
+     command_id: Option<String>,
+@@ -848,6 +873,105 @@ fn dial_gesture_write(
+     )
+ }
+ 
++pub fn joystick_get(input: &Path, direction: &str) -> Result<JoystickView> {
++    let snapshot = read_snapshot(input)?;
++    let contract = load_contract()?;
++    validate_joystick_direction(direction, &contract)?;
++    let action = effective_layout(&snapshot)?
++        .get("analogStick")
++        .and_then(Value::as_object)
++        .and_then(|analog| analog.get(direction))
++        .with_context(|| format!("effective layout.analogStick.{direction} was missing"))?;
++    let action = nullable_action_view(action, &format!("layout.analogStick.{direction}"))?;
++    let inherited = snapshot
++        .settings
++        .get("codex-micro-layout")
++        .and_then(Value::as_object)
++        .and_then(|layout| layout.get("analogStick"))
++        .and_then(Value::as_object)
++        .map_or(true, |analog| !analog.contains_key(direction));
++    Ok(JoystickView {
++        schema_version: 1,
++        kind: "worklouderctl-codex-joystick",
++        revision: settings_revision(&snapshot.settings)?,
++        direction: direction.to_owned(),
++        assignment_type: action.assignment_type,
++        command_id: action.command_id,
++        skill_name: action.skill_name,
++        skill_path: action.skill_path,
++        inherited,
++    })
++}
++
++pub fn joystick_set(
++    input: &Path,
++    direction: &str,
++    update: JoystickUpdate<'_>,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    let action = action_assignment(
++        update.command,
++        update.skill_name,
++        update.skill_path,
++        "joystick",
++    )?;
++    joystick_write(input, direction, action, "codex-joystick-set", output)
++}
++
++pub fn joystick_clear(input: &Path, direction: &str, output: &Path) -> Result<CandidateReceipt> {
++    joystick_write(
++        input,
++        direction,
++        Value::Null,
++        "codex-joystick-clear",
++        output,
++    )
++}
++
++fn joystick_write(
++    input: &Path,
++    direction: &str,
++    action: Value,
++    operation: &'static str,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    let mut snapshot = read_snapshot(input)?;
++    let contract = load_contract()?;
++    validate_joystick_direction(direction, &contract)?;
++    validate_nullable_action(&action, &format!("layout.analogStick.{direction}"))?;
++    let before_revision = settings_revision(&snapshot.settings)?;
++    let before_action = effective_layout(&snapshot)?
++        .get("analogStick")
++        .and_then(Value::as_object)
++        .and_then(|analog| analog.get(direction))
++        .with_context(|| format!("effective layout.analogStick.{direction} was missing"))?
++        .clone();
++    let changed = before_action != action;
++    if changed {
++        let mut layout = editable_layout(&snapshot, &contract)?;
++        layout
++            .get_mut("analogStick")
++            .and_then(Value::as_object_mut)
++            .context("layout.analogStick was missing")?
++            .insert(direction.to_owned(), action);
++        validate_layout(&Value::Object(layout.clone()), &contract.layout)?;
++        snapshot
++            .settings
++            .insert("codex-micro-layout".into(), Value::Object(layout));
++        refresh_effective_settings(&mut snapshot, &contract)?;
++    }
++    publish_candidate(
++        snapshot,
++        output,
++        operation,
++        before_revision,
++        changed
++            .then(|| format!("/settings/codex-micro-layout/analogStick/{direction}"))
++            .into_iter()
++            .collect(),
++    )
++}
++
+ pub fn command_key_get(input: &Path, slot: &str) -> Result<CommandKeyView> {
+     let snapshot = read_snapshot(input)?;
+     command_key_view(&snapshot, slot)
+@@ -1106,22 +1230,49 @@ fn validate_dial_gesture(gesture: &str, contract: &Contract) -> Result<()> {
+     Ok(())
+ }
+ 
++fn validate_joystick_direction(direction: &str, contract: &Contract) -> Result<()> {
++    ensure!(
++        contract
++            .layout
++            .analog_directions
++            .iter()
++            .any(|candidate| candidate == direction),
++        "joystick direction must be one of {}",
++        contract.layout.analog_directions.join(", ")
++    );
++    Ok(())
++}
++
+ fn dial_gesture_action(update: DialGestureUpdate<'_>) -> Result<Value> {
+-    let skill_requested = update.skill_name.is_some() || update.skill_path.is_some();
+-    let assignment_count = usize::from(update.command.is_some()) + usize::from(skill_requested);
++    action_assignment(
++        update.command,
++        update.skill_name,
++        update.skill_path,
++        "dial gesture",
++    )
++}
++
++fn action_assignment(
++    command: Option<&str>,
++    skill_name: Option<&str>,
++    skill_path: Option<&str>,
++    label: &str,
++) -> Result<Value> {
++    let skill_requested = skill_name.is_some() || skill_path.is_some();
++    let assignment_count = usize::from(command.is_some()) + usize::from(skill_requested);
+     ensure!(
+         assignment_count == 1,
+-        "select exactly one dial gesture assignment: --command or --skill-name with --skill-path"
++        "select exactly one {label} assignment: --command or --skill-name with --skill-path"
+     );
+-    if let Some(command_id) = update.command {
++    if let Some(command_id) = command {
+         ensure!(!command_id.trim().is_empty(), "--command must be non-empty");
+         return Ok(serde_json::json!({
+             "type": "command",
+             "commandId": command_id,
+         }));
+     }
+-    let skill_name = update.skill_name.context("--skill-name is required")?;
+-    let skill_path = update.skill_path.context("--skill-path is required")?;
++    let skill_name = skill_name.context("--skill-name is required")?;
++    let skill_path = skill_path.context("--skill-path is required")?;
+     ensure!(
+         !skill_name.trim().is_empty(),
+         "--skill-name must be non-empty"
+@@ -2113,6 +2264,143 @@ mod tests {
+         fs::remove_dir_all(root).unwrap();
+     }
+ 
++    #[test]
++    fn joystick_candidates_preserve_other_directions_metadata_and_source() {
++        let root = fixture_root();
++        fs::create_dir_all(&root).unwrap();
++        let config = root.join("config.toml");
++        let snapshot_path = root.join("snapshot.json");
++        let noop_path = root.join("noop.json");
++        let skill_path = root.join("skill.json");
++        let command_path = root.join("command.json");
++        let cleared_path = root.join("cleared.json");
++        fs::write(&config, b"[desktop]\ncodex-micro-future = \"preserved\"\n").unwrap();
++        let source_sha = fsutil::sha256(&config).unwrap();
++        export(&config, &root.join("missing.app"), &snapshot_path).unwrap();
++
++        let default_up = joystick_get(&snapshot_path, "up").unwrap();
++        assert_eq!(default_up.assignment_type, "command");
++        assert_eq!(
++            default_up.command_id.as_deref(),
++            Some("composer.togglePlanMode")
++        );
++        assert!(default_up.inherited);
++
++        let noop = joystick_set(
++            &snapshot_path,
++            "up",
++            JoystickUpdate {
++                command: Some("composer.togglePlanMode"),
++                skill_name: None,
++                skill_path: None,
++            },
++            &noop_path,
++        )
++        .unwrap();
++        assert!(!noop.changed);
++        assert!(!read_snapshot(&noop_path)
++            .unwrap()
++            .settings
++            .contains_key("codex-micro-layout"));
++
++        let skill = joystick_set(
++            &snapshot_path,
++            "up",
++            JoystickUpdate {
++                command: None,
++                skill_name: Some("Plan Skill"),
++                skill_path: Some("/tmp/plan/SKILL.md"),
++            },
++            &skill_path,
++        )
++        .unwrap();
++        assert_eq!(
++            skill.changed_paths,
++            vec!["/settings/codex-micro-layout/analogStick/up"]
++        );
++        let skill_view = joystick_get(&skill_path, "up").unwrap();
++        assert_eq!(skill_view.assignment_type, "skill");
++        assert_eq!(skill_view.skill_name.as_deref(), Some("Plan Skill"));
++        assert_eq!(skill_view.skill_path.as_deref(), Some("/tmp/plan/SKILL.md"));
++        assert_eq!(
++            joystick_get(&skill_path, "right")
++                .unwrap()
++                .command_id
++                .as_deref(),
++            Some("navigateForward")
++        );
++
++        let mut skill_snapshot = read_snapshot(&skill_path).unwrap();
++        skill_snapshot
++            .settings
++            .get_mut("codex-micro-layout")
++            .unwrap()["futureJoystickMetadata"] = serde_json::json!({"preserved": true});
++        let contract = load_contract().unwrap();
++        refresh_effective_settings(&mut skill_snapshot, &contract).unwrap();
++        let mut bytes = serde_json::to_vec_pretty(&skill_snapshot).unwrap();
++        bytes.push(b'\n');
++        fs::write(&skill_path, bytes).unwrap();
++
++        joystick_set(
++            &skill_path,
++            "right",
++            JoystickUpdate {
++                command: Some("fixture.navigate"),
++                skill_name: None,
++                skill_path: None,
++            },
++            &command_path,
++        )
++        .unwrap();
++        assert_eq!(
++            joystick_get(&command_path, "right")
++                .unwrap()
++                .command_id
++                .as_deref(),
++            Some("fixture.navigate")
++        );
++        assert_eq!(
++            read_snapshot(&command_path).unwrap().settings["codex-micro-layout"]
++                ["futureJoystickMetadata"]["preserved"],
++            true
++        );
++
++        joystick_clear(&command_path, "down", &cleared_path).unwrap();
++        let cleared = joystick_get(&cleared_path, "down").unwrap();
++        assert_eq!(cleared.assignment_type, "empty");
++        assert!(!cleared.inherited);
++        assert_eq!(
++            joystick_get(&cleared_path, "up").unwrap().assignment_type,
++            "skill"
++        );
++        assert_eq!(
++            read_snapshot(&cleared_path).unwrap().settings["codex-micro-future"],
++            "preserved"
++        );
++        assert_eq!(fsutil::sha256(&config).unwrap(), source_sha);
++
++        let invalid_direction = joystick_get(&cleared_path, "center").unwrap_err();
++        assert!(invalid_direction
++            .to_string()
++            .contains("joystick direction must be one of"));
++        let invalid_assignment = joystick_set(
++            &cleared_path,
++            "left",
++            JoystickUpdate {
++                command: Some("fixture.command"),
++                skill_name: Some("Fixture"),
++                skill_path: Some("/tmp/fixture/SKILL.md"),
++            },
++            &root.join("invalid.json"),
++        )
++        .unwrap_err();
++        assert!(invalid_assignment
++            .to_string()
++            .contains("select exactly one joystick assignment"));
++
++        fs::remove_dir_all(root).unwrap();
++    }
++
+     #[test]
+     fn export_is_atomic_and_typed_readback_matches() {
+         let root = fixture_root();
+diff --git a/src/lib.rs b/src/lib.rs
+index 2eeacc8..511cc3e 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -19,14 +19,15 @@ use cli::{
+     AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
+     CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand,
+     CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexDialCommand, CodexDialGesture,
+-    CodexDialGestureCommand, CodexDialMode, CodexDialModeCommand, CodexLightingAutoOff,
+-    CodexLightingAutoOffCommand, CodexLightingBrightnessCommand, CodexLightingCommand,
+-    CodexRuntimeCommand, CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell,
+-    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
+-    InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand, LightingEffect,
+-    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
+-    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+-    SmartActionType as CliSmartActionType, TierCommand,
++    CodexDialGestureCommand, CodexDialMode, CodexDialModeCommand, CodexJoystickCommand,
++    CodexJoystickDirection, CodexLightingAutoOff, CodexLightingAutoOffCommand,
++    CodexLightingBrightnessCommand, CodexLightingCommand, CodexRuntimeCommand, CodexVoiceCommand,
++    CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand, DeviceCommand,
++    DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand, LayerCommand,
++    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
++    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
++    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
++    TierCommand,
+ };
+ use serde::Serialize;
+ use std::io::Write;
+@@ -2148,6 +2149,58 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
+                 )?,
+             },
+         },
++        CodexCommand::Joystick { command } => match command {
++            CodexJoystickCommand::Get { input, direction } => {
++                let result =
++                    codex::joystick_get(&input, codex_joystick_direction_value(direction))?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "joystick-direction={}\ttype={}\tinherited={}",
++                        result.direction, result.assignment_type, result.inherited
++                    )?;
++                    if let Some(value) = result.command_id {
++                        writeln!(out, "command={value}")?;
++                    }
++                    if let (Some(name), Some(path)) = (result.skill_name, result.skill_path) {
++                        writeln!(out, "skill={name}\t{path}")?;
++                    }
++                    writeln!(out, "revision={}", result.revision)?;
++                }
++            }
++            CodexJoystickCommand::Set {
++                input,
++                direction,
++                command,
++                skill_name,
++                skill_path,
++                output,
++            } => write_codex_candidate_result(
++                codex::joystick_set(
++                    &input,
++                    codex_joystick_direction_value(direction),
++                    codex::JoystickUpdate {
++                        command: command.as_deref(),
++                        skill_name: skill_name.as_deref(),
++                        skill_path: skill_path.as_deref(),
++                    },
++                    &output,
++                )?,
++                json,
++                &mut out,
++            )?,
++            CodexJoystickCommand::Clear {
++                input,
++                direction,
++                output,
++            } => write_codex_candidate_result(
++                codex::joystick_clear(&input, codex_joystick_direction_value(direction), &output)?,
++                json,
++                &mut out,
++            )?,
++        },
+         CodexCommand::Lighting { command } => match command {
+             CodexLightingCommand::Brightness { command } => match command {
+                 CodexLightingBrightnessCommand::Get { input } => {
+@@ -2402,6 +2455,15 @@ fn codex_dial_gesture_value(value: CodexDialGesture) -> &'static str {
+     }
+ }
+ 
++fn codex_joystick_direction_value(value: CodexJoystickDirection) -> &'static str {
++    match value {
++        CodexJoystickDirection::Up => "up",
++        CodexJoystickDirection::Right => "right",
++        CodexJoystickDirection::Down => "down",
++        CodexJoystickDirection::Left => "left",
++    }
++}
++
+ fn write_codex_candidate_result(
+     result: codex::CandidateReceipt,
+     json: bool,
+diff --git a/tests/cli.rs b/tests/cli.rs
+index 52b3e96..5af65f0 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -326,6 +326,7 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
+     assert!(stdout.contains("agent-key"));
+     assert!(stdout.contains("command-key"));
+     assert!(stdout.contains("dial"));
++    assert!(stdout.contains("joystick"));
+     assert!(stdout.contains("lighting"));
+     assert!(stdout.contains("voice"));
+ 
+@@ -376,6 +377,16 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
+     assert!(voice.status.success());
+     assert!(voice_stdout.contains("push-to-talk"));
+     assert!(voice_stdout.contains("realtime"));
++
++    let joystick = binary()
++        .args(["codex", "joystick", "--help"])
++        .output()
++        .unwrap();
++    let joystick_stdout = String::from_utf8(joystick.stdout).unwrap();
++    assert!(joystick.status.success());
++    assert!(joystick_stdout.contains("get"));
++    assert!(joystick_stdout.contains("set"));
++    assert!(joystick_stdout.contains("clear"));
+ }
+ 
+ #[test]
+@@ -583,6 +594,127 @@ fn codex_dial_candidates_run_end_to_end_without_writing_source() {
+     fs::remove_dir_all(root).unwrap();
+ }
+ 
++#[test]
++fn codex_joystick_candidates_run_end_to_end_without_writing_source() {
++    let root = fixture_root();
++    fs::create_dir_all(&root).unwrap();
++    let config = root.join("config.toml");
++    let snapshot = root.join("snapshot.json");
++    let skill = root.join("skill.json");
++    let command = root.join("command.json");
++    let cleared = root.join("cleared.json");
++    fs::write(
++        &config,
++        b"[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
++    )
++    .unwrap();
++    let source_sha = worklouderctl::fsutil::sha256(&config).unwrap();
++
++    let export = binary()
++        .args(["codex", "export", "--config"])
++        .arg(&config)
++        .arg("--app")
++        .arg(root.join("missing.app"))
++        .arg("--output")
++        .arg(&snapshot)
++        .output()
++        .unwrap();
++    assert!(export.status.success());
++
++    let default_up = binary()
++        .args(["--json", "codex", "joystick", "get", "--input"])
++        .arg(&snapshot)
++        .arg("up")
++        .output()
++        .unwrap();
++    assert!(default_up.status.success());
++    let default_up: serde_json::Value = serde_json::from_slice(&default_up.stdout).unwrap();
++    assert_eq!(default_up["assignmentType"], "command");
++    assert_eq!(default_up["commandId"], "composer.togglePlanMode");
++    assert_eq!(default_up["inherited"], true);
++
++    let set_skill = binary()
++        .args(["--json", "codex", "joystick", "set", "--input"])
++        .arg(&snapshot)
++        .args([
++            "up",
++            "--skill-name",
++            "Plan Skill",
++            "--skill-path",
++            "/tmp/plan/SKILL.md",
++            "--output",
++        ])
++        .arg(&skill)
++        .output()
++        .unwrap();
++    assert!(set_skill.status.success());
++    let set_skill: serde_json::Value = serde_json::from_slice(&set_skill.stdout).unwrap();
++    assert_eq!(
++        set_skill["changedPaths"],
++        serde_json::json!(["/settings/codex-micro-layout/analogStick/up"])
++    );
++
++    let set_command = binary()
++        .args(["--json", "codex", "joystick", "set", "--input"])
++        .arg(&skill)
++        .args(["right", "--command", "fixture.navigate", "--output"])
++        .arg(&command)
++        .output()
++        .unwrap();
++    assert!(set_command.status.success());
++
++    let get_skill = binary()
++        .args(["--json", "codex", "joystick", "get", "--input"])
++        .arg(&command)
++        .arg("up")
++        .output()
++        .unwrap();
++    assert!(get_skill.status.success());
++    let get_skill: serde_json::Value = serde_json::from_slice(&get_skill.stdout).unwrap();
++    assert_eq!(get_skill["assignmentType"], "skill");
++    assert_eq!(get_skill["skillName"], "Plan Skill");
++    assert_eq!(get_skill["skillPath"], "/tmp/plan/SKILL.md");
++
++    let get_command = binary()
++        .args(["--json", "codex", "joystick", "get", "--input"])
++        .arg(&command)
++        .arg("right")
++        .output()
++        .unwrap();
++    assert!(get_command.status.success());
++    let get_command: serde_json::Value = serde_json::from_slice(&get_command.stdout).unwrap();
++    assert_eq!(get_command["assignmentType"], "command");
++    assert_eq!(get_command["commandId"], "fixture.navigate");
++
++    let clear = binary()
++        .args(["--json", "codex", "joystick", "clear", "--input"])
++        .arg(&command)
++        .arg("down")
++        .arg("--output")
++        .arg(&cleared)
++        .output()
++        .unwrap();
++    assert!(clear.status.success());
++    let clear: serde_json::Value = serde_json::from_slice(&clear.stdout).unwrap();
++    assert_eq!(
++        clear["changedPaths"],
++        serde_json::json!(["/settings/codex-micro-layout/analogStick/down"])
++    );
++
++    let cleared_view = binary()
++        .args(["--json", "codex", "joystick", "get", "--input"])
++        .arg(&cleared)
++        .arg("down")
++        .output()
++        .unwrap();
++    assert!(cleared_view.status.success());
++    let cleared_view: serde_json::Value = serde_json::from_slice(&cleared_view.stdout).unwrap();
++    assert_eq!(cleared_view["assignmentType"], "empty");
++    assert_eq!(worklouderctl::fsutil::sha256(&config).unwrap(), source_sha);
++
++    fs::remove_dir_all(root).unwrap();
++}
++
+ #[test]
+ fn device_help_exposes_live_read_workflow() {
+     let device = binary().args(["device", "--help"]).output().unwrap();
