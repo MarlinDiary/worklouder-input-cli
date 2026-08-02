@@ -50,6 +50,32 @@
       "command": "codex command-key reset --input SNAPSHOT.json SLOT --output CANDIDATE.json",
       "source": "frozen layout default for the selected slot"
     },
+    "dialModeGet": {
+      "command": "codex dial mode get --input SNAPSHOT.json",
+      "values": [
+        "composer-navigation",
+        "reasoning",
+        "conversation-scroll",
+        "custom"
+      ]
+    },
+    "dialModeSet": {
+      "command": "codex dial mode set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
+      "changedPath": "/settings/codex-micro-layout/encoderMode"
+    },
+    "dialGestureGet": {
+      "command": "codex dial gesture get --input SNAPSHOT.json GESTURE"
+    },
+    "dialGestureSet": {
+      "command": "codex dial gesture set --input SNAPSHOT.json GESTURE [--command COMMAND_ID | --skill-name NAME --skill-path PATH] --output CANDIDATE.json",
+      "changedPathTemplate": "/settings/codex-micro-layout/encoder/{gesture}",
+      "requiresMode": "custom"
+    },
+    "dialGestureClear": {
+      "command": "codex dial gesture clear --input SNAPSHOT.json GESTURE --output CANDIDATE.json",
+      "value": null,
+      "requiresMode": "custom"
+    },
     "lightingBrightnessGet": {
       "command": "codex lighting brightness get --input SNAPSHOT.json",
       "type": "integer",
@@ -112,6 +138,17 @@
     },
     "clearActionPreservesKeycap": true,
     "commandAndActionAreMutuallyExclusive": true
+  },
+  "dialRules": {
+    "modeChangePreservesGestureMapping": true,
+    "customGestureEditorRequiresCustomMode": true,
+    "gestureActionTypes": [
+      "command",
+      "skill",
+      "empty"
+    ],
+    "longPressUsesCustomActionOnlyInCustomMode": true,
+    "nonCustomLongPressOpensCodexMicroSettings": true
   },
   "candidateBoundary": {
     "contactsCodex": false,
