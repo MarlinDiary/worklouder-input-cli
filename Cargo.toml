@@ -1,0 +1,36 @@
+[package]
+name = "worklouderctl"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.61"
+description = "Full-configuration CLI for Codex Micro, Codex, and Work Louder Input"
+license = "MIT"
+repository = "https://github.com/MarlinDiary/worklouder-input-cli"
+keywords = ["work-louder", "codex-micro", "cli", "macropad", "automation"]
+categories = ["command-line-utilities", "config"]
+
+[lib]
+name = "worklouderctl"
+path = "src/lib.rs"
+
+[[bin]]
+name = "worklouderctl"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "=1.0.75"
+clap = { version = "=3.2.25", features = ["derive"] }
+# Keep Clap's open-ended transitive ranges on versions that support our
+# declared Rust 1.61 MSRV. Remove these anchors only together with an MSRV bump.
+libc = "=0.2.137"
+once_cell = "=1.17.1"
+proc-macro2 = "=1.0.47"
+quote = "=1.0.21"
+smawk = "=0.3.1"
+textwrap = "=0.16.0"
+unicode-ident = "=1.0.5"
+unicode-width = "=0.1.10"
+
+[profile.release]
+lto = "thin"
+strip = true
