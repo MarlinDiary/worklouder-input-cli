@@ -1,0 +1,160 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package ${{ matrix.target }}
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate tag and Cargo version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -nE 's/^version = "([^"]+)"$/\1/p' Cargo.toml | head -1)
+          test -n "$version"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            test "${GITHUB_REF_NAME}" = "v$version"
+            echo "signature_state=developer-id-notarized" >> "$GITHUB_OUTPUT"
+          else
+            echo "signature_state=unsigned" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Install Rust target
+        run: rustup target add "${{ matrix.target }}"
+      - name: Test source
+        run: cargo test --locked
+      - name: Build release binary
+        run: cargo build --release --locked --target "${{ matrix.target }}"
+      - name: Import Developer ID certificate
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CERTIFICATE_P12_BASE64"
+          test -n "$CERTIFICATE_PASSWORD"
+          test -n "$SIGNING_IDENTITY"
+          keychain="$RUNNER_TEMP/worklouderctl-signing.keychain-db"
+          password=$(openssl rand -hex 24)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+          Path(os.environ["RUNNER_TEMP"], "certificate.p12").write_bytes(
+              base64.b64decode(os.environ["CERTIFICATE_P12_BASE64"], validate=True)
+          )
+          PY
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" \
+            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$password" "$keychain"
+          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" \
+            "target/${{ matrix.target }}/release/worklouderctl"
+          codesign --verify --strict --verbose=2 \
+            "target/${{ matrix.target }}/release/worklouderctl"
+      - name: Notarize signed binary
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$APPLE_ID"
+          test -n "$APPLE_TEAM_ID"
+          test -n "$APPLE_APP_SPECIFIC_PASSWORD"
+          ditto -c -k --keepParent \
+            "target/${{ matrix.target }}/release/worklouderctl" \
+            "$RUNNER_TEMP/worklouderctl-notarization.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/worklouderctl-notarization.zip" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait
+      - name: Build and verify deterministic release archive
+        env:
+          SOURCE_DATE_EPOCH: "0"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir dist
+          ./scripts/build-release-archive.py \
+            --binary "target/${{ matrix.target }}/release/worklouderctl" \
+            --target "${{ matrix.target }}" \
+            --signature-state "${{ steps.version.outputs.signature_state }}" \
+            --output dist
+          archive="dist/worklouderctl-v${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz"
+          ./scripts/verify-release-archive.py "$archive" \
+            --expected-target "${{ matrix.target }}"
+      - name: Attest release archive
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: worklouderctl-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish signed release and Homebrew formula
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: worklouderctl-*
+          path: dist
+          merge-multiple: true
+      - name: Render and verify release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=${GITHUB_REF_NAME#v}
+          arm=$(awk '{print $1}' "dist/worklouderctl-v$version-aarch64-apple-darwin.tar.gz.sha256")
+          intel=$(awk '{print $1}' "dist/worklouderctl-v$version-x86_64-apple-darwin.tar.gz.sha256")
+          ./scripts/render-homebrew-formula.py \
+            --version "$version" \
+            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}" \
+            --arm64-sha256 "$arm" --x86-64-sha256 "$intel" \
+            --output dist/worklouderctl.rb
+          ruby -c dist/worklouderctl.rb
+          cat dist/*.tar.gz.sha256 | sort -k2 > dist/SHA256SUMS
+          (cd dist && shasum -a 256 -c SHA256SUMS)
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag --generate-notes \
+            --title "WorkLouderCTL $GITHUB_REF_NAME"
