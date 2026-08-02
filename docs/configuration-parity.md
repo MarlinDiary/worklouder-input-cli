@@ -13,6 +13,9 @@ parity contract.
 - **researched** — schema and call path are inventoried;
 - **adapter-pending** — typed implementation and fixtures are next;
 - **read-verified** — exact-version read and readback passed; writes remain pending;
+- **candidate-verified** — a strict offline editor preserves unknown content,
+  rehashes the full snapshot, and passes apply/readback/restore against the
+  isolated transaction fixture;
 - **verified** — exact-version read/write/readback/rollback passed;
 - **parity** — the CLI covers every observed control in that GUI surface.
 
@@ -45,8 +48,8 @@ the runtime reloaded the new value.
 
 | GUI surface | Configuration coverage | Planned command family | Current status |
 | --- | --- | --- | --- |
-| Profiles | create, rename, select, delete | `profile` | researched |
-| Layers | create, rename, select, delete, up to six | `layer` | researched |
+| Profiles | create, rename, select, delete | `profile` | candidate-verified for list/rename/select; create/delete pending |
+| Layers | create, rename, select, delete, up to six | `layer` | candidate-verified for list/rename; create/select/delete pending |
 | Basic keys | all device-supported keycodes | `key set` | researched |
 | Layer/profile keys | normal/temp layers and profiles 1–6 | `key set` | researched |
 | Actions | simple/advanced events, delays, groups | `action` | researched |

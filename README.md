@@ -23,8 +23,9 @@
 > `worklouderctl` binary with provider diagnostics, Codex Micro settings
 > inspection/export, Input inspection/exact-byte export, validation, structural
 > diff, live device status/file reads, verified device export, revisioned bridge
-> snapshots/CAS validation, fixture-verified apply/restore transactions, JSON output, and
-> shell completions. There is no packaged release yet.
+> snapshots/CAS validation, offline profile/layer candidate generation,
+> fixture-verified apply/restore transactions, JSON output, and shell completions.
+> There is no packaged release yet.
 > The bridge transaction engine now verifies backup, apply, idempotent retry,
 > readback, restore, and automatic rollback against an isolated writer fixture.
 > Installed-device mutation remains gated on a released, hardware-verified
@@ -96,6 +97,11 @@ worklouderctl device --transport bridge config snapshot --output CONFIG.json
 worklouderctl device --transport bridge config validate --input CONFIG.json
 worklouderctl device --transport bridge config apply --input CONFIG.json --backup BEFORE.json
 worklouderctl device --transport bridge config restore --input BEFORE.json --backup CURRENT.json
+worklouderctl profile list --input CONFIG.json
+worklouderctl profile select --input CONFIG.json --id PROFILE_ID --output CANDIDATE.json
+worklouderctl profile rename --input CONFIG.json --id PROFILE_ID --name NAME --output CANDIDATE.json
+worklouderctl layer list --input CONFIG.json [--profile PROFILE_ID]
+worklouderctl layer rename --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --name NAME --output CANDIDATE.json
 worklouderctl device --transport direct --input-mode require-closed status
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
@@ -137,6 +143,22 @@ full revision readback, and automatic rollback. These commands are advertised
 only when the running Input version supplies a verified configuration writer;
 the current cross-language evidence uses the isolated reference writer.
 
+`profile` and `layer` commands are offline semantic editors. They strictly
+validate every embedded size, SHA-1, SHA-256, canonical base64 payload, safe
+path, keymap ID, and the full snapshot revision before producing a new complete
+candidate. A candidate preserves unknown JSON fields and unrelated file bytes,
+updates only the requested semantic field, recomputes all affected hashes and
+the revision, publishes atomically, and reopens the result. It does not contact
+Input or the device. Apply it through the guarded bridge transaction:
+
+```console
+worklouderctl device --transport bridge config snapshot --output before.json
+worklouderctl profile rename --input before.json --id 0 --name Work --output candidate.json
+worklouderctl device --transport bridge config apply \
+  --input candidate.json --backup pre-apply.json \
+  --expected-revision REVISION --idempotency-key profile-rename-1
+```
+
 The repository includes an executable Input-main reference server, a service
 adapter for the Input 0.18.0 service shape, authentication tests, and a
 cross-language Rust CLI conformance test:
@@ -146,7 +168,7 @@ node --test companion/input-main-bridge.test.mjs
 ./scripts/test-bridge-e2e.sh
 ```
 
-## Planned mutation command experience
+## Additional planned mutation commands
 
 The intended binary name is `worklouderctl`:
 
@@ -155,16 +177,14 @@ worklouderctl codex agent-source set priority
 worklouderctl codex command-key set ACT06 --command toggleFastMode
 worklouderctl codex joystick set up --skill SKILL_ID
 worklouderctl codex lighting set --brightness 80 --auto-off 10-minutes
-worklouderctl profile list
-worklouderctl layer show 2
 worklouderctl plan layout.yaml
 worklouderctl apply layout.yaml
 worklouderctl backup list
 worklouderctl backup restore BACKUP_ID
 ```
 
-These examples document the next mutation interface; they are not implemented
-commands yet. Follow the [roadmap](docs/roadmap.md) for exact status.
+These examples document the remaining mutation interface. Follow the
+[roadmap](docs/roadmap.md) for exact status.
 
 ## Target capabilities
 
@@ -238,7 +258,8 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Bridge apply/restore transaction and automatic rollback fixture | Complete |
 | Companion Bridge integration in a released Input build | Upstream integration pending |
 | Codex live settings-bridge write client | Planned |
-| Semantic profile/layer/control commands | Planned |
+| Semantic profile/layer candidates | List/select/rename implemented and fixture-verified |
+| Semantic control commands | Planned |
 | Real-device mutation and rollback | Planned |
 | Input cache/database and Smart Actions synchronization | Planned |
 | Signed macOS release and Homebrew installation | Planned |
@@ -248,9 +269,10 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 ### Is there a CLI for Work Louder Input?
 
 WorkLouderCTL is an open-source full-configuration CLI project for Codex, Work
-Louder Input, and Codex Micro. A source-built read-only alpha can inspect both
-apps and read/export live Codex Micro state; packaged binaries and
-configuration mutation are upcoming.
+Louder Input, and Codex Micro. The source alpha can inspect both apps,
+read/export live Codex Micro state, generate validated profile/layer candidates,
+and exercise apply/restore against the isolated bridge writer; packaged
+binaries and released-Input writer integration are upcoming.
 
 ### Does WorkLouderCTL replace the Codex and Input configuration GUIs?
 
@@ -292,10 +314,10 @@ Read the complete [FAQ](docs/faq.md).
 
 ## Contributing
 
-The project is at the read-only source-alpha stage. Protocol findings, sanitized
-configurations, compatibility evidence, CLI implementations, and design
-feedback are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a
-pull request.
+The project is at the transaction source-alpha stage. Protocol findings,
+sanitized configurations, compatibility evidence, CLI implementations, and
+design feedback are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before
+opening a pull request.
 
 ## Independence
 

@@ -185,6 +185,24 @@ Codex Micro stores them in a separate `smart_actions.json` file.
 The official setup guide describes a maximum of six layers. Profile and layer
 counts still require device-specific validation rather than a global constant.
 
+The first semantic CLI slice operates on a complete revisioned snapshot rather
+than a partial keymap fragment:
+
+```sh
+worklouderctl profile list --input SNAPSHOT.json
+worklouderctl profile select --input SNAPSHOT.json --id ID --output CANDIDATE.json
+worklouderctl profile rename --input SNAPSHOT.json --id ID --name NAME --output CANDIDATE.json
+worklouderctl layer list --input SNAPSHOT.json [--profile ID]
+worklouderctl layer rename --input SNAPSHOT.json [--profile ID] \
+  --id ID --name NAME --output CANDIDATE.json
+```
+
+These commands validate the entire snapshot offline, preserve unknown fields
+and non-keymap bytes, rewrite `keymap.json` as compact ordered JSON, update its
+size/SHA-1/SHA-256, and recompute the full configuration revision. Candidate
+files are atomically published and reopened. Apply and rollback remain separate
+explicit transaction steps through the Input-owned bridge.
+
 ### Assignable controls
 
 - 13 switches, including the double-width Codex Command Key surface;

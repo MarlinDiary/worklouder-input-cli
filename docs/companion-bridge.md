@@ -112,6 +112,25 @@ worklouderctl device config validate --input config-snapshot.json \
   --expected-revision REVISION
 ```
 
+## Offline semantic candidates
+
+WorkLouderCTL can turn a valid complete snapshot into a complete profile/layer
+candidate without opening a bridge connection:
+
+```sh
+worklouderctl profile list --input config-snapshot.json
+worklouderctl profile rename --input config-snapshot.json \
+  --id 0 --name Work --output candidate.json
+worklouderctl layer rename --input config-snapshot.json \
+  --profile 0 --id 1 --name Build --output candidate.json
+```
+
+Before publishing, the editor independently verifies every file's canonical
+base64, size, SHA-1, SHA-256, safe unique path, and the path-framed full
+revision. It preserves unknown envelope/record/keymap fields and the exact
+bytes of files outside `keymap.json`. The resulting candidate can then be sent
+to `device config apply`; candidate generation itself never calls Input.
+
 ## Mutation methods
 
 Configuration apply and restore are capability-gated:
@@ -189,7 +208,9 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
 - `companion/input-main-bridge.test.mjs` — authentication, dispatch, and service
   adapter tests;
 - `scripts/test-bridge-e2e.sh` — Rust CLI handshake, status, file list, exact
-  export, dual-hash readback, and `config validate` conformance test.
+  export, semantic profile/layer candidates, independent candidate rehash,
+  apply/readback, idempotent retry, stale-CAS rejection, restore, and dual-hash
+  conformance test.
 
 Input maintains only the small adapter from stable bridge method names to its
 current service container. Integration creates the adapter after Input's
