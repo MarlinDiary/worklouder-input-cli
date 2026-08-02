@@ -214,3 +214,21 @@ Path:
 SHA-256:
   7456c4be549c6d699d297df25eed53fcbd38757190b664ebef3bdf1bcc9495d5
 The isolated-worktree execution result is appended after the artifact commit.
+
+Isolated rollback execution
+---------------------------
+Artifact commit:
+  f793e21 test: publish Codex bridge evidence
+Command:
+  artifacts/verification/codex-companion-bridge-v1/rollback.sh \
+    /tmp/worklouderctl-codex-bridge-rollback.WORKTREE
+Literal output:
+  rollback=verified
+  base=1bc08b9ae41b1b7e557d4d8300a8148868b67370
+Exit status: 0
+Postcondition command:
+  git -C WORKTREE diff --quiet \
+    1bc08b9ae41b1b7e557d4d8300a8148868b67370 -- . \
+    ':(exclude)artifacts/verification/codex-companion-bridge-v1'
+Literal output: (empty)
+Exit status: 0
