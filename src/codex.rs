@@ -107,6 +107,26 @@ pub struct AgentTapModeView {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LightingBrightnessView {
+    pub schema_version: u8,
+    pub kind: &'static str,
+    pub revision: String,
+    pub value: i64,
+    pub explicit: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LightingAutoOffView {
+    pub schema_version: u8,
+    pub kind: &'static str,
+    pub revision: String,
+    pub value: String,
+    pub explicit: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommandKeyView {
     pub schema_version: u8,
     pub kind: &'static str,
@@ -449,6 +469,100 @@ pub fn agent_tap_mode_set(input: &Path, enabled: bool, output: &Path) -> Result<
         snapshot,
         output,
         "codex-agent-tap-mode-set",
+        before_revision,
+        changed
+            .then(|| format!("/settings/{key}"))
+            .into_iter()
+            .collect(),
+    )
+}
+
+pub fn lighting_brightness_get(input: &Path) -> Result<LightingBrightnessView> {
+    let snapshot = read_snapshot(input)?;
+    let key = "codex-micro-lighting-brightness";
+    let value = snapshot
+        .effective_settings
+        .get(key)
+        .and_then(Value::as_i64)
+        .context("effective Codex lighting brightness was missing")?;
+    Ok(LightingBrightnessView {
+        schema_version: 1,
+        kind: "worklouderctl-codex-lighting-brightness",
+        revision: settings_revision(&snapshot.settings)?,
+        value,
+        explicit: snapshot.settings.contains_key(key),
+    })
+}
+
+pub fn lighting_brightness_set(
+    input: &Path,
+    value: i64,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let mut snapshot = read_snapshot(input)?;
+    let contract = load_contract()?;
+    let key = "codex-micro-lighting-brightness";
+    let before_revision = settings_revision(&snapshot.settings)?;
+    let current = snapshot
+        .effective_settings
+        .get(key)
+        .and_then(Value::as_i64)
+        .context("effective Codex lighting brightness was missing")?;
+    let changed = current != value;
+    if changed {
+        snapshot.settings.insert(key.into(), Value::from(value));
+        refresh_effective_settings(&mut snapshot, &contract)?;
+    }
+    publish_candidate(
+        snapshot,
+        output,
+        "codex-lighting-brightness-set",
+        before_revision,
+        changed
+            .then(|| format!("/settings/{key}"))
+            .into_iter()
+            .collect(),
+    )
+}
+
+pub fn lighting_auto_off_get(input: &Path) -> Result<LightingAutoOffView> {
+    let snapshot = read_snapshot(input)?;
+    let key = "codex-micro-lighting-auto-off";
+    let value = snapshot
+        .effective_settings
+        .get(key)
+        .and_then(Value::as_str)
+        .context("effective Codex lighting auto-off policy was missing")?;
+    Ok(LightingAutoOffView {
+        schema_version: 1,
+        kind: "worklouderctl-codex-lighting-auto-off",
+        revision: settings_revision(&snapshot.settings)?,
+        value: value.to_owned(),
+        explicit: snapshot.settings.contains_key(key),
+    })
+}
+
+pub fn lighting_auto_off_set(input: &Path, value: &str, output: &Path) -> Result<CandidateReceipt> {
+    let mut snapshot = read_snapshot(input)?;
+    let contract = load_contract()?;
+    let key = "codex-micro-lighting-auto-off";
+    let before_revision = settings_revision(&snapshot.settings)?;
+    let current = snapshot
+        .effective_settings
+        .get(key)
+        .and_then(Value::as_str)
+        .context("effective Codex lighting auto-off policy was missing")?;
+    let changed = current != value;
+    if changed {
+        snapshot
+            .settings
+            .insert(key.into(), Value::String(value.to_owned()));
+        refresh_effective_settings(&mut snapshot, &contract)?;
+    }
+    publish_candidate(
+        snapshot,
+        output,
+        "codex-lighting-auto-off-set",
         before_revision,
         changed
             .then(|| format!("/settings/{key}"))
@@ -1247,6 +1361,94 @@ mod tests {
         let error = inspect(&config, &root.join("missing.app")).unwrap_err();
 
         assert!(error.to_string().contains("must be between 0 and 100"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn lighting_candidates_are_typed_bounded_atomic_and_preserve_unknown_settings() {
+        let root = fixture_root();
+        fs::create_dir_all(&root).unwrap();
+        let config = root.join("config.toml");
+        let snapshot_path = root.join("snapshot.json");
+        let brightness_path = root.join("brightness.json");
+        let auto_off_path = root.join("auto-off.json");
+        fs::write(
+            &config,
+            b"[desktop]\ncodex-micro-lighting-brightness = 42\ncodex-micro-lighting-auto-off = \"1-minute\"\ncodex-micro-future = \"preserved\"\n",
+        )
+        .unwrap();
+        let source_sha = fsutil::sha256(&config).unwrap();
+        export(&config, &root.join("missing.app"), &snapshot_path).unwrap();
+
+        let brightness = lighting_brightness_get(&snapshot_path).unwrap();
+        assert_eq!(brightness.value, 42);
+        assert!(brightness.explicit);
+        let brightness_candidate =
+            lighting_brightness_set(&snapshot_path, 0, &brightness_path).unwrap();
+        assert!(brightness_candidate.changed);
+        assert_eq!(
+            brightness_candidate.changed_paths,
+            vec!["/settings/codex-micro-lighting-brightness"]
+        );
+        assert_eq!(lighting_brightness_get(&brightness_path).unwrap().value, 0);
+
+        let auto_off = lighting_auto_off_get(&brightness_path).unwrap();
+        assert_eq!(auto_off.value, "1-minute");
+        assert!(auto_off.explicit);
+        let auto_off_candidate =
+            lighting_auto_off_set(&brightness_path, "1-hour", &auto_off_path).unwrap();
+        assert!(auto_off_candidate.changed);
+        assert_eq!(
+            auto_off_candidate.changed_paths,
+            vec!["/settings/codex-micro-lighting-auto-off"]
+        );
+        assert_eq!(
+            lighting_auto_off_get(&auto_off_path).unwrap().value,
+            "1-hour"
+        );
+        let reopened = read_snapshot(&auto_off_path).unwrap();
+        assert_eq!(reopened.settings["codex-micro-future"], "preserved");
+        assert_eq!(reopened.source_sha256, source_sha);
+        assert_eq!(fsutil::sha256(&config).unwrap(), source_sha);
+
+        let invalid_brightness_path = root.join("invalid-brightness.json");
+        let invalid_brightness =
+            lighting_brightness_set(&snapshot_path, 101, &invalid_brightness_path).unwrap_err();
+        assert!(invalid_brightness
+            .to_string()
+            .contains("must be between 0 and 100"));
+        assert!(!invalid_brightness_path.exists());
+        let invalid_auto_off_path = root.join("invalid-auto-off.json");
+        let invalid_auto_off =
+            lighting_auto_off_set(&snapshot_path, "2-hours", &invalid_auto_off_path).unwrap_err();
+        assert!(invalid_auto_off.to_string().contains("must be one of"));
+        assert!(!invalid_auto_off_path.exists());
+
+        let default_config = root.join("default.toml");
+        let default_snapshot = root.join("default-snapshot.json");
+        let default_brightness = root.join("default-brightness.json");
+        let default_auto_off = root.join("default-auto-off.json");
+        fs::write(&default_config, b"[desktop]\n").unwrap();
+        export(
+            &default_config,
+            &root.join("missing.app"),
+            &default_snapshot,
+        )
+        .unwrap();
+        let brightness_noop =
+            lighting_brightness_set(&default_snapshot, 100, &default_brightness).unwrap();
+        assert!(!brightness_noop.changed);
+        let auto_off_noop =
+            lighting_auto_off_set(&default_brightness, "3-minutes", &default_auto_off).unwrap();
+        assert!(!auto_off_noop.changed);
+        let default_reopened = read_snapshot(&default_auto_off).unwrap();
+        assert!(!default_reopened
+            .settings
+            .contains_key("codex-micro-lighting-brightness"));
+        assert!(!default_reopened
+            .settings
+            .contains_key("codex-micro-lighting-auto-off"));
+
         fs::remove_dir_all(root).unwrap();
     }
 
