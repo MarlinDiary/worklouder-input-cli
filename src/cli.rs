@@ -393,6 +393,38 @@ pub enum ProfileCommand {
         id: u64,
     },
 
+    /// Create Input's default Codex Micro profile.
+    Create {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long, default_value = "Default")]
+        name: String,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Duplicate one profile with a new profile ID.
+    Duplicate {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        name: Option<String>,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Delete one profile while keeping the active index valid.
+    Delete {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
     /// Select the active profile and write a complete candidate snapshot.
     Select {
         #[clap(long, value_parser)]
@@ -436,6 +468,58 @@ pub enum LayerCommand {
         id: u64,
     },
 
+    /// Create Input's empty Codex Micro layer.
+    Create {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long, default_value = "Layer")]
+        name: String,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Duplicate one non-Codex layer with a new layer ID.
+    Duplicate {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        name: Option<String>,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Delete one non-Codex layer while preserving at least one layer.
+    Delete {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        id: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Move one layer to a zero-based position.
+    Move {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        to: usize,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
     /// Rename one layer and write a complete candidate snapshot.
     Rename {
         #[clap(long, value_parser)]
@@ -464,6 +548,69 @@ pub enum LayerCommand {
         #[clap(long, value_parser)]
         output: PathBuf,
     },
+
+    /// Inspect or edit per-layer backlight and underglow settings.
+    Lighting {
+        #[clap(subcommand)]
+        command: LayerLightingCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum LayerLightingCommand {
+    /// Show both lighting zones for one layer.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        id: u64,
+    },
+
+    /// Set one lighting zone and write a complete candidate snapshot.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        id: u64,
+        #[clap(long, value_enum)]
+        zone: LightingZone,
+        #[clap(long, value_enum)]
+        effect: Option<LightingEffect>,
+        #[clap(long)]
+        brightness: Option<f64>,
+        #[clap(long)]
+        speed: Option<f64>,
+        #[clap(long)]
+        magic: Option<f64>,
+        /// RGB as #RRGGBB, 0xRRGGBB, or a decimal integer.
+        #[clap(long)]
+        color: Option<String>,
+        /// Apply this zone to every layer in the selected profile.
+        #[clap(long)]
+        apply_to_all: bool,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum LightingZone {
+    Backlight,
+    Underglow,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum LightingEffect {
+    Off,
+    Solid,
+    Snake,
+    Rainbow,
+    Breath,
+    Gradient,
 }
 
 #[derive(Debug, Subcommand)]

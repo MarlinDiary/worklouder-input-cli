@@ -50,18 +50,43 @@ fn semantic_help_exposes_offline_candidate_workflow() {
     let profile = binary().args(["profile", "--help"]).output().unwrap();
     let profile_stdout = String::from_utf8(profile.stdout).unwrap();
     assert!(profile.status.success());
-    assert!(profile_stdout.contains("list"));
-    assert!(profile_stdout.contains("show"));
-    assert!(profile_stdout.contains("select"));
-    assert!(profile_stdout.contains("rename"));
+    for command in [
+        "list",
+        "show",
+        "create",
+        "duplicate",
+        "delete",
+        "select",
+        "rename",
+    ] {
+        assert!(profile_stdout.contains(command));
+    }
 
     let layer = binary().args(["layer", "--help"]).output().unwrap();
     let layer_stdout = String::from_utf8(layer.stdout).unwrap();
     assert!(layer.status.success());
-    assert!(layer_stdout.contains("list"));
-    assert!(layer_stdout.contains("show"));
-    assert!(layer_stdout.contains("rename"));
-    assert!(layer_stdout.contains("color"));
+    for command in [
+        "list",
+        "show",
+        "create",
+        "duplicate",
+        "delete",
+        "move",
+        "rename",
+        "color",
+        "lighting",
+    ] {
+        assert!(layer_stdout.contains(command));
+    }
+
+    let lighting = binary()
+        .args(["layer", "lighting", "--help"])
+        .output()
+        .unwrap();
+    let lighting_stdout = String::from_utf8(lighting.stdout).unwrap();
+    assert!(lighting.status.success());
+    assert!(lighting_stdout.contains("show"));
+    assert!(lighting_stdout.contains("set"));
 
     let control = binary().args(["control", "--help"]).output().unwrap();
     let control_stdout = String::from_utf8(control.stdout).unwrap();

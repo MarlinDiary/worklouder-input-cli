@@ -16,6 +16,7 @@ const REVISION_PREFIX: &[u8] = b"worklouder-input-config-revision-v1\0";
 const MAX_FILES: usize = 4096;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_TOTAL_BYTES: usize = 32 * 1024 * 1024;
+const MAX_PROFILES: usize = 6;
 const MAX_LAYERS: usize = 6;
 const MAX_NAME_BYTES: usize = 64;
 const MAX_RGB: u64 = 0x00ff_ffff;
@@ -26,6 +27,7 @@ const MAX_ICON_BYTES: usize = 128;
 const ASSIGNMENT_SPEC_JSON: &str = include_str!("../spec/input-assignment-tokens-0.18.0.json");
 const ACTION_SPEC_JSON: &str = include_str!("../spec/input-actions-0.18.0.json");
 const MULTI_ACTION_SPEC_JSON: &str = include_str!("../spec/input-multi-actions-0.18.0.json");
+const PROFILE_LAYER_SPEC_JSON: &str = include_str!("../spec/input-profile-layers-0.18.0.json");
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize)]
@@ -34,6 +36,7 @@ pub struct ProfileList {
     pub schema_version: u64,
     pub kind: &'static str,
     pub revision: String,
+    pub active_profile_index: usize,
     pub active_profile_id: u64,
     pub profiles: Vec<ProfileEntry>,
 }
@@ -53,6 +56,7 @@ pub struct ProfileShow {
     pub schema_version: u64,
     pub kind: &'static str,
     pub revision: String,
+    pub active_profile_index: usize,
     pub active_profile_id: u64,
     pub profile: ProfileEntry,
     pub layers: Vec<LayerEntry>,
@@ -77,6 +81,7 @@ pub struct LayerEntry {
     pub color: Option<u64>,
     pub color_hex: Option<String>,
     pub has_lights: bool,
+    pub protected: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -97,6 +102,77 @@ pub struct LayoutSummary {
     pub keymap_rows: usize,
     pub encoder_entries: usize,
     pub joystick_fields: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum LightingZone {
+    Backlight,
+    Underglow,
+}
+
+impl LightingZone {
+    fn field(self) -> &'static str {
+        match self {
+            Self::Backlight => "backlight",
+            Self::Underglow => "underglow",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum LightingEffect {
+    Off,
+    Solid,
+    Snake,
+    Rainbow,
+    Breath,
+    Gradient,
+}
+
+impl LightingEffect {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Solid => "solid",
+            Self::Snake => "snake",
+            Self::Rainbow => "rainbow",
+            Self::Breath => "breath",
+            Self::Gradient => "gradient",
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct LightingUpdate<'a> {
+    pub effect: Option<LightingEffect>,
+    pub brightness: Option<f64>,
+    pub speed: Option<f64>,
+    pub magic: Option<f64>,
+    pub color: Option<&'a str>,
+    pub apply_to_all: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayerLightingShow {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub profile_id: u64,
+    pub layer_id: u64,
+    pub backlight: LightingEntry,
+    pub underglow: LightingEntry,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LightingEntry {
+    pub effect: String,
+    pub brightness: f64,
+    pub speed: f64,
+    pub magic: f64,
+    pub color: u64,
+    pub color_hex: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -367,16 +443,17 @@ struct SemanticSnapshot {
 
 pub fn profile_list(input: &Path) -> Result<ProfileList> {
     let snapshot = SemanticSnapshot::read(input)?;
-    let active_profile_id = active_profile_id(&snapshot.keymap)?;
+    let (active_profile_index, active_profile_id) = active_profile_selection(&snapshot.keymap)?;
     let profiles = profiles(&snapshot.keymap)?
         .iter()
-        .map(|profile| {
+        .enumerate()
+        .map(|(index, profile)| {
             let id = object_u64(profile, "id", "profile")?;
             Ok(ProfileEntry {
                 id,
                 name: object_string(profile, "name", "profile")?.to_owned(),
                 layer_count: profile_layers(profile)?.len(),
-                active: id == active_profile_id,
+                active: index == active_profile_index,
             })
         })
         .collect::<Result<Vec<_>>>()?;
@@ -384,6 +461,7 @@ pub fn profile_list(input: &Path) -> Result<ProfileList> {
         schema_version: 1,
         kind: "worklouderctl-profile-list",
         revision: snapshot.revision,
+        active_profile_index,
         active_profile_id,
         profiles,
     })
@@ -391,7 +469,7 @@ pub fn profile_list(input: &Path) -> Result<ProfileList> {
 
 pub fn profile_show(input: &Path, id: u64) -> Result<ProfileShow> {
     let snapshot = SemanticSnapshot::read(input)?;
-    let active_profile_id = active_profile_id(&snapshot.keymap)?;
+    let (active_profile_index, active_profile_id) = active_profile_selection(&snapshot.keymap)?;
     let profile = find_profile(&snapshot.keymap, id)?;
     let layers = profile_layers(profile)?
         .iter()
@@ -401,6 +479,7 @@ pub fn profile_show(input: &Path, id: u64) -> Result<ProfileShow> {
         schema_version: 1,
         kind: "worklouderctl-profile",
         revision: snapshot.revision,
+        active_profile_index,
         active_profile_id,
         profile: ProfileEntry {
             id,
@@ -414,7 +493,7 @@ pub fn profile_show(input: &Path, id: u64) -> Result<ProfileShow> {
 
 pub fn layer_list(input: &Path, profile_id: Option<u64>) -> Result<LayerList> {
     let snapshot = SemanticSnapshot::read(input)?;
-    let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
     let profile = find_profile(&snapshot.keymap, selected_id)?;
     let layers = profile_layers(profile)?
         .iter()
@@ -432,7 +511,7 @@ pub fn layer_list(input: &Path, profile_id: Option<u64>) -> Result<LayerList> {
 
 pub fn layer_show(input: &Path, profile_id: Option<u64>, layer_id: u64) -> Result<LayerShow> {
     let snapshot = SemanticSnapshot::read(input)?;
-    let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
     let profile = find_profile(&snapshot.keymap, selected_id)?;
     let (_, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
     let layer = profile_layers(profile)?
@@ -451,7 +530,7 @@ pub fn layer_show(input: &Path, profile_id: Option<u64>, layer_id: u64) -> Resul
 
 pub fn control_list(input: &Path, profile_id: Option<u64>, layer_id: u64) -> Result<ControlList> {
     let snapshot = SemanticSnapshot::read(input)?;
-    let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
     let profile = find_profile(&snapshot.keymap, selected_id)?;
     let (_, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
     let layer = profile_layers(profile)?
@@ -476,7 +555,7 @@ pub fn control_show(
     control_id: &str,
 ) -> Result<ControlShow> {
     let snapshot = SemanticSnapshot::read(input)?;
-    let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
     let profile = find_profile(&snapshot.keymap, selected_id)?;
     let (_, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
     let layer = profile_layers(profile)?
@@ -504,7 +583,7 @@ pub fn control_set(
     output: &Path,
 ) -> Result<CandidateReceipt> {
     let mut snapshot = SemanticSnapshot::read(input)?;
-    let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
     let address = parse_control_id(control_id)?;
     let canonical_id = canonical_control_id(address);
     ensure!(
@@ -1216,17 +1295,132 @@ pub fn multi_action_group_delete(
     resource_group_delete(input, ResourceKind::MultiAction, id, keep_members, output)
 }
 
+pub fn profile_create(input: &Path, name: &str, output: &Path) -> Result<CandidateReceipt> {
+    validate_name(name)?;
+    validate_profile_layer_model_spec()?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    ensure!(
+        profiles(&snapshot.keymap)?.len() < MAX_PROFILES,
+        "Input supports at most six profiles"
+    );
+    let id = next_object_id(profiles(&snapshot.keymap)?, "profile")?;
+    let mut protected = profiles(&snapshot.keymap)?
+        .iter()
+        .flat_map(|profile| profile_layers(profile).into_iter().flatten())
+        .find(|layer| is_protected_layer(layer))
+        .cloned()
+        .context("Codex Micro protected layer template was not found")?;
+    let protected_object = protected
+        .as_object_mut()
+        .context("protected layer template was not an object")?;
+    protected_object.insert("id".into(), Value::from(0_u64));
+    protected_object.remove("lights");
+    protected_object.remove("linkedAppId");
+    let profile = serde_json::json!({
+        "id": id,
+        "name": name,
+        "layers": [protected],
+        "macrosUsed": [],
+        "multiActionsUsed": []
+    });
+    let index = profiles(&snapshot.keymap)?.len();
+    snapshot
+        .keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .context("keymap.json profiles was invalid")?
+        .push(profile);
+    let mut paths = vec![format!("/keymap.json/profiles/{index}")];
+    sync_profile_usage(&mut snapshot.keymap, index, &mut paths)?;
+    let mut receipt = snapshot.publish(output, "profile-create", true, paths)?;
+    receipt.resource_id = Some(id);
+    Ok(receipt)
+}
+
+pub fn profile_duplicate(
+    input: &Path,
+    id: u64,
+    name: Option<&str>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    if let Some(value) = name {
+        validate_name(value)?;
+    }
+    validate_profile_layer_model_spec()?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    ensure!(
+        profiles(&snapshot.keymap)?.len() < MAX_PROFILES,
+        "Input supports at most six profiles"
+    );
+    let source_index = profile_index(&snapshot.keymap, id)?;
+    let new_id = next_object_id(profiles(&snapshot.keymap)?, "profile")?;
+    let mut duplicate = profiles(&snapshot.keymap)?[source_index].clone();
+    let object = duplicate
+        .as_object_mut()
+        .context("profile was not an object")?;
+    object.insert("id".into(), Value::from(new_id));
+    if let Some(value) = name {
+        object.insert("name".into(), Value::String(value.to_owned()));
+    }
+    let index = profiles(&snapshot.keymap)?.len();
+    snapshot
+        .keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .context("keymap.json profiles was invalid")?
+        .push(duplicate);
+    let mut paths = vec![format!("/keymap.json/profiles/{index}")];
+    sync_profile_usage(&mut snapshot.keymap, index, &mut paths)?;
+    let mut receipt = snapshot.publish(output, "profile-duplicate", true, paths)?;
+    receipt.resource_id = Some(new_id);
+    Ok(receipt)
+}
+
+pub fn profile_delete(input: &Path, id: u64, output: &Path) -> Result<CandidateReceipt> {
+    validate_profile_layer_model_spec()?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    ensure!(
+        profiles(&snapshot.keymap)?.len() > 1,
+        "at least one profile must remain"
+    );
+    let index = profile_index(&snapshot.keymap, id)?;
+    let active_index = active_profile_index(&snapshot.keymap)?;
+    snapshot
+        .keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .context("keymap.json profiles was invalid")?
+        .remove(index);
+    let new_active = if index < active_index {
+        active_index - 1
+    } else if index == active_index {
+        active_index.saturating_sub(1)
+    } else {
+        active_index
+    };
+    let mut paths = vec![format!("/keymap.json/profiles/{index}")];
+    if new_active != active_index {
+        snapshot
+            .keymap
+            .as_object_mut()
+            .context("keymap.json was not an object")?
+            .insert("activeProfileId".into(), Value::from(new_active as u64));
+        paths.push("/keymap.json/activeProfileId".into());
+    }
+    snapshot.publish(output, "profile-delete", true, paths)
+}
+
 pub fn profile_select(input: &Path, id: u64, output: &Path) -> Result<CandidateReceipt> {
     let mut snapshot = SemanticSnapshot::read(input)?;
-    find_profile(&snapshot.keymap, id)?;
-    let previous = active_profile_id(&snapshot.keymap)?;
-    let changed = previous != id;
+    let selected_index = profile_index(&snapshot.keymap, id)?;
+    let previous = active_profile_index(&snapshot.keymap)?;
+    let changed = previous != selected_index;
     if changed {
         snapshot
             .keymap
             .as_object_mut()
             .context("keymap.json was not an object")?
-            .insert("activeProfileId".into(), Value::from(id));
+            .insert("activeProfileId".into(), Value::from(selected_index as u64));
     }
     let paths = if changed {
         vec!["/keymap.json/activeProfileId".into()]
@@ -1267,6 +1461,189 @@ pub fn profile_rename(
     snapshot.publish(output, "profile-rename", changed, paths)
 }
 
+pub fn layer_create(
+    input: &Path,
+    profile_id: Option<u64>,
+    name: &str,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    validate_name(name)?;
+    let spec = profile_layer_model_spec()?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let profile_index = profile_index(&snapshot.keymap, selected_id)?;
+    let profile = find_profile(&snapshot.keymap, selected_id)?;
+    ensure!(
+        profile_layers(profile)?.len() < MAX_LAYERS,
+        "Input supports at most six layers per profile"
+    );
+    let id = next_object_id(profile_layers(profile)?, "layer")?;
+    let mut layer = spec
+        .get("layer")
+        .and_then(|value| value.get("create"))
+        .cloned()
+        .context("embedded Input layer create template was missing")?;
+    let object = layer
+        .as_object_mut()
+        .context("embedded Input layer create template was invalid")?;
+    object.remove("lightingRule");
+    object.insert("id".into(), Value::from(id));
+    object.insert("name".into(), Value::String(name.to_owned()));
+    if let Some(lights) = profile_layers(profile)?
+        .last()
+        .and_then(|value| value.get("lights"))
+        .cloned()
+    {
+        object.insert("lights".into(), lights);
+    }
+    let layer_index = profile_layers(profile)?.len();
+    snapshot
+        .keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .and_then(|items| items.get_mut(profile_index))
+        .and_then(|profile| profile.get_mut("layers"))
+        .and_then(Value::as_array_mut)
+        .context("profile layers was invalid")?
+        .push(layer);
+    let mut paths = vec![format!(
+        "/keymap.json/profiles/{profile_index}/layers/{layer_index}"
+    )];
+    sync_profile_usage(&mut snapshot.keymap, profile_index, &mut paths)?;
+    let mut receipt = snapshot.publish(output, "layer-create", true, paths)?;
+    receipt.resource_id = Some(id);
+    Ok(receipt)
+}
+
+pub fn layer_duplicate(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+    name: Option<&str>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    if let Some(value) = name {
+        validate_name(value)?;
+    }
+    validate_profile_layer_model_spec()?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let (profile_index, source_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let profile = find_profile(&snapshot.keymap, selected_id)?;
+    ensure!(
+        profile_layers(profile)?.len() < MAX_LAYERS,
+        "Input supports at most six layers per profile"
+    );
+    let source = &profile_layers(profile)?[source_index];
+    ensure!(
+        !is_protected_layer(source),
+        "the Codex protected layer is not duplicable"
+    );
+    let id = next_object_id(profile_layers(profile)?, "layer")?;
+    let mut duplicate = source.clone();
+    let object = duplicate
+        .as_object_mut()
+        .context("layer was not an object")?;
+    object.insert("id".into(), Value::from(id));
+    object.remove("linkedAppId");
+    if let Some(value) = name {
+        object.insert("name".into(), Value::String(value.to_owned()));
+    }
+    let layer_index = profile_layers(profile)?.len();
+    snapshot
+        .keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .and_then(|items| items.get_mut(profile_index))
+        .and_then(|profile| profile.get_mut("layers"))
+        .and_then(Value::as_array_mut)
+        .context("profile layers was invalid")?
+        .push(duplicate);
+    let mut paths = vec![format!(
+        "/keymap.json/profiles/{profile_index}/layers/{layer_index}"
+    )];
+    sync_profile_usage(&mut snapshot.keymap, profile_index, &mut paths)?;
+    let mut receipt = snapshot.publish(output, "layer-duplicate", true, paths)?;
+    receipt.resource_id = Some(id);
+    Ok(receipt)
+}
+
+pub fn layer_delete(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    validate_profile_layer_model_spec()?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let profile = find_profile(&snapshot.keymap, selected_id)?;
+    ensure!(
+        !is_protected_layer(&profile_layers(profile)?[layer_index]),
+        "the Codex protected layer is not deletable"
+    );
+    ensure!(
+        profile_layers(profile)?.len() > 1,
+        "at least one layer must remain"
+    );
+    snapshot
+        .keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .and_then(|items| items.get_mut(profile_index))
+        .and_then(|profile| profile.get_mut("layers"))
+        .and_then(Value::as_array_mut)
+        .context("profile layers was invalid")?
+        .remove(layer_index);
+    let mut paths = vec![format!(
+        "/keymap.json/profiles/{profile_index}/layers/{layer_index}"
+    )];
+    sync_profile_usage(&mut snapshot.keymap, profile_index, &mut paths)?;
+    snapshot.publish(output, "layer-delete", true, paths)
+}
+
+pub fn layer_move(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+    to: usize,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    validate_profile_layer_model_spec()?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let (profile_index, from) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let profile = find_profile(&snapshot.keymap, selected_id)?;
+    let layers = profile_layers(profile)?;
+    ensure!(to < layers.len(), "target layer position was out of range");
+    if from == to {
+        return snapshot.publish(output, "layer-move", false, Vec::new());
+    }
+    if layers.first().map(is_protected_layer).unwrap_or(false) {
+        ensure!(
+            from != 0 && to != 0,
+            "the Codex protected layer must remain at position zero"
+        );
+    }
+    let layers = snapshot
+        .keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .and_then(|items| items.get_mut(profile_index))
+        .and_then(|profile| profile.get_mut("layers"))
+        .and_then(Value::as_array_mut)
+        .context("profile layers was invalid")?;
+    let layer = layers.remove(from);
+    layers.insert(to, layer);
+    snapshot.publish(
+        output,
+        "layer-move",
+        true,
+        vec![format!("/keymap.json/profiles/{profile_index}/layers")],
+    )
+}
+
 pub fn layer_rename(
     input: &Path,
     profile_id: Option<u64>,
@@ -1276,7 +1653,7 @@ pub fn layer_rename(
 ) -> Result<CandidateReceipt> {
     validate_name(name)?;
     let mut snapshot = SemanticSnapshot::read(input)?;
-    let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
     let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
     let layer = snapshot
         .keymap
@@ -1314,7 +1691,7 @@ pub fn layer_color(
 ) -> Result<CandidateReceipt> {
     let color = parse_color(color)?;
     let mut snapshot = SemanticSnapshot::read(input)?;
-    let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
     let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
     let layer = snapshot
         .keymap
@@ -1341,6 +1718,156 @@ pub fn layer_color(
         Vec::new()
     };
     snapshot.publish(output, "layer-color", changed, paths)
+}
+
+pub fn layer_lighting_show(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+) -> Result<LayerLightingShow> {
+    let spec = profile_layer_model_spec()?;
+    let snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let (_, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let layer = &profile_layers(find_profile(&snapshot.keymap, selected_id)?)?[layer_index];
+    ensure!(
+        !is_protected_layer(layer),
+        "the Codex protected layer has no editable lighting"
+    );
+    let lights = layer
+        .get("lights")
+        .cloned()
+        .unwrap_or(default_lighting(&spec)?);
+    Ok(LayerLightingShow {
+        schema_version: 1,
+        kind: "worklouderctl-layer-lighting",
+        revision: snapshot.revision,
+        profile_id: selected_id,
+        layer_id,
+        backlight: lighting_entry(
+            lights
+                .get("backlight")
+                .context("backlight configuration was missing")?,
+        )?,
+        underglow: lighting_entry(
+            lights
+                .get("underglow")
+                .context("underglow configuration was missing")?,
+        )?,
+    })
+}
+
+pub fn layer_lighting_set(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+    zone: LightingZone,
+    update: LightingUpdate<'_>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    ensure!(
+        update.effect.is_some()
+            || update.brightness.is_some()
+            || update.speed.is_some()
+            || update.magic.is_some()
+            || update.color.is_some(),
+        "at least one lighting field must be supplied"
+    );
+    for (name, value) in [
+        ("brightness", update.brightness),
+        ("speed", update.speed),
+        ("magic", update.magic),
+    ] {
+        if let Some(number) = value {
+            ensure!(
+                number.is_finite() && (0.0..=1.0).contains(&number),
+                "lighting {name} must be between 0 and 1"
+            );
+        }
+    }
+    let color = update.color.map(parse_color).transpose()?;
+    let spec = profile_layer_model_spec()?;
+    let defaults = default_lighting(&spec)?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let profile = find_profile(&snapshot.keymap, selected_id)?;
+    ensure!(
+        !is_protected_layer(&profile_layers(profile)?[layer_index]),
+        "the Codex protected layer has no editable lighting"
+    );
+
+    let target_before = profile_layers(profile)?[layer_index]
+        .get("lights")
+        .cloned()
+        .unwrap_or_else(|| defaults.clone());
+    let mut target_after = target_before.clone();
+    let target_zone = target_after
+        .get_mut(zone.field())
+        .and_then(Value::as_object_mut)
+        .context("lighting zone was invalid")?;
+    if let Some(effect) = update.effect {
+        target_zone.insert("effect".into(), Value::String(effect.as_str().into()));
+    }
+    for (field, value) in [
+        ("brightness", update.brightness),
+        ("speed", update.speed),
+        ("magic", update.magic),
+    ] {
+        if let Some(number) = value {
+            target_zone.insert(field.into(), Value::from(number));
+        }
+    }
+    if let Some(value) = color {
+        target_zone.insert("color".into(), Value::from(value));
+    }
+    validate_lighting(&target_after)?;
+
+    let source_zone = target_after
+        .get(zone.field())
+        .cloned()
+        .context("updated lighting zone disappeared")?;
+    let layers = snapshot
+        .keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .and_then(|items| items.get_mut(profile_index))
+        .and_then(|profile| profile.get_mut("layers"))
+        .and_then(Value::as_array_mut)
+        .context("profile layers was invalid")?;
+    let indexes = if update.apply_to_all {
+        (0..layers.len()).collect::<Vec<_>>()
+    } else {
+        vec![layer_index]
+    };
+    let mut paths = Vec::new();
+    for index in indexes {
+        let layer = layers
+            .get_mut(index)
+            .context("layer disappeared during lighting update")?;
+        let previous = layer.get("lights").cloned();
+        let next = if let Some(mut existing) = previous.clone() {
+            existing
+                .as_object_mut()
+                .context("layer lights was not an object")?
+                .insert(zone.field().into(), source_zone.clone());
+            existing
+        } else {
+            target_after.clone()
+        };
+        if previous.as_ref() != Some(&next) {
+            layer
+                .as_object_mut()
+                .context("layer was not an object")?
+                .insert("lights".into(), next);
+            paths.push(format!(
+                "/keymap.json/profiles/{profile_index}/layers/{index}/lights/{}",
+                zone.field()
+            ));
+        }
+    }
+    let changed = !paths.is_empty();
+    snapshot.publish(output, "layer-lighting-set", changed, paths)
 }
 
 impl SemanticSnapshot {
@@ -1561,6 +2088,134 @@ fn validate_action_model_spec() -> Result<()> {
                 == Some(true),
         "embedded Input Multi Action model identity was invalid"
     );
+    Ok(())
+}
+
+fn profile_layer_model_spec() -> Result<Value> {
+    let spec: Value = serde_json::from_str(PROFILE_LAYER_SPEC_JSON)
+        .context("embedded Input profile/layer model was invalid")?;
+    ensure!(
+        spec.get("schemaVersion").and_then(Value::as_u64) == Some(1)
+            && spec.get("kind").and_then(Value::as_str)
+                == Some("worklouder-input-profile-layer-model")
+            && spec.get("inputVersion").and_then(Value::as_str) == Some("0.18.0")
+            && spec
+                .get("source")
+                .and_then(|value| value.get("asarSha256"))
+                .and_then(Value::as_str)
+                .map(|value| is_digest(value, 64))
+                == Some(true)
+            && spec
+                .get("profile")
+                .and_then(|value| value.get("maximumCount"))
+                .and_then(Value::as_u64)
+                == Some(MAX_PROFILES as u64)
+            && spec
+                .get("layer")
+                .and_then(|value| value.get("maximumCount"))
+                .and_then(Value::as_u64)
+                == Some(MAX_LAYERS as u64),
+        "embedded Input profile/layer model identity was invalid"
+    );
+    Ok(spec)
+}
+
+fn validate_profile_layer_model_spec() -> Result<()> {
+    profile_layer_model_spec().map(|_| ())
+}
+
+fn default_lighting(spec: &Value) -> Result<Value> {
+    spec.get("lighting")
+        .and_then(|value| value.get("default"))
+        .cloned()
+        .context("embedded Input default lighting was missing")
+}
+
+fn next_object_id(items: &[Value], kind: &str) -> Result<u64> {
+    let maximum = items.iter().try_fold(0_u64, |maximum, item| {
+        Ok::<u64, anyhow::Error>(maximum.max(object_u64(item, "id", kind)?))
+    })?;
+    maximum
+        .checked_add(1)
+        .with_context(|| format!("{kind} id overflowed"))
+}
+
+fn is_protected_layer(layer: &Value) -> bool {
+    layer
+        .get("layout")
+        .map(|layout| value_contains_string_prefix(layout, "KV_OAI_"))
+        .unwrap_or(false)
+}
+
+fn value_contains_string_prefix(value: &Value, prefix: &str) -> bool {
+    match value {
+        Value::String(text) => text.starts_with(prefix),
+        Value::Array(values) => values
+            .iter()
+            .any(|value| value_contains_string_prefix(value, prefix)),
+        Value::Object(values) => values
+            .values()
+            .any(|value| value_contains_string_prefix(value, prefix)),
+        _ => false,
+    }
+}
+
+fn lighting_entry(value: &Value) -> Result<LightingEntry> {
+    let effect = object_string(value, "effect", "lighting zone")?.to_owned();
+    ensure!(
+        lighting_effects().contains(&effect.as_str()),
+        "lighting effect was invalid"
+    );
+    let brightness = lighting_number(value, "brightness")?;
+    let speed = lighting_number(value, "speed")?;
+    let magic = lighting_number(value, "magic")?;
+    let color_hex =
+        normalized_color_value(value.get("color"))?.context("lighting color was missing")?;
+    let color = parse_color(&color_hex)?;
+    Ok(LightingEntry {
+        effect,
+        brightness,
+        speed,
+        magic,
+        color,
+        color_hex,
+    })
+}
+
+fn lighting_effects() -> &'static [&'static str] {
+    &["off", "solid", "snake", "rainbow", "breath", "gradient"]
+}
+
+fn lighting_number(value: &Value, field: &str) -> Result<f64> {
+    let number = value
+        .get(field)
+        .and_then(Value::as_f64)
+        .with_context(|| format!("lighting {field} was invalid"))?;
+    ensure!(
+        number.is_finite() && (0.0..=1.0).contains(&number),
+        "lighting {field} was outside the normalized range"
+    );
+    Ok(number)
+}
+
+fn validate_lighting(value: &Value) -> Result<()> {
+    let object = value
+        .as_object()
+        .context("layer lights was not an object")?;
+    ensure!(
+        object.contains_key("backlight") && object.contains_key("underglow"),
+        "layer lights omitted a required zone"
+    );
+    lighting_entry(
+        object
+            .get("backlight")
+            .context("backlight configuration was missing")?,
+    )?;
+    lighting_entry(
+        object
+            .get("underglow")
+            .context("underglow configuration was missing")?,
+    )?;
     Ok(())
 }
 
@@ -2876,7 +3531,8 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
         object.get("version").and_then(Value::as_u64) == Some(1),
         "keymap.json version was not supported"
     );
-    let active = active_profile_id(keymap)?;
+    validate_profile_layer_model_spec()?;
+    let active = active_profile_index(keymap)?;
     let spec = assignment_spec()?;
     let action_ids = resource_ids(keymap, "macros")?;
     let multi_action_ids = resource_ids(keymap, "multiActions")?;
@@ -2886,30 +3542,46 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
     validate_action_groups(keymap, "multiActionsGroups", &multi_action_ids)?;
     let profiles = profiles(keymap)?;
     ensure!(!profiles.is_empty(), "keymap.json contained no profiles");
+    ensure!(
+        profiles.len() <= MAX_PROFILES,
+        "keymap.json contained more than six profiles"
+    );
+    ensure!(
+        active < profiles.len(),
+        "activeProfileId index was outside the profile array"
+    );
     let mut profile_ids = HashSet::new();
-    let mut active_exists = false;
     for profile in profiles {
         let id = object_u64(profile, "id", "profile")?;
         ensure!(
             profile_ids.insert(id),
             "keymap.json contained duplicate profile id {id}"
         );
-        active_exists |= id == active;
-        object_string(profile, "name", "profile")?;
+        validate_name(object_string(profile, "name", "profile")?)?;
         let layers = profile_layers(profile)?;
+        ensure!(!layers.is_empty(), "profile {id} contained no layers");
         ensure!(
             layers.len() <= MAX_LAYERS,
             "profile {id} contained more than six layers"
         );
         let mut layer_ids = HashSet::new();
-        for layer in layers {
+        for (layer_index, layer) in layers.iter().enumerate() {
             let layer_id = object_u64(layer, "id", "layer")?;
             ensure!(
                 layer_ids.insert(layer_id),
                 "profile {id} contained duplicate layer id {layer_id}"
             );
-            object_string(layer, "name", "layer")?;
+            validate_name(object_string(layer, "name", "layer")?)?;
             optional_color(layer)?;
+            if is_protected_layer(layer) {
+                ensure!(
+                    layer_index == 0,
+                    "profile {id} Codex protected layer was not at position zero"
+                );
+            }
+            if let Some(lights) = layer.get("lights") {
+                validate_lighting(lights)?;
+            }
             for_each_assignment(layer, |token| {
                 validate_assignment_token(token, &spec, &action_ids, &multi_action_ids)
             })?;
@@ -2917,10 +3589,6 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
         validate_usage_field(profile, "macrosUsed", &action_ids)?;
         validate_usage_field(profile, "multiActionsUsed", &multi_action_ids)?;
     }
-    ensure!(
-        active_exists,
-        "activeProfileId did not identify an existing profile"
-    );
     Ok(())
 }
 
@@ -3087,11 +3755,24 @@ fn validate_usage_field(profile: &Value, field: &str, valid_ids: &HashSet<u64>) 
     Ok(())
 }
 
-fn active_profile_id(keymap: &Value) -> Result<u64> {
-    keymap
+fn active_profile_index(keymap: &Value) -> Result<usize> {
+    let value = keymap
         .get("activeProfileId")
         .and_then(Value::as_u64)
-        .context("keymap.json activeProfileId was invalid")
+        .context("keymap.json activeProfileId was invalid")?;
+    usize::try_from(value).context("keymap.json activeProfileId index overflowed")
+}
+
+fn active_profile_selection(keymap: &Value) -> Result<(usize, u64)> {
+    let index = active_profile_index(keymap)?;
+    let profile = profiles(keymap)?
+        .get(index)
+        .context("activeProfileId index was outside the profile array")?;
+    Ok((index, object_u64(profile, "id", "profile")?))
+}
+
+fn active_profile_object_id(keymap: &Value) -> Result<u64> {
+    active_profile_selection(keymap).map(|(_, id)| id)
 }
 
 fn profiles(keymap: &Value) -> Result<&Vec<Value>> {
@@ -3142,6 +3823,7 @@ fn layer_entry(layer: &Value) -> Result<LayerEntry> {
         color,
         color_hex: color.map(format_color),
         has_lights: layer.get("lights").is_some(),
+        protected: is_protected_layer(layer),
     })
 }
 
@@ -3489,9 +4171,14 @@ mod tests {
                             {"a1": 1.5, "a2": 3.0, "k": "KA_M1"}
                         ]}
                     }},
-                    {"id": 1, "name": "Tools", "color": 4478310, "layout": {"keymap": [["KI_LM2", "KC_NONE"]], "encoders": [], "joystick": {"type": "VENDOR", "sectors": []}}}
+                    {"id": 1, "name": "Tools", "color": 4478310, "linkedAppId": 5, "layout": {"keymap": [["KI_LM2", "KC_NONE"]], "encoders": [], "joystick": {"type": "VENDOR", "sectors": []}}, "lights": {
+                        "backlight": {"effect": "solid", "brightness": 1.0, "speed": 0.5, "magic": 1.0, "color": 16777215},
+                        "underglow": {"effect": "gradient", "brightness": 0.8, "speed": 0.4, "magic": 0.3, "color": 15595263}
+                    }}
                 ]},
-                {"id": 7, "name": "Beta", "layers": [{"id": 9, "name": "Other", "color": 7833753, "layout": {}}]}
+                {"id": 7, "name": "Beta", "layers": [{"id": 9, "name": "Other", "color": 7833753, "layout": {
+                    "keymap": [["KV_OAI_AG00"]], "encoders": [], "joystick": {"type": "VENDOR", "sectors": []}
+                }}]}
             ]
         }))
         .unwrap();
@@ -3592,7 +4279,12 @@ mod tests {
 
         profile_select(&source, 7, &selected).unwrap();
         let selected_candidate = SemanticSnapshot::read(&selected).unwrap();
-        assert_eq!(selected_candidate.keymap["activeProfileId"], 7);
+        assert_eq!(selected_candidate.keymap["activeProfileId"], 1);
+        let selected_list = profile_list(&selected).unwrap();
+        assert_eq!(selected_list.active_profile_index, 1);
+        assert_eq!(selected_list.active_profile_id, 7);
+        assert!(selected_list.profiles[1].active);
+        assert_eq!(layer_list(&selected, None).unwrap().profile_id, 7);
 
         let color_receipt = layer_color(&source, Some(0), 1, "#A1B2C3", &recolored).unwrap();
         assert_eq!(color_receipt.operation, "layer-color");
@@ -3614,6 +4306,190 @@ mod tests {
             &selected,
             &recolored,
         ] {
+            fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn profile_lifecycle_uses_object_ids_and_persisted_selection_indexes() {
+        let source = root("profile-lifecycle-source");
+        let created = root("profile-created");
+        let duplicated = root("profile-duplicated");
+        let selected = root("profile-selected-index");
+        let deleted = root("profile-deleted");
+        write_fixture(&source);
+        let smart_before = SemanticSnapshot::read(&source).unwrap().file_bytes[1].clone();
+
+        let receipt = profile_create(&source, "Fresh", &created).unwrap();
+        assert_eq!(receipt.resource_id, Some(8));
+        assert_eq!(receipt.changed_paths, vec!["/keymap.json/profiles/2"]);
+        let candidate = SemanticSnapshot::read(&created).unwrap();
+        assert_eq!(candidate.keymap["profiles"][2]["id"], 8);
+        assert_eq!(candidate.keymap["profiles"][2]["name"], "Fresh");
+        assert_eq!(candidate.keymap["profiles"][2]["layers"][0]["id"], 0);
+        assert!(is_protected_layer(
+            &candidate.keymap["profiles"][2]["layers"][0]
+        ));
+        assert!(candidate.keymap["profiles"][2]["layers"][0]
+            .get("lights")
+            .is_none());
+        assert_eq!(candidate.file_bytes[1], smart_before);
+
+        let receipt = profile_duplicate(&source, 0, Some("Alpha Copy"), &duplicated).unwrap();
+        assert_eq!(receipt.resource_id, Some(8));
+        let duplicate = SemanticSnapshot::read(&duplicated).unwrap();
+        assert_eq!(duplicate.keymap["profiles"][2]["name"], "Alpha Copy");
+        assert_eq!(
+            duplicate.keymap["profiles"][2]["layers"],
+            duplicate.keymap["profiles"][0]["layers"]
+        );
+
+        profile_select(&source, 7, &selected).unwrap();
+        assert_eq!(
+            SemanticSnapshot::read(&selected).unwrap().keymap["activeProfileId"],
+            1
+        );
+        let receipt = profile_delete(&selected, 7, &deleted).unwrap();
+        assert_eq!(receipt.operation, "profile-delete");
+        assert!(receipt
+            .changed_paths
+            .contains(&"/keymap.json/activeProfileId".to_owned()));
+        let deleted_snapshot = SemanticSnapshot::read(&deleted).unwrap();
+        assert_eq!(
+            deleted_snapshot.keymap["profiles"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(deleted_snapshot.keymap["profiles"][0]["id"], 0);
+        assert_eq!(deleted_snapshot.keymap["activeProfileId"], 0);
+
+        let only = root("profile-only");
+        let error = profile_delete(&deleted, 0, &only).unwrap_err().to_string();
+        assert!(error.contains("at least one profile"));
+        assert!(!only.exists());
+
+        for path in [&source, &created, &duplicated, &selected, &deleted] {
+            fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn layer_lifecycle_and_lighting_follow_input_rules() {
+        let source = root("layer-lifecycle-source");
+        let created = root("layer-created");
+        let duplicated = root("layer-duplicated");
+        let deleted = root("layer-deleted");
+        let moved = root("layer-moved");
+        let lit = root("layer-lit");
+        write_fixture(&source);
+        let smart_before = SemanticSnapshot::read(&source).unwrap().file_bytes[1].clone();
+
+        let receipt = layer_create(&source, Some(0), "New Layer", &created).unwrap();
+        assert_eq!(receipt.resource_id, Some(2));
+        let candidate = SemanticSnapshot::read(&created).unwrap();
+        let layer = &candidate.keymap["profiles"][0]["layers"][2];
+        assert_eq!(layer["name"], "New Layer");
+        assert_eq!(layer["layout"]["keymap"][0], json!(["KC_NONE", "KC_NONE"]));
+        assert_eq!(layer["layout"]["joystick"]["sectors"][0]["k"], "KI_X");
+        assert_eq!(
+            layer["lights"],
+            candidate.keymap["profiles"][0]["layers"][1]["lights"]
+        );
+        assert_eq!(candidate.file_bytes[1], smart_before);
+
+        let receipt =
+            layer_duplicate(&source, Some(0), 1, Some("Tools Copy"), &duplicated).unwrap();
+        assert_eq!(receipt.resource_id, Some(2));
+        let duplicate = SemanticSnapshot::read(&duplicated).unwrap();
+        assert_eq!(
+            duplicate.keymap["profiles"][0]["layers"][2]["name"],
+            "Tools Copy"
+        );
+        assert!(duplicate.keymap["profiles"][0]["layers"][2]
+            .get("linkedAppId")
+            .is_none());
+
+        layer_delete(&source, Some(0), 1, &deleted).unwrap();
+        let deleted_snapshot = SemanticSnapshot::read(&deleted).unwrap();
+        assert_eq!(
+            deleted_snapshot.keymap["profiles"][0]["layers"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+
+        layer_move(&source, Some(0), 1, 0, &moved).unwrap();
+        assert_eq!(
+            SemanticSnapshot::read(&moved).unwrap().keymap["profiles"][0]["layers"][0]["id"],
+            1
+        );
+
+        for operation in ["duplicate", "delete"] {
+            let output = root("protected-layer-rejected");
+            let error = match operation {
+                "duplicate" => layer_duplicate(&source, Some(7), 9, None, &output),
+                _ => layer_delete(&source, Some(7), 9, &output),
+            }
+            .unwrap_err()
+            .to_string();
+            assert!(error.contains("protected layer"));
+            assert!(!output.exists());
+        }
+
+        let shown = layer_lighting_show(&source, Some(0), 1).unwrap();
+        assert_eq!(shown.backlight.effect, "solid");
+        assert_eq!(shown.underglow.color_hex, "#EDF6FF");
+        let receipt = layer_lighting_set(
+            &source,
+            Some(0),
+            1,
+            LightingZone::Backlight,
+            LightingUpdate {
+                effect: Some(LightingEffect::Breath),
+                brightness: Some(0.25),
+                speed: Some(0.75),
+                magic: Some(0.5),
+                color: Some("#102030"),
+                apply_to_all: true,
+            },
+            &lit,
+        )
+        .unwrap();
+        assert_eq!(receipt.changed_paths.len(), 2);
+        let lighting = SemanticSnapshot::read(&lit).unwrap();
+        for index in 0..2 {
+            let backlight = &lighting.keymap["profiles"][0]["layers"][index]["lights"]["backlight"];
+            assert_eq!(backlight["effect"], "breath");
+            assert_eq!(backlight["brightness"], 0.25);
+            assert_eq!(backlight["color"], 0x102030);
+        }
+        assert_eq!(lighting.file_bytes[1], smart_before);
+
+        let rejected = root("lighting-rejected");
+        let error = layer_lighting_set(
+            &source,
+            Some(0),
+            1,
+            LightingZone::Underglow,
+            LightingUpdate {
+                effect: None,
+                brightness: Some(1.01),
+                speed: None,
+                magic: None,
+                color: None,
+                apply_to_all: false,
+            },
+            &rejected,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("between 0 and 1"));
+        assert!(!rejected.exists());
+
+        for path in [&source, &created, &duplicated, &deleted, &moved, &lit] {
             fs::remove_file(path).unwrap();
         }
     }

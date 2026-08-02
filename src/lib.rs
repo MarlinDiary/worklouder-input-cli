@@ -15,8 +15,8 @@ use cli::{
     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand, BridgeCommand,
     CapabilityCommand, Cli, CodexCommand, Command, CompletionShell, ConfigCommand, ControlCommand,
     DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, LayerCommand,
-    MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand,
-    TierCommand,
+    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
+    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -129,6 +129,27 @@ fn run_profile(command: ProfileCommand, json: bool, mut out: impl Write) -> Resu
                 }
             }
         }
+        ProfileCommand::Create {
+            input,
+            name,
+            output,
+        } => {
+            let result = semantic::profile_create(&input, &name, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        ProfileCommand::Duplicate {
+            input,
+            id,
+            name,
+            output,
+        } => {
+            let result = semantic::profile_duplicate(&input, id, name.as_deref(), &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        ProfileCommand::Delete { input, id, output } => {
+            let result = semantic::profile_delete(&input, id, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
         ProfileCommand::Select { input, id, output } => {
             let result = semantic::profile_select(&input, id, &output)?;
             write_candidate_result(result, json, &mut out)?;
@@ -191,6 +212,44 @@ fn run_layer(command: LayerCommand, json: bool, mut out: impl Write) -> Result<(
                 )?;
             }
         }
+        LayerCommand::Create {
+            input,
+            profile,
+            name,
+            output,
+        } => {
+            let result = semantic::layer_create(&input, profile, &name, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        LayerCommand::Duplicate {
+            input,
+            profile,
+            id,
+            name,
+            output,
+        } => {
+            let result = semantic::layer_duplicate(&input, profile, id, name.as_deref(), &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        LayerCommand::Delete {
+            input,
+            profile,
+            id,
+            output,
+        } => {
+            let result = semantic::layer_delete(&input, profile, id, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        LayerCommand::Move {
+            input,
+            profile,
+            id,
+            to,
+            output,
+        } => {
+            let result = semantic::layer_move(&input, profile, id, to, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
         LayerCommand::Rename {
             input,
             profile,
@@ -211,6 +270,72 @@ fn run_layer(command: LayerCommand, json: bool, mut out: impl Write) -> Result<(
             let result = semantic::layer_color(&input, profile, id, &color, &output)?;
             write_candidate_result(result, json, &mut out)?;
         }
+        LayerCommand::Lighting { command } => match command {
+            LayerLightingCommand::Show { input, profile, id } => {
+                let result = semantic::layer_lighting_show(&input, profile, id)?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "profile={}\tlayer={}",
+                        result.profile_id, result.layer_id
+                    )?;
+                    for (name, zone) in [
+                        ("backlight", result.backlight),
+                        ("underglow", result.underglow),
+                    ] {
+                        writeln!(
+                            out,
+                            "{}\teffect={}\tbrightness={}\tspeed={}\tmagic={}\tcolor={}",
+                            name,
+                            zone.effect,
+                            zone.brightness,
+                            zone.speed,
+                            zone.magic,
+                            zone.color_hex
+                        )?;
+                    }
+                }
+            }
+            LayerLightingCommand::Set {
+                input,
+                profile,
+                id,
+                zone,
+                effect,
+                brightness,
+                speed,
+                magic,
+                color,
+                apply_to_all,
+                output,
+            } => {
+                let zone = match zone {
+                    LightingZone::Backlight => semantic::LightingZone::Backlight,
+                    LightingZone::Underglow => semantic::LightingZone::Underglow,
+                };
+                let effect = effect.map(|value| match value {
+                    LightingEffect::Off => semantic::LightingEffect::Off,
+                    LightingEffect::Solid => semantic::LightingEffect::Solid,
+                    LightingEffect::Snake => semantic::LightingEffect::Snake,
+                    LightingEffect::Rainbow => semantic::LightingEffect::Rainbow,
+                    LightingEffect::Breath => semantic::LightingEffect::Breath,
+                    LightingEffect::Gradient => semantic::LightingEffect::Gradient,
+                });
+                let update = semantic::LightingUpdate {
+                    effect,
+                    brightness,
+                    speed,
+                    magic,
+                    color: color.as_deref(),
+                    apply_to_all,
+                };
+                let result =
+                    semantic::layer_lighting_set(&input, profile, id, zone, update, &output)?;
+                write_candidate_result(result, json, &mut out)?;
+            }
+        },
     }
     Ok(())
 }
