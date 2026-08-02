@@ -310,7 +310,7 @@ fn input_cache_snapshot_runs_into_semantic_candidates_end_to_end() {
 }
 
 #[test]
-fn codex_help_exposes_read_only_workflow() {
+fn codex_help_exposes_snapshot_and_candidate_workflow() {
     let codex = binary().args(["codex", "--help"]).output().unwrap();
     let stdout = String::from_utf8(codex.stdout).unwrap();
 
@@ -318,6 +318,9 @@ fn codex_help_exposes_read_only_workflow() {
     assert!(stdout.contains("doctor"));
     assert!(stdout.contains("inspect"));
     assert!(stdout.contains("export"));
+    assert!(stdout.contains("agent-source"));
+    assert!(stdout.contains("agent-key"));
+    assert!(stdout.contains("command-key"));
 }
 
 #[test]
@@ -370,6 +373,120 @@ fn codex_inspect_emits_only_the_micro_settings_subset() {
     assert_eq!(snapshot["settings"]["codex-micro-lighting-brightness"], 64);
     assert!(!stdout.contains("unrelated-secret"));
     assert!(!stdout.contains("also-private"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn codex_tier1_candidates_run_end_to_end_without_writing_source() {
+    let root = fixture_root();
+    fs::create_dir_all(&root).unwrap();
+    let config = root.join("config.toml");
+    let snapshot = root.join("snapshot.json");
+    let agent = root.join("agent.json");
+    let tap = root.join("tap.json");
+    let command = root.join("command.json");
+    let reset = root.join("reset.json");
+    fs::write(
+        &config,
+        b"model = \"unrelated\"\n[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
+    )
+    .unwrap();
+    let source_before = worklouderctl::fsutil::sha256(&config).unwrap();
+
+    let exported = binary()
+        .args(["--json", "codex", "export", "--config"])
+        .arg(&config)
+        .arg("--app")
+        .arg(root.join("missing.app"))
+        .arg("--output")
+        .arg(&snapshot)
+        .output()
+        .unwrap();
+    assert!(
+        exported.status.success(),
+        "{}",
+        String::from_utf8_lossy(&exported.stderr)
+    );
+
+    let set_agent = binary()
+        .args(["--json", "codex", "agent-source", "set", "--input"])
+        .arg(&snapshot)
+        .arg("priority")
+        .arg("--output")
+        .arg(&agent)
+        .output()
+        .unwrap();
+    assert!(set_agent.status.success());
+    let set_agent: serde_json::Value = serde_json::from_slice(&set_agent.stdout).unwrap();
+    assert_eq!(
+        set_agent["changedPaths"],
+        serde_json::json!(["/settings/codex-micro-agent-source"])
+    );
+    assert_eq!(set_agent["expectedSourceSha256"], source_before);
+
+    let set_tap = binary()
+        .args(["--json", "codex", "agent-key", "tap-mode", "set", "--input"])
+        .arg(&agent)
+        .arg("enabled")
+        .arg("--output")
+        .arg(&tap)
+        .output()
+        .unwrap();
+    assert!(set_tap.status.success());
+
+    let set_command = binary()
+        .args(["--json", "codex", "command-key", "set", "--input"])
+        .arg(&tap)
+        .arg("ACT06")
+        .args(["--keycap", "BUG", "--command", "fixture.command"])
+        .arg("--output")
+        .arg(&command)
+        .output()
+        .unwrap();
+    assert!(
+        set_command.status.success(),
+        "{}",
+        String::from_utf8_lossy(&set_command.stderr)
+    );
+
+    let show = binary()
+        .args(["--json", "codex", "command-key", "get", "--input"])
+        .arg(&command)
+        .arg("ACT06")
+        .output()
+        .unwrap();
+    assert!(show.status.success());
+    let show: serde_json::Value = serde_json::from_slice(&show.stdout).unwrap();
+    assert_eq!(show["keycapId"], "BUG");
+    assert_eq!(show["assignmentType"], "command");
+    assert_eq!(show["commandId"], "fixture.command");
+
+    let reset_command = binary()
+        .args(["--json", "codex", "command-key", "reset", "--input"])
+        .arg(&command)
+        .arg("ACT06")
+        .arg("--output")
+        .arg(&reset)
+        .output()
+        .unwrap();
+    assert!(reset_command.status.success());
+    let reset_show = binary()
+        .args(["--json", "codex", "command-key", "get", "--input"])
+        .arg(&reset)
+        .arg("ACT06")
+        .output()
+        .unwrap();
+    assert!(reset_show.status.success());
+    let reset_show: serde_json::Value = serde_json::from_slice(&reset_show.stdout).unwrap();
+    assert_eq!(reset_show["keycapId"], "FAST");
+    assert_eq!(reset_show["assignmentType"], "keycap");
+
+    let candidate: serde_json::Value = serde_json::from_slice(&fs::read(&reset).unwrap()).unwrap();
+    assert_eq!(candidate["settings"]["codex-micro-future"], "preserved");
+    assert_eq!(
+        worklouderctl::fsutil::sha256(&config).unwrap(),
+        source_before
+    );
     fs::remove_dir_all(root).unwrap();
 }
 

@@ -393,6 +393,131 @@ pub enum CodexCommand {
         #[clap(long, value_parser)]
         app: Option<PathBuf>,
     },
+
+    /// Inspect or edit the Agent Key source ordering in an offline snapshot.
+    AgentSource {
+        #[clap(subcommand)]
+        command: CodexAgentSourceCommand,
+    },
+
+    /// Inspect or edit Agent Key behavior in an offline snapshot.
+    AgentKey {
+        #[clap(subcommand)]
+        command: CodexAgentKeyCommand,
+    },
+
+    /// Inspect or edit Codex-native Command Keys in an offline snapshot.
+    CommandKey {
+        #[clap(subcommand)]
+        command: CodexCommandKeyCommand,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CodexAgentSource {
+    Pinned,
+    Recent,
+    Priority,
+    Custom,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexAgentSourceCommand {
+    /// Read the effective Agent Key source ordering.
+    Get {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Write an offline candidate with a new Agent Key source ordering.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(value_enum)]
+        value: CodexAgentSource,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexAgentKeyCommand {
+    /// Inspect or edit the single-tap focus behavior.
+    TapMode {
+        #[clap(subcommand)]
+        command: CodexAgentTapModeCommand,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CodexAgentTapMode {
+    Enabled,
+    Disabled,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexAgentTapModeCommand {
+    /// Read the effective single-tap focus behavior.
+    Get {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Write an offline candidate with single-tap focus enabled or disabled.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(value_enum)]
+        mode: CodexAgentTapMode,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexCommandKeyCommand {
+    /// Read one effective Command Key assignment.
+    Get {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        /// Logical slot: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12.
+        slot: String,
+    },
+
+    /// Write one Command Key assignment into an offline candidate.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        /// Logical slot: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12.
+        slot: String,
+        /// Optional frozen keycap identifier.
+        #[clap(long)]
+        keycap: Option<String>,
+        /// Assign a Codex command ID.
+        #[clap(long)]
+        command: Option<String>,
+        /// Assign a Skill display name; pair with --skill-path.
+        #[clap(long)]
+        skill_name: Option<String>,
+        /// Assign a Skill path; pair with --skill-name.
+        #[clap(long)]
+        skill_path: Option<String>,
+        /// Clear command/Skill assignment while preserving the keycap.
+        #[clap(long)]
+        clear_action: bool,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Restore one Command Key slot to the frozen Codex default.
+    Reset {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        /// Logical slot: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12.
+        slot: String,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
 }
 
 #[derive(Debug, Subcommand)]

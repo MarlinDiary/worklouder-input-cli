@@ -13,12 +13,14 @@ use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
-    AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexCommand, Command, CompletionShell,
-    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
-    InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand, LightingEffect,
-    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
-    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
-    SmartActionType as CliSmartActionType, TierCommand,
+    AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
+    CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexCommand,
+    CodexCommandKeyCommand, Command, CompletionShell, ConfigCommand, ControlCommand, DeviceCommand,
+    DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand, LayerCommand,
+    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
+    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
+    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
+    TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -1644,6 +1646,162 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
                 )?;
             }
         }
+        CodexCommand::AgentSource { command } => match command {
+            CodexAgentSourceCommand::Get { input } => {
+                let result = codex::agent_source_get(&input)?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "agent-source={}\texplicit={}",
+                        result.value, result.explicit
+                    )?;
+                    writeln!(out, "revision={}", result.revision)?;
+                }
+            }
+            CodexAgentSourceCommand::Set {
+                input,
+                value,
+                output,
+            } => write_codex_candidate_result(
+                codex::agent_source_set(&input, codex_agent_source_value(value), &output)?,
+                json,
+                &mut out,
+            )?,
+        },
+        CodexCommand::AgentKey { command } => match command {
+            CodexAgentKeyCommand::TapMode { command } => match command {
+                CodexAgentTapModeCommand::Get { input } => {
+                    let result = codex::agent_tap_mode_get(&input)?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "agent-key-tap-mode={}\texplicit={}",
+                            if result.enabled {
+                                "enabled"
+                            } else {
+                                "disabled"
+                            },
+                            result.explicit
+                        )?;
+                        writeln!(out, "revision={}", result.revision)?;
+                    }
+                }
+                CodexAgentTapModeCommand::Set {
+                    input,
+                    mode,
+                    output,
+                } => write_codex_candidate_result(
+                    codex::agent_tap_mode_set(
+                        &input,
+                        matches!(mode, CodexAgentTapMode::Enabled),
+                        &output,
+                    )?,
+                    json,
+                    &mut out,
+                )?,
+            },
+        },
+        CodexCommand::CommandKey { command } => match command {
+            CodexCommandKeyCommand::Get { input, slot } => {
+                let result = codex::command_key_get(&input, &slot)?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "slot={}\tkeycap={}\ttype={}\tinherited={}",
+                        result.slot, result.keycap_id, result.assignment_type, result.inherited
+                    )?;
+                    if let Some(value) = result.command_id {
+                        writeln!(out, "command={value}")?;
+                    }
+                    if let (Some(name), Some(path)) = (result.skill_name, result.skill_path) {
+                        writeln!(out, "skill={name}\t{path}")?;
+                    }
+                    writeln!(out, "revision={}", result.revision)?;
+                }
+            }
+            CodexCommandKeyCommand::Set {
+                input,
+                slot,
+                keycap,
+                command,
+                skill_name,
+                skill_path,
+                clear_action,
+                output,
+            } => write_codex_candidate_result(
+                codex::command_key_set(
+                    &input,
+                    &slot,
+                    codex::CommandKeyUpdate {
+                        keycap: keycap.as_deref(),
+                        command: command.as_deref(),
+                        skill_name: skill_name.as_deref(),
+                        skill_path: skill_path.as_deref(),
+                        clear_action,
+                    },
+                    &output,
+                )?,
+                json,
+                &mut out,
+            )?,
+            CodexCommandKeyCommand::Reset {
+                input,
+                slot,
+                output,
+            } => write_codex_candidate_result(
+                codex::command_key_reset(&input, &slot, &output)?,
+                json,
+                &mut out,
+            )?,
+        },
+    }
+    Ok(())
+}
+
+fn codex_agent_source_value(value: CodexAgentSource) -> &'static str {
+    match value {
+        CodexAgentSource::Pinned => "pinned",
+        CodexAgentSource::Recent => "recent",
+        CodexAgentSource::Priority => "priority",
+        CodexAgentSource::Custom => "custom",
+    }
+}
+
+fn write_codex_candidate_result(
+    result: codex::CandidateReceipt,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    if json {
+        write_json(&mut out, &result)?;
+    } else {
+        writeln!(
+            out,
+            "{} candidate {} at {}",
+            result.operation,
+            if result.changed {
+                "changed"
+            } else {
+                "unchanged"
+            },
+            result.output.display()
+        )?;
+        writeln!(
+            out,
+            "revision={} -> {}",
+            result.before_revision, result.after_revision
+        )?;
+        writeln!(
+            out,
+            "expected-source-sha256={}",
+            result.expected_source_sha256
+        )?;
     }
     Ok(())
 }
