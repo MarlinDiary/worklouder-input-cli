@@ -7,6 +7,8 @@ socket=$root/bridge.sock
 token=$root/bridge.token
 export_dir=$root/export
 config_snapshot=$root/config-snapshot.json
+cache_support=$root/input-cache
+cache_snapshot=$root/config-cache-snapshot.json
 candidate_snapshot=$root/config-candidate.json
 color_snapshot=$root/config-color.json
 control_snapshot=$root/config-control.json
@@ -103,6 +105,18 @@ node "$repo/companion/conformance.mjs" \
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config snapshot \
   --output "$config_snapshot" >"$root/config-snapshot-receipt.json"
+mkdir -p "$cache_support/devices/fixture-device"
+cp "$export_dir/keymap.json" "$cache_support/devices/fixture-device/keymap.json"
+cp "$export_dir/smart_actions.json" \
+  "$cache_support/devices/fixture-device/smart_actions.json"
+printf '%s\n' '{"hostOnly":true}' >"$cache_support/input_storage.json"
+"$bin" --json input config snapshot --support-root "$cache_support" \
+  --device fixture-device --output "$cache_snapshot" \
+  >"$root/config-cache-snapshot-receipt.json"
+"$bin" --json profile list --input "$cache_snapshot" \
+  >"$root/cache-profile-list.json"
+"$bin" --json smart-action list --input "$cache_snapshot" \
+  >"$root/cache-smart-action-list.json"
 revision=$(python3 -c \
   'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
   "$config_snapshot")
@@ -317,6 +331,14 @@ files = json.loads((root / "device-files.json").read_text())
 manifest = json.loads((root / "export" / "manifest.json").read_text())
 validation = json.loads((root / "export-validation.json").read_text())
 snapshot = json.loads((root / "config-snapshot.json").read_text())
+cache_snapshot = json.loads((root / "config-cache-snapshot.json").read_text())
+cache_snapshot_receipt = json.loads(
+    (root / "config-cache-snapshot-receipt.json").read_text()
+)
+cache_profile_list = json.loads((root / "cache-profile-list.json").read_text())
+cache_smart_action_list = json.loads(
+    (root / "cache-smart-action-list.json").read_text()
+)
 snapshot_receipt = json.loads(
     (root / "config-snapshot-receipt.json").read_text()
 )
@@ -476,6 +498,20 @@ for record in sorted(snapshot["files"], key=lambda item: item["relativePath"].en
 assert revision_hash.hexdigest() == snapshot["revision"]
 assert snapshot_receipt["revision"] == snapshot["revision"]
 assert snapshot_receipt["fileCount"] == 2
+assert cache_snapshot["schemaVersion"] == snapshot["schemaVersion"]
+assert cache_snapshot["kind"] == snapshot["kind"]
+assert cache_snapshot["revisionAlgorithm"] == snapshot["revisionAlgorithm"]
+assert cache_snapshot["deviceId"] == snapshot["deviceId"]
+assert cache_snapshot["revision"] == snapshot["revision"]
+assert cache_snapshot["files"] == snapshot["files"]
+assert cache_snapshot_receipt["adapter"] == "input-cache-v1"
+assert cache_snapshot_receipt["revision"] == snapshot["revision"]
+assert cache_snapshot_receipt["fileCount"] == 2
+assert cache_profile_list["revision"] == snapshot["revision"]
+assert cache_smart_action_list["smartActions"] == []
+assert [item["relativePath"] for item in cache_snapshot["files"]] == [
+    "keymap.json", "smart_actions.json",
+]
 assert bridge_validation["valid"] is True
 assert bridge_validation["revision"] == snapshot["revision"]
 assert bridge_validation["liveRevision"] == snapshot["revision"]
@@ -927,6 +963,8 @@ print("exported_files=2")
 print("sha1_sha256_readback=verified")
 print("config_validation=verified")
 print("config_snapshot_revision=verified")
+print("input_cache_snapshot_revision=verified")
+print("input_cache_semantic_consumers=verified")
 print("semantic_profile_list=verified")
 print("semantic_profile_show=verified")
 print("semantic_layer_list=verified")
