@@ -12,11 +12,12 @@ pub mod semantic;
 use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
-    ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand, BridgeCommand,
-    CapabilityCommand, Cli, CodexCommand, Command, CompletionShell, ConfigCommand, ControlCommand,
-    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, LayerCommand,
-    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
-    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, TierCommand,
+    ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
+    AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexCommand, Command, CompletionShell,
+    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
+    InputCommand, LayerCommand, LayerLightingCommand, LightingEffect, LightingZone,
+    MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand,
+    TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -77,9 +78,110 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Control { command } => run_control(command, cli.json, &mut out)?,
         Command::Action { command } => run_action(command, cli.json, &mut out)?,
         Command::MultiAction { command } => run_multi_action(command, cli.json, &mut out)?,
+        Command::Appsense { command } => run_appsense(command, cli.json, &mut out)?,
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
+    Ok(())
+}
+
+fn run_appsense(command: AppSenseCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        AppSenseCommand::List { input } => {
+            let result = semantic::appsense_list(&input)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                for app in result.linked_apps {
+                    writeln!(
+                        out,
+                        "{}\t{}\tprocess={}\tpath={}\t{} binding(s)",
+                        app.id,
+                        app.name,
+                        app.process,
+                        app.path,
+                        app.bindings.len()
+                    )?;
+                }
+            }
+        }
+        AppSenseCommand::Show { input, id } => {
+            let result = semantic::appsense_show(&input, id)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                let app = result.linked_app;
+                writeln!(
+                    out,
+                    "{}\t{}\tprocess={}\tpath={}",
+                    app.id, app.name, app.process, app.path
+                )?;
+                for binding in app.bindings {
+                    writeln!(
+                        out,
+                        "BINDING\tprofile={}\t{}\tlayer={}\t{}",
+                        binding.profile_id,
+                        binding.profile_name,
+                        binding.layer_id,
+                        binding.layer_name
+                    )?;
+                }
+            }
+        }
+        AppSenseCommand::Link {
+            input,
+            profile,
+            layer,
+            name,
+            process,
+            path,
+            output,
+        } => {
+            let result = semantic::appsense_link(
+                &input,
+                profile,
+                layer,
+                &name,
+                process.as_deref(),
+                path.as_deref(),
+                &output,
+            )?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        AppSenseCommand::Set {
+            input,
+            id,
+            name,
+            process,
+            clear_process,
+            path,
+            clear_path,
+            output,
+        } => {
+            let result = semantic::appsense_set(
+                &input,
+                id,
+                semantic::AppSenseUpdate {
+                    name: name.as_deref(),
+                    process: process.as_deref(),
+                    clear_process,
+                    path: path.as_deref(),
+                    clear_path,
+                },
+                &output,
+            )?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        AppSenseCommand::Unlink {
+            input,
+            profile,
+            layer,
+            output,
+        } => {
+            let result = semantic::appsense_unlink(&input, profile, layer, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+    }
     Ok(())
 }
 

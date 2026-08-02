@@ -131,6 +131,13 @@ fn semantic_help_exposes_offline_candidate_workflow() {
         assert!(multi_stdout.contains(command));
     }
 
+    let appsense = binary().args(["appsense", "--help"]).output().unwrap();
+    let appsense_stdout = String::from_utf8(appsense.stdout).unwrap();
+    assert!(appsense.status.success());
+    for command in ["list", "show", "link", "set", "unlink"] {
+        assert!(appsense_stdout.contains(command));
+    }
+
     let multi_group = binary()
         .args(["multi-action", "group", "--help"])
         .output()

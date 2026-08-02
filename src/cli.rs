@@ -125,6 +125,12 @@ pub enum Command {
         command: MultiActionCommand,
     },
 
+    /// Inspect or edit AppSense linked applications in an offline snapshot.
+    Appsense {
+        #[clap(subcommand)]
+        command: AppSenseCommand,
+    },
+
     /// Generate a shell completion script on standard output.
     Completion {
         #[clap(value_enum)]
@@ -611,6 +617,75 @@ pub enum LightingEffect {
     Rainbow,
     Breath,
     Gradient,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AppSenseCommand {
+    /// List linked applications and every layer binding.
+    List {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Show one linked application and every layer binding.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+    },
+
+    /// Create a linked application and bind it to one layer.
+    Link {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        layer: u64,
+        #[clap(long)]
+        name: String,
+        /// macOS bundle identifier or Windows process identity.
+        #[clap(long)]
+        process: Option<String>,
+        /// Application path when supplied by the Input focus detector.
+        #[clap(long)]
+        path: Option<String>,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Update linked-application label or detection identity.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        name: Option<String>,
+        #[clap(long, conflicts_with = "clear-process")]
+        process: Option<String>,
+        #[clap(long)]
+        clear_process: bool,
+        #[clap(long, conflicts_with = "clear-path")]
+        path: Option<String>,
+        #[clap(long)]
+        clear_path: bool,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Remove one layer binding and its now-unreferenced application record.
+    Unlink {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        layer: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
 }
 
 #[derive(Debug, Subcommand)]

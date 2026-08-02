@@ -28,6 +28,7 @@ const ASSIGNMENT_SPEC_JSON: &str = include_str!("../spec/input-assignment-tokens
 const ACTION_SPEC_JSON: &str = include_str!("../spec/input-actions-0.18.0.json");
 const MULTI_ACTION_SPEC_JSON: &str = include_str!("../spec/input-multi-actions-0.18.0.json");
 const PROFILE_LAYER_SPEC_JSON: &str = include_str!("../spec/input-profile-layers-0.18.0.json");
+const APPSENSE_SPEC_JSON: &str = include_str!("../spec/input-appsense-0.18.0.json");
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize)]
@@ -173,6 +174,52 @@ pub struct LightingEntry {
     pub magic: f64,
     pub color: u64,
     pub color_hex: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSenseList {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub linked_apps: Vec<AppSenseEntry>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSenseShow {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub linked_app: AppSenseEntry,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSenseEntry {
+    pub id: u64,
+    pub name: String,
+    pub process: String,
+    pub path: String,
+    pub bindings: Vec<AppSenseBinding>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSenseBinding {
+    pub profile_id: u64,
+    pub profile_name: String,
+    pub layer_id: u64,
+    pub layer_name: String,
+}
+
+#[derive(Debug)]
+pub struct AppSenseUpdate<'a> {
+    pub name: Option<&'a str>,
+    pub process: Option<&'a str>,
+    pub clear_process: bool,
+    pub path: Option<&'a str>,
+    pub clear_path: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -1867,6 +1914,199 @@ pub fn layer_lighting_set(
     snapshot.publish(output, "layer-lighting-set", changed, paths)
 }
 
+pub fn appsense_list(input: &Path) -> Result<AppSenseList> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let linked_apps = linked_apps(&snapshot.keymap)?
+        .iter()
+        .map(|app| appsense_entry(&snapshot.keymap, app))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(AppSenseList {
+        schema_version: 1,
+        kind: "worklouderctl-appsense-list",
+        revision: snapshot.revision,
+        linked_apps,
+    })
+}
+
+pub fn appsense_show(input: &Path, id: u64) -> Result<AppSenseShow> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let index = linked_app_index(&snapshot.keymap, id)?;
+    let linked_app = appsense_entry(
+        &snapshot.keymap,
+        linked_apps(&snapshot.keymap)?
+            .get(index)
+            .context("linked application disappeared during lookup")?,
+    )?;
+    Ok(AppSenseShow {
+        schema_version: 1,
+        kind: "worklouderctl-appsense-show",
+        revision: snapshot.revision,
+        linked_app,
+    })
+}
+
+pub fn appsense_link(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+    name: &str,
+    process: Option<&str>,
+    path: Option<&str>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    validate_name(name)?;
+    let process = process.unwrap_or("");
+    let path = path.unwrap_or("");
+    validate_app_identity(process, path)?;
+    validate_appsense_model_spec()?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let layer = &profile_layers(find_profile(&snapshot.keymap, selected_id)?)?[layer_index];
+    ensure!(
+        optional_u64(layer, "linkedAppId", "layer")?.is_none(),
+        "layer {layer_id} in profile {selected_id} is already linked"
+    );
+    let id = first_available_object_id(linked_apps(&snapshot.keymap)?, "linked application")?;
+    let app_index = linked_apps(&snapshot.keymap)?.len();
+    snapshot
+        .keymap
+        .get_mut("linkedApps")
+        .and_then(Value::as_array_mut)
+        .context("keymap.json linkedApps was invalid")?
+        .push(serde_json::json!({
+            "id": id,
+            "name": name,
+            "process": process,
+            "path": path
+        }));
+    snapshot
+        .keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .and_then(|profiles| profiles.get_mut(profile_index))
+        .and_then(|profile| profile.get_mut("layers"))
+        .and_then(Value::as_array_mut)
+        .and_then(|layers| layers.get_mut(layer_index))
+        .and_then(Value::as_object_mut)
+        .context("layer disappeared during AppSense link")?
+        .insert("linkedAppId".into(), Value::from(id));
+    let mut receipt = snapshot.publish(
+        output,
+        "appsense-link",
+        true,
+        vec![
+            format!("/keymap.json/linkedApps/{app_index}"),
+            format!("/keymap.json/profiles/{profile_index}/layers/{layer_index}/linkedAppId"),
+        ],
+    )?;
+    receipt.resource_id = Some(id);
+    Ok(receipt)
+}
+
+pub fn appsense_set(
+    input: &Path,
+    id: u64,
+    update: AppSenseUpdate<'_>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    ensure!(
+        update.name.is_some()
+            || update.process.is_some()
+            || update.clear_process
+            || update.path.is_some()
+            || update.clear_path,
+        "at least one AppSense field must be supplied"
+    );
+    if let Some(name) = update.name {
+        validate_name(name)?;
+    }
+    validate_appsense_model_spec()?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let index = linked_app_index(&snapshot.keymap, id)?;
+    let current = linked_apps(&snapshot.keymap)?
+        .get(index)
+        .context("linked application disappeared during update")?;
+    let current_name = object_string(current, "name", "linked application")?.to_owned();
+    let current_process = object_string(current, "process", "linked application")?.to_owned();
+    let current_path = object_string(current, "path", "linked application")?.to_owned();
+    let name = update.name.unwrap_or(&current_name);
+    let process = if update.clear_process {
+        ""
+    } else {
+        update.process.unwrap_or(&current_process)
+    };
+    let path = if update.clear_path {
+        ""
+    } else {
+        update.path.unwrap_or(&current_path)
+    };
+    validate_name(name)?;
+    validate_app_identity(process, path)?;
+
+    let app = snapshot
+        .keymap
+        .get_mut("linkedApps")
+        .and_then(Value::as_array_mut)
+        .and_then(|apps| apps.get_mut(index))
+        .and_then(Value::as_object_mut)
+        .context("linked application disappeared during update")?;
+    let mut paths = Vec::new();
+    for (field, previous, next) in [
+        ("name", current_name.as_str(), name),
+        ("process", current_process.as_str(), process),
+        ("path", current_path.as_str(), path),
+    ] {
+        if previous != next {
+            app.insert(field.into(), Value::String(next.to_owned()));
+            paths.push(format!("/keymap.json/linkedApps/{index}/{field}"));
+        }
+    }
+    snapshot.publish(output, "appsense-set", !paths.is_empty(), paths)
+}
+
+pub fn appsense_unlink(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    validate_appsense_model_spec()?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let layer = &profile_layers(find_profile(&snapshot.keymap, selected_id)?)?[layer_index];
+    let app_id = optional_u64(layer, "linkedAppId", "layer")?
+        .with_context(|| format!("layer {layer_id} in profile {selected_id} is not linked"))?;
+    let app_index = linked_app_index(&snapshot.keymap, app_id)?;
+    let references = linked_app_bindings(&snapshot.keymap, app_id)?.len();
+    let mut paths = Vec::new();
+    if references == 1 {
+        snapshot
+            .keymap
+            .get_mut("linkedApps")
+            .and_then(Value::as_array_mut)
+            .context("keymap.json linkedApps was invalid")?
+            .remove(app_index);
+        paths.push(format!("/keymap.json/linkedApps/{app_index}"));
+    }
+    snapshot
+        .keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .and_then(|profiles| profiles.get_mut(profile_index))
+        .and_then(|profile| profile.get_mut("layers"))
+        .and_then(Value::as_array_mut)
+        .and_then(|layers| layers.get_mut(layer_index))
+        .and_then(Value::as_object_mut)
+        .context("layer disappeared during AppSense unlink")?
+        .remove("linkedAppId");
+    paths.push(format!(
+        "/keymap.json/profiles/{profile_index}/layers/{layer_index}/linkedAppId"
+    ));
+    snapshot.publish(output, "appsense-unlink", true, paths)
+}
+
 impl SemanticSnapshot {
     fn read(input: &Path) -> Result<Self> {
         let raw = fs::read(input).with_context(|| {
@@ -2121,6 +2361,34 @@ fn validate_profile_layer_model_spec() -> Result<()> {
     profile_layer_model_spec().map(|_| ())
 }
 
+fn validate_appsense_model_spec() -> Result<()> {
+    let spec: Value = serde_json::from_str(APPSENSE_SPEC_JSON)
+        .context("embedded Input AppSense model was invalid")?;
+    ensure!(
+        spec.get("schemaVersion").and_then(Value::as_u64) == Some(1)
+            && spec.get("kind").and_then(Value::as_str) == Some("worklouder-input-appsense-model")
+            && spec.get("inputVersion").and_then(Value::as_str) == Some("0.18.0")
+            && spec
+                .get("source")
+                .and_then(|source| source.get("asarSha256"))
+                .and_then(Value::as_str)
+                .map(|value| is_digest(value, 64))
+                == Some(true)
+            && spec
+                .get("storage")
+                .and_then(|storage| storage.get("appsField"))
+                .and_then(Value::as_str)
+                == Some("linkedApps")
+            && spec
+                .get("storage")
+                .and_then(|storage| storage.get("layerReferenceField"))
+                .and_then(Value::as_str)
+                == Some("linkedAppId"),
+        "embedded Input AppSense model identity was invalid"
+    );
+    Ok(())
+}
+
 fn default_lighting(spec: &Value) -> Result<Value> {
     spec.get("lighting")
         .and_then(|value| value.get("default"))
@@ -2135,6 +2403,20 @@ fn next_object_id(items: &[Value], kind: &str) -> Result<u64> {
     maximum
         .checked_add(1)
         .with_context(|| format!("{kind} id overflowed"))
+}
+
+fn first_available_object_id(items: &[Value], kind: &str) -> Result<u64> {
+    let ids = items
+        .iter()
+        .map(|item| object_u64(item, "id", kind))
+        .collect::<Result<HashSet<_>>>()?;
+    let mut id = 0_u64;
+    while ids.contains(&id) {
+        id = id
+            .checked_add(1)
+            .with_context(|| format!("{kind} id overflowed"))?;
+    }
+    Ok(id)
 }
 
 fn is_protected_layer(layer: &Value) -> bool {
@@ -3529,6 +3811,7 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
         "keymap.json version was not supported"
     );
     validate_profile_layer_model_spec()?;
+    validate_appsense_model_spec()?;
     let active = active_profile_index(keymap)?;
     let spec = assignment_spec()?;
     let action_ids = resource_ids(keymap, "macros")?;
@@ -3537,6 +3820,7 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
     validate_multi_actions(keymap, &spec, &action_ids, &multi_action_ids)?;
     validate_action_groups(keymap, "macrosGroups", &action_ids)?;
     validate_action_groups(keymap, "multiActionsGroups", &multi_action_ids)?;
+    let linked_app_ids = validate_linked_apps(keymap)?;
     let profiles = profiles(keymap)?;
     ensure!(!profiles.is_empty(), "keymap.json contained no profiles");
     ensure!(
@@ -3579,6 +3863,12 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
             if let Some(lights) = layer.get("lights") {
                 validate_lighting(lights)?;
             }
+            if let Some(linked_app_id) = optional_u64(layer, "linkedAppId", "layer")? {
+                ensure!(
+                    linked_app_ids.contains(&linked_app_id),
+                    "profile {id} layer {layer_id} referenced missing linked application id {linked_app_id}"
+                );
+            }
             for_each_assignment(layer, |token| {
                 validate_assignment_token(token, &spec, &action_ids, &multi_action_ids)
             })?;
@@ -3587,6 +3877,23 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
         validate_usage_field(profile, "multiActionsUsed", &multi_action_ids)?;
     }
     Ok(())
+}
+
+fn validate_linked_apps(keymap: &Value) -> Result<HashSet<u64>> {
+    let mut ids = HashSet::new();
+    for app in linked_apps(keymap)? {
+        let id = object_u64(app, "id", "linked application")?;
+        ensure!(
+            ids.insert(id),
+            "keymap.json contained duplicate linked application id {id}"
+        );
+        validate_name(object_string(app, "name", "linked application")?)?;
+        validate_app_identity(
+            object_string(app, "process", "linked application")?,
+            object_string(app, "path", "linked application")?,
+        )?;
+    }
+    Ok(ids)
 }
 
 fn validate_actions(
@@ -3779,6 +4086,22 @@ fn profiles(keymap: &Value) -> Result<&Vec<Value>> {
         .context("keymap.json profiles was invalid")
 }
 
+fn linked_apps(keymap: &Value) -> Result<&Vec<Value>> {
+    keymap
+        .get("linkedApps")
+        .and_then(Value::as_array)
+        .context("keymap.json linkedApps was invalid")
+}
+
+fn linked_app_index(keymap: &Value, id: u64) -> Result<usize> {
+    linked_apps(keymap)?
+        .iter()
+        .position(|app| {
+            matches!(object_u64(app, "id", "linked application"), Ok(candidate) if candidate == id)
+        })
+        .with_context(|| format!("linked application id {id} was not found"))
+}
+
 fn profile_layers(profile: &Value) -> Result<&Vec<Value>> {
     profile
         .get("layers")
@@ -3810,6 +4133,36 @@ fn layer_indices(keymap: &Value, profile_id: u64, layer_id: u64) -> Result<(usiz
         .position(|layer| matches!(object_u64(layer, "id", "layer"), Ok(id) if id == layer_id))
         .with_context(|| format!("layer id {layer_id} was not found in profile {profile_id}"))?;
     Ok((profile_index, layer_index))
+}
+
+fn linked_app_bindings(keymap: &Value, app_id: u64) -> Result<Vec<AppSenseBinding>> {
+    let mut bindings = Vec::new();
+    for profile in profiles(keymap)? {
+        let profile_id = object_u64(profile, "id", "profile")?;
+        let profile_name = object_string(profile, "name", "profile")?;
+        for layer in profile_layers(profile)? {
+            if optional_u64(layer, "linkedAppId", "layer")? == Some(app_id) {
+                bindings.push(AppSenseBinding {
+                    profile_id,
+                    profile_name: profile_name.to_owned(),
+                    layer_id: object_u64(layer, "id", "layer")?,
+                    layer_name: object_string(layer, "name", "layer")?.to_owned(),
+                });
+            }
+        }
+    }
+    Ok(bindings)
+}
+
+fn appsense_entry(keymap: &Value, app: &Value) -> Result<AppSenseEntry> {
+    let id = object_u64(app, "id", "linked application")?;
+    Ok(AppSenseEntry {
+        id,
+        name: object_string(app, "name", "linked application")?.to_owned(),
+        process: object_string(app, "process", "linked application")?.to_owned(),
+        path: object_string(app, "path", "linked application")?.to_owned(),
+        bindings: linked_app_bindings(keymap, id)?,
+    })
 }
 
 fn layer_entry(layer: &Value) -> Result<LayerEntry> {
@@ -3888,6 +4241,16 @@ fn object_u64(value: &Value, field: &str, kind: &str) -> Result<u64> {
         .with_context(|| format!("{kind} {field} was invalid"))
 }
 
+fn optional_u64(value: &Value, field: &str, kind: &str) -> Result<Option<u64>> {
+    match value.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => value
+            .as_u64()
+            .map(Some)
+            .with_context(|| format!("{kind} {field} was invalid")),
+    }
+}
+
 fn object_string<'a>(value: &'a Value, field: &str, kind: &str) -> Result<&'a str> {
     value
         .get(field)
@@ -3913,6 +4276,18 @@ fn validate_name(name: &str) -> Result<()> {
     ensure!(
         !name.chars().any(char::is_control),
         "name must not contain control characters"
+    );
+    Ok(())
+}
+
+fn validate_app_identity(process: &str, path: &str) -> Result<()> {
+    ensure!(
+        !process.is_empty() || !path.is_empty(),
+        "linked application process or path must be non-empty"
+    );
+    ensure!(
+        !process.chars().any(char::is_control) && !path.chars().any(char::is_control),
+        "linked application process and path must not contain control characters"
     );
     Ok(())
 }
@@ -4122,6 +4497,9 @@ mod tests {
             "version": 1,
             "activeProfileId": 0,
             "vendorFutureField": {"kept": true},
+            "linkedApps": [
+                {"id": 5, "name": "Fixture App", "process": "com.example.fixture", "path": ""}
+            ],
             "macros": [
                 {"id": 3, "name": "Fixture Action", "color": null, "actions": [{"act": 1, "delay": 0, "kc": "KC_C"}]},
                 {"id": 4, "name": "Dependent Action", "color": null, "actions": [{"act": 1, "delay": 0, "kc": "KA_A3"}]},
@@ -4487,6 +4865,119 @@ mod tests {
         assert!(!rejected.exists());
 
         for path in [&source, &created, &duplicated, &deleted, &moved, &lit] {
+            fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn appsense_candidates_preserve_bindings_and_input_id_allocation() {
+        let source = root("appsense-source");
+        let renamed = root("appsense-renamed");
+        let unlinked = root("appsense-unlinked");
+        let linked = root("appsense-linked");
+        write_fixture(&source);
+        let smart_before = SemanticSnapshot::read(&source).unwrap().file_bytes[1].clone();
+
+        let listed = appsense_list(&source).unwrap();
+        assert_eq!(listed.linked_apps.len(), 1);
+        assert_eq!(listed.linked_apps[0].id, 5);
+        assert_eq!(listed.linked_apps[0].process, "com.example.fixture");
+        assert_eq!(listed.linked_apps[0].bindings.len(), 1);
+        assert_eq!(listed.linked_apps[0].bindings[0].profile_id, 0);
+        assert_eq!(listed.linked_apps[0].bindings[0].layer_id, 1);
+        let shown = appsense_show(&source, 5).unwrap();
+        assert_eq!(shown.linked_app.name, "Fixture App");
+
+        let receipt = appsense_set(
+            &source,
+            5,
+            AppSenseUpdate {
+                name: Some("Renamed App"),
+                process: None,
+                clear_process: false,
+                path: None,
+                clear_path: false,
+            },
+            &renamed,
+        )
+        .unwrap();
+        assert_eq!(
+            receipt.changed_paths,
+            vec!["/keymap.json/linkedApps/0/name"]
+        );
+        let renamed_snapshot = SemanticSnapshot::read(&renamed).unwrap();
+        assert_eq!(
+            renamed_snapshot.keymap["linkedApps"][0]["name"],
+            "Renamed App"
+        );
+        assert_eq!(
+            renamed_snapshot.keymap["linkedApps"][0]["process"],
+            "com.example.fixture"
+        );
+
+        let receipt = appsense_unlink(&source, Some(0), 1, &unlinked).unwrap();
+        assert_eq!(
+            receipt.changed_paths,
+            vec![
+                "/keymap.json/linkedApps/0",
+                "/keymap.json/profiles/0/layers/1/linkedAppId",
+            ]
+        );
+        let unlinked_snapshot = SemanticSnapshot::read(&unlinked).unwrap();
+        assert!(unlinked_snapshot.keymap["linkedApps"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        assert!(unlinked_snapshot.keymap["profiles"][0]["layers"][1]
+            .get("linkedAppId")
+            .is_none());
+
+        let receipt = appsense_link(
+            &source,
+            Some(0),
+            0,
+            "New App-mac",
+            Some("com.example.new"),
+            None,
+            &linked,
+        )
+        .unwrap();
+        assert_eq!(receipt.resource_id, Some(0));
+        assert_eq!(
+            receipt.changed_paths,
+            vec![
+                "/keymap.json/linkedApps/1",
+                "/keymap.json/profiles/0/layers/0/linkedAppId",
+            ]
+        );
+        let linked_snapshot = SemanticSnapshot::read(&linked).unwrap();
+        assert_eq!(linked_snapshot.keymap["linkedApps"][1]["id"], 0);
+        assert_eq!(linked_snapshot.keymap["linkedApps"][1]["path"], "");
+        assert_eq!(
+            linked_snapshot.keymap["profiles"][0]["layers"][0]["linkedAppId"],
+            0
+        );
+        assert_eq!(linked_snapshot.file_bytes[1], smart_before);
+
+        let rejected = root("appsense-empty-identity");
+        let error = appsense_set(
+            &source,
+            5,
+            AppSenseUpdate {
+                name: None,
+                process: None,
+                clear_process: true,
+                path: None,
+                clear_path: true,
+            },
+            &rejected,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("process or path"));
+        assert!(!rejected.exists());
+
+        for path in [&source, &renamed, &unlinked, &linked] {
             fs::remove_file(path).unwrap();
         }
     }
