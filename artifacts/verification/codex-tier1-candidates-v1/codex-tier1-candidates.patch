@@ -1,0 +1,1590 @@
+diff --git a/README.md b/README.md
+index d7c05e2..997b31d 100644
+--- a/README.md
++++ b/README.md
+@@ -87,6 +87,13 @@ worklouderctl doctor [--strict]
+ worklouderctl codex doctor [--strict]
+ worklouderctl codex inspect
+ worklouderctl codex export --output CODEX_SNAPSHOT.json
++worklouderctl codex agent-source get --input CODEX_SNAPSHOT.json
++worklouderctl codex agent-source set --input CODEX_SNAPSHOT.json priority --output CODEX_CANDIDATE.json
++worklouderctl codex agent-key tap-mode get --input CODEX_SNAPSHOT.json
++worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled --output CODEX_CANDIDATE.json
++worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
++worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
++worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
+ worklouderctl input inspect [--device DEVICE_ID]
+ worklouderctl input export --output BACKUP_DIRECTORY
+ worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
+@@ -168,6 +175,14 @@ Codex 26.727.51351 contract, and recursively fills inherited defaults in the
+ effective view. `codex export` atomically publishes and reopens a typed JSON
+ snapshot. Neither command serializes unrelated Codex settings.
+ 
++`codex agent-source`, `codex agent-key tap-mode`, and `codex command-key` are
++strict offline Tier 1 editors. They validate the embedded frozen definitions,
++recompute effective settings and a recursive-key-sorted revision, preserve
++unknown `codex-micro-*` values, publish atomically, and reopen the result. Each
++receipt carries `expectedSourceSha256` for the future Codex `settings-write`
++CAS transaction; candidate generation leaves the source TOML and Codex runtime
++state unchanged.
++
+ `input inspect` is also read-only. `input export` copies the exact source bytes
+ into an atomically published directory and records each file's size and SHA-256
+ in `manifest.json`. It does not pause Input or write the device.
+@@ -294,8 +309,9 @@ node --test companion/input-main-bridge.test.mjs
+ The intended binary name is `worklouderctl`:
+ 
+ ```console
+-worklouderctl codex agent-source set priority
+-worklouderctl codex command-key set ACT06 --command toggleFastMode
++worklouderctl codex agent-source set --input codex.json priority --output codex-priority.json
++worklouderctl codex command-key set --input codex-priority.json ACT06 \
++  --command toggleFastMode --output codex-fast.json
+ worklouderctl codex joystick set up --skill SKILL_ID
+ worklouderctl codex lighting set --brightness 80 --auto-off 10-minutes
+ worklouderctl plan layout.yaml
+@@ -372,6 +388,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
+ | Provider `doctor` and Input `inspect`/exact-byte `export`/semantic cache snapshot | Complete |
+ | Bundle `validate` and structural `diff` | Complete |
+ | Codex settings contract and TOML `doctor`/`inspect`/`export` | Complete |
++| Codex Agent source/tap mode and Command Key offline candidates | Complete; bridge apply pending |
+ | Input 0.18.0 live `device status`/`files`/verified `export` | Complete |
+ | Read-only Input process coordination and automatic reopen | Complete |
+ | Companion Bridge v1 contract, CLI client, and reference server | Complete |
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 88e988a..26be1fa 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -57,6 +57,13 @@ worklouderctl doctor [--strict]
+ worklouderctl codex doctor [--strict]
+ worklouderctl codex inspect
+ worklouderctl codex export --output CODEX_SNAPSHOT.json
++worklouderctl codex agent-source get --input CODEX_SNAPSHOT.json
++worklouderctl codex agent-source set --input CODEX_SNAPSHOT.json priority --output CODEX_CANDIDATE.json
++worklouderctl codex agent-key tap-mode get --input CODEX_SNAPSHOT.json
++worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled --output CODEX_CANDIDATE.json
++worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
++worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
++worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
+ worklouderctl input inspect [--device DEVICE_ID]
+ worklouderctl input export --output BACKUP_DIRECTORY
+ worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
+@@ -133,6 +140,12 @@ worklouderctl completion bash|zsh|fish
+ view 中递归补齐继承的默认值。`codex export` 原子发布并重新打开 typed JSON
+ snapshot；两者都不会序列化其他 Codex 设置。
+ 
++`codex agent-source`、`codex agent-key tap-mode` 与 `codex command-key` 是严格的
++Tier 1 离线 editor：核对内嵌 frozen definitions，重算 effective settings 与
++recursive-key-sorted revision，保留未知 `codex-micro-*` 值，原子发布并重新打开。
++receipt 中的 `expectedSourceSha256` 供后续 Codex `settings-write` CAS transaction
++使用；candidate 生成阶段保持源 TOML 与 Codex runtime state 原样。
++
+ `input inspect` 同样全程只读；`input export` 把源文件原字节复制到原子发布的
+ 目录，并在 `manifest.json` 记录 size 与 SHA-256。它不会暂停 Input，也不会
+ 写入设备。
+@@ -239,8 +252,9 @@ node --test companion/input-main-bridge.test.mjs
+ ## 其余计划中的写入命令
+ 
+ ```console
+-worklouderctl codex agent-source set priority
+-worklouderctl codex command-key set ACT06 --command toggleFastMode
++worklouderctl codex agent-source set --input codex.json priority --output codex-priority.json
++worklouderctl codex command-key set --input codex-priority.json ACT06 \
++  --command toggleFastMode --output codex-fast.json
+ worklouderctl codex joystick set up --skill SKILL_ID
+ worklouderctl plan layout.yaml
+ worklouderctl apply layout.yaml
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index eb775ca..f16cc09 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -23,10 +23,10 @@ parity contract.
+ 
+ | GUI surface | Configuration coverage | Planned command family | Current status |
+ | --- | --- | --- | --- |
+-| Agent source | pinned, recent, priority, custom | `codex agent-source get/set` | researched |
++| Agent source | pinned, recent, priority, custom | `codex agent-source get/set` | strict offline candidate verified; bridge apply pending |
+ | Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key get/set/clear` | researched |
+-| Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | researched |
+-| Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | researched |
++| Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | strict offline candidate verified; bridge apply pending |
++| Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; bridge apply pending |
+ | Voice button | push-to-talk, Voice Chat | `codex voice get/set` | researched |
+ | Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | researched |
+ | Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | researched |
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index 67bef07..229c30e 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -25,14 +25,31 @@ all unrelated Codex configuration from its output. Offline mutation still
+ requires separate round-trip and restart fixtures. Raw Chromium LevelDB
+ mutation is not part of the configuration path.
+ 
+-The current read-only command surface is:
++The current read and offline-candidate command surface is:
+ 
+ ```console
+ worklouderctl codex doctor [--strict] [--config PATH] [--app PATH]
+ worklouderctl codex inspect [--config PATH] [--app PATH]
+ worklouderctl codex export --output FILE [--config PATH] [--app PATH]
++worklouderctl codex agent-source get --input SNAPSHOT.json
++worklouderctl codex agent-source set --input SNAPSHOT.json VALUE --output CANDIDATE.json
++worklouderctl codex agent-key tap-mode get --input SNAPSHOT.json
++worklouderctl codex agent-key tap-mode set --input SNAPSHOT.json enabled|disabled --output CANDIDATE.json
++worklouderctl codex command-key get --input SNAPSHOT.json SLOT
++worklouderctl codex command-key set --input SNAPSHOT.json SLOT \
++  [--keycap KEYCAP] [--command COMMAND_ID | --skill-name NAME --skill-path PATH | --clear-action] \
++  --output CANDIDATE.json
++worklouderctl codex command-key reset --input SNAPSHOT.json SLOT --output CANDIDATE.json
+ ```
+ 
++Candidate input is a complete `codex export` snapshot. The editor verifies the
++frozen definitions and effective view, preserves unknown prefixed settings,
++hashes canonical explicit settings with `codex-settings-revision-v1`, and
++publishes/reopens a complete candidate. Command Key updates preserve the
++current keycap when omitted, keep command and Skill representations mutually
++exclusive, and reset from the frozen slot default. The source TOML SHA-256 is
++retained as the future online transaction's CAS value.
++
+ ### Persisted setting keys
+ 
+ The installed Codex app exposes these Codex Micro setting records:
+diff --git a/docs/research/2026-08-02-codex-settings-read-contract.md b/docs/research/2026-08-02-codex-settings-read-contract.md
+index 03839cf..34d1e61 100644
+--- a/docs/research/2026-08-02-codex-settings-read-contract.md
++++ b/docs/research/2026-08-02-codex-settings-read-contract.md
+@@ -31,6 +31,12 @@ effective view, and never serializes unrelated Codex configuration. A later
+ write adapter should use the running bridge or the equivalent Codex
+ configuration transaction rather than editing TOML text in place.
+ 
++The implemented offline candidate adapter consumes that typed snapshot for
++Agent source, single-tap mode, and all six Command Key slots. It validates the
++embedded definitions/effective view, preserves unknown prefixed settings,
++records a deterministic settings revision plus the original source SHA-256,
++and leaves online mutation to the versioned `settings-write` transaction.
++
+ ## Capture and compatibility rules
+ 
+ 1. Hash the source file before and after reading it. Reject a moving capture.
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 0253efa..32f9ea2 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -45,8 +45,9 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ 
+ - [x] Exact Codex 26.727.51351 read contract and settings-schema adapter
+ - [ ] `settings-read` and `settings-write` bridge client
+-- [ ] Agent source and six Agent Key assignments
+-- [ ] six Command Key slots and reset
++- [x] Agent source and single-tap behavior offline candidates
++- [ ] Six Agent Key task/command/Skill assignments
++- [x] Six Command Key slots get/set/reset offline candidates
+ - [ ] voice mode
+ - [ ] dial modes and custom gestures
+ - [ ] joystick directions and Skills
+diff --git a/docs/tier-model.md b/docs/tier-model.md
+index 89d0c3d..e9df0cf 100644
+--- a/docs/tier-model.md
++++ b/docs/tier-model.md
+@@ -51,9 +51,10 @@ worklouderctl codex inspect
+ worklouderctl codex doctor
+ worklouderctl codex export
+ worklouderctl codex diff CONFIG
+-worklouderctl codex agent-source get|set
++worklouderctl codex agent-source get|set --input SNAPSHOT
+ worklouderctl codex agent-key get|set|clear AG00
+-worklouderctl codex command-key get|set|reset ACT06
++worklouderctl codex agent-key tap-mode get|set --input SNAPSHOT
++worklouderctl codex command-key get|set|reset --input SNAPSHOT ACT06
+ worklouderctl codex dial get|set|reset
+ worklouderctl codex joystick get|set|reset
+ worklouderctl codex voice get|set
+diff --git a/llms.txt b/llms.txt
+index bc257ac..92c6b88 100644
+--- a/llms.txt
++++ b/llms.txt
+@@ -32,6 +32,7 @@ Important: the project is currently a source alpha. The repository builds a work
+ - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
+ - Current maturity: source alpha; read paths and isolated bridge apply/restore transaction conformance implemented; no packaged release
+ - Current Codex commands: `codex doctor`, `codex inspect`, and atomic typed `codex export`
++- Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, and `codex command-key` provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; live `settings-write` apply remains pending
+ - Input cache command: `input config snapshot` captures `keymap.json` plus optional `smart_actions.json` byte-for-byte, excludes host-only state, and emits a bridge-revision-equivalent semantic snapshot without controlling the Input GUI or device transport
+ - Primary device transport: authenticated Input Companion Bridge v1 over a private Unix socket; Rust client, one-call Input-main integration, release conformance command, and cross-language tests are implemented
+ - Bridge config commands: deterministic byte-exact snapshot/validate plus capability-gated apply/restore with immutable CLI backup, CAS, session idempotency, full readback, and automatic rollback
+diff --git a/spec/codex-settings-candidate-v1.json b/spec/codex-settings-candidate-v1.json
+new file mode 100644
+index 0000000..4225251
+--- /dev/null
++++ b/spec/codex-settings-candidate-v1.json
+@@ -0,0 +1,87 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouderctl-codex-settings-candidate-contract",
++  "contractAppVersion": "26.727.51351",
++  "authority": "codex-settings",
++  "inputKind": "worklouderctl-codex-settings-snapshot",
++  "outputKind": "worklouderctl-codex-settings-snapshot",
++  "receiptKind": "worklouderctl-codex-settings-candidate",
++  "revisionAlgorithm": {
++    "id": "codex-settings-revision-v1",
++    "prefixUtf8": "worklouder-codex-settings-revision-v1\\u0000",
++    "payload": "recursive-key-sorted compact JSON of explicit settings"
++  },
++  "validation": {
++    "requireExactSchemaVersion": true,
++    "requireExactKind": true,
++    "requireExactAdapter": "codex-config-toml-read-v1",
++    "requireExactContractAppVersion": true,
++    "requireLowercaseSourceSha256": true,
++    "requireEmbeddedDefinitionsEqualContract": true,
++    "recomputeEffectiveSettings": true,
++    "preserveUnknownPrefixedSettings": true,
++    "rejectExistingOutput": true,
++    "atomicPublishAndReopen": true
++  },
++  "operations": {
++    "agentSourceGet": {
++      "command": "codex agent-source get --input SNAPSHOT.json",
++      "values": ["pinned", "recent", "priority", "custom"]
++    },
++    "agentSourceSet": {
++      "command": "codex agent-source set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
++      "changedPath": "/settings/codex-micro-agent-source"
++    },
++    "agentTapModeGet": {
++      "command": "codex agent-key tap-mode get --input SNAPSHOT.json"
++    },
++    "agentTapModeSet": {
++      "command": "codex agent-key tap-mode set --input SNAPSHOT.json ENABLED --output CANDIDATE.json",
++      "changedPath": "/settings/codex-micro-single-tap-agent-keys"
++    },
++    "commandKeyGet": {
++      "command": "codex command-key get --input SNAPSHOT.json SLOT"
++    },
++    "commandKeySet": {
++      "command": "codex command-key set --input SNAPSHOT.json SLOT [--keycap KEYCAP] [--command COMMAND_ID | --skill-name NAME --skill-path PATH | --clear-action] --output CANDIDATE.json",
++      "changedPathTemplate": "/settings/codex-micro-layout/slots/{slot}"
++    },
++    "commandKeyReset": {
++      "command": "codex command-key reset --input SNAPSHOT.json SLOT --output CANDIDATE.json",
++      "source": "frozen layout default for the selected slot"
++    }
++  },
++  "commandKeySlots": [
++    "ACT06",
++    "ACT07",
++    "ACT08",
++    "ACT09",
++    "ACT10_ACT11",
++    "ACT12"
++  ],
++  "commandKeyRules": {
++    "preserveCurrentKeycapWhenOmitted": true,
++    "commandRepresentation": {
++      "keycapId": "KEYCAP",
++      "commandId": "COMMAND_ID"
++    },
++    "skillRepresentation": {
++      "keycapId": "KEYCAP",
++      "action": {
++        "type": "skill",
++        "skillName": "NAME",
++        "skillPath": "PATH"
++      }
++    },
++    "clearActionPreservesKeycap": true,
++    "commandAndActionAreMutuallyExclusive": true
++  },
++  "candidateBoundary": {
++    "contactsCodex": false,
++    "contactsInput": false,
++    "contactsDevice": false,
++    "writesSourceConfig": false,
++    "futureApplyAuthority": "Codex settings-write bridge",
++    "futureApplyCasField": "expectedSourceSha256"
++  }
++}
+diff --git a/src/cli.rs b/src/cli.rs
+index 28202c8..9181f78 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -393,6 +393,131 @@ pub enum CodexCommand {
+         #[clap(long, value_parser)]
+         app: Option<PathBuf>,
+     },
++
++    /// Inspect or edit the Agent Key source ordering in an offline snapshot.
++    AgentSource {
++        #[clap(subcommand)]
++        command: CodexAgentSourceCommand,
++    },
++
++    /// Inspect or edit Agent Key behavior in an offline snapshot.
++    AgentKey {
++        #[clap(subcommand)]
++        command: CodexAgentKeyCommand,
++    },
++
++    /// Inspect or edit Codex-native Command Keys in an offline snapshot.
++    CommandKey {
++        #[clap(subcommand)]
++        command: CodexCommandKeyCommand,
++    },
++}
++
++#[derive(Clone, Copy, Debug, ValueEnum)]
++pub enum CodexAgentSource {
++    Pinned,
++    Recent,
++    Priority,
++    Custom,
++}
++
++#[derive(Debug, Subcommand)]
++pub enum CodexAgentSourceCommand {
++    /// Read the effective Agent Key source ordering.
++    Get {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++    },
++
++    /// Write an offline candidate with a new Agent Key source ordering.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(value_enum)]
++        value: CodexAgentSource,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++}
++
++#[derive(Debug, Subcommand)]
++pub enum CodexAgentKeyCommand {
++    /// Inspect or edit the single-tap focus behavior.
++    TapMode {
++        #[clap(subcommand)]
++        command: CodexAgentTapModeCommand,
++    },
++}
++
++#[derive(Clone, Copy, Debug, ValueEnum)]
++pub enum CodexAgentTapMode {
++    Enabled,
++    Disabled,
++}
++
++#[derive(Debug, Subcommand)]
++pub enum CodexAgentTapModeCommand {
++    /// Read the effective single-tap focus behavior.
++    Get {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++    },
++
++    /// Write an offline candidate with single-tap focus enabled or disabled.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(value_enum)]
++        mode: CodexAgentTapMode,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++}
++
++#[derive(Debug, Subcommand)]
++pub enum CodexCommandKeyCommand {
++    /// Read one effective Command Key assignment.
++    Get {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        /// Logical slot: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12.
++        slot: String,
++    },
++
++    /// Write one Command Key assignment into an offline candidate.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        /// Logical slot: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12.
++        slot: String,
++        /// Optional frozen keycap identifier.
++        #[clap(long)]
++        keycap: Option<String>,
++        /// Assign a Codex command ID.
++        #[clap(long)]
++        command: Option<String>,
++        /// Assign a Skill display name; pair with --skill-path.
++        #[clap(long)]
++        skill_name: Option<String>,
++        /// Assign a Skill path; pair with --skill-name.
++        #[clap(long)]
++        skill_path: Option<String>,
++        /// Clear command/Skill assignment while preserving the keycap.
++        #[clap(long)]
++        clear_action: bool,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Restore one Command Key slot to the frozen Codex default.
++    Reset {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        /// Logical slot: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12.
++        slot: String,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
+ }
+ 
+ #[derive(Debug, Subcommand)]
+diff --git a/src/codex.rs b/src/codex.rs
+index 11e374f..60aa333 100644
+--- a/src/codex.rs
++++ b/src/codex.rs
+@@ -1,6 +1,6 @@
+ use crate::doctor::{self, Check, CheckStatus};
+ use crate::fsutil;
+-use anyhow::{bail, Context, Result};
++use anyhow::{bail, ensure, Context, Result};
+ use serde::{Deserialize, Serialize};
+ use serde_json::{Map, Value};
+ use std::collections::BTreeMap;
+@@ -10,7 +10,10 @@ use std::path::{Path, PathBuf};
+ 
+ pub const SNAPSHOT_KIND: &str = "worklouderctl-codex-settings-snapshot";
+ pub const SNAPSHOT_SCHEMA_VERSION: u8 = 1;
++pub const CANDIDATE_KIND: &str = "worklouderctl-codex-settings-candidate";
++pub const REVISION_ALGORITHM: &str = "codex-settings-revision-v1";
+ const CONTRACT_JSON: &str = include_str!("../spec/codex-settings-26.727.51351.json");
++const REVISION_PREFIX: &[u8] = b"worklouder-codex-settings-revision-v1\0";
+ 
+ #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+ #[serde(rename_all = "camelCase")]
+@@ -67,6 +70,68 @@ pub struct Snapshot {
+     pub warnings: Vec<String>,
+ }
+ 
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct CandidateReceipt {
++    pub schema_version: u8,
++    pub kind: &'static str,
++    pub operation: &'static str,
++    pub output: PathBuf,
++    pub changed: bool,
++    pub changed_paths: Vec<String>,
++    pub expected_source_sha256: String,
++    pub revision_algorithm: &'static str,
++    pub before_revision: String,
++    pub after_revision: String,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct AgentSourceView {
++    pub schema_version: u8,
++    pub kind: &'static str,
++    pub revision: String,
++    pub value: String,
++    pub explicit: bool,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct AgentTapModeView {
++    pub schema_version: u8,
++    pub kind: &'static str,
++    pub revision: String,
++    pub enabled: bool,
++    pub explicit: bool,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct CommandKeyView {
++    pub schema_version: u8,
++    pub kind: &'static str,
++    pub revision: String,
++    pub slot: String,
++    pub keycap_id: String,
++    pub assignment_type: String,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub command_id: Option<String>,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub skill_name: Option<String>,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub skill_path: Option<String>,
++    pub inherited: bool,
++}
++
++#[derive(Clone, Copy, Debug)]
++pub struct CommandKeyUpdate<'a> {
++    pub keycap: Option<&'a str>,
++    pub command: Option<&'a str>,
++    pub skill_name: Option<&'a str>,
++    pub skill_path: Option<&'a str>,
++    pub clear_action: bool,
++}
++
+ #[derive(Debug, Serialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct DoctorReport {
+@@ -160,19 +225,7 @@ pub fn inspect(config_path: &Path, app_path: &Path) -> Result<Snapshot> {
+     }
+     validate_settings(&settings, &contract)?;
+ 
+-    let mut effective_settings: BTreeMap<String, Value> = contract
+-        .definitions
+-        .iter()
+-        .map(|(key, definition)| (key.clone(), definition.default.clone()))
+-        .collect();
+-    for (key, explicit) in &settings {
+-        match effective_settings.get_mut(key) {
+-            Some(effective) => merge_value(effective, explicit),
+-            None => {
+-                effective_settings.insert(key.clone(), explicit.clone());
+-            }
+-        }
+-    }
++    let effective_settings = compute_effective_settings(&settings, &contract);
+ 
+     let installed_app_version = doctor::bundle_version(app_path);
+     let mut warnings = Vec::new();
+@@ -193,15 +246,7 @@ pub fn inspect(config_path: &Path, app_path: &Path) -> Result<Snapshot> {
+         }
+     }
+ 
+-    let definitions = contract
+-        .definitions
+-        .iter()
+-        .map(|(key, definition)| {
+-            serde_json::to_value(definition)
+-                .map(|value| (key.clone(), value))
+-                .context("failed to serialize frozen definition")
+-        })
+-        .collect::<Result<BTreeMap<_, _>>>()?;
++    let definitions = definition_values(&contract)?;
+ 
+     Ok(Snapshot {
+         schema_version: SNAPSHOT_SCHEMA_VERSION,
+@@ -271,6 +316,519 @@ pub fn export(config_path: &Path, app_path: &Path, output: &Path) -> Result<Snap
+     Ok(snapshot)
+ }
+ 
++pub fn agent_source_get(input: &Path) -> Result<AgentSourceView> {
++    let snapshot = read_snapshot(input)?;
++    let key = "codex-micro-agent-source";
++    let value = snapshot
++        .effective_settings
++        .get(key)
++        .and_then(Value::as_str)
++        .context("effective Agent Key source was missing")?;
++    Ok(AgentSourceView {
++        schema_version: 1,
++        kind: "worklouderctl-codex-agent-source",
++        revision: settings_revision(&snapshot.settings)?,
++        value: value.to_owned(),
++        explicit: snapshot.settings.contains_key(key),
++    })
++}
++
++pub fn agent_source_set(input: &Path, value: &str, output: &Path) -> Result<CandidateReceipt> {
++    let mut snapshot = read_snapshot(input)?;
++    let contract = load_contract()?;
++    let key = "codex-micro-agent-source";
++    let before_revision = settings_revision(&snapshot.settings)?;
++    let current = snapshot
++        .effective_settings
++        .get(key)
++        .and_then(Value::as_str)
++        .context("effective Agent Key source was missing")?;
++    let changed = current != value;
++    if changed {
++        snapshot
++            .settings
++            .insert(key.into(), Value::String(value.to_owned()));
++        refresh_effective_settings(&mut snapshot, &contract)?;
++    }
++    publish_candidate(
++        snapshot,
++        output,
++        "codex-agent-source-set",
++        before_revision,
++        changed
++            .then(|| format!("/settings/{key}"))
++            .into_iter()
++            .collect(),
++    )
++}
++
++pub fn agent_tap_mode_get(input: &Path) -> Result<AgentTapModeView> {
++    let snapshot = read_snapshot(input)?;
++    let key = "codex-micro-single-tap-agent-keys";
++    let enabled = snapshot
++        .effective_settings
++        .get(key)
++        .and_then(Value::as_bool)
++        .context("effective Agent Key tap mode was missing")?;
++    Ok(AgentTapModeView {
++        schema_version: 1,
++        kind: "worklouderctl-codex-agent-tap-mode",
++        revision: settings_revision(&snapshot.settings)?,
++        enabled,
++        explicit: snapshot.settings.contains_key(key),
++    })
++}
++
++pub fn agent_tap_mode_set(input: &Path, enabled: bool, output: &Path) -> Result<CandidateReceipt> {
++    let mut snapshot = read_snapshot(input)?;
++    let contract = load_contract()?;
++    let key = "codex-micro-single-tap-agent-keys";
++    let before_revision = settings_revision(&snapshot.settings)?;
++    let current = snapshot
++        .effective_settings
++        .get(key)
++        .and_then(Value::as_bool)
++        .context("effective Agent Key tap mode was missing")?;
++    let changed = current != enabled;
++    if changed {
++        snapshot.settings.insert(key.into(), Value::Bool(enabled));
++        refresh_effective_settings(&mut snapshot, &contract)?;
++    }
++    publish_candidate(
++        snapshot,
++        output,
++        "codex-agent-tap-mode-set",
++        before_revision,
++        changed
++            .then(|| format!("/settings/{key}"))
++            .into_iter()
++            .collect(),
++    )
++}
++
++pub fn command_key_get(input: &Path, slot: &str) -> Result<CommandKeyView> {
++    let snapshot = read_snapshot(input)?;
++    command_key_view(&snapshot, slot)
++}
++
++pub fn command_key_set(
++    input: &Path,
++    slot: &str,
++    update: CommandKeyUpdate<'_>,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    let mut snapshot = read_snapshot(input)?;
++    let contract = load_contract()?;
++    validate_command_key_slot(slot, &contract)?;
++    validate_command_key_update(update, &contract)?;
++    let before_revision = settings_revision(&snapshot.settings)?;
++    let mut layout = effective_layout(&snapshot)?.clone();
++    let before_slot = command_key_slot(&layout, slot)?.clone();
++
++    {
++        let slots = layout
++            .get_mut("slots")
++            .and_then(Value::as_object_mut)
++            .context("effective layout.slots was missing")?;
++        let slot_value = slots
++            .get_mut(slot)
++            .with_context(|| format!("effective Command Key slot {slot} was missing"))?;
++        let slot_object = slot_value
++            .as_object_mut()
++            .with_context(|| format!("Command Key slot {slot} must be an object"))?;
++        if let Some(keycap) = update.keycap {
++            slot_object.insert("keycapId".into(), Value::String(keycap.to_owned()));
++        }
++        if let Some(command) = update.command {
++            slot_object.remove("action");
++            slot_object.insert("commandId".into(), Value::String(command.to_owned()));
++        } else if update.skill_name.is_some() || update.skill_path.is_some() {
++            slot_object.remove("commandId");
++            slot_object.insert(
++                "action".into(),
++                serde_json::json!({
++                    "type": "skill",
++                    "skillName": update.skill_name.context("--skill-name is required")?,
++                    "skillPath": update.skill_path.context("--skill-path is required")?,
++                }),
++            );
++        } else if update.clear_action {
++            slot_object.remove("commandId");
++            slot_object.remove("action");
++        }
++    }
++
++    validate_layout(&Value::Object(layout.clone()), &contract.layout)?;
++    let changed = before_slot != *command_key_slot(&layout, slot)?;
++    if changed {
++        snapshot
++            .settings
++            .insert("codex-micro-layout".into(), Value::Object(layout.clone()));
++        refresh_effective_settings(&mut snapshot, &contract)?;
++    }
++    publish_candidate(
++        snapshot,
++        output,
++        "codex-command-key-set",
++        before_revision,
++        changed
++            .then(|| format!("/settings/codex-micro-layout/slots/{slot}"))
++            .into_iter()
++            .collect(),
++    )
++}
++
++pub fn command_key_reset(input: &Path, slot: &str, output: &Path) -> Result<CandidateReceipt> {
++    let mut snapshot = read_snapshot(input)?;
++    let contract = load_contract()?;
++    validate_command_key_slot(slot, &contract)?;
++    let before_revision = settings_revision(&snapshot.settings)?;
++    let mut layout = effective_layout(&snapshot)?.clone();
++    let before_slot = command_key_slot(&layout, slot)?.clone();
++    let default_layout = contract
++        .definitions
++        .get("codex-micro-layout")
++        .context("frozen layout definition was missing")?
++        .default
++        .as_object()
++        .context("frozen layout default was invalid")?;
++    let default_slot = command_key_slot(default_layout, slot)?.clone();
++    let changed = before_slot != default_slot;
++    if changed {
++        layout
++            .get_mut("slots")
++            .and_then(Value::as_object_mut)
++            .context("effective layout.slots was missing")?
++            .insert(slot.to_owned(), default_slot);
++        snapshot
++            .settings
++            .insert("codex-micro-layout".into(), Value::Object(layout));
++        refresh_effective_settings(&mut snapshot, &contract)?;
++    }
++    publish_candidate(
++        snapshot,
++        output,
++        "codex-command-key-reset",
++        before_revision,
++        changed
++            .then(|| format!("/settings/codex-micro-layout/slots/{slot}"))
++            .into_iter()
++            .collect(),
++    )
++}
++
++fn command_key_view(snapshot: &Snapshot, slot: &str) -> Result<CommandKeyView> {
++    let contract = load_contract()?;
++    validate_command_key_slot(slot, &contract)?;
++    let slot_value = command_key_slot(effective_layout(snapshot)?, slot)?;
++    let slot_object = slot_value
++        .as_object()
++        .with_context(|| format!("Command Key slot {slot} must be an object"))?;
++    let keycap_id = nonempty_string_field(slot_object, "keycapId", "Command Key")?.to_owned();
++    let (assignment_type, command_id, skill_name, skill_path) = if let Some(command_id) =
++        slot_object.get("commandId").and_then(Value::as_str)
++    {
++        (
++            "command".to_owned(),
++            Some(command_id.to_owned()),
++            None,
++            None,
++        )
++    } else if let Some(action) = slot_object.get("action").filter(|value| !value.is_null()) {
++        let action = action
++            .as_object()
++            .context("Command Key action must be an object")?;
++        match nonempty_string_field(action, "type", "Command Key action")? {
++            "command" => (
++                "command".to_owned(),
++                Some(nonempty_string_field(action, "commandId", "Command Key action")?.to_owned()),
++                None,
++                None,
++            ),
++            "skill" => (
++                "skill".to_owned(),
++                None,
++                Some(nonempty_string_field(action, "skillName", "Command Key action")?.to_owned()),
++                Some(nonempty_string_field(action, "skillPath", "Command Key action")?.to_owned()),
++            ),
++            other => bail!("Command Key action has unknown type {other}"),
++        }
++    } else {
++        ("keycap".to_owned(), None, None, None)
++    };
++    let inherited = snapshot
++        .settings
++        .get("codex-micro-layout")
++        .and_then(Value::as_object)
++        .and_then(|layout| layout.get("slots"))
++        .and_then(Value::as_object)
++        .map_or(true, |slots| !slots.contains_key(slot));
++    Ok(CommandKeyView {
++        schema_version: 1,
++        kind: "worklouderctl-codex-command-key",
++        revision: settings_revision(&snapshot.settings)?,
++        slot: slot.to_owned(),
++        keycap_id,
++        assignment_type,
++        command_id,
++        skill_name,
++        skill_path,
++        inherited,
++    })
++}
++
++fn validate_command_key_update(update: CommandKeyUpdate<'_>, contract: &Contract) -> Result<()> {
++    let skill_requested = update.skill_name.is_some() || update.skill_path.is_some();
++    let action_count = usize::from(update.command.is_some())
++        + usize::from(skill_requested)
++        + usize::from(update.clear_action);
++    ensure!(
++        update.keycap.is_some() || action_count > 0,
++        "at least one Command Key field must be supplied"
++    );
++    ensure!(
++        action_count <= 1,
++        "--command, Skill assignment, and --clear-action are mutually exclusive"
++    );
++    if let Some(keycap) = update.keycap {
++        ensure!(
++            contract.layout.keycaps.iter().any(|value| value == keycap),
++            "unknown Codex keycap {keycap}"
++        );
++    }
++    if let Some(command) = update.command {
++        ensure!(!command.trim().is_empty(), "--command must be non-empty");
++    }
++    if skill_requested {
++        let name = update.skill_name.context("--skill-name is required")?;
++        let path = update.skill_path.context("--skill-path is required")?;
++        ensure!(!name.trim().is_empty(), "--skill-name must be non-empty");
++        ensure!(!path.trim().is_empty(), "--skill-path must be non-empty");
++    }
++    Ok(())
++}
++
++fn validate_command_key_slot(slot: &str, contract: &Contract) -> Result<()> {
++    ensure!(
++        contract.layout.slots.iter().any(|value| value == slot),
++        "unknown Codex Command Key slot {slot}; expected {}",
++        contract.layout.slots.join(", ")
++    );
++    Ok(())
++}
++
++fn effective_layout(snapshot: &Snapshot) -> Result<&Map<String, Value>> {
++    snapshot
++        .effective_settings
++        .get("codex-micro-layout")
++        .and_then(Value::as_object)
++        .context("effective Codex Micro layout was missing")
++}
++
++fn command_key_slot<'a>(layout: &'a Map<String, Value>, slot: &str) -> Result<&'a Value> {
++    layout
++        .get("slots")
++        .and_then(Value::as_object)
++        .and_then(|slots| slots.get(slot))
++        .with_context(|| format!("Command Key slot {slot} was missing"))
++}
++
++fn read_snapshot(path: &Path) -> Result<Snapshot> {
++    let metadata = fs::symlink_metadata(path)
++        .with_context(|| format!("failed to inspect Codex snapshot {}", path.display()))?;
++    ensure!(
++        metadata.file_type().is_file() && !metadata.file_type().is_symlink(),
++        "Codex snapshot source must be a regular file"
++    );
++    let snapshot: Snapshot = serde_json::from_slice(
++        &fs::read(path)
++            .with_context(|| format!("failed to read Codex snapshot {}", path.display()))?,
++    )
++    .with_context(|| format!("invalid Codex snapshot JSON at {}", path.display()))?;
++    validate_snapshot(&snapshot)?;
++    Ok(snapshot)
++}
++
++fn validate_snapshot(snapshot: &Snapshot) -> Result<()> {
++    let contract = load_contract()?;
++    ensure!(
++        snapshot.schema_version == SNAPSHOT_SCHEMA_VERSION,
++        "Codex snapshot schemaVersion must be {SNAPSHOT_SCHEMA_VERSION}"
++    );
++    ensure!(
++        snapshot.kind == SNAPSHOT_KIND,
++        "Codex snapshot kind is invalid"
++    );
++    ensure!(
++        snapshot.adapter == contract.storage.adapter,
++        "Codex snapshot adapter is invalid"
++    );
++    ensure!(
++        snapshot.contract_app_version == contract.app_version,
++        "Codex snapshot contract version is invalid"
++    );
++    ensure!(
++        snapshot.source_sha256.len() == 64
++            && snapshot
++                .source_sha256
++                .bytes()
++                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
++        "Codex snapshot sourceSha256 must be lowercase SHA-256"
++    );
++    ensure!(
++        !snapshot.source_path.as_os_str().is_empty(),
++        "Codex snapshot sourcePath must be non-empty"
++    );
++    ensure!(
++        snapshot.definitions == definition_values(&contract)?,
++        "Codex snapshot definitions differ from the frozen contract"
++    );
++    validate_settings(&snapshot.settings, &contract)?;
++    ensure!(
++        snapshot.effective_settings == compute_effective_settings(&snapshot.settings, &contract),
++        "Codex snapshot effectiveSettings readback differed"
++    );
++    Ok(())
++}
++
++fn refresh_effective_settings(snapshot: &mut Snapshot, contract: &Contract) -> Result<()> {
++    validate_settings(&snapshot.settings, contract)?;
++    snapshot.effective_settings = compute_effective_settings(&snapshot.settings, contract);
++    Ok(())
++}
++
++fn publish_candidate(
++    snapshot: Snapshot,
++    output: &Path,
++    operation: &'static str,
++    before_revision: String,
++    changed_paths: Vec<String>,
++) -> Result<CandidateReceipt> {
++    ensure!(
++        !output.exists(),
++        "candidate destination already exists: {}",
++        output.display()
++    );
++    validate_snapshot(&snapshot)?;
++    let after_revision = settings_revision(&snapshot.settings)?;
++    let changed = before_revision != after_revision;
++    ensure!(
++        changed != changed_paths.is_empty(),
++        "candidate changed paths did not match its revision change"
++    );
++    let parent = output
++        .parent()
++        .filter(|path| !path.as_os_str().is_empty())
++        .unwrap_or_else(|| Path::new("."));
++    fs::create_dir_all(parent)
++        .with_context(|| format!("failed to create candidate parent {}", parent.display()))?;
++    let file_name = output
++        .file_name()
++        .context("candidate destination must name a JSON file")?
++        .to_string_lossy();
++    let staging = parent.join(format!(
++        ".{file_name}.worklouderctl-codex-staging-{}",
++        std::process::id()
++    ));
++    ensure!(
++        !staging.exists(),
++        "candidate staging file already exists: {}",
++        staging.display()
++    );
++    let result = (|| -> Result<()> {
++        let mut bytes = serde_json::to_vec_pretty(&snapshot)?;
++        bytes.push(b'\n');
++        fs::write(&staging, bytes)
++            .with_context(|| format!("failed to write staging file {}", staging.display()))?;
++        ensure!(
++            read_snapshot(&staging)? == snapshot,
++            "Codex candidate staging readback differed"
++        );
++        fs::rename(&staging, output).with_context(|| {
++            format!(
++                "failed to atomically move {} to {}",
++                staging.display(),
++                output.display()
++            )
++        })?;
++        ensure!(
++            read_snapshot(output)? == snapshot,
++            "Codex candidate final readback differed"
++        );
++        Ok(())
++    })();
++    if result.is_err() && staging.exists() {
++        let _ = fs::remove_file(&staging);
++    }
++    result?;
++    Ok(CandidateReceipt {
++        schema_version: 1,
++        kind: CANDIDATE_KIND,
++        operation,
++        output: output.to_path_buf(),
++        changed,
++        changed_paths,
++        expected_source_sha256: snapshot.source_sha256,
++        revision_algorithm: REVISION_ALGORITHM,
++        before_revision,
++        after_revision,
++    })
++}
++
++fn settings_revision(settings: &BTreeMap<String, Value>) -> Result<String> {
++    let mut framed = REVISION_PREFIX.to_vec();
++    let value = serde_json::to_value(settings)?;
++    framed.extend(serde_json::to_vec(&canonical_json(&value))?);
++    fsutil::sha256_bytes(&framed)
++}
++
++fn canonical_json(value: &Value) -> Value {
++    match value {
++        Value::Object(object) => {
++            let sorted: BTreeMap<&String, &Value> = object.iter().collect();
++            let mut canonical = Map::new();
++            for (key, value) in sorted {
++                canonical.insert(key.clone(), canonical_json(value));
++            }
++            Value::Object(canonical)
++        }
++        Value::Array(values) => Value::Array(values.iter().map(canonical_json).collect()),
++        value => value.clone(),
++    }
++}
++
++fn definition_values(contract: &Contract) -> Result<BTreeMap<String, Value>> {
++    contract
++        .definitions
++        .iter()
++        .map(|(key, definition)| {
++            serde_json::to_value(definition)
++                .map(|value| (key.clone(), value))
++                .context("failed to serialize frozen definition")
++        })
++        .collect()
++}
++
++fn compute_effective_settings(
++    settings: &BTreeMap<String, Value>,
++    contract: &Contract,
++) -> BTreeMap<String, Value> {
++    let mut effective_settings: BTreeMap<String, Value> = contract
++        .definitions
++        .iter()
++        .map(|(key, definition)| (key.clone(), definition.default.clone()))
++        .collect();
++    for (key, explicit) in settings {
++        match effective_settings.get_mut(key) {
++            Some(effective) => merge_value(effective, explicit),
++            None => {
++                effective_settings.insert(key.clone(), explicit.clone());
++            }
++        }
++    }
++    effective_settings
++}
++
+ pub fn doctor(config_path: &Path, app_path: &Path) -> DoctorReport {
+     let contract = load_contract();
+     let mut checks = Vec::new();
+@@ -476,6 +1034,12 @@ fn validate_slot(value: &Value, slot_name: &str, contract: &LayoutContract) -> R
+     if !contract.keycaps.iter().any(|candidate| candidate == keycap) {
+         bail!("{path}.keycapId has unknown keycap {keycap}");
+     }
++    let has_command = slot.get("commandId").is_some();
++    let has_action = slot.get("action").map_or(false, |value| !value.is_null());
++    ensure!(
++        !(has_command && has_action),
++        "{path}.commandId and action are mutually exclusive"
++    );
+     if let Some(command_id) = slot.get("commandId") {
+         if command_id.as_str().map_or(true, str::is_empty) {
+             bail!("{path}.commandId must be a non-empty string");
+@@ -676,4 +1240,152 @@ mod tests {
+         );
+         assert!(effective["encoder"]["click"].is_null());
+     }
++
++    #[test]
++    fn tier1_candidates_are_strict_atomic_and_semantic() {
++        let root = fixture_root();
++        fs::create_dir_all(&root).unwrap();
++        let config = root.join("config.toml");
++        let snapshot_path = root.join("snapshot.json");
++        let agent_path = root.join("agent.json");
++        let tap_path = root.join("tap.json");
++        let command_path = root.join("command.json");
++        let skill_path = root.join("skill.json");
++        let reset_path = root.join("reset.json");
++        fs::write(
++            &config,
++            b"[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
++        )
++        .unwrap();
++        let original_sha = fsutil::sha256(&config).unwrap();
++        export(&config, &root.join("missing.app"), &snapshot_path).unwrap();
++
++        let default_key = command_key_get(&snapshot_path, "ACT06").unwrap();
++        assert_eq!(default_key.keycap_id, "FAST");
++        assert_eq!(default_key.assignment_type, "keycap");
++        assert!(default_key.inherited);
++
++        let agent = agent_source_set(&snapshot_path, "priority", &agent_path).unwrap();
++        assert!(agent.changed);
++        assert_eq!(
++            agent.changed_paths,
++            vec!["/settings/codex-micro-agent-source"]
++        );
++        let tap = agent_tap_mode_set(&agent_path, true, &tap_path).unwrap();
++        assert!(tap.changed);
++        assert!(agent_tap_mode_get(&tap_path).unwrap().enabled);
++
++        let command = command_key_set(
++            &tap_path,
++            "ACT06",
++            CommandKeyUpdate {
++                keycap: Some("BUG"),
++                command: Some("fixture.command"),
++                skill_name: None,
++                skill_path: None,
++                clear_action: false,
++            },
++            &command_path,
++        )
++        .unwrap();
++        assert!(command.changed);
++        let command_view = command_key_get(&command_path, "ACT06").unwrap();
++        assert_eq!(command_view.keycap_id, "BUG");
++        assert_eq!(command_view.assignment_type, "command");
++        assert_eq!(command_view.command_id.as_deref(), Some("fixture.command"));
++
++        command_key_set(
++            &command_path,
++            "ACT06",
++            CommandKeyUpdate {
++                keycap: None,
++                command: None,
++                skill_name: Some("Fixture Skill"),
++                skill_path: Some("/tmp/fixture-skill"),
++                clear_action: false,
++            },
++            &skill_path,
++        )
++        .unwrap();
++        let skill_view = command_key_get(&skill_path, "ACT06").unwrap();
++        assert_eq!(skill_view.keycap_id, "BUG");
++        assert_eq!(skill_view.assignment_type, "skill");
++        assert_eq!(skill_view.skill_name.as_deref(), Some("Fixture Skill"));
++        assert_eq!(skill_view.skill_path.as_deref(), Some("/tmp/fixture-skill"));
++
++        command_key_reset(&skill_path, "ACT06", &reset_path).unwrap();
++        let reset_view = command_key_get(&reset_path, "ACT06").unwrap();
++        assert_eq!(reset_view.keycap_id, "FAST");
++        assert_eq!(reset_view.assignment_type, "keycap");
++        let reopened = read_snapshot(&reset_path).unwrap();
++        assert_eq!(
++            reopened.settings["codex-micro-future"],
++            Value::String("preserved".into())
++        );
++        assert_eq!(reopened.source_sha256, original_sha);
++        assert_eq!(fsutil::sha256(&config).unwrap(), original_sha);
++        fs::remove_dir_all(root).unwrap();
++    }
++
++    #[test]
++    fn tier1_candidates_reject_tampering_and_keep_default_noops_implicit() {
++        let root = fixture_root();
++        fs::create_dir_all(&root).unwrap();
++        let config = root.join("config.toml");
++        let snapshot_path = root.join("snapshot.json");
++        fs::write(&config, b"[desktop]\n").unwrap();
++        export(&config, &root.join("missing.app"), &snapshot_path).unwrap();
++
++        let noop_path = root.join("noop.json");
++        let noop = agent_source_set(&snapshot_path, "recent", &noop_path).unwrap();
++        assert!(!noop.changed);
++        assert_eq!(noop.before_revision, noop.after_revision);
++        assert!(!read_snapshot(&noop_path)
++            .unwrap()
++            .settings
++            .contains_key("codex-micro-agent-source"));
++
++        let reset_path = root.join("reset.json");
++        let reset = command_key_reset(&snapshot_path, "ACT06", &reset_path).unwrap();
++        assert!(!reset.changed);
++        assert!(!read_snapshot(&reset_path)
++            .unwrap()
++            .settings
++            .contains_key("codex-micro-layout"));
++
++        let mut tampered: Value =
++            serde_json::from_slice(&fs::read(&snapshot_path).unwrap()).unwrap();
++        tampered["definitions"] = serde_json::json!({});
++        let tampered_path = root.join("tampered.json");
++        fs::write(&tampered_path, serde_json::to_vec(&tampered).unwrap()).unwrap();
++        assert!(agent_source_get(&tampered_path)
++            .unwrap_err()
++            .to_string()
++            .contains("definitions differ"));
++
++        let link_path = root.join("snapshot-link.json");
++        std::os::unix::fs::symlink(&snapshot_path, &link_path).unwrap();
++        assert!(agent_source_get(&link_path)
++            .unwrap_err()
++            .to_string()
++            .contains("regular file"));
++
++        let invalid = command_key_set(
++            &snapshot_path,
++            "ACT99",
++            CommandKeyUpdate {
++                keycap: Some("FAST"),
++                command: None,
++                skill_name: None,
++                skill_path: None,
++                clear_action: false,
++            },
++            &root.join("invalid.json"),
++        )
++        .unwrap_err();
++        assert!(invalid
++            .to_string()
++            .contains("unknown Codex Command Key slot"));
++        fs::remove_dir_all(root).unwrap();
++    }
+ }
+diff --git a/src/lib.rs b/src/lib.rs
+index 1cd963f..5d0c872 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -13,12 +13,14 @@ use anyhow::Result;
+ use clap::CommandFactory;
+ use cli::{
+     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
+-    AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexCommand, Command, CompletionShell,
+-    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
+-    InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand, LightingEffect,
+-    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
+-    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+-    SmartActionType as CliSmartActionType, TierCommand,
++    AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
++    CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexCommand,
++    CodexCommandKeyCommand, Command, CompletionShell, ConfigCommand, ControlCommand, DeviceCommand,
++    DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand, LayerCommand,
++    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
++    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
++    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
++    TierCommand,
+ };
+ use serde::Serialize;
+ use std::io::Write;
+@@ -1644,6 +1646,162 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
+                 )?;
+             }
+         }
++        CodexCommand::AgentSource { command } => match command {
++            CodexAgentSourceCommand::Get { input } => {
++                let result = codex::agent_source_get(&input)?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "agent-source={}\texplicit={}",
++                        result.value, result.explicit
++                    )?;
++                    writeln!(out, "revision={}", result.revision)?;
++                }
++            }
++            CodexAgentSourceCommand::Set {
++                input,
++                value,
++                output,
++            } => write_codex_candidate_result(
++                codex::agent_source_set(&input, codex_agent_source_value(value), &output)?,
++                json,
++                &mut out,
++            )?,
++        },
++        CodexCommand::AgentKey { command } => match command {
++            CodexAgentKeyCommand::TapMode { command } => match command {
++                CodexAgentTapModeCommand::Get { input } => {
++                    let result = codex::agent_tap_mode_get(&input)?;
++                    if json {
++                        write_json(&mut out, &result)?;
++                    } else {
++                        writeln!(
++                            out,
++                            "agent-key-tap-mode={}\texplicit={}",
++                            if result.enabled {
++                                "enabled"
++                            } else {
++                                "disabled"
++                            },
++                            result.explicit
++                        )?;
++                        writeln!(out, "revision={}", result.revision)?;
++                    }
++                }
++                CodexAgentTapModeCommand::Set {
++                    input,
++                    mode,
++                    output,
++                } => write_codex_candidate_result(
++                    codex::agent_tap_mode_set(
++                        &input,
++                        matches!(mode, CodexAgentTapMode::Enabled),
++                        &output,
++                    )?,
++                    json,
++                    &mut out,
++                )?,
++            },
++        },
++        CodexCommand::CommandKey { command } => match command {
++            CodexCommandKeyCommand::Get { input, slot } => {
++                let result = codex::command_key_get(&input, &slot)?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "slot={}\tkeycap={}\ttype={}\tinherited={}",
++                        result.slot, result.keycap_id, result.assignment_type, result.inherited
++                    )?;
++                    if let Some(value) = result.command_id {
++                        writeln!(out, "command={value}")?;
++                    }
++                    if let (Some(name), Some(path)) = (result.skill_name, result.skill_path) {
++                        writeln!(out, "skill={name}\t{path}")?;
++                    }
++                    writeln!(out, "revision={}", result.revision)?;
++                }
++            }
++            CodexCommandKeyCommand::Set {
++                input,
++                slot,
++                keycap,
++                command,
++                skill_name,
++                skill_path,
++                clear_action,
++                output,
++            } => write_codex_candidate_result(
++                codex::command_key_set(
++                    &input,
++                    &slot,
++                    codex::CommandKeyUpdate {
++                        keycap: keycap.as_deref(),
++                        command: command.as_deref(),
++                        skill_name: skill_name.as_deref(),
++                        skill_path: skill_path.as_deref(),
++                        clear_action,
++                    },
++                    &output,
++                )?,
++                json,
++                &mut out,
++            )?,
++            CodexCommandKeyCommand::Reset {
++                input,
++                slot,
++                output,
++            } => write_codex_candidate_result(
++                codex::command_key_reset(&input, &slot, &output)?,
++                json,
++                &mut out,
++            )?,
++        },
++    }
++    Ok(())
++}
++
++fn codex_agent_source_value(value: CodexAgentSource) -> &'static str {
++    match value {
++        CodexAgentSource::Pinned => "pinned",
++        CodexAgentSource::Recent => "recent",
++        CodexAgentSource::Priority => "priority",
++        CodexAgentSource::Custom => "custom",
++    }
++}
++
++fn write_codex_candidate_result(
++    result: codex::CandidateReceipt,
++    json: bool,
++    mut out: impl Write,
++) -> Result<()> {
++    if json {
++        write_json(&mut out, &result)?;
++    } else {
++        writeln!(
++            out,
++            "{} candidate {} at {}",
++            result.operation,
++            if result.changed {
++                "changed"
++            } else {
++                "unchanged"
++            },
++            result.output.display()
++        )?;
++        writeln!(
++            out,
++            "revision={} -> {}",
++            result.before_revision, result.after_revision
++        )?;
++        writeln!(
++            out,
++            "expected-source-sha256={}",
++            result.expected_source_sha256
++        )?;
+     }
+     Ok(())
+ }
+diff --git a/tests/cli.rs b/tests/cli.rs
+index 20c0db6..6fde33b 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -310,7 +310,7 @@ fn input_cache_snapshot_runs_into_semantic_candidates_end_to_end() {
+ }
+ 
+ #[test]
+-fn codex_help_exposes_read_only_workflow() {
++fn codex_help_exposes_snapshot_and_candidate_workflow() {
+     let codex = binary().args(["codex", "--help"]).output().unwrap();
+     let stdout = String::from_utf8(codex.stdout).unwrap();
+ 
+@@ -318,6 +318,9 @@ fn codex_help_exposes_read_only_workflow() {
+     assert!(stdout.contains("doctor"));
+     assert!(stdout.contains("inspect"));
+     assert!(stdout.contains("export"));
++    assert!(stdout.contains("agent-source"));
++    assert!(stdout.contains("agent-key"));
++    assert!(stdout.contains("command-key"));
+ }
+ 
+ #[test]
+@@ -373,6 +376,120 @@ fn codex_inspect_emits_only_the_micro_settings_subset() {
+     fs::remove_dir_all(root).unwrap();
+ }
+ 
++#[test]
++fn codex_tier1_candidates_run_end_to_end_without_writing_source() {
++    let root = fixture_root();
++    fs::create_dir_all(&root).unwrap();
++    let config = root.join("config.toml");
++    let snapshot = root.join("snapshot.json");
++    let agent = root.join("agent.json");
++    let tap = root.join("tap.json");
++    let command = root.join("command.json");
++    let reset = root.join("reset.json");
++    fs::write(
++        &config,
++        b"model = \"unrelated\"\n[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
++    )
++    .unwrap();
++    let source_before = worklouderctl::fsutil::sha256(&config).unwrap();
++
++    let exported = binary()
++        .args(["--json", "codex", "export", "--config"])
++        .arg(&config)
++        .arg("--app")
++        .arg(root.join("missing.app"))
++        .arg("--output")
++        .arg(&snapshot)
++        .output()
++        .unwrap();
++    assert!(
++        exported.status.success(),
++        "{}",
++        String::from_utf8_lossy(&exported.stderr)
++    );
++
++    let set_agent = binary()
++        .args(["--json", "codex", "agent-source", "set", "--input"])
++        .arg(&snapshot)
++        .arg("priority")
++        .arg("--output")
++        .arg(&agent)
++        .output()
++        .unwrap();
++    assert!(set_agent.status.success());
++    let set_agent: serde_json::Value = serde_json::from_slice(&set_agent.stdout).unwrap();
++    assert_eq!(
++        set_agent["changedPaths"],
++        serde_json::json!(["/settings/codex-micro-agent-source"])
++    );
++    assert_eq!(set_agent["expectedSourceSha256"], source_before);
++
++    let set_tap = binary()
++        .args(["--json", "codex", "agent-key", "tap-mode", "set", "--input"])
++        .arg(&agent)
++        .arg("enabled")
++        .arg("--output")
++        .arg(&tap)
++        .output()
++        .unwrap();
++    assert!(set_tap.status.success());
++
++    let set_command = binary()
++        .args(["--json", "codex", "command-key", "set", "--input"])
++        .arg(&tap)
++        .arg("ACT06")
++        .args(["--keycap", "BUG", "--command", "fixture.command"])
++        .arg("--output")
++        .arg(&command)
++        .output()
++        .unwrap();
++    assert!(
++        set_command.status.success(),
++        "{}",
++        String::from_utf8_lossy(&set_command.stderr)
++    );
++
++    let show = binary()
++        .args(["--json", "codex", "command-key", "get", "--input"])
++        .arg(&command)
++        .arg("ACT06")
++        .output()
++        .unwrap();
++    assert!(show.status.success());
++    let show: serde_json::Value = serde_json::from_slice(&show.stdout).unwrap();
++    assert_eq!(show["keycapId"], "BUG");
++    assert_eq!(show["assignmentType"], "command");
++    assert_eq!(show["commandId"], "fixture.command");
++
++    let reset_command = binary()
++        .args(["--json", "codex", "command-key", "reset", "--input"])
++        .arg(&command)
++        .arg("ACT06")
++        .arg("--output")
++        .arg(&reset)
++        .output()
++        .unwrap();
++    assert!(reset_command.status.success());
++    let reset_show = binary()
++        .args(["--json", "codex", "command-key", "get", "--input"])
++        .arg(&reset)
++        .arg("ACT06")
++        .output()
++        .unwrap();
++    assert!(reset_show.status.success());
++    let reset_show: serde_json::Value = serde_json::from_slice(&reset_show.stdout).unwrap();
++    assert_eq!(reset_show["keycapId"], "FAST");
++    assert_eq!(reset_show["assignmentType"], "keycap");
++
++    let candidate: serde_json::Value = serde_json::from_slice(&fs::read(&reset).unwrap()).unwrap();
++    assert_eq!(candidate["settings"]["codex-micro-future"], "preserved");
++    assert_eq!(
++        worklouderctl::fsutil::sha256(&config).unwrap(),
++        source_before
++    );
++    fs::remove_dir_all(root).unwrap();
++}
++
+ #[test]
+ fn doctor_help_documents_strict_mode() {
+     let output = binary().args(["doctor", "--help"]).output().unwrap();

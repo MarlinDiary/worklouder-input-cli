@@ -1,0 +1,214 @@
+WorkLouderCTL Codex Tier 1 candidate v1 verification record
+============================================================
+
+Scope
+-----
+Base commit: 11520add1e086787c4dfad43e176eea489afa321
+Feature commit: 86d579aeb9d68a26e3ea6e5e35c66e1a945254d2
+Feature commits:
+  f1a7481 spec: freeze Codex Tier 1 candidates
+  db6d160 feat: add Codex Tier 1 candidates
+  86d579a docs: publish Codex Tier 1 candidate workflow
+Changed CLI branches:
+  codex agent-source get/set
+  codex agent-key tap-mode get/set
+  codex command-key get/set/reset
+Changed semantic fields:
+  /settings/codex-micro-agent-source
+  /settings/codex-micro-single-tap-agent-keys
+  /settings/codex-micro-layout/slots/{ACT06,ACT07,ACT08,ACT09,ACT10_ACT11,ACT12}
+Codex version (Info.plist read, app executable untouched): 26.727.51351
+Codex GUI/runtime/source mutation during the current-config probe: none. All
+snapshots and candidates were written under /tmp.
+
+Functional baseline-red: Agent source
+-------------------------------------
+Command:
+  ./target/release/worklouderctl codex agent-source --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'agent-source' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl codex [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
+
+Functional baseline-red: Command Key
+------------------------------------
+Command:
+  ./target/release/worklouderctl codex command-key --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'command-key' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl codex [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
+
+Modified behavior: real Codex config to offline candidates
+----------------------------------------------------------
+Source input:
+  /Users/marlin/.codex/config.toml
+Snapshot command:
+  ./target/release/worklouderctl --json codex export \
+    --config /Users/marlin/.codex/config.toml \
+    --app /Applications/ChatGPT.app \
+    --output /tmp/worklouder-codex-tier1-release.Bz8VR3/baseline.json
+Exit status: 0
+
+Agent source command:
+  ./target/release/worklouderctl --json codex agent-source set \
+    --input baseline.json priority --output agent.json
+Literal output:
+{"schemaVersion":1,"kind":"worklouderctl-codex-settings-candidate","operation":"codex-agent-source-set","output":"/tmp/worklouder-codex-tier1-release.Bz8VR3/agent.json","changed":true,"changedPaths":["/settings/codex-micro-agent-source"],"expectedSourceSha256":"e0ada13d8d8c046cb7007ae356af270762a4faefc4e933b659cd207bd4000392","revisionAlgorithm":"codex-settings-revision-v1","beforeRevision":"d75cf420e7f00730a8d7c3808ff7285a2b4d029d8c810b21403882b752dd71c8","afterRevision":"2f701204c1cde9680499a51e00f9d724c7e8278e1826a0219e93bcc8858c0d9e"}
+Exit status: 0
+
+Agent tap mode command:
+  ./target/release/worklouderctl --json codex agent-key tap-mode set \
+    --input agent.json disabled --output tap.json
+Literal output:
+{"schemaVersion":1,"kind":"worklouderctl-codex-settings-candidate","operation":"codex-agent-tap-mode-set","output":"/tmp/worklouder-codex-tier1-release.Bz8VR3/tap.json","changed":true,"changedPaths":["/settings/codex-micro-single-tap-agent-keys"],"expectedSourceSha256":"e0ada13d8d8c046cb7007ae356af270762a4faefc4e933b659cd207bd4000392","revisionAlgorithm":"codex-settings-revision-v1","beforeRevision":"2f701204c1cde9680499a51e00f9d724c7e8278e1826a0219e93bcc8858c0d9e","afterRevision":"9abba119c7ab69ce5495da3d905998d0b434f109b32248894723dcb340e0eebc"}
+Exit status: 0
+
+Command Key set command:
+  ./target/release/worklouderctl --json codex command-key set \
+    --input tap.json ACT06 --keycap BUG --command fixture.tier1 \
+    --output command.json
+Literal output:
+{"schemaVersion":1,"kind":"worklouderctl-codex-settings-candidate","operation":"codex-command-key-set","output":"/tmp/worklouder-codex-tier1-release.Bz8VR3/command.json","changed":true,"changedPaths":["/settings/codex-micro-layout/slots/ACT06"],"expectedSourceSha256":"e0ada13d8d8c046cb7007ae356af270762a4faefc4e933b659cd207bd4000392","revisionAlgorithm":"codex-settings-revision-v1","beforeRevision":"9abba119c7ab69ce5495da3d905998d0b434f109b32248894723dcb340e0eebc","afterRevision":"261637af3948e864fe82b80fb8d52347245f33abe7b515412dfcd0e197bd92f1"}
+Exit status: 0
+
+Command Key readback command:
+  ./target/release/worklouderctl --json codex command-key get \
+    --input command.json ACT06
+Literal output:
+{"schemaVersion":1,"kind":"worklouderctl-codex-command-key","revision":"261637af3948e864fe82b80fb8d52347245f33abe7b515412dfcd0e197bd92f1","slot":"ACT06","keycapId":"BUG","assignmentType":"command","commandId":"fixture.tier1","inherited":false}
+Exit status: 0
+
+Command Key reset command:
+  ./target/release/worklouderctl --json codex command-key reset \
+    --input command.json ACT06 --output reset.json
+Literal output:
+{"schemaVersion":1,"kind":"worklouderctl-codex-settings-candidate","operation":"codex-command-key-reset","output":"/tmp/worklouder-codex-tier1-release.Bz8VR3/reset.json","changed":true,"changedPaths":["/settings/codex-micro-layout/slots/ACT06"],"expectedSourceSha256":"e0ada13d8d8c046cb7007ae356af270762a4faefc4e933b659cd207bd4000392","revisionAlgorithm":"codex-settings-revision-v1","beforeRevision":"261637af3948e864fe82b80fb8d52347245f33abe7b515412dfcd0e197bd92f1","afterRevision":"da4163ebff404e28270f3506315a67408e35c4a2b8fd0ea7e34f77c00f95679b"}
+Exit status: 0
+
+Reset readback literal output:
+{"schemaVersion":1,"kind":"worklouderctl-codex-command-key","revision":"da4163ebff404e28270f3506315a67408e35c4a2b8fd0ea7e34f77c00f95679b","slot":"ACT06","keycapId":"FAST","assignmentType":"keycap","inherited":false}
+Exit status: 0
+
+Source config baseline and post-probe hashes
+--------------------------------------------
+Command:
+  shasum -a 256 /Users/marlin/.codex/config.toml
+Baseline literal output:
+  e0ada13d8d8c046cb7007ae356af270762a4faefc4e933b659cd207bd4000392  /Users/marlin/.codex/config.toml
+Post-probe literal output:
+  e0ada13d8d8c046cb7007ae356af270762a4faefc4e933b659cd207bd4000392  /Users/marlin/.codex/config.toml
+Comparison command:
+  cmp source-before.sha256 source-after.sha256
+Literal output: (empty)
+Exit status: 0
+Literal assertions:
+  EXPECTED_SOURCE_SHA256=e0ada13d8d8c046cb7007ae356af270762a4faefc4e933b659cd207bd4000392
+  COMMAND_AFTER=ACT06,BUG,command,fixture.tier1
+  COMMAND_RESET=ACT06,FAST,keycap
+  SOURCE_HASHES_UNCHANGED=true
+  RELEASE_CODEX_TIER1_E2E=PASS
+
+Validation boundary
+-------------------
+Verified by unit and CLI fixtures:
+  embedded definitions must equal the frozen Codex contract
+  effectiveSettings is independently recomputed
+  sourceSha256 is lowercase SHA-256
+  symlink snapshot inputs are rejected
+  unknown codex-micro-* settings are preserved
+  command and Skill representations are mutually exclusive
+  keycap-only updates preserve the existing assignment
+  default-value no-ops remain implicit and keep the revision unchanged
+  candidate output is atomically published and reopened
+
+Automated quality gates
+-----------------------
+Command: cargo fmt --check
+Literal output: (empty)
+Exit status: 0
+
+Command: cargo test --locked
+Literal result:
+  50 passed; 0 failed (library)
+  13 passed; 0 failed (CLI integration)
+  0 failed (doc tests)
+Exit status: 0
+
+Command: cargo clippy --all-targets -- -D warnings
+Literal result:
+  Finished dev [unoptimized + debuginfo] target(s)
+Exit status: 0
+
+Command: cargo +1.61.0 test --offline --locked
+Literal result:
+  50 passed; 0 failed (library)
+  13 passed; 0 failed (CLI integration)
+  0 failed (doc tests)
+Exit status: 0
+
+Command: node --test companion/input-main-bridge.test.mjs
+Literal result:
+  tests 7
+  pass 7
+  fail 0
+Exit status: 0
+
+Command: ./scripts/test-bridge-e2e.sh
+Literal relevant output:
+  config_apply_readback=verified
+  config_restore_readback=verified
+Exit status: 0
+
+Command: cargo build --release --locked
+Literal result:
+  Finished release [optimized] target(s)
+Exit status: 0
+
+Modified artifact
+-----------------
+Path: target/release/worklouderctl
+SHA-256: f26f77847afabc6a0dbe7b988afec9ab1c0a372eeced0eff282b0f2aca966f7b
+Command: ./target/release/worklouderctl version
+Literal output: worklouderctl 0.1.0
+Exit status: 0
+Commands:
+  ./target/release/worklouderctl codex agent-source --help
+  ./target/release/worklouderctl codex command-key --help
+Literal result: both command groups list get/set; Command Key also lists reset.
+Exit status: 0
+
+Patch
+-----
+Path: artifacts/verification/codex-tier1-candidates-v1/codex-tier1-candidates.patch
+SHA-256: 5433095983096fe7fd0122b1a74eb1b1cd6ece9300bccf447965977fb552dfb3
+Command:
+  git apply --check --reverse artifacts/verification/codex-tier1-candidates-v1/codex-tier1-candidates.patch
+Literal output: (empty)
+Exit status: 0
+
+Rollback
+--------
+Path: artifacts/verification/codex-tier1-candidates-v1/rollback.sh
+SHA-256: 8eb19d2836935f8f8e2d2b424034ab890801250b5ea4e8dcb13fc42ec6393d3d
+The isolated-worktree execution result is appended after the artifact commit.
+Isolated worktree command:
+  artifacts/verification/codex-tier1-candidates-v1/rollback.sh WORKTREE
+Literal output:
+  rollback=verified
+  base=11520add1e086787c4dfad43e176eea489afa321
+Exit status: 0
+Postcondition command:
+  git -C WORKTREE diff --quiet 11520add1e086787c4dfad43e176eea489afa321 -- . \
+    ':(exclude)artifacts/verification/codex-tier1-candidates-v1'
+Postcondition exit status: 0
