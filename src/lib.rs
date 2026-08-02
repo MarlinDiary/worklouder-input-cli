@@ -1616,6 +1616,23 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
                         writeln!(out, "source-sha256={}", result.source_sha256)?;
                     }
                 }
+                CodexConfigCommand::Diff { base, candidate } => {
+                    let result = codex::diff(&base, &candidate)?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        if result.identical {
+                            writeln!(out, "No Codex settings differences")?;
+                        } else {
+                            writeln!(out, "{} Codex setting difference(s)", result.changes.len())?;
+                            for change in &result.changes {
+                                writeln!(out, "{:?}\t{}", change.change, change.path)?;
+                            }
+                        }
+                        writeln!(out, "base-revision={}", result.base_revision)?;
+                        writeln!(out, "candidate-revision={}", result.candidate_revision)?;
+                    }
+                }
                 CodexConfigCommand::Apply {
                     input,
                     backup,

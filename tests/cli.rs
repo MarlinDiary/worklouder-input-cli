@@ -398,6 +398,66 @@ fn codex_runtime_help_exposes_status_and_coordinated_recovery() {
 }
 
 #[test]
+fn codex_settings_diff_runs_end_to_end_without_opening_a_bridge() {
+    let root = fixture_root();
+    fs::create_dir_all(&root).unwrap();
+    let config = root.join("config.toml");
+    let baseline = root.join("baseline.json");
+    let candidate = root.join("candidate.json");
+    fs::write(
+        &config,
+        b"[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
+    )
+    .unwrap();
+
+    let export = binary()
+        .args(["codex", "export", "--config"])
+        .arg(&config)
+        .arg("--app")
+        .arg(root.join("missing.app"))
+        .arg("--output")
+        .arg(&baseline)
+        .output()
+        .unwrap();
+    assert!(export.status.success());
+
+    let edit = binary()
+        .args(["codex", "lighting", "brightness", "set", "--input"])
+        .arg(&baseline)
+        .arg("37")
+        .arg("--output")
+        .arg(&candidate)
+        .output()
+        .unwrap();
+    assert!(edit.status.success());
+
+    let output = binary()
+        .args(["--json", "codex", "config", "diff"])
+        .arg(&baseline)
+        .arg(&candidate)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["kind"], "worklouderctl-codex-settings-diff");
+    assert_eq!(report["identical"], false);
+    assert_eq!(report["changes"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        report["changes"][0]["path"],
+        "/settings/codex-micro-lighting-brightness"
+    );
+    assert_eq!(report["changes"][0]["change"], "added");
+    assert_eq!(report["changes"][0]["after"], 37);
+    assert_ne!(report["baseRevision"], report["candidateRevision"]);
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn device_help_exposes_live_read_workflow() {
     let device = binary().args(["device", "--help"]).output().unwrap();
     let stdout = String::from_utf8(device.stdout).unwrap();

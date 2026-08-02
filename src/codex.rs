@@ -1,5 +1,5 @@
 use crate::doctor::{self, Check, CheckStatus};
-use crate::fsutil;
+use crate::{config, fsutil};
 use anyhow::{bail, ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -83,6 +83,19 @@ pub struct CandidateReceipt {
     pub revision_algorithm: &'static str,
     pub before_revision: String,
     pub after_revision: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsDiffReport {
+    pub schema_version: u8,
+    pub kind: &'static str,
+    pub base: PathBuf,
+    pub candidate: PathBuf,
+    pub base_revision: String,
+    pub candidate_revision: String,
+    pub identical: bool,
+    pub changes: Vec<config::Change>,
 }
 
 #[derive(Debug, Serialize)]
@@ -875,6 +888,27 @@ pub fn read_snapshot(path: &Path) -> Result<Snapshot> {
     Ok(snapshot)
 }
 
+pub fn diff(base_path: &Path, candidate_path: &Path) -> Result<SettingsDiffReport> {
+    let base = read_snapshot(base_path)?;
+    let candidate = read_snapshot(candidate_path)?;
+    let base_revision = settings_revision(&base.settings)?;
+    let candidate_revision = settings_revision(&candidate.settings)?;
+    let base_settings = serde_json::to_value(&base.settings)?;
+    let candidate_settings = serde_json::to_value(&candidate.settings)?;
+    let changes = config::diff_json_values("/settings", &base_settings, &candidate_settings);
+
+    Ok(SettingsDiffReport {
+        schema_version: 1,
+        kind: "worklouderctl-codex-settings-diff",
+        base: base_path.to_path_buf(),
+        candidate: candidate_path.to_path_buf(),
+        identical: changes.is_empty(),
+        base_revision,
+        candidate_revision,
+        changes,
+    })
+}
+
 pub fn validate_snapshot(snapshot: &Snapshot) -> Result<()> {
     let contract = load_contract()?;
     ensure!(
@@ -1422,6 +1456,53 @@ mod tests {
         let error = inspect(&config, &root.join("missing.app")).unwrap_err();
 
         assert!(error.to_string().contains("must be between 0 and 100"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn settings_diff_validates_snapshots_and_ignores_transport_metadata() {
+        let root = fixture_root();
+        fs::create_dir_all(&root).unwrap();
+        let config = root.join("config.toml");
+        let baseline_path = root.join("baseline.json");
+        let candidate_path = root.join("candidate.json");
+        let metadata_path = root.join("metadata.json");
+        fs::write(
+            &config,
+            b"[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
+        )
+        .unwrap();
+        export(&config, &root.join("missing.app"), &baseline_path).unwrap();
+        lighting_brightness_set(&baseline_path, 37, &candidate_path).unwrap();
+
+        let report = diff(&baseline_path, &candidate_path).unwrap();
+        assert!(!report.identical);
+        assert_ne!(report.base_revision, report.candidate_revision);
+        assert_eq!(report.changes.len(), 1);
+        assert_eq!(
+            report.changes[0].path,
+            "/settings/codex-micro-lighting-brightness"
+        );
+        assert_eq!(report.changes[0].before, None);
+        assert_eq!(report.changes[0].after, Some(serde_json::json!(37)));
+
+        let mut metadata_only = read_snapshot(&baseline_path).unwrap();
+        metadata_only.installed_app_version = Some("metadata-only".into());
+        metadata_only.source_path = root.join("different-source.toml");
+        metadata_only.warnings.push("metadata-only".into());
+        fs::write(
+            &metadata_path,
+            serde_json::to_vec_pretty(&metadata_only).unwrap(),
+        )
+        .unwrap();
+        let metadata_report = diff(&baseline_path, &metadata_path).unwrap();
+        assert!(metadata_report.identical);
+        assert_eq!(
+            metadata_report.base_revision,
+            metadata_report.candidate_revision
+        );
+        assert!(metadata_report.changes.is_empty());
+
         fs::remove_dir_all(root).unwrap();
     }
 

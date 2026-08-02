@@ -449,6 +449,12 @@ fn diff_value(path: &str, before: &Value, after: &Value, changes: &mut Vec<Chang
     }
 }
 
+pub(crate) fn diff_json_values(path: &str, before: &Value, after: &Value) -> Vec<Change> {
+    let mut changes = Vec::new();
+    diff_value(path, before, after, &mut changes);
+    changes
+}
+
 fn safe_relative_path(path: &str) -> bool {
     if path.contains('\\') || path.contains('\0') {
         return false;
@@ -481,6 +487,17 @@ mod tests {
         assert_eq!(changes.len(), 2);
         assert_eq!(changes[0].path, "/keymap.json/layer/color");
         assert_eq!(changes[1].path, "/keymap.json/layer/keys/1");
+    }
+
+    #[test]
+    fn structural_diff_escapes_json_pointer_tokens() {
+        let before = serde_json::json!({"a/b": {"~flag": false}});
+        let after = serde_json::json!({"a/b": {"~flag": true}});
+
+        let changes = diff_json_values("/settings", &before, &after);
+
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].path, "/settings/a~1b/~0flag");
     }
 
     #[test]

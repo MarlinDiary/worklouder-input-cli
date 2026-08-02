@@ -660,6 +660,17 @@ pub enum CodexConfigCommand {
         output: PathBuf,
     },
 
+    /// Compare only the explicit settings in two validated Codex snapshots.
+    Diff {
+        /// Baseline from `codex config snapshot` or an offline Codex editor.
+        #[clap(value_parser)]
+        base: PathBuf,
+
+        /// Candidate from `codex config snapshot` or an offline Codex editor.
+        #[clap(value_parser)]
+        candidate: PathBuf,
+    },
+
     /// Apply a complete settings candidate with backup, CAS, and exact readback.
     Apply {
         /// Candidate from `codex config snapshot` or an offline Codex editor.
