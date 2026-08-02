@@ -179,3 +179,30 @@ Syntax command:
   sh -n artifacts/verification/input-command-permission-v1/rollback.sh
 Exit status: 0
 The isolated rollback execution is appended after the artifact commit.
+Isolated rollback execution
+---------------------------
+Artifact commit:
+  fe10284
+Command:
+  artifacts/verification/input-command-permission-v1/rollback.sh \
+    /tmp/worklouderctl-input-command-permission-v1.mceNKK/rollback-worktree.3GsvbH
+Literal output:
+  rollback=verified
+  base=2b2a6e275a799c1e79cc89a9025e4b7bcbfc1b62
+Literal stderr: (empty)
+Exit status: 0
+Postcondition:
+  worktree equals base outside artifacts/verification/input-command-permission-v1
+Exit status: 0
+Rolled-back behavior command:
+  cargo run --quiet --locked --manifest-path ROLLBACK_WORKTREE/Cargo.toml -- \
+    input permission command --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'permission' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl input [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
