@@ -176,3 +176,29 @@ Path:
 SHA-256:
   e0151a579fa78b9b5e9581342e667d473ccf39c660bed8635bdd32a5a7f72e1b
 The isolated rollback execution is appended after the artifact commit.
+
+Isolated rollback execution
+---------------------------
+Artifact commit:
+  b8929ca test: publish Codex joystick evidence
+Command:
+  artifacts/verification/codex-joystick-v1/rollback.sh \
+    /tmp/worklouderctl-codex-joystick-v1.rx42IT/rollback-worktree
+Literal output:
+  rollback=verified
+  base=d7fb0964b171285ce5b84d9cd049fc129049f77c
+Exit status: 0
+Postcondition:
+  worktree equals base outside artifacts/verification/codex-joystick-v1
+Exit status: 0
+Rolled-back behavior:
+  cargo run --quiet --locked --manifest-path ROLLBACK_WORKTREE/Cargo.toml -- \
+    codex joystick --help
+Literal stderr:
+  error: Found argument 'joystick' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl codex [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
