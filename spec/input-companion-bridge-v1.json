@@ -189,6 +189,15 @@
       "resultKind": "worklouder-input-firmware-plan"
     },
     {
+      "name": "input.reset.plan",
+      "capability": "input.reset.plan.v1",
+      "mutation": false,
+      "optionalParams": [
+        "deviceId"
+      ],
+      "resultKind": "worklouder-input-reset-plan-bundle"
+    },
+    {
       "name": "input.firmware.update",
       "capability": "input.firmware.update.v1",
       "mutation": true,
@@ -370,6 +379,13 @@
       "update": "optional high-level authority owns download, bootloader, programmer, reconnect, config restore, and postflight",
       "updateTimeoutSeconds": 900,
       "capabilityAdvertisement": "status and plan require firmwareAuthority.readStatus; update additionally requires firmwareOperationsAuthority.updateFirmware"
+    },
+    "reset": {
+      "authority": "Input-owned device/layout/version default configuration factory",
+      "planMutation": false,
+      "applyAuthority": "existing device.config.apply transaction",
+      "rollbackAuthority": "existing device.config.restore transaction",
+      "capabilityAdvertisement": "advertised only when resetAuthority.buildDefaultConfiguration supplies complete default files"
     },
     "logs": {
       "authority": "Input WindowService in-memory renderer log ring",

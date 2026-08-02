@@ -55,6 +55,7 @@ export async function installInputCompanionBridge({
   const adapter = createInputMainAdapter({
     devicesCommManager: services.devicesCommManager,
     deviceKitVersion,
+    inputVersion: app.getVersion(),
     configurationWriter: services.configurationWriter,
     hostSettingsAuthority,
     presetCatalogAuthority: services.presetCatalogAuthority,
@@ -62,6 +63,7 @@ export async function installInputCompanionBridge({
     permissionsAuthority,
     firmwareAuthority,
     firmwareOperationsAuthority: services.firmwareOperationsAuthority,
+    resetAuthority: services.resetAuthority,
     logsAuthority,
   });
   const bridge = await startInputCompanionBridge({

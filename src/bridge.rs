@@ -28,6 +28,8 @@ const HOST_SETTINGS_KIND: &str = "worklouder-input-host-settings";
 const HOST_SETTINGS_REVISION_ALGORITHM: &str = "sha256:input-host-settings-three-booleans-v1";
 const PRESET_CATALOG_KIND: &str = "worklouder-input-preset-catalog";
 const PRESET_CATALOG_REVISION_ALGORITHM: &str = "sha256:recursive-key-sorted-presets-json-v1";
+const RESET_PLAN_KIND: &str = "worklouder-input-reset-plan";
+const RESET_PLAN_REVISION_ALGORITHM: &str = "sha256:recursive-key-sorted-reset-plan-body-v1";
 const MAX_PRESET_CATALOG_BYTES: usize = 32 * 1024 * 1024;
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -70,8 +72,8 @@ pub struct ConfigValidation {
     pub total_bytes: u64,
 }
 
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ConfigMutationReceipt {
     pub backup: PathBuf,
     pub schema_version: u64,
@@ -85,6 +87,74 @@ pub struct ConfigMutationReceipt {
     pub before_revision: String,
     pub after_revision: String,
     pub target_revision: String,
+    pub file_count: usize,
+    pub total_bytes: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ResetPlan {
+    pub schema_version: u64,
+    pub kind: String,
+    pub revision_algorithm: String,
+    pub revision: String,
+    pub input_app_version: String,
+    pub device_id: String,
+    pub device_kit_version: String,
+    pub device: DeviceInfo,
+    pub firmware_version: String,
+    pub layout_version: String,
+    pub strategy: String,
+    pub source_revision: String,
+    pub candidate_revision: String,
+    pub candidate_file_count: usize,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct BridgeResetPlanBundle {
+    schema_version: u64,
+    kind: String,
+    plan: ResetPlan,
+    candidate: Value,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetPlanReceipt {
+    pub plan: PathBuf,
+    pub candidate: PathBuf,
+    pub revision: String,
+    pub input_app_version: String,
+    pub device_id: String,
+    pub device_type: String,
+    pub layout_version: String,
+    pub source_revision: String,
+    pub candidate_revision: String,
+    pub candidate_file_count: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ResetApplyReceipt {
+    pub schema_version: u64,
+    pub kind: String,
+    pub adapter: String,
+    pub plan: PathBuf,
+    pub candidate: PathBuf,
+    pub backup: PathBuf,
+    pub receipt: PathBuf,
+    pub plan_revision: String,
+    pub input_app_version: String,
+    pub device_id: String,
+    pub device_type: String,
+    pub layout_version: String,
+    pub source_revision: String,
+    pub candidate_revision: String,
+    pub idempotency_key: String,
+    pub idempotent_replay: bool,
+    pub changed: bool,
+    pub rollback_performed: bool,
     pub file_count: usize,
     pub total_bytes: u64,
 }
@@ -779,6 +849,251 @@ pub fn firmware_update(
     Ok(receipt)
 }
 
+pub fn reset_plan(
+    paths: &BridgePaths,
+    device_id: Option<&str>,
+    plan_path: &Path,
+    candidate_path: &Path,
+) -> Result<ResetPlanReceipt> {
+    ensure!(
+        plan_path != candidate_path,
+        "reset plan and candidate paths must differ"
+    );
+    ensure!(
+        !plan_path.exists() && !candidate_path.exists(),
+        "reset plan and candidate destinations must not already exist"
+    );
+    let mut client = BridgeClient::connect(paths)?;
+    let input_version = client.handshake.input_version.clone();
+    let bundle: BridgeResetPlanBundle = client.call(
+        "input.reset.plan",
+        "input.reset.plan.v1",
+        json!({ "deviceId": device_id }),
+    )?;
+    ensure!(
+        bundle.schema_version == 1 && bundle.kind == "worklouder-input-reset-plan-bundle",
+        "Input reset plan bundle header was invalid"
+    );
+    validate_reset_plan(&bundle.plan)?;
+    ensure!(
+        bundle.plan.input_app_version == input_version,
+        "Input reset plan version differed from the bridge handshake"
+    );
+    validate_reset_candidate(&bundle.plan, &bundle.candidate)?;
+
+    let mut candidate_published = false;
+    let mut plan_published = false;
+    let publish = (|| -> Result<()> {
+        write_atomic_json(candidate_path, &bundle.candidate)?;
+        candidate_published = true;
+        write_atomic_json(plan_path, &serde_json::to_value(&bundle.plan)?)?;
+        plan_published = true;
+        Ok(())
+    })();
+    if publish.is_err() {
+        if plan_published {
+            let _ = fs::remove_file(plan_path);
+        }
+        if candidate_published {
+            let _ = fs::remove_file(candidate_path);
+        }
+        publish?;
+    }
+    let reopened_plan = read_reset_plan(plan_path)?;
+    let (reopened_candidate, _) = read_config_snapshot(candidate_path)?;
+    validate_reset_candidate(&reopened_plan, &reopened_candidate)?;
+    ensure!(
+        reopened_plan == bundle.plan && reopened_candidate == bundle.candidate,
+        "published reset plan/candidate readback differed"
+    );
+    Ok(ResetPlanReceipt {
+        plan: plan_path.to_path_buf(),
+        candidate: candidate_path.to_path_buf(),
+        revision: bundle.plan.revision,
+        input_app_version: bundle.plan.input_app_version,
+        device_id: bundle.plan.device_id,
+        device_type: bundle.plan.device.device_type,
+        layout_version: bundle.plan.layout_version,
+        source_revision: bundle.plan.source_revision,
+        candidate_revision: bundle.plan.candidate_revision,
+        candidate_file_count: bundle.plan.candidate_file_count,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn reset_apply(
+    paths: &BridgePaths,
+    plan_path: &Path,
+    candidate_path: &Path,
+    backup_path: &Path,
+    receipt_path: &Path,
+    expected_revision: Option<&str>,
+    idempotency_key: Option<&str>,
+) -> Result<ResetApplyReceipt> {
+    let distinct = [plan_path, candidate_path, backup_path, receipt_path];
+    for (index, path) in distinct.iter().enumerate() {
+        ensure!(
+            distinct.iter().skip(index + 1).all(|other| path != other),
+            "reset plan, candidate, backup, and receipt paths must differ"
+        );
+    }
+    ensure!(
+        !receipt_path.exists(),
+        "reset receipt destination already exists: {}",
+        receipt_path.display()
+    );
+    let plan = read_reset_plan(plan_path)?;
+    let (candidate, candidate_metadata) = read_config_snapshot(candidate_path)?;
+    validate_reset_candidate(&plan, &candidate)?;
+    let expected = expected_revision.unwrap_or(&plan.source_revision);
+    ensure!(
+        expected.eq_ignore_ascii_case(&plan.source_revision),
+        "reset expected revision differed from the frozen source revision"
+    );
+    if backup_path.exists() {
+        let (_, backup_metadata) = read_config_snapshot(backup_path)?;
+        ensure!(
+            backup_metadata.device_id == plan.device_id
+                && backup_metadata.revision.eq_ignore_ascii_case(expected),
+            "existing reset backup did not match the frozen source revision"
+        );
+    }
+    let mutation = config_apply_versioned(
+        paths,
+        Some(&plan.device_id),
+        candidate_path,
+        backup_path,
+        Some(expected),
+        idempotency_key,
+        Some(&plan.input_app_version),
+    )?;
+    let (_, backup_metadata) = read_config_snapshot(backup_path)?;
+    ensure!(
+        backup_metadata.device_id == plan.device_id
+            && backup_metadata
+                .revision
+                .eq_ignore_ascii_case(&plan.source_revision),
+        "reset backup readback did not match the frozen source revision"
+    );
+    ensure!(
+        mutation
+            .before_revision
+            .eq_ignore_ascii_case(&plan.source_revision)
+            && mutation.after_revision == plan.candidate_revision
+            && mutation.target_revision == candidate_metadata.revision
+            && !mutation.rollback_performed,
+        "reset config transaction did not match the frozen plan"
+    );
+    let receipt = ResetApplyReceipt {
+        schema_version: 1,
+        kind: "worklouderctl-input-reset-receipt".into(),
+        adapter: ADAPTER.into(),
+        plan: plan_path.to_path_buf(),
+        candidate: candidate_path.to_path_buf(),
+        backup: backup_path.to_path_buf(),
+        receipt: receipt_path.to_path_buf(),
+        plan_revision: plan.revision,
+        input_app_version: plan.input_app_version,
+        device_id: plan.device_id,
+        device_type: plan.device.device_type,
+        layout_version: plan.layout_version,
+        source_revision: plan.source_revision,
+        candidate_revision: plan.candidate_revision,
+        idempotency_key: mutation.idempotency_key,
+        idempotent_replay: mutation.idempotent_replay,
+        changed: mutation.changed,
+        rollback_performed: mutation.rollback_performed,
+        file_count: mutation.file_count,
+        total_bytes: mutation.total_bytes,
+    };
+    write_atomic_json(receipt_path, &serde_json::to_value(&receipt)?)?;
+    let reopened = read_reset_apply_receipt(receipt_path)?;
+    ensure!(
+        reopened == receipt,
+        "published reset receipt readback differed"
+    );
+    Ok(receipt)
+}
+
+pub fn read_reset_plan(input: &Path) -> Result<ResetPlan> {
+    let metadata = fs::symlink_metadata(input)
+        .with_context(|| format!("failed to inspect reset plan {}", input.display()))?;
+    ensure!(
+        metadata.file_type().is_file(),
+        "reset plan must be a regular file"
+    );
+    ensure!(
+        metadata.len() <= 2 * 1024 * 1024,
+        "reset plan exceeded 2 MiB"
+    );
+    let plan: ResetPlan = serde_json::from_slice(
+        &fs::read(input)
+            .with_context(|| format!("failed to read reset plan {}", input.display()))?,
+    )
+    .with_context(|| format!("reset plan was invalid JSON: {}", input.display()))?;
+    validate_reset_plan(&plan)?;
+    Ok(plan)
+}
+
+pub fn read_reset_apply_receipt(input: &Path) -> Result<ResetApplyReceipt> {
+    let metadata = fs::symlink_metadata(input)
+        .with_context(|| format!("failed to inspect reset receipt {}", input.display()))?;
+    ensure!(
+        metadata.file_type().is_file(),
+        "reset receipt must be a regular file"
+    );
+    ensure!(
+        metadata.len() <= 4 * 1024 * 1024,
+        "reset receipt exceeded 4 MiB"
+    );
+    let receipt: ResetApplyReceipt = serde_json::from_slice(
+        &fs::read(input)
+            .with_context(|| format!("failed to read reset receipt {}", input.display()))?,
+    )
+    .with_context(|| format!("reset receipt was invalid JSON: {}", input.display()))?;
+    ensure!(
+        receipt.schema_version == 1
+            && receipt.kind == "worklouderctl-input-reset-receipt"
+            && receipt.adapter == ADAPTER
+            && receipt.receipt == input
+            && is_sha256(&receipt.plan_revision)
+            && is_sha256(&receipt.source_revision)
+            && is_sha256(&receipt.candidate_revision)
+            && !receipt.input_app_version.is_empty()
+            && !receipt.device_id.is_empty()
+            && !receipt.device_type.is_empty()
+            && !receipt.layout_version.is_empty()
+            && !receipt.idempotency_key.is_empty()
+            && receipt.idempotency_key.len() <= 256
+            && !receipt.rollback_performed
+            && receipt.changed
+                != receipt
+                    .source_revision
+                    .eq_ignore_ascii_case(&receipt.candidate_revision),
+        "reset receipt header or outcome was invalid"
+    );
+    let plan = read_reset_plan(&receipt.plan)?;
+    let (candidate, candidate_metadata) = read_config_snapshot(&receipt.candidate)?;
+    validate_reset_candidate(&plan, &candidate)?;
+    let (_, backup_metadata) = read_config_snapshot(&receipt.backup)?;
+    ensure!(
+        receipt.plan_revision == plan.revision
+            && receipt.input_app_version == plan.input_app_version
+            && receipt.device_id == plan.device_id
+            && receipt.device_type == plan.device.device_type
+            && receipt.layout_version == plan.layout_version
+            && receipt.source_revision == plan.source_revision
+            && receipt.candidate_revision == plan.candidate_revision
+            && candidate_metadata.revision == plan.candidate_revision
+            && backup_metadata.device_id == plan.device_id
+            && backup_metadata.revision == plan.source_revision
+            && receipt.file_count == candidate_metadata.file_count
+            && receipt.total_bytes == candidate_metadata.total_bytes,
+        "reset receipt did not match its plan, candidate, or backup"
+    );
+    Ok(receipt)
+}
+
 pub fn collect_logs(
     paths: &BridgePaths,
     output: &Path,
@@ -1193,6 +1508,94 @@ fn firmware_plan_revision(plan: &FirmwarePlan) -> Result<String> {
     fsutil::sha256_bytes(&bytes)
 }
 
+fn validate_reset_plan(plan: &ResetPlan) -> Result<()> {
+    ensure!(
+        plan.schema_version == 1
+            && plan.kind == RESET_PLAN_KIND
+            && plan.revision_algorithm == RESET_PLAN_REVISION_ALGORITHM,
+        "Input reset plan header was invalid"
+    );
+    ensure!(
+        !plan.input_app_version.is_empty()
+            && plan.input_app_version.len() <= 128
+            && !plan.input_app_version.contains('\0')
+            && !plan.device_id.is_empty()
+            && plan.device_id.len() <= 512
+            && !plan.device_id.contains('\0')
+            && !plan.device_kit_version.is_empty()
+            && plan.device_kit_version.len() <= 128
+            && !plan.device_kit_version.contains('\0')
+            && !plan.firmware_version.is_empty()
+            && plan.firmware_version.len() <= 128
+            && !plan.firmware_version.contains('\0')
+            && !plan.layout_version.is_empty()
+            && plan.layout_version.len() <= 128
+            && !plan.layout_version.contains('\0')
+            && !plan.device.device_pid.is_empty()
+            && !plan.device.device_type.is_empty()
+            && !plan.device.layout_type.is_empty()
+            && !plan.device.connection_type.is_empty()
+            && plan.strategy == "input-default-layout"
+            && is_sha256(&plan.source_revision)
+            && is_sha256(&plan.candidate_revision)
+            && (1..=4096).contains(&plan.candidate_file_count),
+        "Input reset plan identity or revisions were invalid"
+    );
+    ensure!(
+        plan.revision == reset_plan_revision(plan)?,
+        "Input reset plan revision did not match content"
+    );
+    Ok(())
+}
+
+fn validate_reset_candidate(plan: &ResetPlan, candidate: &Value) -> Result<()> {
+    let metadata = inspect_config_snapshot(candidate)?;
+    let object = candidate
+        .as_object()
+        .context("reset candidate was not an object")?;
+    let device_kit_version = object
+        .get("deviceKitVersion")
+        .and_then(Value::as_str)
+        .context("reset candidate omitted deviceKitVersion")?;
+    let device: DeviceInfo = serde_json::from_value(
+        object
+            .get("device")
+            .cloned()
+            .context("reset candidate omitted device")?,
+    )
+    .context("reset candidate device was invalid")?;
+    let status: DeviceStatus = serde_json::from_value(
+        object
+            .get("status")
+            .cloned()
+            .context("reset candidate omitted status")?,
+    )
+    .context("reset candidate status was invalid")?;
+    ensure!(
+        metadata.device_id == plan.device_id
+            && metadata.revision == plan.candidate_revision
+            && metadata.file_count == plan.candidate_file_count
+            && device_kit_version == plan.device_kit_version
+            && device == plan.device
+            && status.firmware_version.as_deref() == Some(plan.firmware_version.as_str()),
+        "reset candidate identity did not match the plan"
+    );
+    Ok(())
+}
+
+fn reset_plan_revision(plan: &ResetPlan) -> Result<String> {
+    let mut body = serde_json::to_value(plan)?;
+    let object = body
+        .as_object_mut()
+        .context("reset plan body was not an object")?;
+    for field in ["schemaVersion", "kind", "revisionAlgorithm", "revision"] {
+        object.remove(field);
+    }
+    let mut bytes = b"worklouder-input-reset-plan-revision-v1\0".to_vec();
+    bytes.extend(serde_json::to_vec(&canonical_json(&body))?);
+    fsutil::sha256_bytes(&bytes)
+}
+
 fn validate_log_snapshot(snapshot: &InputLogSnapshot, limit: usize) -> Result<()> {
     ensure!(
         snapshot.schema_version == 1
@@ -1544,6 +1947,27 @@ pub fn config_apply(
     expected_revision: Option<&str>,
     idempotency_key: Option<&str>,
 ) -> Result<ConfigMutationReceipt> {
+    config_apply_versioned(
+        paths,
+        device_id,
+        input,
+        backup,
+        expected_revision,
+        idempotency_key,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn config_apply_versioned(
+    paths: &BridgePaths,
+    device_id: Option<&str>,
+    input: &Path,
+    backup: &Path,
+    expected_revision: Option<&str>,
+    idempotency_key: Option<&str>,
+    expected_input_version: Option<&str>,
+) -> Result<ConfigMutationReceipt> {
     config_mutate(
         paths,
         "apply",
@@ -1555,6 +1979,7 @@ pub fn config_apply(
         backup,
         expected_revision,
         idempotency_key,
+        expected_input_version,
     )
 }
 
@@ -1577,6 +2002,7 @@ pub fn config_restore(
         backup,
         expected_revision,
         idempotency_key,
+        None,
     )
 }
 
@@ -1788,6 +2214,7 @@ fn config_mutate(
     backup: &Path,
     expected_revision: Option<&str>,
     idempotency_key: Option<&str>,
+    expected_input_version: Option<&str>,
 ) -> Result<ConfigMutationReceipt> {
     ensure!(input != backup, "input and backup paths must differ");
     let (candidate, candidate_metadata) = read_config_snapshot(input)?;
@@ -1821,6 +2248,12 @@ fn config_mutate(
         .context("mutation params were not an object")?
         .insert(payload_field.to_owned(), candidate);
     let mut client = BridgeClient::connect(paths)?;
+    if let Some(version) = expected_input_version {
+        ensure!(
+            client.handshake.input_version == version,
+            "Input version differed from the frozen configuration plan"
+        );
+    }
     let response: ConfigMutationResponse = client.call(method, capability, params)?;
     validate_mutation_response(
         &response,

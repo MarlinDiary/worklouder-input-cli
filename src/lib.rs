@@ -33,12 +33,12 @@ use cli::{
     ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
     InputCommand, InputCommandPermissionCommand, InputCommandPermissionValue, InputConfigCommand,
     InputFirmwareCommand, InputLogsCommand, InputPermissionCommand, InputPresetCommand,
-    LayerCommand, LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand,
-    LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect, LightingZone,
-    MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, PresetCommand,
-    ProfileCommand, RadialCommand, SchemaCommand, SmartActionCommand, SmartActionGroupCommand,
-    SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType, TierCommand,
-    TransactionCommand,
+    InputResetCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
+    LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect,
+    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
+    PresetCommand, ProfileCommand, RadialCommand, SchemaCommand, SmartActionCommand,
+    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
+    TierCommand, TransactionCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -3417,6 +3417,64 @@ fn run_input(
                     writeln!(out, "backup={}", result.backup.display())?;
                     writeln!(out, "receipt={}", result.receipt.display())?;
                     writeln!(out, "providerOutcome={}", result.provider_outcome)?;
+                }
+            }
+        },
+        InputCommand::Reset { command } => match command {
+            InputResetCommand::Plan {
+                plan,
+                candidate,
+                device,
+            } => {
+                let result =
+                    bridge::reset_plan(&bridge_paths, device.as_deref(), &plan, &candidate)?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "Reset plan {}: {} / {} / {}",
+                        result.revision,
+                        result.input_app_version,
+                        result.device_type,
+                        result.layout_version
+                    )?;
+                    writeln!(out, "sourceRevision={}", result.source_revision)?;
+                    writeln!(out, "candidateRevision={}", result.candidate_revision)?;
+                    writeln!(out, "plan={}", result.plan.display())?;
+                    writeln!(out, "candidate={}", result.candidate.display())?;
+                }
+            }
+            InputResetCommand::Apply {
+                plan,
+                candidate,
+                backup,
+                receipt,
+                expected_revision,
+                idempotency_key,
+            } => {
+                let result = bridge::reset_apply(
+                    &bridge_paths,
+                    &plan,
+                    &candidate,
+                    &backup,
+                    &receipt,
+                    expected_revision.as_deref(),
+                    idempotency_key.as_deref(),
+                )?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "Reset {} -> {}: changed={} replay={}",
+                        result.source_revision,
+                        result.candidate_revision,
+                        result.changed,
+                        result.idempotent_replay
+                    )?;
+                    writeln!(out, "backup={}", result.backup.display())?;
+                    writeln!(out, "receipt={}", result.receipt.display())?;
                 }
             }
         },

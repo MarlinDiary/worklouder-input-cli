@@ -214,6 +214,33 @@ fn inspect_file(input: &Path) -> Result<BackupInspection> {
                 None,
             ))
         }
+        "worklouder-input-reset-plan" => {
+            let plan = bridge::read_reset_plan(input)?;
+            Ok(report(
+                kind,
+                input,
+                plan.schema_version,
+                Some(plan.revision),
+                plan.candidate_file_count,
+                false,
+                None,
+            ))
+        }
+        "worklouderctl-input-reset-receipt" => {
+            let receipt = bridge::read_reset_apply_receipt(input)?;
+            Ok(report(
+                kind,
+                input,
+                receipt.schema_version,
+                Some(receipt.plan_revision),
+                receipt.file_count,
+                true,
+                Some(format!(
+                    "worklouderctl device --transport bridge config restore --input {} --backup CURRENT_BACKUP --expected-revision {} --idempotency-key IDEMPOTENCY_KEY",
+                    receipt.backup.display(), receipt.candidate_revision
+                )),
+            ))
+        }
         "worklouder-input-preset-catalog" => {
             let snapshot = bridge::read_preset_catalog_snapshot(input)?;
             Ok(report(

@@ -189,10 +189,25 @@ fn schemas_are_discoverable_and_machine_readable() {
         .unwrap();
     assert!(list.status.success());
     let summaries: serde_json::Value = serde_json::from_slice(&list.stdout).unwrap();
-    assert_eq!(summaries.as_array().unwrap().len(), 7);
-    assert_eq!(summaries[0]["name"], "agent-execution-v1");
-    assert_eq!(summaries[1]["name"], "backup-inspection-v1");
-    assert_eq!(summaries[3]["name"], "configuration-v1");
+    let names = summaries
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|summary| summary["name"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        names,
+        vec![
+            "agent-execution-v1",
+            "backup-inspection-v1",
+            "command-envelope-v1",
+            "compatibility-matrix-v1",
+            "configuration-v1",
+            "error-v1",
+            "input-operations-v1",
+            "transaction-v1",
+        ]
+    );
 
     let backup = binary()
         .args(["--json", "schema", "show", "backup-inspection-v1"])
@@ -429,6 +444,7 @@ fn input_and_config_help_expose_read_only_workflow() {
     assert!(input_stdout.contains("permission"));
     assert!(input_stdout.contains("permissions"));
     assert!(input_stdout.contains("firmware"));
+    assert!(input_stdout.contains("reset"));
     assert!(input_stdout.contains("logs"));
     assert!(input_stdout.contains("preset"));
 
@@ -516,6 +532,45 @@ fn firmware_help_exposes_plan_before_delegated_update() {
         "--idempotency-key",
     ] {
         assert!(update_stdout.contains(option));
+    }
+}
+
+#[test]
+fn reset_help_exposes_plan_and_transactional_apply() {
+    let output = binary()
+        .args(["input", "reset", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(output.status.success());
+    assert!(stdout.contains("plan"));
+    assert!(stdout.contains("apply"));
+
+    let plan = binary()
+        .args(["input", "reset", "plan", "--help"])
+        .output()
+        .unwrap();
+    let plan_stdout = String::from_utf8(plan.stdout).unwrap();
+    assert!(plan.status.success());
+    for option in ["--plan", "--candidate", "--device"] {
+        assert!(plan_stdout.contains(option));
+    }
+
+    let apply = binary()
+        .args(["input", "reset", "apply", "--help"])
+        .output()
+        .unwrap();
+    let apply_stdout = String::from_utf8(apply.stdout).unwrap();
+    assert!(apply.status.success());
+    for option in [
+        "--plan",
+        "--candidate",
+        "--backup",
+        "--receipt",
+        "--expected-revision",
+        "--idempotency-key",
+    ] {
+        assert!(apply_stdout.contains(option));
     }
 }
 

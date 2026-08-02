@@ -291,6 +291,12 @@ pub enum InputCommand {
         command: InputFirmwareCommand,
     },
 
+    /// Plan and apply an Input-owned complete default configuration.
+    Reset {
+        #[clap(subcommand)]
+        command: InputResetCommand,
+    },
+
     /// Collect a bounded, sanitized diagnostic log bundle from Input.
     Logs {
         #[clap(subcommand)]
@@ -343,6 +349,51 @@ pub enum InputFirmwareCommand {
         expected_revision: Option<String>,
 
         /// Stable retry key; reuse it only with the exact same plan.
+        #[clap(long)]
+        idempotency_key: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum InputResetCommand {
+    /// Freeze the live revision and an Input-generated default candidate.
+    Plan {
+        /// Destination for the immutable reset plan.
+        #[clap(long, value_parser)]
+        plan: PathBuf,
+
+        /// Destination for the complete default configuration snapshot.
+        #[clap(long, value_parser)]
+        candidate: PathBuf,
+
+        /// Select a connected device ID; defaults to the single Codex Micro.
+        #[clap(long)]
+        device: Option<String>,
+    },
+
+    /// Apply the frozen candidate through the existing config transaction.
+    Apply {
+        /// Immutable plan produced by `input reset plan`.
+        #[clap(long, value_parser)]
+        plan: PathBuf,
+
+        /// Complete default candidate produced with the plan.
+        #[clap(long, value_parser)]
+        candidate: PathBuf,
+
+        /// Immutable complete pre-reset configuration snapshot.
+        #[clap(long, value_parser)]
+        backup: PathBuf,
+
+        /// Destination for the verified reset receipt.
+        #[clap(long, value_parser)]
+        receipt: PathBuf,
+
+        /// Require the live configuration to have this exact revision.
+        #[clap(long)]
+        expected_revision: Option<String>,
+
+        /// Stable retry key; reuse it only with the same plan and candidate.
         #[clap(long)]
         idempotency_key: Option<String>,
     },

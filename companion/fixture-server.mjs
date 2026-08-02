@@ -178,6 +178,49 @@ const files = new Map([
   ],
 ]);
 
+const defaultFiles = new Map([
+  [
+    "keymap.json",
+    Buffer.from(
+      JSON.stringify({
+        version: 1,
+        activeProfileId: 0,
+        linkedApps: [],
+        macros: [],
+        macrosGroups: [],
+        multiActions: [],
+        multiActionsGroups: [],
+        profiles: [
+          {
+            id: 0,
+            name: "Default",
+            macrosUsed: [],
+            multiActionsUsed: [],
+            layers: [
+              {
+                id: 0,
+                name: "Layer 1",
+                color: 0xffffff,
+                layout: {
+                  keymap: [["KC_NONE", "KC_NONE"]],
+                  encoders: [["KC_NONE", "KC_NONE", "KC_NONE"]],
+                  joystick: { type: "VENDOR", sectors: [] },
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    ),
+  ],
+  [
+    "smart_actions.json",
+    Buffer.from(
+      JSON.stringify({ version: 1, smartActions: {}, smartActionGroups: [] }),
+    ),
+  ],
+]);
+
 let hostSettings = {
   showedAnalyticsPopUp: true,
   analyticsConsented: false,
@@ -225,6 +268,7 @@ const device = {
 const adapter = createInputMainAdapter({
   devicesCommManager: { getDevices: () => [device] },
   deviceKitVersion: "0.1.29-fixture",
+  inputVersion: "0.18.0-fixture",
   configurationWriter: {
     async replaceConfiguration({ files: replacement }) {
       const injectFailure =
@@ -365,6 +409,23 @@ const adapter = createInputMainAdapter({
           "restore-changed-configuration",
           "verify-firmware-and-configuration",
         ],
+      };
+    },
+  },
+  resetAuthority: {
+    async buildDefaultConfiguration({ device: selected }) {
+      if (
+        selected.info.deviceType !== "codex_micro" ||
+        selected.info.layoutType !== "universal"
+      ) {
+        throw new Error("fixture reset authority received the wrong device/layout");
+      }
+      return {
+        layoutVersion: "codex_micro/universal/input-0.18.0-fixture/v1",
+        files: [...defaultFiles].map(([relativePath, bytes]) => ({
+          relativePath,
+          bytes: Buffer.from(bytes),
+        })),
       };
     },
   },

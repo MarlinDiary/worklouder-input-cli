@@ -71,6 +71,11 @@
   "reset": {
     "rendererResetHookOffset": 10224466,
     "classification": "renderer state/default-layout flow rather than a standalone main-process reset service",
-    "highLevelMainServiceMethodFound": false
+    "highLevelMainServiceMethodFound": false,
+    "offlineTemplate": "input-default-config-0.18.0-codex-micro.json",
+    "planCapability": "input.reset.plan.v1 only when an injected Input-owned default factory is available",
+    "candidateBoundary": "complete device/layout/version-specific configuration snapshot",
+    "applyBoundary": "device.config.apply.v1 with exact source CAS, complete backup, readback, and automatic rollback",
+    "restoreBoundary": "device.config.restore.v1 with the pre-reset backup"
   }
 }

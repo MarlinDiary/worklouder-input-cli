@@ -17,6 +17,10 @@ export const FIRMWARE_PLAN_SCHEMA_VERSION = 1;
 export const FIRMWARE_PLAN_KIND = "worklouder-input-firmware-plan";
 export const FIRMWARE_PLAN_REVISION_ALGORITHM =
   "sha256:recursive-key-sorted-firmware-plan-body-v1";
+export const RESET_PLAN_SCHEMA_VERSION = 1;
+export const RESET_PLAN_KIND = "worklouder-input-reset-plan";
+export const RESET_PLAN_REVISION_ALGORITHM =
+  "sha256:recursive-key-sorted-reset-plan-body-v1";
 
 const MAX_CONFIG_FILES = 4096;
 const MAX_CONFIG_FILE_BYTES = 16 * 1024 * 1024;
@@ -38,6 +42,7 @@ const FIRMWARE_PHASES = [
 export function createInputMainAdapter({
   devicesCommManager,
   deviceKitVersion,
+  inputVersion,
   configurationWriter,
   hostSettingsAuthority,
   presetCatalogAuthority,
@@ -45,6 +50,7 @@ export function createInputMainAdapter({
   permissionsAuthority,
   firmwareAuthority,
   firmwareOperationsAuthority,
+  resetAuthority,
   logsAuthority,
 }) {
   if (
@@ -115,6 +121,21 @@ export function createInputMainAdapter({
     throw new TypeError(
       "firmwareOperationsAuthority requires firmwareAuthority.readStatus",
     );
+  }
+  if (
+    resetAuthority !== undefined &&
+    (!resetAuthority ||
+      typeof resetAuthority.buildDefaultConfiguration !== "function")
+  ) {
+    throw new TypeError(
+      "resetAuthority.buildDefaultConfiguration must be a function",
+    );
+  }
+  if (
+    resetAuthority &&
+    (typeof inputVersion !== "string" || inputVersion.length === 0)
+  ) {
+    throw new TypeError("inputVersion is required with resetAuthority");
   }
   if (
     logsAuthority !== undefined &&
@@ -268,6 +289,52 @@ export function createInputMainAdapter({
         update: normalizeFirmwareStatus(update),
         config,
       }),
+    };
+  };
+
+  const captureResetPlan = async (device) => {
+    const current = await captureConfigSnapshot(device);
+    const generated = await resetAuthority.buildDefaultConfiguration({
+      device,
+      currentConfiguration: current,
+    });
+    if (!generated || typeof generated !== "object" || Array.isArray(generated)) {
+      throw new BridgeError(-32008, "Input reset authority returned no candidate");
+    }
+    const layoutVersion = safeBoundedString(
+      generated.layoutVersion,
+      "reset layout version",
+      128,
+    );
+    const candidate = defaultConfigSnapshot(current, generated.files);
+    const body = {
+      inputAppVersion: inputVersion,
+      deviceId: current.deviceId,
+      deviceKitVersion: current.deviceKitVersion,
+      device: current.device,
+      firmwareVersion: safeBoundedString(
+        current.status.firmwareVersion,
+        "reset firmware version",
+        128,
+      ),
+      layoutVersion,
+      strategy: "input-default-layout",
+      sourceRevision: current.revision,
+      candidateRevision: candidate.revision,
+      candidateFileCount: candidate.files.length,
+    };
+    const plan = {
+      schemaVersion: RESET_PLAN_SCHEMA_VERSION,
+      kind: RESET_PLAN_KIND,
+      revisionAlgorithm: RESET_PLAN_REVISION_ALGORITHM,
+      revision: resetPlanRevision(body),
+      ...body,
+    };
+    return {
+      schemaVersion: 1,
+      kind: "worklouder-input-reset-plan-bundle",
+      plan,
+      candidate,
     };
   };
 
@@ -841,6 +908,10 @@ export function createInputMainAdapter({
   if (firmwareOperationsAuthority) {
     adapter.updateFirmware = runFirmwareUpdate;
   }
+  if (resetAuthority) {
+    adapter.getResetPlan = async ({ deviceId = null }) =>
+      captureResetPlan(selectDevice(deviceId));
+  }
   if (logsAuthority) {
     adapter.snapshotLogs = async ({ maxEntries = MAX_LOG_ENTRIES }) => {
       const limit = safeInteger(maxEntries, "maxEntries", 1, MAX_LOG_ENTRIES);
@@ -849,6 +920,67 @@ export function createInputMainAdapter({
     };
   }
   return adapter;
+}
+
+function defaultConfigSnapshot(current, suppliedFiles) {
+  if (
+    !Array.isArray(suppliedFiles) ||
+    suppliedFiles.length === 0 ||
+    suppliedFiles.length > MAX_CONFIG_FILES
+  ) {
+    throw new BridgeError(-32008, "Input reset authority returned invalid files");
+  }
+  const seen = new Set();
+  let totalBytes = 0;
+  const files = suppliedFiles.map((file) => {
+    if (!file || typeof file !== "object" || Array.isArray(file)) {
+      throw new BridgeError(-32008, "Input reset file was invalid");
+    }
+    const relativePath = safeRelativePath(file.relativePath);
+    if (seen.has(relativePath)) {
+      throw new BridgeError(-32008, "Input reset files contained duplicate paths");
+    }
+    seen.add(relativePath);
+    const bytes = Buffer.isBuffer(file.bytes)
+      ? Buffer.from(file.bytes)
+      : file.bytes instanceof Uint8Array
+        ? Buffer.from(file.bytes)
+        : null;
+    if (!bytes) {
+      throw new BridgeError(-32008, "Input reset file contained no bytes");
+    }
+    totalBytes += bytes.length;
+    if (
+      bytes.length > MAX_CONFIG_FILE_BYTES ||
+      totalBytes > MAX_CONFIG_TOTAL_BYTES
+    ) {
+      throw new BridgeError(-32008, "Input reset files exceeded snapshot limits");
+    }
+    return {
+      relativePath,
+      size: bytes.length,
+      deviceChecksumSha1: createHash("sha1").update(bytes).digest("hex"),
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+      dataBase64: bytes.toString("base64"),
+      bytes,
+    };
+  });
+  files.sort((left, right) => comparePaths(left.relativePath, right.relativePath));
+  const serializable = files.map(({ bytes: _bytes, ...file }) => file);
+  const candidate = {
+    ...current,
+    revision: configRevision(files),
+    files: serializable,
+  };
+  validateConfigSnapshot(candidate);
+  return candidate;
+}
+
+export function resetPlanRevision(body) {
+  return createHash("sha256")
+    .update("worklouder-input-reset-plan-revision-v1\0", "utf8")
+    .update(canonicalJson(body), "utf8")
+    .digest("hex");
 }
 
 function normalizePermissionsStatus(status) {

@@ -709,6 +709,45 @@ test("Input adapter delegates firmware update and verifies config-preserving pos
   assert.equal(replay.afterFirmwareVersion, "v0.7.0");
 });
 
+test("Input adapter builds a versioned default candidate without mutating configuration", async () => {
+  const files = new Map([
+    ["keymap.json", Buffer.from('{"layout":"custom"}')],
+    ["smart_actions.json", Buffer.from('{"smartActions":{"1":{}}}')],
+  ]);
+  const device = configDevice("reset-device", files);
+  let authorityCalls = 0;
+  const adapter = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [device] },
+    deviceKitVersion: "0.1.29",
+    inputVersion: "0.18.0",
+    resetAuthority: {
+      async buildDefaultConfiguration({ device: selected, currentConfiguration }) {
+        authorityCalls += 1;
+        assert.equal(selected, device);
+        assert.equal(currentConfiguration.deviceId, "reset-device");
+        return {
+          layoutVersion: "codex_micro/universal/input-0.18.0/v1",
+          files: [
+            { relativePath: "keymap.json", bytes: Buffer.from('{"layout":"default"}') },
+            { relativePath: "smart_actions.json", bytes: Buffer.from('{"smartActions":{}}') },
+          ],
+        };
+      },
+    },
+  });
+
+  const bundle = await adapter.getResetPlan({ deviceId: "reset-device" });
+  assert.equal(bundle.kind, "worklouder-input-reset-plan-bundle");
+  assert.equal(bundle.plan.inputAppVersion, "0.18.0");
+  assert.equal(bundle.plan.device.layoutType, "universal");
+  assert.equal(bundle.plan.sourceRevision.length, 64);
+  assert.equal(bundle.plan.candidateRevision, bundle.candidate.revision);
+  assert.notEqual(bundle.plan.sourceRevision, bundle.plan.candidateRevision);
+  assert.equal(bundle.plan.candidateFileCount, 2);
+  assert.equal(authorityCalls, 1);
+  assert.equal(files.get("keymap.json").toString(), '{"layout":"custom"}');
+});
+
 test("one-call Input integration owns discovery and lifecycle paths", async () => {
   const root = await mkdtemp("/tmp/wlb-integration-");
   class FixtureApp extends EventEmitter {
@@ -824,6 +863,7 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
   assert.ok(integration.capabilities.includes("input.firmware.status.v1"));
   assert.ok(integration.capabilities.includes("input.firmware.plan.v1"));
   assert.ok(!integration.capabilities.includes("input.firmware.update.v1"));
+  assert.ok(!integration.capabilities.includes("input.reset.plan.v1"));
   assert.ok(integration.capabilities.includes("input.logs.snapshot.v1"));
   assert.equal(app.listenerCount("before-quit"), 1);
   await integration.stop();
