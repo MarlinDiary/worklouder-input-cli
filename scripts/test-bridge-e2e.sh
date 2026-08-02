@@ -39,6 +39,9 @@ layer_duplicated_snapshot=$root/config-layer-duplicated.json
 layer_deleted_snapshot=$root/config-layer-deleted.json
 layer_moved_snapshot=$root/config-layer-moved.json
 layer_lighting_snapshot=$root/config-layer-lighting.json
+appsense_linked_snapshot=$root/config-appsense-linked.json
+appsense_updated_snapshot=$root/config-appsense-updated.json
+appsense_unlinked_snapshot=$root/config-appsense-unlinked.json
 server_log=$root/server.log
 server_pid=
 
@@ -109,6 +112,10 @@ revision=$(python3 -c \
   >"$root/layer-list.json"
 "$bin" --json layer show --input "$config_snapshot" --id 0 \
   >"$root/layer-show.json"
+"$bin" --json appsense list --input "$config_snapshot" \
+  >"$root/appsense-list.json"
+"$bin" --json appsense show --input "$config_snapshot" --id 5 \
+  >"$root/appsense-show.json"
 "$bin" --json control list --input "$config_snapshot" --layer 0 \
   >"$root/control-list.json"
 "$bin" --json control show --input "$config_snapshot" --layer 0 \
@@ -156,6 +163,14 @@ revision=$(python3 -c \
   --zone backlight --effect breath --brightness 0.25 --speed 0.75 --magic 0.5 \
   --color '#102030' --apply-to-all --output "$layer_lighting_snapshot" \
   >"$root/layer-lighting-set.json"
+"$bin" --json appsense link --input "$layer_lighting_snapshot" \
+  --profile 0 --layer 0 --name 'New App-mac' --process com.example.new \
+  --output "$appsense_linked_snapshot" >"$root/appsense-link.json"
+"$bin" --json appsense set --input "$config_snapshot" --id 5 \
+  --name 'Renamed Fixture' --path '/Applications/Fixture.app' \
+  --output "$appsense_updated_snapshot" >"$root/appsense-set.json"
+"$bin" --json appsense unlink --input "$config_snapshot" --profile 0 --layer 1 \
+  --output "$appsense_unlinked_snapshot" >"$root/appsense-unlink.json"
 "$bin" --json control set --input "$config_snapshot" --profile 0 --layer 0 \
   --control key:0:0 --assignment KA_A4 --output "$control_snapshot" \
   >"$root/control-set.json"
@@ -179,7 +194,7 @@ revision=$(python3 -c \
 "$bin" --json multi-action create --input "$config_snapshot" --name 'New Multi' \
   --color '#EDF6FF' --icon icon-new --output "$multi_created_snapshot" \
   >"$root/multi-create.json"
-"$bin" --json multi-action set --input "$layer_lighting_snapshot" --id 2 \
+"$bin" --json multi-action set --input "$appsense_linked_snapshot" --id 2 \
   --name 'Updated Multi' --color '#A1B2C3' --icon icon-updated \
   --tap KC_X --double-tap KA_A4 --hold KC_Y --tap-hold KA_M1 \
   --tapping-term 999 --output "$candidate_snapshot" >"$root/multi-set.json"
@@ -283,10 +298,15 @@ layer_duplicated_candidate = json.loads((root / "config-layer-duplicated.json").
 layer_deleted_candidate = json.loads((root / "config-layer-deleted.json").read_text())
 layer_moved_candidate = json.loads((root / "config-layer-moved.json").read_text())
 layer_lighting_candidate = json.loads((root / "config-layer-lighting.json").read_text())
+appsense_linked_candidate = json.loads((root / "config-appsense-linked.json").read_text())
+appsense_updated_candidate = json.loads((root / "config-appsense-updated.json").read_text())
+appsense_unlinked_candidate = json.loads((root / "config-appsense-unlinked.json").read_text())
 profile_list = json.loads((root / "profile-list.json").read_text())
 profile_show = json.loads((root / "profile-show.json").read_text())
 layer_list = json.loads((root / "layer-list.json").read_text())
 layer_show = json.loads((root / "layer-show.json").read_text())
+appsense_list = json.loads((root / "appsense-list.json").read_text())
+appsense_show = json.loads((root / "appsense-show.json").read_text())
 control_list = json.loads((root / "control-list.json").read_text())
 control_show = json.loads((root / "control-show.json").read_text())
 action_list = json.loads((root / "action-list.json").read_text())
@@ -310,6 +330,9 @@ layer_delete = json.loads((root / "layer-delete.json").read_text())
 layer_move = json.loads((root / "layer-move.json").read_text())
 layer_lighting_show = json.loads((root / "layer-lighting-show.json").read_text())
 layer_lighting_set = json.loads((root / "layer-lighting-set.json").read_text())
+appsense_link = json.loads((root / "appsense-link.json").read_text())
+appsense_set = json.loads((root / "appsense-set.json").read_text())
+appsense_unlink = json.loads((root / "appsense-unlink.json").read_text())
 control_set = json.loads((root / "control-set.json").read_text())
 action_create = json.loads((root / "action-create.json").read_text())
 action_rename = json.loads((root / "action-rename.json").read_text())
@@ -420,6 +443,19 @@ assert [item["colorHex"] for item in layer_list["layers"]] == ["#112233", "#4455
 assert layer_show["layer"]["id"] == 0
 assert layer_show["layer"]["color"] == 0x112233
 assert layer_show["layer"]["colorHex"] == "#112233"
+assert appsense_list["linkedApps"] == [{
+    "id": 5,
+    "name": "Fixture App",
+    "process": "com.example.fixture",
+    "path": "",
+    "bindings": [{
+        "profileId": 0,
+        "profileName": "Fixture Default",
+        "layerId": 1,
+        "layerName": "Tools",
+    }],
+}]
+assert appsense_show["linkedApp"] == appsense_list["linkedApps"][0]
 assert [item["id"] for item in control_list["controls"]] == [
     "key:0:0", "key:0:1", "key:1:0",
     "encoder:0:ccw", "encoder:0:cw", "encoder:0:press",
@@ -503,6 +539,19 @@ assert layer_lighting_set["changedPaths"] == [
     "/keymap.json/profiles/0/layers/1/lights/backlight",
     "/keymap.json/profiles/0/layers/2/lights/backlight",
 ]
+assert appsense_link["resourceId"] == 0
+assert appsense_link["changedPaths"] == [
+    "/keymap.json/linkedApps/1",
+    "/keymap.json/profiles/0/layers/0/linkedAppId",
+]
+assert appsense_set["changedPaths"] == [
+    "/keymap.json/linkedApps/0/name",
+    "/keymap.json/linkedApps/0/path",
+]
+assert appsense_unlink["changedPaths"] == [
+    "/keymap.json/linkedApps/0",
+    "/keymap.json/profiles/0/layers/1/linkedAppId",
+]
 assert control_set["changedPaths"] == [
     "/keymap.json/profiles/0/layers/0/layout/keymap/0/0",
     "/keymap.json/profiles/0/macrosUsed",
@@ -579,6 +628,7 @@ for document in [
     profile_created_candidate, profile_duplicated_candidate, profile_deleted_candidate,
     layer_candidate, layer_created_candidate, layer_duplicated_candidate,
     layer_deleted_candidate, layer_moved_candidate, layer_lighting_candidate,
+    appsense_linked_candidate, appsense_updated_candidate, appsense_unlinked_candidate,
     action_created_candidate, action_renamed_candidate,
     action_event_added_candidate, action_event_set_candidate,
     action_event_deleted_candidate, action_event_moved_candidate,
@@ -623,6 +673,9 @@ layer_duplicated_keymap = json.loads(payload(layer_duplicated_candidate, "keymap
 layer_deleted_keymap = json.loads(payload(layer_deleted_candidate, "keymap.json"))
 layer_moved_keymap = json.loads(payload(layer_moved_candidate, "keymap.json"))
 layer_lighting_keymap = json.loads(payload(layer_lighting_candidate, "keymap.json"))
+appsense_linked_keymap = json.loads(payload(appsense_linked_candidate, "keymap.json"))
+appsense_updated_keymap = json.loads(payload(appsense_updated_candidate, "keymap.json"))
+appsense_unlinked_keymap = json.loads(payload(appsense_unlinked_candidate, "keymap.json"))
 assert renamed_profile_keymap["profiles"][1]["name"] == "Research"
 assert candidate_keymap["fixtureExtension"] == {"preserved": True}
 assert action_event_set_keymap["macros"][0]["actions"][0] == {"act": 2, "delay": 200, "kc": "KC_X"}
@@ -726,6 +779,16 @@ for layer in layer_lighting_keymap["profiles"][0]["layers"]:
         "effect": "breath", "brightness": 0.25, "speed": 0.75,
         "magic": 0.5, "color": 0x102030,
     }
+assert appsense_linked_keymap["linkedApps"][-1] == {
+    "id": 0, "name": "New App-mac", "process": "com.example.new", "path": "",
+}
+assert appsense_linked_keymap["profiles"][0]["layers"][0]["linkedAppId"] == 0
+assert appsense_updated_keymap["linkedApps"][0] == {
+    "id": 5, "name": "Renamed Fixture", "process": "com.example.fixture",
+    "path": "/Applications/Fixture.app",
+}
+assert appsense_unlinked_keymap["linkedApps"] == []
+assert "linkedAppId" not in appsense_unlinked_keymap["profiles"][0]["layers"][1]
 assert candidate["revision"] != snapshot["revision"]
 assert pre_apply["revision"] == snapshot["revision"]
 assert apply["operation"] == "apply"
@@ -739,6 +802,8 @@ assert post_apply["revision"] == candidate["revision"]
 post_apply_keymap = json.loads(payload(post_apply, "keymap.json"))
 assert post_apply_keymap["profiles"][2]["name"] == "CLI Profile"
 assert post_apply_keymap["profiles"][0]["layers"][2]["name"] == "CLI Layer"
+assert post_apply_keymap["linkedApps"][-1]["id"] == 0
+assert post_apply_keymap["profiles"][0]["layers"][0]["linkedAppId"] == 0
 for layer in post_apply_keymap["profiles"][0]["layers"]:
     assert layer["lights"]["backlight"]["effect"] == "breath"
     assert layer["lights"]["backlight"]["color"] == 0x102030
@@ -772,6 +837,9 @@ print("semantic_layer_rename=verified")
 print("semantic_layer_color=verified")
 print("semantic_layer_lifecycle=verified")
 print("semantic_layer_lighting=verified")
+print("semantic_appsense_list_show=verified")
+print("semantic_appsense_link_set_unlink=verified")
+print("semantic_appsense_apply_readback_restore=verified")
 print("semantic_control_list=verified")
 print("semantic_control_show=verified")
 print("semantic_control_set=verified")

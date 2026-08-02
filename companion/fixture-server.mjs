@@ -15,6 +15,14 @@ const files = new Map([
         version: 1,
         activeProfileId: 0,
         fixtureExtension: { preserved: true },
+        linkedApps: [
+          {
+            id: 5,
+            name: "Fixture App",
+            process: "com.example.fixture",
+            path: "",
+          },
+        ],
         macros: [
           {
             id: 3,
