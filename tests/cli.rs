@@ -17,6 +17,17 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("doctor"));
     assert!(stdout.contains("input"));
     assert!(stdout.contains("config"));
+    assert!(stdout.contains("completion"));
+}
+
+#[test]
+fn zsh_completion_is_generated_end_to_end() {
+    let output = binary().args(["completion", "zsh"]).output().unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+
+    assert!(output.status.success());
+    assert!(stdout.contains("#compdef worklouderctl"));
+    assert!(stdout.contains("_worklouderctl"));
 }
 
 #[test]

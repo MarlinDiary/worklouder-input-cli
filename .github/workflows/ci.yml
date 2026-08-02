@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  msrv:
+    name: Rust 1.61 test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install declared MSRV
+        run: rustup toolchain install 1.61.0 --profile minimal
+      - name: Test locked dependency graph
+        run: cargo +1.61.0 test --locked
+
+  quality:
+    name: Format, test, and lint
+    runs-on: macos-latest
+    env:
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable checks
+        run: rustup component add rustfmt clippy
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Test
+        run: cargo test --locked
+      - name: Lint
+        run: cargo clippy --all-targets -- -D warnings

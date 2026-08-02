@@ -1,6 +1,6 @@
 # Contributing to WorkLouderCTL
 
-WorkLouderCTL is currently pre-alpha. Contributions should strengthen the
+WorkLouderCTL is currently a read-only source alpha. Contributions should strengthen the
 evidence, compatibility model, transaction safety, or command contract without
 claiming support beyond the tested boundary.
 

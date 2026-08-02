@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 /// Full-configuration CLI for Codex Micro, Codex, and Work Louder Input.
@@ -47,6 +47,12 @@ pub enum Command {
     Config {
         #[clap(subcommand)]
         command: ConfigCommand,
+    },
+
+    /// Generate a shell completion script on standard output.
+    Completion {
+        #[clap(value_enum)]
+        shell: CompletionShell,
     },
 }
 
@@ -117,6 +123,13 @@ pub enum ConfigCommand {
         #[clap(value_parser)]
         candidate: PathBuf,
     },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CompletionShell {
+    Bash,
+    Zsh,
+    Fish,
 }
 
 pub fn parse_from<I, T>(args: I) -> Cli

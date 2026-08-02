@@ -20,6 +20,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "=1.0.75"
 clap = { version = "=3.2.25", features = ["derive"] }
+clap_complete = "=3.2.5"
 # Keep open-ended transitive ranges on versions that support our declared
 # Rust 1.61 MSRV. Remove these anchors only together with an MSRV bump.
 itoa = "=1.0.4"

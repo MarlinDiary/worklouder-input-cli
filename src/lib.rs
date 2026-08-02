@@ -6,7 +6,10 @@ pub mod fsutil;
 pub mod input;
 
 use anyhow::Result;
-use cli::{CapabilityCommand, Cli, Command, ConfigCommand, InputCommand, TierCommand};
+use clap::CommandFactory;
+use cli::{
+    CapabilityCommand, Cli, Command, CompletionShell, ConfigCommand, InputCommand, TierCommand,
+};
 use serde::Serialize;
 use std::io::Write;
 
@@ -36,9 +39,20 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Doctor { strict } => run_doctor(strict, cli.json, &mut out)?,
         Command::Input { command } => run_input(command, cli.json, &mut out)?,
         Command::Config { command } => run_config(command, cli.json, &mut out)?,
+        Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
     Ok(())
+}
+
+fn run_completion(shell: CompletionShell, mut out: impl Write) {
+    let generator = match shell {
+        CompletionShell::Bash => clap_complete::Shell::Bash,
+        CompletionShell::Zsh => clap_complete::Shell::Zsh,
+        CompletionShell::Fish => clap_complete::Shell::Fish,
+    };
+    let mut command = Cli::command();
+    clap_complete::generate(generator, &mut command, "worklouderctl", &mut out);
 }
 
 fn run_input(command: InputCommand, json: bool, mut out: impl Write) -> Result<()> {

@@ -17,17 +17,19 @@ The roadmap prioritizes evidence and configuration safety over command count.
 
 ## M1 — Read-only alpha
 
-- [ ] `worklouderctl version`
-- [ ] `worklouderctl doctor`
-- [ ] `worklouderctl input inspect`
+- [x] `worklouderctl version`
+- [x] `worklouderctl doctor`
+- [x] `worklouderctl input inspect`
+- [x] `worklouderctl input export`
 - [ ] `worklouderctl codex inspect`
 - [ ] `worklouderctl codex export`
-- [ ] `worklouderctl tier explain`
+- [x] `worklouderctl tier explain`
 - [ ] `worklouderctl device status`
 - [ ] `worklouderctl device files`
 - [ ] `worklouderctl device export`
-- [ ] Structural `show`, `validate`, and `diff`
-- [ ] JSON output and typed exit statuses
+- [x] Structural `validate` and `diff`
+- [x] JSON output
+- [ ] Typed exit statuses
 
 ## M2 — Codex-native configuration beta
 

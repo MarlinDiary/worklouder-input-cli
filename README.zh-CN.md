@@ -6,7 +6,10 @@
 [兼容性](docs/compatibility.md) · [架构](docs/architecture.md) ·
 [路线图](docs/roadmap.md)
 
-> **当前状态：pre-alpha。** 仓库目前提供产品定义和研究基线，尚未发布可安装版本。下方命令代表目标接口。
+> **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
+> provider 诊断、Input 只读检查、原字节导出、校验、结构化 diff、JSON 输出和
+> shell completion。尚未发布打包版本；配置写入会等 provider transaction 与
+> rollback 完整验证后再开放。
 
 ## 简单来说，它是什么？
 
@@ -29,15 +32,43 @@ runtime，而是调用当前已安装的 Codex/Input provider，从而继续获�
 读取当前状态 → 生成计划与 diff → 备份 → 写入 → readback 验证 → 同步 Input → 恢复或完成
 ```
 
-## 计划中的命令
+## 构建和使用当前 CLI
+
+最低 Rust 版本为 1.61：
 
 ```console
-worklouderctl doctor
+git clone https://github.com/MarlinDiary/worklouder-input-cli.git
+cd worklouder-input-cli
+cargo build --release --locked
+./target/release/worklouderctl doctor
+```
+
+当前已经实现：
+
+```console
+worklouderctl version
+worklouderctl tier list
+worklouderctl tier explain 1
+worklouderctl capability list --tier 2
+worklouderctl doctor [--strict]
+worklouderctl input inspect [--device DEVICE_ID]
+worklouderctl input export --output BACKUP_DIRECTORY
+worklouderctl config validate BACKUP_DIRECTORY
+worklouderctl config diff BASE CANDIDATE
+worklouderctl --json input inspect
+worklouderctl completion bash|zsh|fish
+```
+
+`input inspect` 全程只读；`input export` 把源文件原字节复制到原子发布的目录，
+并在 `manifest.json` 记录 size 与 SHA-256。它不会暂停 Input，也不会写入设备。
+
+## 计划中的写入命令
+
+```console
 worklouderctl codex export
 worklouderctl codex agent-source set priority
 worklouderctl codex command-key set ACT06 --command toggleFastMode
 worklouderctl codex joystick set up --skill SKILL_ID
-worklouderctl input inspect
 worklouderctl device status
 worklouderctl profile list
 worklouderctl layer show 2
@@ -81,7 +112,8 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 
 ## 当前进度
 
-仓库目前处于产品定义与 fixture 准备阶段。可安装 binary、Homebrew formula 和完整命令将在经过硬件验证后发布。
+仓库目前处于只读 source-alpha 阶段。可安装 binary、Homebrew formula、Codex
+settings bridge 与完整写入命令将在对应 transaction 和真实硬件 readback 验证后发布。
 
 配置边界已经确定：**Tier 1 使用 Codex 的设置模型与运行时；Tier 2 及以上
 使用 Input 的设置模型与运行时；CLI 对两边都提供完整配置能力。** 详见

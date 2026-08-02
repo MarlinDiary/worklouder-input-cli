@@ -13,16 +13,17 @@
 </p>
 
 <p align="center">
-  <img alt="Project status: pre-alpha" src="https://img.shields.io/badge/status-pre--alpha-F59E0B">
+  <img alt="Project status: source alpha" src="https://img.shields.io/badge/status-source%20alpha-F59E0B">
   <img alt="Target platform: macOS first" src="https://img.shields.io/badge/platform-macOS%20first-111827">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-22C55E">
 </p>
 
 > [!IMPORTANT]
-> **Project status: pre-alpha.** This repository currently contains the product
-> specification and research baseline. There is no installable release yet.
-> Commands and capabilities described below are the target contract unless they
-> are explicitly marked as verified.
+> **Project status: source alpha.** The repository now builds a working
+> `worklouderctl` binary with read-only provider diagnostics, Input inspection,
+> exact-byte exports, validation, structural diff, JSON output, and shell
+> completions. There is no packaged release yet. Configuration mutation remains
+> gated until its provider transactions and rollback are verified.
 
 ## The short answer
 
@@ -58,18 +59,47 @@ cooperating with their runtimes**. A guarded mutation coordinates Codex and
 Input, preserves every state authority, writes only after validation, verifies
 the result, and refreshes or reopens the affected runtime.
 
-## Planned command experience
+## Build and run the current CLI
+
+The declared minimum Rust version is 1.61:
+
+```console
+git clone https://github.com/MarlinDiary/worklouder-input-cli.git
+cd worklouder-input-cli
+cargo build --release --locked
+./target/release/worklouderctl doctor
+```
+
+Currently implemented commands:
+
+```console
+worklouderctl version
+worklouderctl tier list
+worklouderctl tier explain 1
+worklouderctl capability list --tier 2
+worklouderctl doctor [--strict]
+worklouderctl input inspect [--device DEVICE_ID]
+worklouderctl input export --output BACKUP_DIRECTORY
+worklouderctl config validate BACKUP_DIRECTORY
+worklouderctl config diff BASE CANDIDATE
+worklouderctl --json input inspect
+worklouderctl completion bash|zsh|fish
+```
+
+`input inspect` is read-only. `input export` copies the exact source bytes into
+an atomically published directory and records each file's size and SHA-256 in
+`manifest.json`. It does not pause Input or write the device.
+
+## Planned mutation command experience
 
 The intended binary name is `worklouderctl`:
 
 ```console
-worklouderctl doctor
 worklouderctl codex export
 worklouderctl codex agent-source set priority
 worklouderctl codex command-key set ACT06 --command toggleFastMode
 worklouderctl codex joystick set up --skill SKILL_ID
 worklouderctl codex lighting set --brightness 80 --auto-off 10-minutes
-worklouderctl input inspect
 worklouderctl device status
 worklouderctl profile list
 worklouderctl layer show 2
@@ -79,8 +109,8 @@ worklouderctl backup list
 worklouderctl backup restore BACKUP_ID
 ```
 
-These examples document the planned interface; they are not released commands
-yet. Follow the [roadmap](docs/roadmap.md) for implementation status.
+These examples document the next mutation interface; they are not implemented
+commands yet. Follow the [roadmap](docs/roadmap.md) for exact status.
 
 ## Target capabilities
 
@@ -143,7 +173,10 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | --- | --- |
 | SEO/AIO and product documentation foundation | Complete |
 | Sanitized research fixtures and schema model | Planned |
-| Read-only `doctor`, `inspect`, `status`, and `export` | Planned |
+| Rust CLI foundation, tier/capability contract, and JSON output | Complete |
+| Provider `doctor` and Input `inspect`/exact-byte `export` | Complete |
+| Bundle `validate` and structural `diff` | Complete |
+| Codex `inspect`/`export` through the settings bridge | In progress |
 | Semantic profile/layer/control commands | Planned |
 | Verified device mutation and rollback | Planned |
 | Input cache/database and Smart Actions synchronization | Planned |
@@ -153,9 +186,9 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 
 ### Is there a CLI for Work Louder Input?
 
-WorkLouderCTL is being developed as an open-source full-configuration CLI for
-Codex, Work Louder Input, and Codex Micro. The repository is currently
-pre-alpha and does not yet publish an installable binary.
+WorkLouderCTL is an open-source full-configuration CLI project for Codex, Work
+Louder Input, and Codex Micro. A source-built read-only alpha is available in
+this repository; packaged binaries and configuration mutation are upcoming.
 
 ### Does WorkLouderCTL replace the Codex and Input configuration GUIs?
 
@@ -192,9 +225,10 @@ Read the complete [FAQ](docs/faq.md).
 
 ## Contributing
 
-The project is at the specification and fixture stage. Protocol findings,
-sanitized configurations, compatibility evidence, and CLI design feedback are
-welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+The project is at the read-only source-alpha stage. Protocol findings, sanitized
+configurations, compatibility evidence, CLI implementations, and design
+feedback are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a
+pull request.
 
 ## Independence
 
