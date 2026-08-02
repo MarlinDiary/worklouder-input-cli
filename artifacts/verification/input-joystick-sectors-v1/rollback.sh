@@ -8,7 +8,6 @@ git -C "$repo" apply --check --reverse "$patch"
 git -C "$repo" apply --reverse "$patch"
 git -C "$repo" diff --check
 if git -C "$repo" cat-file -e "$base^{commit}" 2>/dev/null; then
-  git -C "$repo" diff --quiet "$base" -- . \
-    ':(exclude)artifacts/verification/input-joystick-sectors-v1'
+  git -C "$repo" diff --quiet "$base" -- . ':(exclude)artifacts/verification/input-joystick-sectors-v1'
 fi
 printf '%s\n' "rollback=verified" "base=$base"

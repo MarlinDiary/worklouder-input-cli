@@ -1,5 +1,5 @@
 WorkLouderCTL Input joystick sectors v1 verification record
-===========================================================
+============================================================
 
 Scope
 -----
@@ -12,118 +12,125 @@ Feature commits:
   0fe4e34 test: cover Input joystick command tree
   57df533 docs: publish Input joystick sector workflow
 Changed branch:
-  layer joystick mode/sector and control joystick:INDEX assignment
+  layer joystick
 Changed fields:
-  /keymap.json/profiles/PROFILE_INDEX/layers/LAYER_INDEX/layout/joystick/type
-  /keymap.json/profiles/PROFILE_INDEX/layers/LAYER_INDEX/layout/joystick/sectors
-Source cache, Input GUI/process, bridge, device, and runtime mutation: none
+  /keymap.json/profiles/{profile}/layers/{layer}/layout/joystick/type
+  /keymap.json/profiles/{profile}/layers/{layer}/layout/joystick/sectors
+Input GUI, Input cache, bridge, device, and runtime mutation: none
 
 Released behavior contract
 --------------------------
-Static inspection of the exact Input 0.18.0 renderer
-  /Applications/input.app/Contents/Resources/app.asar
-ASAR SHA-256:
+Static inspection of exact Input 0.18.0 app.asar and extracted
+renderer chunk device_config_data-BMUs-0m4.js. RADIAL is the released editable
+mode; JOYSTICK exists in the enum but is disabled by the GUI. RADIAL seeds two
+sectors when fewer than two exist, allows 2 through 8 sectors, inserts KC_NONE,
+and rebalances every angle with a fixed first 45-degree sector anchored at
+67.5 degrees. The CLI emits offline candidates only.
+Input app.asar SHA-256:
   8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8
-Renderer chunk:
-  device_config_data-BMUs-0m4.js
 Renderer chunk SHA-256:
   c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e
-Frozen behavior:
-  editable mode RADIAL; GUI-disabled mode JOYSTICK
-  seed KI_X/KC_NONE when switching to RADIAL below two sectors
-  minimum 2 and maximum 8 sectors
-  add inserts KC_NONE at a zero-based insertion index
-  delete requires the current count to exceed two
-  every add/delete fixes sector zero at 0.1875..0.3125 turns and divides
-  the remaining 0.875 turns equally among all other sectors modulo one
+Frozen spec:
+  spec/input-joystick-sectors-0.18.0.json
 
 Preserved original artifact and baseline-red
 --------------------------------------------
+Source commit: 07898097c64d03c210922623d46f7b0239faf958
 Build command:
-  CARGO_TARGET_DIR=/tmp/worklouderctl-input-joystick-sectors-v1.S1bEQs/base-target cargo build --release --locked \
-    --manifest-path /tmp/worklouderctl-input-joystick-sectors-v1.S1bEQs/base/Cargo.toml
+  CARGO_TARGET_DIR=/tmp/worklouderctl-input-joystick-sectors-v1.K3XqlP/base-target cargo build --release --locked     --manifest-path /tmp/worklouderctl-input-joystick-sectors-v1.K3XqlP/base-worktree/Cargo.toml
 Path:
-  /tmp/worklouderctl-input-joystick-sectors-v1.S1bEQs/original-worklouderctl
+  /tmp/worklouderctl-input-joystick-sectors-v1.K3XqlP/original/worklouderctl
 SHA-256 after reopen/execute:
-  15cb21a4cf4445e9d51b9f130c99230dd3eb14b7971d5c7230475b830e791c5a
+  91dbf0248f814860d56d685752973bbb07ae06f8afd9fca9ecf1d410281b962c
 Command:
-  /tmp/worklouderctl-input-joystick-sectors-v1.S1bEQs/original-worklouderctl layer joystick --help
+  ORIGINAL_BIN layer joystick --help
 Literal stdout: (empty)
 Literal stderr:
   error: Found argument 'joystick' which wasn't expected, or isn't valid in this context
-  
+
   USAGE:
-      original-worklouderctl layer [OPTIONS] <SUBCOMMAND>
-  
+      worklouderctl layer [OPTIONS] <SUBCOMMAND>
+
   For more information try --help
 Exit status: 2
 
 Modified release E2E
 --------------------
-Modified binary:
-  /tmp/worklouderctl-input-joystick-sectors-v1.S1bEQs/modified-worklouderctl
-SHA-256 after reopen/execute:
-  0abb126833d8b319f27c0c503113007dd359ddea7ad6414d24a4969eb68fa92d
-Help command:
-  /tmp/worklouderctl-input-joystick-sectors-v1.S1bEQs/modified-worklouderctl layer joystick --help
-Literal result:
-  mode      Inspect or change the released editable joystick mode
-  sector    Add or delete radial sectors using Input's angle rebalancer
-  show      Show joystick mode and every ordered radial sector
-Exit status: 0
+Fixture support root:
+  /tmp/worklouderctl-input-joystick-sectors-v1.K3XqlP/e2e/support
+Fixture device cache:
+  devices/33632/keymap.json
+  devices/33632/smart_actions.json
+Excluded host-only fixture:
+  input_storage.json
+Source SHA-256 before and after:
+  keymap.json: 8e3b8987920cb23a9d44410b71706687bfeeeea071de78ffc46d8420b6bb1e49
+  smart_actions.json: 039c38b6f9ca9d0e2053b2a05e162278f07789e4e66ced15fe750e1b3c826529
 
-Fixture cache inputs:
-  /tmp/worklouderctl-input-joystick-sectors-v1.S1bEQs/e2e/support/devices/33632/keymap.json
-  /tmp/worklouderctl-input-joystick-sectors-v1.S1bEQs/e2e/support/devices/33632/smart_actions.json
-Cache keymap SHA-256 before and after:
-  062868835a6efbf7d369dd3b91663a2f94cbfc5179649334f0521314a4e90431
-Cache smart_actions SHA-256 before and after:
-  25faeb94ce5468ceffae3944225428fe43fa91d5928fc3e32552623bc90991f9
-
-Exact commands (each exit status 0):
-  MODIFIED_BIN --json input config snapshot --support-root E2E/support \
-    --output E2E/snapshot.json
-  MODIFIED_BIN --json layer joystick mode set --input E2E/snapshot.json \
-    --id 0 radial --output E2E/radial.json
-  MODIFIED_BIN --json layer joystick sector add --input E2E/radial.json \
-    --id 0 --index 1 --output E2E/added.json
-  MODIFIED_BIN --json control set --input E2E/added.json --layer 0 \
-    --control joystick:1 --assignment KC_C --output E2E/assigned.json
+Commands:
+  MODIFIED_BIN --json input config snapshot --support-root SUPPORT     --output E2E/snapshot.json
+  MODIFIED_BIN --json layer joystick mode set --input E2E/snapshot.json     --id 0 radial --output E2E/radial.json
+  MODIFIED_BIN --json layer joystick sector add --input E2E/radial.json     --id 0 --index 1 --output E2E/added.json
+  MODIFIED_BIN --json control set --input E2E/added.json --layer 0     --control joystick:1 --assignment KC_C --output E2E/assigned.json
   MODIFIED_BIN --json layer joystick show --input E2E/assigned.json --id 0
-  MODIFIED_BIN --json layer joystick sector delete --input E2E/assigned.json \
-    --id 0 --index 2 --output E2E/deleted.json
-  MODIFIED_BIN --json layer joystick show --input E2E/deleted.json --id 0
-  MODIFIED_BIN --json config validate E2E/deleted.json
+  MODIFIED_BIN --json layer joystick sector delete --input E2E/assigned.json     --id 0 --index 2 --output E2E/deleted.json
+Exit status: 0 for all commands
 
 Literal mode receipt:
-  {"schemaVersion":1,"kind":"worklouderctl-config-candidate","operation":"layer-joystick-mode-set","output":"/tmp/worklouderctl-input-joystick-sectors-v1.S1bEQs/e2e/radial.json","changed":true,"changedPaths":["/keymap.json/profiles/0/layers/0/layout/joystick/type","/keymap.json/profiles/0/layers/0/layout/joystick/sectors"],"beforeRevision":"813e0e9804bd66c234127d600267ff8e6fb8c7e319686de316909d36914832ac","afterRevision":"10b9171437207bb27a25ad304df5bd49670e314a58ac0c0cea1dd6541bd6ef6f"}
+  operation=layer-joystick-mode-set
+  changed=true
+  changedPaths=[
+    "/keymap.json/profiles/0/layers/0/layout/joystick/type",
+    "/keymap.json/profiles/0/layers/0/layout/joystick/sectors"
+  ]
+  beforeRevision=3bd8f60d4dd824696667efa0ae23d0f362aaa35e1e46467f46827d85ff810c4b
+  afterRevision=ba12b0fa5bbdb3b3cb830c9faccdca625fdfcef1f4b884829086a8e28ec03942
 Literal add receipt:
-  {"schemaVersion":1,"kind":"worklouderctl-config-candidate","operation":"layer-joystick-sector-add","output":"/tmp/worklouderctl-input-joystick-sectors-v1.S1bEQs/e2e/added.json","changed":true,"changedPaths":["/keymap.json/profiles/0/layers/0/layout/joystick/sectors"],"beforeRevision":"10b9171437207bb27a25ad304df5bd49670e314a58ac0c0cea1dd6541bd6ef6f","afterRevision":"d2a1a202599e4fe36fe662898126bd1f7ea75f3c1fd88294fbb113578c95eeb6"}
-Literal assigned three-sector readback:
-  {"schemaVersion":1,"kind":"worklouderctl-layer-joystick","revision":"33ba621586ff616d4c11d1379591489d89d43d061945a4cec319258939e19855","profileId":0,"layerId":0,"mode":"RADIAL","sectors":[{"index":0,"assignment":"KI_X","assignmentKind":"internal","a1":0.1875,"a2":0.3125},{"index":1,"assignment":"KC_C","assignmentKind":"basic","a1":0.3125,"a2":0.75},{"index":2,"assignment":"KC_NONE","assignmentKind":"basic","a1":0.75,"a2":0.1875}]}
+  operation=layer-joystick-sector-add
+  changedPaths=["/keymap.json/profiles/0/layers/0/layout/joystick/sectors"]
+  afterRevision=d4eec002b5b334ba2b8060f9c194fb0e4c73db61fce25d72001e31dd624f15bf
+Literal assignment receipt:
+  operation=control-set
+  changedPaths=["/keymap.json/profiles/0/layers/0/layout/joystick/sectors/1/k"]
+  afterRevision=2cedda53b750cb79b747fb2715292845a9f2578cdc5e4e411d95caadff7659fe
+Literal three-sector readback:
+  mode=RADIAL
+  sectors=[
+    {index:0, assignment:KI_X,   a1:0.1875, a2:0.3125},
+    {index:1, assignment:KC_C,   a1:0.3125, a2:0.75},
+    {index:2, assignment:KC_NONE,a1:0.75,   a2:0.1875}
+  ]
 Literal delete receipt:
-  {"schemaVersion":1,"kind":"worklouderctl-config-candidate","operation":"layer-joystick-sector-delete","output":"/tmp/worklouderctl-input-joystick-sectors-v1.S1bEQs/e2e/deleted.json","changed":true,"changedPaths":["/keymap.json/profiles/0/layers/0/layout/joystick/sectors"],"beforeRevision":"33ba621586ff616d4c11d1379591489d89d43d061945a4cec319258939e19855","afterRevision":"1f98905905f26bc4fd30c050f28e6af9481bf99d096d1202122f9c03552cd636"}
-Literal final two-sector readback:
-  {"schemaVersion":1,"kind":"worklouderctl-layer-joystick","revision":"1f98905905f26bc4fd30c050f28e6af9481bf99d096d1202122f9c03552cd636","profileId":0,"layerId":0,"mode":"RADIAL","sectors":[{"index":0,"assignment":"KI_X","assignmentKind":"internal","a1":0.1875,"a2":0.3125},{"index":1,"assignment":"KC_C","assignmentKind":"basic","a1":0.3125,"a2":0.1875}]}
-Literal validation:
-  {"path":"/tmp/worklouderctl-input-joystick-sectors-v1.S1bEQs/e2e/deleted.json","kind":"json-file","valid":true,"checks":[{"id":"json.syntax","valid":true,"summary":"valid JSON (1496 bytes, sha256 837f18e5cfce1436366a55fb86d35a7d8592cd1c87447cfd041b087c0bd7ee31)"}]}
-Literal assertions:
-  assertions=pass
-  candidate revision=1f98905905f26bc4fd30c050f28e6af9481bf99d096d1202122f9c03552cd636
-  unknown root/layer/joystick fields preserved by strict snapshot reopen
-  cache source hashes unchanged
+  operation=layer-joystick-sector-delete
+  changedPaths=["/keymap.json/profiles/0/layers/0/layout/joystick/sectors"]
+  afterRevision=895ca589c1fea770a8a7863c8be9996c576c1c414ec4aafb76c9c01ad7368991
 
-Minimum boundary negative test
-------------------------------
-Command:
-  MODIFIED_BIN layer joystick sector delete --input E2E/deleted.json \
-    --id 0 --index 1 --output E2E/below-minimum.json
-Literal stdout: (empty)
+Boundary checks
+---------------
+Minimum command:
+  MODIFIED_BIN layer joystick sector delete --input E2E/deleted.json     --id 0 --index 1 --output E2E/below-minimum.json
 Literal stderr:
   error: radial joystick must retain at least 2 sectors
 Exit status: 1
-Literal assertion:
-  E2E/below-minimum.json does not exist
+Maximum setup:
+  six successive sector add candidates grow count 2 to count 8
+Exit status: 0 for all six commands
+Maximum command:
+  MODIFIED_BIN layer joystick sector add --input E2E/count-8.json     --id 0 --index 8 --output E2E/above-maximum.json
+Literal stderr:
+  error: radial joystick already has the maximum 8 sectors
+Exit status: 1
+Literal eight-sector boundaries:
+  sector[0]={a1:0.1875,a2:0.3125}
+  sector[6]={a1:0.9375,a2:0.0625}
+  sector[7]={a1:0.0625,a2:0.1875}
+Literal assertions:
+  assertions=pass
+  exact RADIAL seed and angle rebalance
+  minimum and maximum sector limits
+  target assignment survives rebalance
+  source cache hashes unchanged
+  input_storage.json excluded from snapshot
 
 Automated quality gates
 -----------------------
@@ -142,24 +149,21 @@ Command: cargo build --release --locked
 Literal result: Finished release
 Exit status: 0
 
-Tested boundaries
------------------
-  exact Input 0.18.0 mode seed and angle algorithm
-  two-sector minimum and eight-sector maximum
-  ordered insert/delete and assignment preservation
-  existing joystick assignment through control set
-  protected Codex-layer rejection
-  disabled JOYSTICK mode rejection
-  Action/Multi Action usage resynchronization
-  strict candidate validation, atomic publish, and reopen
-  source cache byte preservation and no GUI/process/device contact
+Tested boundaries:
+  exact Input 0.18.0 static model and frozen source hashes
+  VENDOR-to-RADIAL two-sector seed
+  indexed add and delete
+  2-sector minimum and 8-sector maximum
+  exact fractional-angle wraparound
+  target update through stable joystick:{index} control ID
+  snapshot integrity, atomic candidates, and source-cache preservation
 
 Modified artifact
 -----------------
 Path:
   target/release/worklouderctl
 Preserved copy:
-  /tmp/worklouderctl-input-joystick-sectors-v1.S1bEQs/modified-worklouderctl
+  /tmp/worklouderctl-input-joystick-sectors-v1.K3XqlP/modified/worklouderctl
 SHA-256 after reopen/execute:
   0abb126833d8b319f27c0c503113007dd359ddea7ad6414d24a4969eb68fa92d
 Reopen/execute command:
@@ -181,7 +185,7 @@ Rollback
 Path:
   artifacts/verification/input-joystick-sectors-v1/rollback.sh
 SHA-256:
-  45017b60f411700c57dc6b7a06933bcda022d61d6a60187f2ef4dcfe7b58c337
+  6c27c40ee6fce4e48180e0383e52f730234a5d30a08ea9b10bee84eb8cfb89f2
 Syntax command:
   sh -n artifacts/verification/input-joystick-sectors-v1/rollback.sh
 Exit status: 0
