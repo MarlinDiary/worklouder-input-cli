@@ -326,6 +326,7 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
     assert!(stdout.contains("agent-key"));
     assert!(stdout.contains("command-key"));
     assert!(stdout.contains("dial"));
+    assert!(stdout.contains("joystick"));
     assert!(stdout.contains("lighting"));
     assert!(stdout.contains("voice"));
 
@@ -376,6 +377,16 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
     assert!(voice.status.success());
     assert!(voice_stdout.contains("push-to-talk"));
     assert!(voice_stdout.contains("realtime"));
+
+    let joystick = binary()
+        .args(["codex", "joystick", "--help"])
+        .output()
+        .unwrap();
+    let joystick_stdout = String::from_utf8(joystick.stdout).unwrap();
+    assert!(joystick.status.success());
+    assert!(joystick_stdout.contains("get"));
+    assert!(joystick_stdout.contains("set"));
+    assert!(joystick_stdout.contains("clear"));
 }
 
 #[test]
@@ -573,6 +584,127 @@ fn codex_dial_candidates_run_end_to_end_without_writing_source() {
         .args(["--json", "codex", "dial", "gesture", "get", "--input"])
         .arg(&cleared)
         .arg("left")
+        .output()
+        .unwrap();
+    assert!(cleared_view.status.success());
+    let cleared_view: serde_json::Value = serde_json::from_slice(&cleared_view.stdout).unwrap();
+    assert_eq!(cleared_view["assignmentType"], "empty");
+    assert_eq!(worklouderctl::fsutil::sha256(&config).unwrap(), source_sha);
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn codex_joystick_candidates_run_end_to_end_without_writing_source() {
+    let root = fixture_root();
+    fs::create_dir_all(&root).unwrap();
+    let config = root.join("config.toml");
+    let snapshot = root.join("snapshot.json");
+    let skill = root.join("skill.json");
+    let command = root.join("command.json");
+    let cleared = root.join("cleared.json");
+    fs::write(
+        &config,
+        b"[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
+    )
+    .unwrap();
+    let source_sha = worklouderctl::fsutil::sha256(&config).unwrap();
+
+    let export = binary()
+        .args(["codex", "export", "--config"])
+        .arg(&config)
+        .arg("--app")
+        .arg(root.join("missing.app"))
+        .arg("--output")
+        .arg(&snapshot)
+        .output()
+        .unwrap();
+    assert!(export.status.success());
+
+    let default_up = binary()
+        .args(["--json", "codex", "joystick", "get", "--input"])
+        .arg(&snapshot)
+        .arg("up")
+        .output()
+        .unwrap();
+    assert!(default_up.status.success());
+    let default_up: serde_json::Value = serde_json::from_slice(&default_up.stdout).unwrap();
+    assert_eq!(default_up["assignmentType"], "command");
+    assert_eq!(default_up["commandId"], "composer.togglePlanMode");
+    assert_eq!(default_up["inherited"], true);
+
+    let set_skill = binary()
+        .args(["--json", "codex", "joystick", "set", "--input"])
+        .arg(&snapshot)
+        .args([
+            "up",
+            "--skill-name",
+            "Plan Skill",
+            "--skill-path",
+            "/tmp/plan/SKILL.md",
+            "--output",
+        ])
+        .arg(&skill)
+        .output()
+        .unwrap();
+    assert!(set_skill.status.success());
+    let set_skill: serde_json::Value = serde_json::from_slice(&set_skill.stdout).unwrap();
+    assert_eq!(
+        set_skill["changedPaths"],
+        serde_json::json!(["/settings/codex-micro-layout/analogStick/up"])
+    );
+
+    let set_command = binary()
+        .args(["--json", "codex", "joystick", "set", "--input"])
+        .arg(&skill)
+        .args(["right", "--command", "fixture.navigate", "--output"])
+        .arg(&command)
+        .output()
+        .unwrap();
+    assert!(set_command.status.success());
+
+    let get_skill = binary()
+        .args(["--json", "codex", "joystick", "get", "--input"])
+        .arg(&command)
+        .arg("up")
+        .output()
+        .unwrap();
+    assert!(get_skill.status.success());
+    let get_skill: serde_json::Value = serde_json::from_slice(&get_skill.stdout).unwrap();
+    assert_eq!(get_skill["assignmentType"], "skill");
+    assert_eq!(get_skill["skillName"], "Plan Skill");
+    assert_eq!(get_skill["skillPath"], "/tmp/plan/SKILL.md");
+
+    let get_command = binary()
+        .args(["--json", "codex", "joystick", "get", "--input"])
+        .arg(&command)
+        .arg("right")
+        .output()
+        .unwrap();
+    assert!(get_command.status.success());
+    let get_command: serde_json::Value = serde_json::from_slice(&get_command.stdout).unwrap();
+    assert_eq!(get_command["assignmentType"], "command");
+    assert_eq!(get_command["commandId"], "fixture.navigate");
+
+    let clear = binary()
+        .args(["--json", "codex", "joystick", "clear", "--input"])
+        .arg(&command)
+        .arg("down")
+        .arg("--output")
+        .arg(&cleared)
+        .output()
+        .unwrap();
+    assert!(clear.status.success());
+    let clear: serde_json::Value = serde_json::from_slice(&clear.stdout).unwrap();
+    assert_eq!(
+        clear["changedPaths"],
+        serde_json::json!(["/settings/codex-micro-layout/analogStick/down"])
+    );
+
+    let cleared_view = binary()
+        .args(["--json", "codex", "joystick", "get", "--input"])
+        .arg(&cleared)
+        .arg("down")
         .output()
         .unwrap();
     assert!(cleared_view.status.success());

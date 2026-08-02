@@ -19,14 +19,15 @@ use cli::{
     AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
     CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand,
     CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexDialCommand, CodexDialGesture,
-    CodexDialGestureCommand, CodexDialMode, CodexDialModeCommand, CodexLightingAutoOff,
-    CodexLightingAutoOffCommand, CodexLightingBrightnessCommand, CodexLightingCommand,
-    CodexRuntimeCommand, CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell,
-    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
-    InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand, LightingEffect,
-    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
-    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
-    SmartActionType as CliSmartActionType, TierCommand,
+    CodexDialGestureCommand, CodexDialMode, CodexDialModeCommand, CodexJoystickCommand,
+    CodexJoystickDirection, CodexLightingAutoOff, CodexLightingAutoOffCommand,
+    CodexLightingBrightnessCommand, CodexLightingCommand, CodexRuntimeCommand, CodexVoiceCommand,
+    CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand, DeviceCommand,
+    DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand, LayerCommand,
+    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
+    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
+    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
+    TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -2148,6 +2149,58 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
                 )?,
             },
         },
+        CodexCommand::Joystick { command } => match command {
+            CodexJoystickCommand::Get { input, direction } => {
+                let result =
+                    codex::joystick_get(&input, codex_joystick_direction_value(direction))?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "joystick-direction={}\ttype={}\tinherited={}",
+                        result.direction, result.assignment_type, result.inherited
+                    )?;
+                    if let Some(value) = result.command_id {
+                        writeln!(out, "command={value}")?;
+                    }
+                    if let (Some(name), Some(path)) = (result.skill_name, result.skill_path) {
+                        writeln!(out, "skill={name}\t{path}")?;
+                    }
+                    writeln!(out, "revision={}", result.revision)?;
+                }
+            }
+            CodexJoystickCommand::Set {
+                input,
+                direction,
+                command,
+                skill_name,
+                skill_path,
+                output,
+            } => write_codex_candidate_result(
+                codex::joystick_set(
+                    &input,
+                    codex_joystick_direction_value(direction),
+                    codex::JoystickUpdate {
+                        command: command.as_deref(),
+                        skill_name: skill_name.as_deref(),
+                        skill_path: skill_path.as_deref(),
+                    },
+                    &output,
+                )?,
+                json,
+                &mut out,
+            )?,
+            CodexJoystickCommand::Clear {
+                input,
+                direction,
+                output,
+            } => write_codex_candidate_result(
+                codex::joystick_clear(&input, codex_joystick_direction_value(direction), &output)?,
+                json,
+                &mut out,
+            )?,
+        },
         CodexCommand::Lighting { command } => match command {
             CodexLightingCommand::Brightness { command } => match command {
                 CodexLightingBrightnessCommand::Get { input } => {
@@ -2399,6 +2452,15 @@ fn codex_dial_gesture_value(value: CodexDialGesture) -> &'static str {
         CodexDialGesture::Right => "right",
         CodexDialGesture::Click => "click",
         CodexDialGesture::LongPress => "longPress",
+    }
+}
+
+fn codex_joystick_direction_value(value: CodexJoystickDirection) -> &'static str {
+    match value {
+        CodexJoystickDirection::Up => "up",
+        CodexJoystickDirection::Right => "right",
+        CodexJoystickDirection::Down => "down",
+        CodexJoystickDirection::Left => "left",
     }
 }
 

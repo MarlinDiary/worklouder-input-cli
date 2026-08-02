@@ -460,6 +460,12 @@ pub enum CodexCommand {
         command: CodexDialCommand,
     },
 
+    /// Inspect or edit Codex-native joystick directions in an offline snapshot.
+    Joystick {
+        #[clap(subcommand)]
+        command: CodexJoystickCommand,
+    },
+
     /// Inspect or edit Codex-native global lighting in an offline snapshot.
     Lighting {
         #[clap(subcommand)]
@@ -880,6 +886,54 @@ pub enum CodexDialGestureCommand {
         input: PathBuf,
         #[clap(value_enum)]
         gesture: CodexDialGesture,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CodexJoystickDirection {
+    Up,
+    Right,
+    Down,
+    Left,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexJoystickCommand {
+    /// Read one effective joystick direction assignment.
+    Get {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(value_enum)]
+        direction: CodexJoystickDirection,
+    },
+
+    /// Assign one Codex command or Skill to a joystick direction.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(value_enum)]
+        direction: CodexJoystickDirection,
+        /// Assign a Codex command ID.
+        #[clap(long)]
+        command: Option<String>,
+        /// Assign a Skill display name; pair with --skill-path.
+        #[clap(long)]
+        skill_name: Option<String>,
+        /// Assign a Skill path; pair with --skill-name.
+        #[clap(long)]
+        skill_path: Option<String>,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Clear one joystick direction while preserving the other directions.
+    Clear {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(value_enum)]
+        direction: CodexJoystickDirection,
         #[clap(long, value_parser)]
         output: PathBuf,
     },

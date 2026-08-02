@@ -51,6 +51,7 @@ struct LayoutContract {
     keycaps: Vec<String>,
     encoder_modes: Vec<String>,
     encoder_gestures: Vec<String>,
+    analog_directions: Vec<String>,
     voice_button_modes: Vec<String>,
 }
 
@@ -178,6 +179,30 @@ pub struct DialGestureView {
 
 #[derive(Clone, Copy, Debug)]
 pub struct DialGestureUpdate<'a> {
+    pub command: Option<&'a str>,
+    pub skill_name: Option<&'a str>,
+    pub skill_path: Option<&'a str>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JoystickView {
+    pub schema_version: u8,
+    pub kind: &'static str,
+    pub revision: String,
+    pub direction: String,
+    pub assignment_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skill_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skill_path: Option<String>,
+    pub inherited: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct JoystickUpdate<'a> {
     pub command: Option<&'a str>,
     pub skill_name: Option<&'a str>,
     pub skill_path: Option<&'a str>,
@@ -848,6 +873,105 @@ fn dial_gesture_write(
     )
 }
 
+pub fn joystick_get(input: &Path, direction: &str) -> Result<JoystickView> {
+    let snapshot = read_snapshot(input)?;
+    let contract = load_contract()?;
+    validate_joystick_direction(direction, &contract)?;
+    let action = effective_layout(&snapshot)?
+        .get("analogStick")
+        .and_then(Value::as_object)
+        .and_then(|analog| analog.get(direction))
+        .with_context(|| format!("effective layout.analogStick.{direction} was missing"))?;
+    let action = nullable_action_view(action, &format!("layout.analogStick.{direction}"))?;
+    let inherited = snapshot
+        .settings
+        .get("codex-micro-layout")
+        .and_then(Value::as_object)
+        .and_then(|layout| layout.get("analogStick"))
+        .and_then(Value::as_object)
+        .map_or(true, |analog| !analog.contains_key(direction));
+    Ok(JoystickView {
+        schema_version: 1,
+        kind: "worklouderctl-codex-joystick",
+        revision: settings_revision(&snapshot.settings)?,
+        direction: direction.to_owned(),
+        assignment_type: action.assignment_type,
+        command_id: action.command_id,
+        skill_name: action.skill_name,
+        skill_path: action.skill_path,
+        inherited,
+    })
+}
+
+pub fn joystick_set(
+    input: &Path,
+    direction: &str,
+    update: JoystickUpdate<'_>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let action = action_assignment(
+        update.command,
+        update.skill_name,
+        update.skill_path,
+        "joystick",
+    )?;
+    joystick_write(input, direction, action, "codex-joystick-set", output)
+}
+
+pub fn joystick_clear(input: &Path, direction: &str, output: &Path) -> Result<CandidateReceipt> {
+    joystick_write(
+        input,
+        direction,
+        Value::Null,
+        "codex-joystick-clear",
+        output,
+    )
+}
+
+fn joystick_write(
+    input: &Path,
+    direction: &str,
+    action: Value,
+    operation: &'static str,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let mut snapshot = read_snapshot(input)?;
+    let contract = load_contract()?;
+    validate_joystick_direction(direction, &contract)?;
+    validate_nullable_action(&action, &format!("layout.analogStick.{direction}"))?;
+    let before_revision = settings_revision(&snapshot.settings)?;
+    let before_action = effective_layout(&snapshot)?
+        .get("analogStick")
+        .and_then(Value::as_object)
+        .and_then(|analog| analog.get(direction))
+        .with_context(|| format!("effective layout.analogStick.{direction} was missing"))?
+        .clone();
+    let changed = before_action != action;
+    if changed {
+        let mut layout = editable_layout(&snapshot, &contract)?;
+        layout
+            .get_mut("analogStick")
+            .and_then(Value::as_object_mut)
+            .context("layout.analogStick was missing")?
+            .insert(direction.to_owned(), action);
+        validate_layout(&Value::Object(layout.clone()), &contract.layout)?;
+        snapshot
+            .settings
+            .insert("codex-micro-layout".into(), Value::Object(layout));
+        refresh_effective_settings(&mut snapshot, &contract)?;
+    }
+    publish_candidate(
+        snapshot,
+        output,
+        operation,
+        before_revision,
+        changed
+            .then(|| format!("/settings/codex-micro-layout/analogStick/{direction}"))
+            .into_iter()
+            .collect(),
+    )
+}
+
 pub fn command_key_get(input: &Path, slot: &str) -> Result<CommandKeyView> {
     let snapshot = read_snapshot(input)?;
     command_key_view(&snapshot, slot)
@@ -1106,22 +1230,49 @@ fn validate_dial_gesture(gesture: &str, contract: &Contract) -> Result<()> {
     Ok(())
 }
 
+fn validate_joystick_direction(direction: &str, contract: &Contract) -> Result<()> {
+    ensure!(
+        contract
+            .layout
+            .analog_directions
+            .iter()
+            .any(|candidate| candidate == direction),
+        "joystick direction must be one of {}",
+        contract.layout.analog_directions.join(", ")
+    );
+    Ok(())
+}
+
 fn dial_gesture_action(update: DialGestureUpdate<'_>) -> Result<Value> {
-    let skill_requested = update.skill_name.is_some() || update.skill_path.is_some();
-    let assignment_count = usize::from(update.command.is_some()) + usize::from(skill_requested);
+    action_assignment(
+        update.command,
+        update.skill_name,
+        update.skill_path,
+        "dial gesture",
+    )
+}
+
+fn action_assignment(
+    command: Option<&str>,
+    skill_name: Option<&str>,
+    skill_path: Option<&str>,
+    label: &str,
+) -> Result<Value> {
+    let skill_requested = skill_name.is_some() || skill_path.is_some();
+    let assignment_count = usize::from(command.is_some()) + usize::from(skill_requested);
     ensure!(
         assignment_count == 1,
-        "select exactly one dial gesture assignment: --command or --skill-name with --skill-path"
+        "select exactly one {label} assignment: --command or --skill-name with --skill-path"
     );
-    if let Some(command_id) = update.command {
+    if let Some(command_id) = command {
         ensure!(!command_id.trim().is_empty(), "--command must be non-empty");
         return Ok(serde_json::json!({
             "type": "command",
             "commandId": command_id,
         }));
     }
-    let skill_name = update.skill_name.context("--skill-name is required")?;
-    let skill_path = update.skill_path.context("--skill-path is required")?;
+    let skill_name = skill_name.context("--skill-name is required")?;
+    let skill_path = skill_path.context("--skill-path is required")?;
     ensure!(
         !skill_name.trim().is_empty(),
         "--skill-name must be non-empty"
@@ -2109,6 +2260,143 @@ mod tests {
         assert!(invalid_gesture
             .to_string()
             .contains("dial gesture must be one of"));
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn joystick_candidates_preserve_other_directions_metadata_and_source() {
+        let root = fixture_root();
+        fs::create_dir_all(&root).unwrap();
+        let config = root.join("config.toml");
+        let snapshot_path = root.join("snapshot.json");
+        let noop_path = root.join("noop.json");
+        let skill_path = root.join("skill.json");
+        let command_path = root.join("command.json");
+        let cleared_path = root.join("cleared.json");
+        fs::write(&config, b"[desktop]\ncodex-micro-future = \"preserved\"\n").unwrap();
+        let source_sha = fsutil::sha256(&config).unwrap();
+        export(&config, &root.join("missing.app"), &snapshot_path).unwrap();
+
+        let default_up = joystick_get(&snapshot_path, "up").unwrap();
+        assert_eq!(default_up.assignment_type, "command");
+        assert_eq!(
+            default_up.command_id.as_deref(),
+            Some("composer.togglePlanMode")
+        );
+        assert!(default_up.inherited);
+
+        let noop = joystick_set(
+            &snapshot_path,
+            "up",
+            JoystickUpdate {
+                command: Some("composer.togglePlanMode"),
+                skill_name: None,
+                skill_path: None,
+            },
+            &noop_path,
+        )
+        .unwrap();
+        assert!(!noop.changed);
+        assert!(!read_snapshot(&noop_path)
+            .unwrap()
+            .settings
+            .contains_key("codex-micro-layout"));
+
+        let skill = joystick_set(
+            &snapshot_path,
+            "up",
+            JoystickUpdate {
+                command: None,
+                skill_name: Some("Plan Skill"),
+                skill_path: Some("/tmp/plan/SKILL.md"),
+            },
+            &skill_path,
+        )
+        .unwrap();
+        assert_eq!(
+            skill.changed_paths,
+            vec!["/settings/codex-micro-layout/analogStick/up"]
+        );
+        let skill_view = joystick_get(&skill_path, "up").unwrap();
+        assert_eq!(skill_view.assignment_type, "skill");
+        assert_eq!(skill_view.skill_name.as_deref(), Some("Plan Skill"));
+        assert_eq!(skill_view.skill_path.as_deref(), Some("/tmp/plan/SKILL.md"));
+        assert_eq!(
+            joystick_get(&skill_path, "right")
+                .unwrap()
+                .command_id
+                .as_deref(),
+            Some("navigateForward")
+        );
+
+        let mut skill_snapshot = read_snapshot(&skill_path).unwrap();
+        skill_snapshot
+            .settings
+            .get_mut("codex-micro-layout")
+            .unwrap()["futureJoystickMetadata"] = serde_json::json!({"preserved": true});
+        let contract = load_contract().unwrap();
+        refresh_effective_settings(&mut skill_snapshot, &contract).unwrap();
+        let mut bytes = serde_json::to_vec_pretty(&skill_snapshot).unwrap();
+        bytes.push(b'\n');
+        fs::write(&skill_path, bytes).unwrap();
+
+        joystick_set(
+            &skill_path,
+            "right",
+            JoystickUpdate {
+                command: Some("fixture.navigate"),
+                skill_name: None,
+                skill_path: None,
+            },
+            &command_path,
+        )
+        .unwrap();
+        assert_eq!(
+            joystick_get(&command_path, "right")
+                .unwrap()
+                .command_id
+                .as_deref(),
+            Some("fixture.navigate")
+        );
+        assert_eq!(
+            read_snapshot(&command_path).unwrap().settings["codex-micro-layout"]
+                ["futureJoystickMetadata"]["preserved"],
+            true
+        );
+
+        joystick_clear(&command_path, "down", &cleared_path).unwrap();
+        let cleared = joystick_get(&cleared_path, "down").unwrap();
+        assert_eq!(cleared.assignment_type, "empty");
+        assert!(!cleared.inherited);
+        assert_eq!(
+            joystick_get(&cleared_path, "up").unwrap().assignment_type,
+            "skill"
+        );
+        assert_eq!(
+            read_snapshot(&cleared_path).unwrap().settings["codex-micro-future"],
+            "preserved"
+        );
+        assert_eq!(fsutil::sha256(&config).unwrap(), source_sha);
+
+        let invalid_direction = joystick_get(&cleared_path, "center").unwrap_err();
+        assert!(invalid_direction
+            .to_string()
+            .contains("joystick direction must be one of"));
+        let invalid_assignment = joystick_set(
+            &cleared_path,
+            "left",
+            JoystickUpdate {
+                command: Some("fixture.command"),
+                skill_name: Some("Fixture"),
+                skill_path: Some("/tmp/fixture/SKILL.md"),
+            },
+            &root.join("invalid.json"),
+        )
+        .unwrap_err();
+        assert!(invalid_assignment
+            .to_string()
+            .contains("select exactly one joystick assignment"));
 
         fs::remove_dir_all(root).unwrap();
     }
