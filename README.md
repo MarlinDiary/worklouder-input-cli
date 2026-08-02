@@ -108,6 +108,10 @@ worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled -
 worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
 worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
 worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
+worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
+worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
+worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
+worklouderctl codex lighting auto-off set --input CODEX_BRIGHTNESS.json 10-minutes --output CODEX_LIGHTING.json
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
 worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
@@ -189,8 +193,9 @@ Codex 26.727.51351 contract, and recursively fills inherited defaults in the
 effective view. `codex export` atomically publishes and reopens a typed JSON
 snapshot. Neither command serializes unrelated Codex settings.
 
-`codex agent-source`, `codex agent-key tap-mode`, and `codex command-key` are
-strict offline Tier 1 editors. They validate the embedded frozen definitions,
+`codex agent-source`, `codex agent-key tap-mode`, `codex command-key`, and
+`codex lighting` are strict offline Tier 1 editors. They validate the embedded
+frozen definitions,
 recompute effective settings and a recursive-key-sorted revision, preserve
 unknown `codex-micro-*` values, publish atomically, and reopen the result. Each
 receipt carries `expectedSourceSha256` for the Codex `settings-write` CAS
@@ -346,7 +351,6 @@ worklouderctl codex agent-source set --input codex.json priority --output codex-
 worklouderctl codex command-key set --input codex-priority.json ACT06 \
   --command toggleFastMode --output codex-fast.json
 worklouderctl codex joystick set up --skill SKILL_ID
-worklouderctl codex lighting set --brightness 80 --auto-off 10-minutes
 worklouderctl plan layout.yaml
 worklouderctl apply layout.yaml
 worklouderctl backup list

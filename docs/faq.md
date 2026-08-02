@@ -54,6 +54,11 @@ profiles, six layers, the key matrix, encoder, joystick sectors, Actions,
 Multi Actions, Smart Actions, linked apps, backlight, underglow, and layer
 metadata. The CLI configures every tier through its corresponding authority.
 
+Global Codex lighting brightness and auto-off are already available as strict
+offline `codex lighting brightness/auto-off get/set` candidates. The isolated
+Codex bridge E2E applies both fields, reads them back exactly, and restores their
+baseline values through the complete settings transaction.
+
 ## Can an AI agent configure Codex Micro?
 
 Yes, through the deterministic JSON contract. Human and agent clients share

@@ -77,6 +77,10 @@ worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled -
 worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
 worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
 worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
+worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
+worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
+worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
+worklouderctl codex lighting auto-off set --input CODEX_BRIGHTNESS.json 10-minutes --output CODEX_LIGHTING.json
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
 worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
@@ -153,7 +157,8 @@ worklouderctl completion bash|zsh|fish
 view 中递归补齐继承的默认值。`codex export` 原子发布并重新打开 typed JSON
 snapshot；两者都不会序列化其他 Codex 设置。
 
-`codex agent-source`、`codex agent-key tap-mode` 与 `codex command-key` 是严格的
+`codex agent-source`、`codex agent-key tap-mode`、`codex command-key` 与
+`codex lighting` 是严格的
 Tier 1 离线 editor：核对内嵌 frozen definitions，重算 effective settings 与
 recursive-key-sorted revision，保留未知 `codex-micro-*` 值，原子发布并重新打开。
 receipt 中的 `expectedSourceSha256` 供 Codex `settings-write` CAS transaction
@@ -331,7 +336,8 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 contract/client/reference server、
 revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
 Input 自动恢复、Codex Companion Bridge settings snapshot/CAS/apply/restore/rollback
-与六键 Agent assignment snapshot/get/set/clear/apply/restore transaction，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
+与六键 Agent assignment snapshot/get/set/clear/apply/restore transaction、Codex 全局
+lighting brightness/auto-off candidate 与 fixture transaction，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
 与 per-layer lighting、AppSense linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线 candidate 生成，keys、
 encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
 list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input

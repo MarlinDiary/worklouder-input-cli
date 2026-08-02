@@ -169,7 +169,9 @@ WORKLOUDERCTL_BIN=./target/release/worklouderctl \
   ./scripts/test-codex-bridge-e2e.sh
 ```
 
-The E2E test proves `recent -> custom -> recent`, applies command/Skill/task/
-keycap/empty Agent Key assignments, verifies idempotent replay and stale-CAS
-rejection, restores the exact six-slot revision, and requires the restored
-settings source SHA-256 to equal the baseline source SHA-256.
+The E2E test proves `recent -> custom -> recent`, global brightness
+`100 -> 37 -> 100`, and lighting auto-off
+`3-minutes -> 10-minutes -> 3-minutes`; applies command/Skill/task/keycap/empty
+Agent Key assignments; verifies idempotent replay and stale-CAS rejection;
+restores the exact six-slot revision; and requires the restored settings source
+SHA-256 to equal the baseline source SHA-256.

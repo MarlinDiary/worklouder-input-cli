@@ -47,8 +47,9 @@ CAS, immutable backup, exact explicit/effective readback, idempotency, restore,
 and automatic rollback. A separate injected Agent Key replacer advertises
 complete six-slot global-state apply/restore with its own revision CAS, backup,
 idempotency, exact readback, restore, and rollback. The cross-language fixture
-verifies `recent -> custom -> recent`, every Agent Key assignment type, exact
-Agent Key revision recovery, and exact source SHA recovery. Codex 26.727.51351
+verifies `recent -> custom -> recent`, global brightness and auto-off
+apply/readback/restore, every Agent Key assignment type, exact Agent Key revision
+recovery, and exact source SHA recovery. Codex 26.727.51351
 contains the internal handlers but does not yet ship the external listener,
 leaving released-app integration as the next upstream milestone.
 

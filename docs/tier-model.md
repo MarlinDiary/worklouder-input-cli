@@ -64,7 +64,8 @@ worklouderctl codex command-key get|set|reset --input SNAPSHOT ACT06
 worklouderctl codex dial get|set|reset
 worklouderctl codex joystick get|set|reset
 worklouderctl codex voice get|set
-worklouderctl codex lighting get|set
+worklouderctl codex lighting brightness get|set --input SNAPSHOT
+worklouderctl codex lighting auto-off get|set --input SNAPSHOT
 worklouderctl codex apply CONFIG
 worklouderctl codex restore BACKUP_ID
 ```

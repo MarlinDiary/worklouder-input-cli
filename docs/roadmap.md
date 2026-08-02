@@ -53,7 +53,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [ ] voice mode
 - [ ] dial modes and custom gestures
 - [ ] joystick directions and Skills
-- [ ] global brightness and auto-off
+- [x] global brightness and auto-off
 - [x] Codex settings backup, apply, readback, restore, and automatic rollback fixture
 - [ ] Codex settings structural diff command
 

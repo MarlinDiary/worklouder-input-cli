@@ -56,6 +56,10 @@ worklouderctl codex command-key set --input SNAPSHOT.json SLOT \
   [--keycap KEYCAP] [--command COMMAND_ID | --skill-name NAME --skill-path PATH | --clear-action] \
   --output CANDIDATE.json
 worklouderctl codex command-key reset --input SNAPSHOT.json SLOT --output CANDIDATE.json
+worklouderctl codex lighting brightness get --input SNAPSHOT.json
+worklouderctl codex lighting brightness set --input SNAPSHOT.json VALUE --output CANDIDATE.json
+worklouderctl codex lighting auto-off get --input SNAPSHOT.json
+worklouderctl codex lighting auto-off set --input SNAPSHOT.json VALUE --output CANDIDATE.json
 ```
 
 Candidate input is a complete `codex export` snapshot. The editor verifies the
@@ -67,6 +71,12 @@ exclusive, and reset from the frozen slot default. The source TOML SHA-256 is
 retained as the online transaction's source CAS value. The bridge also compares
 the canonical settings revision, performs complete explicit-setting replacement,
 and verifies exact explicit/effective readback before reporting success.
+
+Lighting brightness is a typed integer from `0` through `100`. Auto-off accepts
+exactly `off`, `30-seconds`, `1-minute`, `3-minutes`, `10-minutes`, `30-minutes`,
+or `1-hour`. Both editors preserve unknown settings, keep inherited defaults
+implicit for no-op candidates, and use the complete settings bridge transaction
+for CAS apply/readback/restore.
 
 Agent Key snapshots use the separate `codex-agent-keys-revision-v1` global-state
 revision. Offline set/clear changes one `AG00`–`AG05` slot, preserves the other

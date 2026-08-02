@@ -41,7 +41,8 @@ apply; and exact explicit/effective readback. It also verifies all six Agent Key
 slots, command/Skill/task/keycap/empty assignment types, a separate canonical
 global-state revision, complete-object apply, idempotent replay, stale-CAS
 rejection, explicit restore, and automatic rollback after corrupt readback. Its
-E2E path proves `recent -> custom -> recent`, restores the exact Agent Key
+E2E path proves `recent -> custom -> recent`, brightness `100 -> 37 -> 100`,
+auto-off `3-minutes -> 10-minutes -> 3-minutes`, restores the exact Agent Key
 revision, and recovers the exact baseline settings source SHA-256. This is bridge
 transaction evidence; released-Codex mutation begins when Codex installs the
 reference integration and supplies exact settings and Agent Key replacers.

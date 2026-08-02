@@ -31,8 +31,8 @@ parity contract.
 | Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | researched |
 | Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | researched |
 | Joystick | up, right, down, left command/Skill/empty | `codex joystick get/set/clear` | researched |
-| Lighting brightness | integer 0–100 | `codex lighting brightness get/set` | researched |
-| Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | researched |
+| Lighting brightness | integer 0–100 | `codex lighting brightness get/set` | strict offline candidate plus `100 -> 37 -> 100` bridge apply/readback/restore fixture verified |
+| Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | strict offline candidate plus `3-minutes -> 10-minutes -> 3-minutes` bridge apply/readback/restore fixture verified |
 | Layout reset | installed-build default layout | `codex reset layout` | researched |
 | Full object | export, validate, diff, apply, restore | `codex config snapshot/apply/restore`, future diff | authenticated snapshot/CAS/apply/readback/restore/rollback fixture verified; released Codex integration and diff pending |
 
