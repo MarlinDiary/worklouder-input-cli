@@ -87,8 +87,8 @@ The roadmap prioritizes evidence and configuration safety over command count.
 
 - [x] Smart Actions and groups (offline candidate and current-cache format verified)
 - [x] Input cache read adapter with bridge-equivalent semantic snapshot/revision
-- [ ] Input database adapter
-- [ ] Input process coordination
+- [x] Input-owned cache/database adapter contract through configuration writer and ApplicationService; no direct LokiJS writes
+- [x] Input process coordination through the in-process serialized bridge; direct compatibility reads retain explicit quit/reopen
 - [x] Codex settings-bridge protocol, client, and reference process integration
 - [ ] Released Codex process integration
 - [x] Private backup catalog with atomic publication and mode-0700/0600 containment
@@ -102,7 +102,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [ ] Homebrew formula
 - [ ] Shell completions and generated command reference
 - [ ] Compatibility matrix for every release
-- [ ] Migration and backup inspection tools
+- [x] Strict backup inspection and schema migration assessment tools
 - [ ] Agent-facing protocol over the same transaction core
 
 ## M6 — Delegated Input operations

@@ -123,6 +123,12 @@ run_case() {
     --output "$root/codex-post-apply.json" >"$root/codex-post-apply-receipt.json"
   "$BIN" --json codex agent-key snapshot --socket "$codex_socket" --token "$codex_token" \
     --output "$root/agent-post-apply.json" >"$root/agent-post-apply-receipt.json"
+  "$BIN" --json backup inspect --input "$root/apply.json" \
+    >"$root/apply-inspection.json"
+  "$BIN" --json backup inspect --input "$root/apply-backup" \
+    >"$root/catalog-inspection.json"
+  "$BIN" --json backup migration-plan --input "$root/apply.json" \
+    >"$root/apply-migration.json"
 
   if [[ "$fail_settings_writes" == 0 ]]; then
     [[ "$apply_status" == 0 ]]
@@ -183,6 +189,8 @@ run_case() {
       --output "$root/codex-restored.json" >"$root/codex-restored-receipt.json"
     "$BIN" --json codex agent-key snapshot --socket "$codex_socket" --token "$codex_token" \
       --output "$root/agent-restored.json" >"$root/agent-restored-receipt.json"
+    "$BIN" --json backup inspect --input "$root/restore.json" \
+      >"$root/restore-inspection.json"
   else
     [[ "$apply_status" == 6 ]]
   fi
@@ -211,6 +219,9 @@ agent_base = load("agent-base.json")
 agent_candidate = load("agent-candidate.json")
 agent_post = load("agent-post-apply.json")
 catalog = load("apply-backup/catalog.json")
+apply_inspection = load("apply-inspection.json")
+catalog_inspection = load("catalog-inspection.json")
+apply_migration = load("apply-migration.json")
 
 assert load("plan-show.json") == plan
 assert len(plan["authorities"]) == 4
@@ -220,6 +231,11 @@ assert [item["id"] for item in plan["authorities"]] == [
 ]
 assert catalog["operation"] == "apply"
 assert catalog["planRevision"] == plan["revision"]
+assert apply_inspection["artifactKind"] == "worklouderctl-cross-authority-transaction"
+assert apply_inspection["valid"] is True
+assert catalog_inspection["artifactKind"] == "worklouderctl-private-backup-catalog"
+assert catalog_inspection["itemCount"] == 4
+assert apply_migration["migration"]["migrationRequired"] is False
 assert stat.S_IMODE((root / "apply-backup").stat().st_mode) == 0o700
 for path in (root / "apply-backup").rglob("*.json"):
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
@@ -249,7 +265,9 @@ else:
     assert codex_post["settings"] == codex_candidate["settings"]
     assert agent_post["assignments"] == agent_candidate["assignments"]
     restore = load("restore.json")
+    restore_inspection = load("restore-inspection.json")
     assert restore["operation"] == "restore" and restore["status"] == "restored"
+    assert restore_inspection["restoreAvailable"] is False
     assert load("restore-stdout.json") == restore == load("restore-retry.json")
     assert [item["id"] for item in restore["mutations"]] == [
         "codex-settings", "codex-agent-keys", "input-config", "input-host-settings",
@@ -272,4 +290,6 @@ printf '%s\n' \
   'cross_authority_idempotent_retry=verified' \
   'cross_authority_retry_drift_rejected=verified' \
   'cross_authority_private_catalog_permissions=verified' \
+  'cross_authority_backup_inspection=verified' \
+  'cross_authority_migration_plan=verified' \
   'cross_authority_failure_auto_rollback=verified'

@@ -1,3 +1,4 @@
+pub mod backup;
 pub mod bridge;
 pub mod cli;
 pub mod codex;
@@ -19,22 +20,23 @@ use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
-    AppSenseCommand, BridgeCommand, CapabilityCommand, CheatSheetBehavior, CheatSheetCommand, Cli,
-    CodexAgentKeyCommand, CodexAgentSource, CodexAgentSourceCommand, CodexAgentTapMode,
-    CodexAgentTapModeCommand, CodexBridgeCommand, CodexCommand, CodexCommandKeyCommand,
-    CodexConfigCommand, CodexDialCommand, CodexDialGesture, CodexDialGestureCommand, CodexDialMode,
-    CodexDialModeCommand, CodexJoystickCommand, CodexJoystickDirection, CodexLightingAutoOff,
-    CodexLightingAutoOffCommand, CodexLightingBrightnessCommand, CodexLightingCommand,
-    CodexResetCommand, CodexRuntimeCommand, CodexVoiceCommand, CodexVoiceMode, Command,
-    CompletionShell, ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand,
-    DeviceTransport, InputCommand, InputCommandPermissionCommand, InputCommandPermissionValue,
-    InputConfigCommand, InputFirmwareCommand, InputLogsCommand, InputPermissionCommand,
-    InputPresetCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
-    LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect,
-    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
-    PresetCommand, ProfileCommand, RadialCommand, SchemaCommand, SmartActionCommand,
-    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
-    TierCommand, TransactionCommand,
+    AppSenseCommand, BackupCommand, BridgeCommand, CapabilityCommand, CheatSheetBehavior,
+    CheatSheetCommand, Cli, CodexAgentKeyCommand, CodexAgentSource, CodexAgentSourceCommand,
+    CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand, CodexCommand,
+    CodexCommandKeyCommand, CodexConfigCommand, CodexDialCommand, CodexDialGesture,
+    CodexDialGestureCommand, CodexDialMode, CodexDialModeCommand, CodexJoystickCommand,
+    CodexJoystickDirection, CodexLightingAutoOff, CodexLightingAutoOffCommand,
+    CodexLightingBrightnessCommand, CodexLightingCommand, CodexResetCommand, CodexRuntimeCommand,
+    CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand,
+    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand,
+    InputCommandPermissionCommand, InputCommandPermissionValue, InputConfigCommand,
+    InputFirmwareCommand, InputLogsCommand, InputPermissionCommand, InputPresetCommand,
+    LayerCommand, LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand,
+    LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect, LightingZone,
+    MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, PresetCommand,
+    ProfileCommand, RadialCommand, SchemaCommand, SmartActionCommand, SmartActionGroupCommand,
+    SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType, TierCommand,
+    TransactionCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -103,6 +105,7 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         } => run_bridge(command, socket, token, cli.json, &mut out)?,
         Command::Config { command } => run_config(command, cli.json, &mut out)?,
         Command::Schema { command } => run_schema(command, cli.json, &mut out)?,
+        Command::Backup { command } => run_backup(command, cli.json, &mut out)?,
         Command::Transaction { command } => run_transaction(command, cli.json, &mut out)?,
         Command::Profile { command } => run_profile(command, cli.json, &mut out)?,
         Command::Layer { command } => run_layer(command, cli.json, &mut out)?,
@@ -117,6 +120,34 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
+    Ok(())
+}
+
+fn run_backup(command: BackupCommand, json: bool, mut out: impl Write) -> Result<()> {
+    let report = match command {
+        BackupCommand::Inspect { input } => backup::inspect(&input)?,
+        BackupCommand::MigrationPlan { input } => backup::migration_plan(&input)?,
+    };
+    if json {
+        write_json(&mut out, &report)?;
+    } else {
+        writeln!(out, "kind={}", report.artifact_kind)?;
+        writeln!(out, "valid={}", report.valid)?;
+        writeln!(out, "schemaVersion={}", report.artifact_schema_version)?;
+        if let Some(revision) = &report.revision {
+            writeln!(out, "revision={revision}")?;
+        }
+        writeln!(out, "items={}", report.item_count)?;
+        writeln!(out, "restoreAvailable={}", report.restore_available)?;
+        writeln!(
+            out,
+            "migration={} targetSchemaVersion={}",
+            report.migration.action, report.migration.target_schema_version
+        )?;
+        if let Some(hint) = &report.restore_hint {
+            writeln!(out, "restoreHint={hint}")?;
+        }
+    }
     Ok(())
 }
 

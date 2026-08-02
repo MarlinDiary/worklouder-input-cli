@@ -223,6 +223,8 @@ worklouderctl config diff BASE CANDIDATE
 worklouderctl --json input inspect
 worklouderctl --json schema list
 worklouderctl --json schema show configuration-v1
+worklouderctl --json backup inspect --input APPLY_RECEIPT.json
+worklouderctl --json backup migration-plan --input BACKUP_DIRECTORY
 worklouderctl completion bash|zsh|fish
 ```
 
@@ -642,6 +644,7 @@ Read the complete [FAQ](docs/faq.md).
 - [Cross-authority transaction guide](docs/transactions.md)
 - [Exit statuses and JSON error envelopes](docs/exit-statuses.md)
 - [JSON Schemas and agent invocation contract](docs/json-schemas.md)
+- [Backup inspection and migration](docs/backups-and-migrations.md)
 - [Configuration parity matrix](docs/configuration-parity.md)
 - [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
 - [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)

@@ -1072,7 +1072,7 @@ fn catalog_entry<'a>(catalog: &'a BackupCatalog, id: &str) -> Result<&'a BackupC
         .with_context(|| format!("backup catalog omitted authority {id}"))
 }
 
-fn read_backup_catalog(input: &Path) -> Result<BackupCatalog> {
+pub fn read_backup_catalog(input: &Path) -> Result<BackupCatalog> {
     let path = regular_file(input, "backup catalog")?;
     let bytes = fs::read(&path)?;
     ensure!(
@@ -1169,6 +1169,26 @@ fn read_backup_catalog(input: &Path) -> Result<BackupCatalog> {
         );
     }
     Ok(catalog)
+}
+
+pub fn verify_receipt_artifacts(
+    input: &Path,
+) -> Result<(TransactionReceipt, BackupCatalog, TransactionPlan)> {
+    let receipt = read_transaction_receipt(input)?;
+    let catalog = read_backup_catalog(&receipt.backup_catalog)?;
+    let plan = read_plan_metadata(&catalog.plan)?;
+    ensure!(
+        receipt.operation == catalog.operation
+            && receipt.plan_revision == catalog.plan_revision
+            && regular_file(&receipt.plan, "receipt plan")? == catalog.plan
+            && regular_file(&receipt.backup_catalog, "receipt backup catalog")?
+                == catalog.plan.parent().unwrap().join("catalog.json"),
+        "transaction receipt did not match its backup catalog"
+    );
+    if receipt.status == "applied" || receipt.status == "restored" {
+        validate_success_receipt_catalog(&receipt, &catalog, &plan)?;
+    }
+    Ok((receipt, catalog, plan))
 }
 
 fn ensure_private(path: &Path, directory: bool, label: &str) -> Result<()> {

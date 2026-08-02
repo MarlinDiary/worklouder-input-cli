@@ -840,6 +840,17 @@ fn validate_log_bundle(root: &Path, expected: &InputLogBundleManifest) -> Result
     Ok(())
 }
 
+pub fn read_log_bundle(root: &Path) -> Result<InputLogBundleManifest> {
+    let manifest_path = root.join("manifest.json");
+    let manifest: InputLogBundleManifest = serde_json::from_slice(
+        &fs::read(&manifest_path)
+            .with_context(|| format!("failed to read {}", manifest_path.display()))?,
+    )
+    .with_context(|| format!("invalid log bundle manifest {}", manifest_path.display()))?;
+    validate_log_bundle(root, &manifest)?;
+    Ok(manifest)
+}
+
 fn validate_appsense_runtime(runtime: &AppSenseRuntimeState) -> Result<()> {
     ensure!(
         runtime.device_ids.len() <= 256

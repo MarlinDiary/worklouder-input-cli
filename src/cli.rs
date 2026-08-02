@@ -109,6 +109,12 @@ pub enum Command {
         command: SchemaCommand,
     },
 
+    /// Verify backup integrity and report version migration requirements.
+    Backup {
+        #[clap(subcommand)]
+        command: BackupCommand,
+    },
+
     /// Plan coordinated Codex and Input mutations with one unified diff.
     Transaction {
         #[clap(subcommand)]
@@ -1149,6 +1155,21 @@ pub enum SchemaCommand {
     Show {
         /// Schema registry name, for example configuration-v1.
         name: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BackupCommand {
+    /// Detect and fully verify a supported backup, receipt, catalog, or snapshot.
+    Inspect {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Report whether a verified artifact requires a schema migration.
+    MigrationPlan {
+        #[clap(long, value_parser)]
+        input: PathBuf,
     },
 }
 

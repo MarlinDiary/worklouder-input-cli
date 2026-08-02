@@ -63,6 +63,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("bridge"));
     assert!(stdout.contains("config"));
     assert!(stdout.contains("schema"));
+    assert!(stdout.contains("backup"));
     assert!(stdout.contains("codex"));
     assert!(stdout.contains("device"));
     assert!(stdout.contains("input"));
@@ -78,6 +79,39 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("preset"));
     assert!(stdout.contains("radial"));
     assert!(stdout.contains("completion"));
+}
+
+#[test]
+fn backup_inspection_and_migration_plan_reopen_fixture_snapshots() {
+    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("fixtures/input/0.18.0/codex-micro-v0.6.0/config-snapshot.json");
+    let inspect = binary()
+        .args(["--json", "backup", "inspect", "--input"])
+        .arg(&fixture)
+        .output()
+        .unwrap();
+    assert!(
+        inspect.status.success(),
+        "{}",
+        String::from_utf8_lossy(&inspect.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&inspect.stdout).unwrap();
+    assert_eq!(report["kind"], "worklouderctl-backup-inspection");
+    assert_eq!(report["artifactKind"], "worklouder-input-config-snapshot");
+    assert_eq!(report["valid"], true);
+    assert_eq!(report["restoreAvailable"], true);
+    assert_eq!(report["migration"]["migrationRequired"], false);
+    assert_eq!(report["migration"]["action"], "none");
+
+    let migration = binary()
+        .args(["--json", "backup", "migration-plan", "--input"])
+        .arg(&fixture)
+        .output()
+        .unwrap();
+    assert!(migration.status.success());
+    let migration: serde_json::Value = serde_json::from_slice(&migration.stdout).unwrap();
+    assert_eq!(migration["migration"]["supported"], true);
+    assert_eq!(migration["migration"]["targetSchemaVersion"], 1);
 }
 
 #[test]

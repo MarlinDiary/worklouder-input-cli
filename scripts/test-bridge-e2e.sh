@@ -115,6 +115,8 @@ node "$repo/companion/conformance.mjs" \
 "$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
   logs collect --output "$root/input-logs" --max-entries 2 \
   >"$root/input-logs-receipt.json"
+"$bin" --json backup inspect --input "$root/input-logs" \
+  >"$root/input-logs-inspection.json"
 "$bin" --json appsense test \
   --bridge-socket "$socket" --bridge-token "$token" \
   --device fixture-device \
@@ -506,6 +508,7 @@ input_firmware = json.loads((root / "input-firmware.json").read_text())
 input_logs_receipt = json.loads((root / "input-logs-receipt.json").read_text())
 input_logs_manifest = json.loads((root / "input-logs" / "manifest.json").read_text())
 input_logs = json.loads((root / "input-logs" / "logs.json").read_text())
+input_logs_inspection = json.loads((root / "input-logs-inspection.json").read_text())
 appsense_runtime_test = json.loads((root / "appsense-runtime-test.json").read_text())
 appsense_runtime_mismatch = json.loads((root / "appsense-runtime-mismatch.json").read_text())
 files = json.loads((root / "device-files.json").read_text())
@@ -717,6 +720,9 @@ assert input_logs_receipt["output"] == str(root / "input-logs")
 assert input_logs_manifest["sanitized"] is True
 assert input_logs_manifest["exportedEntryCount"] == 2
 assert input_logs_manifest["redactionCount"] == 3
+assert input_logs_inspection["artifactKind"] == "worklouderctl-input-log-bundle"
+assert input_logs_inspection["valid"] is True
+assert input_logs_inspection["migration"]["migrationRequired"] is False
 assert input_logs["entries"][0]["message"] == (
     "Input fixture ready at $HOME/Library token=<REDACTED>"
 )
