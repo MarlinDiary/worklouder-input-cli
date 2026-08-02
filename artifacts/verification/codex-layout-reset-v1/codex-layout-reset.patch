@@ -1,0 +1,525 @@
+diff --git a/README.md b/README.md
+index 651b73b..4453d78 100644
+--- a/README.md
++++ b/README.md
+@@ -118,6 +118,7 @@ worklouderctl codex joystick get --input CODEX_SNAPSHOT.json up
+ worklouderctl codex joystick set --input CODEX_SNAPSHOT.json up --skill-name Plan --skill-path /PATH/TO/SKILL.md --output CODEX_JOYSTICK_UP.json
+ worklouderctl codex joystick set --input CODEX_JOYSTICK_UP.json right --command navigateForward --output CODEX_JOYSTICK_RIGHT.json
+ worklouderctl codex joystick clear --input CODEX_JOYSTICK_RIGHT.json down --output CODEX_JOYSTICK_CLEARED.json
++worklouderctl codex reset layout --input CODEX_JOYSTICK_CLEARED.json --output CODEX_LAYOUT_DEFAULT.json
+ worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
+ worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
+@@ -209,7 +210,7 @@ effective view. `codex export` atomically publishes and reopens a typed JSON
+ snapshot. Neither command serializes unrelated Codex settings.
+ 
+ `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`,
+-`codex dial`, `codex joystick`, `codex lighting`, and `codex voice` are strict offline Tier 1 editors. They
++`codex dial`, `codex joystick`, `codex reset`, `codex lighting`, and `codex voice` are strict offline Tier 1 editors. They
+ validate the embedded frozen definitions,
+ recompute effective settings and a recursive-key-sorted revision, preserve
+ unknown `codex-micro-*` values, publish atomically, and reopen the result. Each
+@@ -239,6 +240,12 @@ direction can store a Codex command, Skill, or empty mapping. Every candidate
+ changes one `analogStick` leaf, preserves the other three directions plus
+ unknown layout fields, and keeps the source settings bytes unchanged.
+ 
++`codex reset layout` matches the released reset call path: it replaces the
++complete `codex-micro-layout` with the exact installed-build default. Command
++Keys, joystick, dial, and voice-button fields return to their frozen defaults;
++Agent Key assignments, Agent source, lighting, unknown sibling settings, and
++the source settings bytes are preserved.
++
+ `codex config diff BASE.json CANDIDATE.json` validates both frozen-contract
+ snapshots and compares only their explicit `settings`. Transport metadata,
+ warnings, definitions, and the derived effective view are excluded, while
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 61ba221..2dcc3c9 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -87,6 +87,7 @@ worklouderctl codex joystick get --input CODEX_SNAPSHOT.json up
+ worklouderctl codex joystick set --input CODEX_SNAPSHOT.json up --skill-name Plan --skill-path /PATH/TO/SKILL.md --output CODEX_JOYSTICK_UP.json
+ worklouderctl codex joystick set --input CODEX_JOYSTICK_UP.json right --command navigateForward --output CODEX_JOYSTICK_RIGHT.json
+ worklouderctl codex joystick clear --input CODEX_JOYSTICK_RIGHT.json down --output CODEX_JOYSTICK_CLEARED.json
++worklouderctl codex reset layout --input CODEX_JOYSTICK_CLEARED.json --output CODEX_LAYOUT_DEFAULT.json
+ worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
+ worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
+@@ -173,7 +174,7 @@ view 中递归补齐继承的默认值。`codex export` 原子发布并重新打
+ snapshot；两者都不会序列化其他 Codex 设置。
+ 
+ `codex agent-source`、`codex agent-key tap-mode`、`codex command-key`、
+-`codex dial`、`codex joystick`、`codex lighting` 与 `codex voice` 是严格的
++`codex dial`、`codex joystick`、`codex reset`、`codex lighting` 与 `codex voice` 是严格的
+ Tier 1 离线 editor：核对内嵌 frozen definitions，重算 effective settings 与
+ recursive-key-sorted revision，保留未知 `codex-micro-*` 值，原子发布并重新打开。
+ receipt 中的 `expectedSourceSha256` 供 Codex `settings-write` CAS transaction
+@@ -200,6 +201,11 @@ direction 都可以保存 Codex command、Skill 或 empty mapping。每次 candi
+ 一个 `analogStick` leaf，并保留另外三个 directions、未知 layout fields 与源
+ settings 原字节。
+ 
++`codex reset layout` 与 released reset call path 一致：把完整
++`codex-micro-layout` 替换为当前 installed-build 的精确默认值。Command Keys、
++joystick、dial 与 voice-button fields 回到 frozen defaults；Agent Key assignments、
++Agent source、lighting、未知 sibling settings 与源 settings 原字节保持不变。
++
+ `codex config diff BASE.json CANDIDATE.json` 会先校验两个 frozen-contract
+ snapshot，再只比较 explicit `settings`。transport metadata、warnings、definitions
+ 与派生的 effective view 不进入差异，但未知 settings 仍会完整显示。human output
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index 6c6239e..e5a5f40 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -33,7 +33,7 @@ parity contract.
+ | Joystick | up, right, down, left command/Skill/empty | `codex joystick get/set/clear` | strict candidate verified; one-leaf paths, default inheritance, no-op detection, preservation, and source immutability verified |
+ | Lighting brightness | integer 0–100 | `codex lighting brightness get/set` | strict offline candidate plus `100 -> 37 -> 100` bridge apply/readback/restore fixture verified |
+ | Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | strict offline candidate plus `3-minutes -> 10-minutes -> 3-minutes` bridge apply/readback/restore fixture verified |
+-| Layout reset | installed-build default layout | `codex reset layout` | researched |
++| Layout reset | installed-build default layout | `codex reset layout` | exact whole-layout candidate, inherited no-op, sibling preservation, source immutability, and released call-path evidence verified |
+ | Full object | export, validate, diff, apply, restore | `codex config snapshot/diff/apply/restore` | settings-only structural diff plus authenticated snapshot/CAS/apply/readback/restore/rollback fixture verified; released Codex integration pending |
+ | Runtime health | connected control plane, settled reconnect, HID/joystick subscriptions | `codex runtime status/recover` | exact 26.727.51351 bundle contract, live failed-state capture and service-only recovery verified; CDP transport and CLI surface regression verified |
+ 
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index 44c428f..04aa0c0 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -67,6 +67,7 @@ worklouderctl codex joystick get --input SNAPSHOT.json up|right|down|left
+ worklouderctl codex joystick set --input SNAPSHOT.json DIRECTION \
+   [--command COMMAND_ID | --skill-name NAME --skill-path PATH] --output CANDIDATE.json
+ worklouderctl codex joystick clear --input SNAPSHOT.json DIRECTION --output CANDIDATE.json
++worklouderctl codex reset layout --input SNAPSHOT.json --output CANDIDATE.json
+ worklouderctl codex lighting brightness get --input SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input SNAPSHOT.json VALUE --output CANDIDATE.json
+ worklouderctl codex lighting auto-off get --input SNAPSHOT.json
+@@ -157,6 +158,11 @@ a command object, Skill object, or `null`. An inherited default is reported
+ until a candidate materializes the frozen layout; setting a direction to its
+ effective default is a no-op and leaves that layout implicit.
+ 
++Layout reset writes the complete frozen installed-build default, covering
++Command Keys, joystick, dial mode/gestures, and voice-button mode. It preserves
++all sibling settings and does not touch Agent Key assignment storage. An
++inherited default layout is a no-op and remains implicit.
++
+ ### Codex command/keycap catalog
+ 
+ The inspected build contains 38 keycap identifiers:
+diff --git a/docs/research/2026-08-02-codex-layout-reset-contract.md b/docs/research/2026-08-02-codex-layout-reset-contract.md
+new file mode 100644
+index 0000000..4954b48
+--- /dev/null
++++ b/docs/research/2026-08-02-codex-layout-reset-contract.md
+@@ -0,0 +1,26 @@
++# Codex layout reset candidate contract (Codex 26.727.51351)
++
++The released settings UI confirms reset through
++`settings.codexMicro.keyboardLayout.resetConfirmation`, then invokes the same
++settings setter used by the other Codex Micro controls with the installed
++build's `cxt` default layout object. The target setting is
++`codex-micro-layout`; Agent Key assignment storage and Agent Key source remain
++separate.
++
++The frozen default contains the six Command Key slots, four analog-stick
++directions, four dial gestures, dial mode, and voice-button mode. Therefore an
++exact GUI-equivalent reset replaces the complete layout object rather than
++resetting individual leaves. Other `codex-micro-*` settings are preserved.
++
++## CLI contract
++
++`codex reset layout` accepts a complete offline settings snapshot, validates
++its frozen definitions and effective view, and compares the effective layout
++with the exact embedded installed-build default. A changed candidate replaces
++only `/settings/codex-micro-layout`, recomputes effective settings and the
++canonical settings revision, and atomically publishes/reopens the result. An
++already-inherited default is a no-op and remains implicit.
++
++Candidate generation is file-only. Applying it remains a separate Codex
++Companion Bridge transaction with source/revision CAS, exact readback,
++automatic rollback, and explicit restore.
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 10b4208..8d27043 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -53,6 +53,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] voice mode
+ - [x] dial modes and command/Skill/empty custom gestures
+ - [x] joystick directions and command/Skill/empty candidates
++- [x] exact installed-build whole-layout reset candidate
+ - [x] global brightness and auto-off
+ - [x] Codex settings backup, apply, readback, restore, and automatic rollback fixture
+ - [x] Codex settings-only structural diff with revisions and typed before/after values
+diff --git a/docs/tier-model.md b/docs/tier-model.md
+index d420fb2..ca6f3c3 100644
+--- a/docs/tier-model.md
++++ b/docs/tier-model.md
+@@ -64,6 +64,7 @@ worklouderctl codex command-key get|set|reset --input SNAPSHOT ACT06
+ worklouderctl codex dial mode get|set --input SNAPSHOT
+ worklouderctl codex dial gesture get|set|clear --input SNAPSHOT GESTURE
+ worklouderctl codex joystick get|set|clear --input SNAPSHOT up|right|down|left
++worklouderctl codex reset layout --input SNAPSHOT --output CANDIDATE
+ worklouderctl codex voice get|set --input SNAPSHOT
+ worklouderctl codex lighting brightness get|set --input SNAPSHOT
+ worklouderctl codex lighting auto-off get|set --input SNAPSHOT
+diff --git a/spec/codex-settings-candidate-v1.json b/spec/codex-settings-candidate-v1.json
+index 2449919..2151b38 100644
+--- a/spec/codex-settings-candidate-v1.json
++++ b/spec/codex-settings-candidate-v1.json
+@@ -87,6 +87,11 @@
+       "command": "codex joystick clear --input SNAPSHOT.json DIRECTION --output CANDIDATE.json",
+       "value": null
+     },
++    "layoutReset": {
++      "command": "codex reset layout --input SNAPSHOT.json --output CANDIDATE.json",
++      "changedPath": "/settings/codex-micro-layout",
++      "source": "exact installed-build codex-micro-layout default"
++    },
+     "lightingBrightnessGet": {
+       "command": "codex lighting brightness get --input SNAPSHOT.json",
+       "type": "integer",
+@@ -176,6 +181,12 @@
+     "oneDirectionPerCandidate": true,
+     "preserveUntargetedDirections": true
+   },
++  "layoutResetRules": {
++    "replaceCompleteLayout": true,
++    "preserveOtherSettings": true,
++    "defaultSource": "frozen exact-version installed-build definition",
++    "inheritedDefaultIsNoop": true
++  },
+   "candidateBoundary": {
+     "contactsCodex": false,
+     "contactsInput": false,
+diff --git a/src/cli.rs b/src/cli.rs
+index 75e1110..772a11d 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -466,6 +466,12 @@ pub enum CodexCommand {
+         command: CodexJoystickCommand,
+     },
+ 
++    /// Restore Codex Micro configuration surfaces to frozen defaults.
++    Reset {
++        #[clap(subcommand)]
++        command: CodexResetCommand,
++    },
++
+     /// Inspect or edit Codex-native global lighting in an offline snapshot.
+     Lighting {
+         #[clap(subcommand)]
+@@ -939,6 +945,17 @@ pub enum CodexJoystickCommand {
+     },
+ }
+ 
++#[derive(Debug, Subcommand)]
++pub enum CodexResetCommand {
++    /// Restore the complete Codex Micro layout to the installed-build default.
++    Layout {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++}
++
+ #[derive(Debug, Subcommand)]
+ pub enum ConfigCommand {
+     /// Validate an export bundle or JSON configuration file.
+diff --git a/src/codex.rs b/src/codex.rs
+index 02bbb74..d992ff9 100644
+--- a/src/codex.rs
++++ b/src/codex.rs
+@@ -928,6 +928,40 @@ pub fn joystick_clear(input: &Path, direction: &str, output: &Path) -> Result<Ca
+     )
+ }
+ 
++pub fn layout_reset(input: &Path, output: &Path) -> Result<CandidateReceipt> {
++    let mut snapshot = read_snapshot(input)?;
++    let contract = load_contract()?;
++    let before_revision = settings_revision(&snapshot.settings)?;
++    let default_layout = contract
++        .definitions
++        .get("codex-micro-layout")
++        .context("frozen layout definition was missing")?
++        .default
++        .clone();
++    validate_layout(&default_layout, &contract.layout)?;
++    let changed = snapshot
++        .effective_settings
++        .get("codex-micro-layout")
++        .context("effective Codex Micro layout was missing")?
++        != &default_layout;
++    if changed {
++        snapshot
++            .settings
++            .insert("codex-micro-layout".into(), default_layout);
++        refresh_effective_settings(&mut snapshot, &contract)?;
++    }
++    publish_candidate(
++        snapshot,
++        output,
++        "codex-layout-reset",
++        before_revision,
++        changed
++            .then(|| "/settings/codex-micro-layout".into())
++            .into_iter()
++            .collect(),
++    )
++}
++
+ fn joystick_write(
+     input: &Path,
+     direction: &str,
+@@ -2401,6 +2435,98 @@ mod tests {
+         fs::remove_dir_all(root).unwrap();
+     }
+ 
++    #[test]
++    fn layout_reset_restores_exact_default_and_preserves_other_settings() {
++        let root = fixture_root();
++        fs::create_dir_all(&root).unwrap();
++        let config = root.join("config.toml");
++        let snapshot_path = root.join("snapshot.json");
++        let inherited_noop_path = root.join("inherited-noop.json");
++        let custom_path = root.join("custom.json");
++        let reset_path = root.join("reset.json");
++        let explicit_noop_path = root.join("explicit-noop.json");
++        fs::write(
++            &config,
++            b"[desktop]\ncodex-micro-agent-source = \"priority\"\ncodex-micro-future = \"preserved\"\n",
++        )
++        .unwrap();
++        let source_sha = fsutil::sha256(&config).unwrap();
++        let mut snapshot = export(&config, &root.join("missing.app"), &snapshot_path).unwrap();
++
++        let inherited_noop = layout_reset(&snapshot_path, &inherited_noop_path).unwrap();
++        assert!(!inherited_noop.changed);
++        assert!(!read_snapshot(&inherited_noop_path)
++            .unwrap()
++            .settings
++            .contains_key("codex-micro-layout"));
++
++        let contract = load_contract().unwrap();
++        let mut custom = contract.definitions["codex-micro-layout"].default.clone();
++        custom["slots"]["ACT06"] = serde_json::json!({
++            "keycapId": "BUG",
++            "commandId": "fixture.command"
++        });
++        custom["analogStick"]["up"] = serde_json::json!({
++            "type": "skill",
++            "skillName": "Plan Skill",
++            "skillPath": "/tmp/plan/SKILL.md"
++        });
++        custom["encoderMode"] = Value::String("custom".into());
++        custom["encoder"]["left"] = serde_json::json!({
++            "type": "command",
++            "commandId": "navigateBack"
++        });
++        custom["voiceButtonMode"] = Value::String("realtime".into());
++        custom["futureLayoutMetadata"] = serde_json::json!({"dropOnReset": true});
++        snapshot
++            .settings
++            .insert("codex-micro-layout".into(), custom);
++        refresh_effective_settings(&mut snapshot, &contract).unwrap();
++        let mut bytes = serde_json::to_vec_pretty(&snapshot).unwrap();
++        bytes.push(b'\n');
++        fs::write(&custom_path, bytes).unwrap();
++
++        let reset = layout_reset(&custom_path, &reset_path).unwrap();
++        assert!(reset.changed);
++        assert_eq!(reset.changed_paths, vec!["/settings/codex-micro-layout"]);
++        let reopened = read_snapshot(&reset_path).unwrap();
++        assert_eq!(
++            reopened.settings["codex-micro-layout"],
++            contract.definitions["codex-micro-layout"].default
++        );
++        assert_eq!(reopened.settings["codex-micro-agent-source"], "priority");
++        assert_eq!(reopened.settings["codex-micro-future"], "preserved");
++        assert_eq!(
++            command_key_get(&reset_path, "ACT06").unwrap().keycap_id,
++            "FAST"
++        );
++        assert_eq!(
++            joystick_get(&reset_path, "up")
++                .unwrap()
++                .command_id
++                .as_deref(),
++            Some("composer.togglePlanMode")
++        );
++        assert_eq!(
++            dial_mode_get(&reset_path).unwrap().value,
++            "composer-navigation"
++        );
++        assert_eq!(
++            dial_gesture_get(&reset_path, "left")
++                .unwrap()
++                .assignment_type,
++            "empty"
++        );
++        assert_eq!(voice_mode_get(&reset_path).unwrap().value, "push-to-talk");
++        assert_eq!(fsutil::sha256(&config).unwrap(), source_sha);
++
++        let explicit_noop = layout_reset(&reset_path, &explicit_noop_path).unwrap();
++        assert!(!explicit_noop.changed);
++        assert_eq!(explicit_noop.before_revision, explicit_noop.after_revision);
++
++        fs::remove_dir_all(root).unwrap();
++    }
++
+     #[test]
+     fn export_is_atomic_and_typed_readback_matches() {
+         let root = fixture_root();
+diff --git a/src/lib.rs b/src/lib.rs
+index 511cc3e..08e5a44 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -21,10 +21,10 @@ use cli::{
+     CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexDialCommand, CodexDialGesture,
+     CodexDialGestureCommand, CodexDialMode, CodexDialModeCommand, CodexJoystickCommand,
+     CodexJoystickDirection, CodexLightingAutoOff, CodexLightingAutoOffCommand,
+-    CodexLightingBrightnessCommand, CodexLightingCommand, CodexRuntimeCommand, CodexVoiceCommand,
+-    CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand, DeviceCommand,
+-    DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand, LayerCommand,
+-    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
++    CodexLightingBrightnessCommand, CodexLightingCommand, CodexResetCommand, CodexRuntimeCommand,
++    CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand,
++    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand,
++    LayerCommand, LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
+     MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
+     SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
+     TierCommand,
+@@ -2201,6 +2201,11 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
+                 &mut out,
+             )?,
+         },
++        CodexCommand::Reset { command } => match command {
++            CodexResetCommand::Layout { input, output } => {
++                write_codex_candidate_result(codex::layout_reset(&input, &output)?, json, &mut out)?
++            }
++        },
+         CodexCommand::Lighting { command } => match command {
+             CodexLightingCommand::Brightness { command } => match command {
+                 CodexLightingBrightnessCommand::Get { input } => {
+diff --git a/tests/cli.rs b/tests/cli.rs
+index 5af65f0..283159e 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -327,6 +327,7 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
+     assert!(stdout.contains("command-key"));
+     assert!(stdout.contains("dial"));
+     assert!(stdout.contains("joystick"));
++    assert!(stdout.contains("reset"));
+     assert!(stdout.contains("lighting"));
+     assert!(stdout.contains("voice"));
+ 
+@@ -387,6 +388,14 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
+     assert!(joystick_stdout.contains("get"));
+     assert!(joystick_stdout.contains("set"));
+     assert!(joystick_stdout.contains("clear"));
++
++    let reset = binary()
++        .args(["codex", "reset", "--help"])
++        .output()
++        .unwrap();
++    let reset_stdout = String::from_utf8(reset.stdout).unwrap();
++    assert!(reset.status.success());
++    assert!(reset_stdout.contains("layout"));
+ }
+ 
+ #[test]
+@@ -715,6 +724,98 @@ fn codex_joystick_candidates_run_end_to_end_without_writing_source() {
+     fs::remove_dir_all(root).unwrap();
+ }
+ 
++#[test]
++fn codex_layout_reset_runs_end_to_end_without_writing_source() {
++    let root = fixture_root();
++    fs::create_dir_all(&root).unwrap();
++    let config = root.join("config.toml");
++    let snapshot = root.join("snapshot.json");
++    let joystick = root.join("joystick.json");
++    let voice = root.join("voice.json");
++    let reset = root.join("reset.json");
++    fs::write(
++        &config,
++        b"[desktop]\ncodex-micro-agent-source = \"priority\"\ncodex-micro-future = \"preserved\"\n",
++    )
++    .unwrap();
++    let source_sha = worklouderctl::fsutil::sha256(&config).unwrap();
++
++    let export = binary()
++        .args(["codex", "export", "--config"])
++        .arg(&config)
++        .arg("--app")
++        .arg(root.join("missing.app"))
++        .arg("--output")
++        .arg(&snapshot)
++        .output()
++        .unwrap();
++    assert!(export.status.success());
++
++    let set_joystick = binary()
++        .args(["codex", "joystick", "set", "--input"])
++        .arg(&snapshot)
++        .args(["up", "--command", "fixture.command", "--output"])
++        .arg(&joystick)
++        .output()
++        .unwrap();
++    assert!(set_joystick.status.success());
++    let set_voice = binary()
++        .args(["codex", "voice", "set", "--input"])
++        .arg(&joystick)
++        .args(["realtime", "--output"])
++        .arg(&voice)
++        .output()
++        .unwrap();
++    assert!(set_voice.status.success());
++
++    let reset_result = binary()
++        .args(["--json", "codex", "reset", "layout", "--input"])
++        .arg(&voice)
++        .arg("--output")
++        .arg(&reset)
++        .output()
++        .unwrap();
++    assert!(reset_result.status.success());
++    let reset_result: serde_json::Value = serde_json::from_slice(&reset_result.stdout).unwrap();
++    assert_eq!(reset_result["operation"], "codex-layout-reset");
++    assert_eq!(
++        reset_result["changedPaths"],
++        serde_json::json!(["/settings/codex-micro-layout"])
++    );
++
++    let up = binary()
++        .args(["--json", "codex", "joystick", "get", "--input"])
++        .arg(&reset)
++        .arg("up")
++        .output()
++        .unwrap();
++    assert!(up.status.success());
++    let up: serde_json::Value = serde_json::from_slice(&up.stdout).unwrap();
++    assert_eq!(up["commandId"], "composer.togglePlanMode");
++    let voice = binary()
++        .args(["--json", "codex", "voice", "get", "--input"])
++        .arg(&reset)
++        .output()
++        .unwrap();
++    assert!(voice.status.success());
++    let voice: serde_json::Value = serde_json::from_slice(&voice.stdout).unwrap();
++    assert_eq!(voice["value"], "push-to-talk");
++
++    let reset_snapshot: serde_json::Value =
++        serde_json::from_slice(&fs::read(&reset).unwrap()).unwrap();
++    assert_eq!(
++        reset_snapshot["settings"]["codex-micro-agent-source"],
++        "priority"
++    );
++    assert_eq!(
++        reset_snapshot["settings"]["codex-micro-future"],
++        "preserved"
++    );
++    assert_eq!(worklouderctl::fsutil::sha256(&config).unwrap(), source_sha);
++
++    fs::remove_dir_all(root).unwrap();
++}
++
+ #[test]
+ fn device_help_exposes_live_read_workflow() {
+     let device = binary().args(["device", "--help"]).output().unwrap();

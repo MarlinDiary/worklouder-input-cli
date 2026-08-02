@@ -1,0 +1,154 @@
+WorkLouderCTL Codex layout reset v1 verification record
+======================================================
+
+Scope
+-----
+Base commit: d51e54a361d62072e0360727db57a7f7585cc8db
+Feature commit: 8bda9a503256dd6a6709751c69ddc3aea92dfc08
+Feature commits:
+  b6594ef spec: freeze Codex layout reset
+  37e85c8 feat: add Codex layout reset candidate
+  8bda9a5 docs: publish Codex layout reset workflow
+Changed branch:
+  codex reset layout
+Changed field:
+  /settings/codex-micro-layout
+Source settings, GUI, bridge, device, and runtime mutation: none
+
+Released behavior contract
+--------------------------
+Exact Codex 26.727.51351 static inspection shows the settings confirmation
+calling the normal settings setter with the installed-build cxt default layout.
+The complete default contains Command Keys, analog stick, dial gestures and
+mode, plus voice-button mode. Agent Key assignment storage and Agent source are
+separate and are not reset.
+
+Preserved original artifact and baseline-red
+--------------------------------------------
+Source commit: d51e54a361d62072e0360727db57a7f7585cc8db
+Build command:
+  cargo build --release --locked --manifest-path BASE_WORKTREE/Cargo.toml
+Path:
+  /tmp/worklouderctl-codex-layout-reset-v1.cRYKaS/original/worklouderctl
+SHA-256:
+  52d5f1a9379764373f32ef54f4968f4b0a71fc949a0e9874a7fa4763e85be24c
+Command:
+  ORIGINAL_BIN codex reset --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'reset' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl codex [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
+
+Modified release E2E
+--------------------
+Input:
+  /tmp/worklouderctl-codex-layout-reset-v1.cRYKaS/e2e-verified/config.toml
+Literal input:
+  [desktop]
+  codex-micro-agent-source = "priority"
+  codex-micro-future = "preserved"
+Source SHA-256 before and after:
+  1553740be6de1a662597b29726362be4dc25cc1143ae045df1dff4d000d1e45e
+
+Commands:
+  MODIFIED_BIN --json codex export --config E2E/config.toml \
+    --app E2E/missing.app --output E2E/baseline.json
+  MODIFIED_BIN --json codex command-key set --input E2E/baseline.json \
+    ACT06 --keycap BUG --command fixture.command --output E2E/command-key.json
+  MODIFIED_BIN --json codex joystick set --input E2E/command-key.json up \
+    --skill-name "Plan Skill" --skill-path /tmp/plan/SKILL.md \
+    --output E2E/joystick.json
+  MODIFIED_BIN --json codex dial mode set --input E2E/joystick.json \
+    custom --output E2E/custom.json
+  MODIFIED_BIN --json codex dial gesture set --input E2E/custom.json left \
+    --command navigateBack --output E2E/dial.json
+  MODIFIED_BIN --json codex voice set --input E2E/dial.json realtime \
+    --output E2E/voice.json
+  MODIFIED_BIN --json codex reset layout --input E2E/voice.json \
+    --output E2E/reset.json
+  MODIFIED_BIN --json codex command-key get --input E2E/reset.json ACT06
+  MODIFIED_BIN --json codex joystick get --input E2E/reset.json up
+  MODIFIED_BIN --json codex dial mode get --input E2E/reset.json
+  MODIFIED_BIN --json codex dial gesture get --input E2E/reset.json left
+  MODIFIED_BIN --json codex voice get --input E2E/reset.json
+Exit status: 0 for all commands
+
+Literal reset receipt:
+  operation=codex-layout-reset
+  changedPaths=["/settings/codex-micro-layout"]
+  expectedSourceSha256=1553740be6de1a662597b29726362be4dc25cc1143ae045df1dff4d000d1e45e
+  beforeRevision=bcfb0a2240bd72a1665e41ab03bb34c7d5edd752882cdcf0516014f18ba140ad
+  afterRevision=fe797c0904fd82d71a3299eee06fe1e5fda68caff682269fbac5fbce809f876e
+Literal readback:
+  command-key ACT06: keycapId=FAST assignmentType=keycap
+  joystick up: commandId=composer.togglePlanMode assignmentType=command
+  dial mode: composer-navigation
+  dial left: assignmentType=empty
+  voice mode: push-to-talk
+  revision=fe797c0904fd82d71a3299eee06fe1e5fda68caff682269fbac5fbce809f876e
+Literal assertions:
+  assertions=pass
+  explicit layout equals embedded definition default exactly
+  source bytes unchanged
+  codex-micro-agent-source=priority preserved
+  unknown codex-micro-future=preserved
+
+Automated quality gates
+-----------------------
+Command: cargo fmt --all -- --check
+Exit status: 0
+Command: cargo clippy --locked --all-targets --all-features -- -D warnings
+Literal result: Finished dev
+Exit status: 0
+Command: cargo test --locked
+Literal result:
+  64 passed; 0 failed (library)
+  18 passed; 0 failed (CLI integration)
+  0 failed (binary and doc tests)
+Exit status: 0
+Command: cargo build --release --locked
+Literal result: Finished release
+Exit status: 0
+
+Tested boundaries:
+  inherited-default no-op remains implicit
+  changed complete layout becomes exact installed-build default
+  Command Key, joystick, dial, and voice reset together
+  Agent source and unknown sibling setting preservation
+  source hash preservation
+  atomic publish and final reopen
+
+Modified artifact
+-----------------
+Path:
+  target/release/worklouderctl
+Preserved copy:
+  /tmp/worklouderctl-codex-layout-reset-v1.cRYKaS/modified/worklouderctl
+SHA-256:
+  1c97340607a095a12d1b2a560b1b5df880ffb1b8fd5b288bf460dff7eb6f6398
+Reopen/execute command:
+  ./target/release/worklouderctl codex reset --help
+Exit status: 0
+
+Patch
+-----
+Path:
+  artifacts/verification/codex-layout-reset-v1/codex-layout-reset.patch
+SHA-256:
+  e8c20883da8eb17f73420ec931d44ea62a14bb56bc1171c6fca8699e05dad881
+Command:
+  git apply --check --reverse artifacts/verification/codex-layout-reset-v1/codex-layout-reset.patch
+Exit status: 0
+
+Rollback
+--------
+Path:
+  artifacts/verification/codex-layout-reset-v1/rollback.sh
+SHA-256:
+  334995e19f2e390bbae372bc245c9a275e8522de860d2acbeeeceff03a0b15d9
+The isolated rollback execution is appended after the artifact commit.
