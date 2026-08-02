@@ -20,10 +20,11 @@
 
 > [!IMPORTANT]
 > **Project status: source alpha.** The repository now builds a working
-> `worklouderctl` binary with read-only provider diagnostics, Input inspection,
-> exact-byte exports, validation, structural diff, JSON output, and shell
-> completions. There is no packaged release yet. Configuration mutation remains
-> gated until its provider transactions and rollback are verified.
+> `worklouderctl` binary with provider diagnostics, Codex Micro settings
+> inspection/export, Input inspection/exact-byte export, validation, structural
+> diff, JSON output, and shell completions. There is no packaged release yet.
+> Configuration mutation remains gated until its provider transactions and
+> rollback are verified.
 
 ## The short answer
 
@@ -78,6 +79,9 @@ worklouderctl tier list
 worklouderctl tier explain 1
 worklouderctl capability list --tier 2
 worklouderctl doctor [--strict]
+worklouderctl codex doctor [--strict]
+worklouderctl codex inspect
+worklouderctl codex export --output CODEX_SNAPSHOT.json
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
 worklouderctl config validate BACKUP_DIRECTORY
@@ -86,16 +90,21 @@ worklouderctl --json input inspect
 worklouderctl completion bash|zsh|fish
 ```
 
-`input inspect` is read-only. `input export` copies the exact source bytes into
-an atomically published directory and records each file's size and SHA-256 in
-`manifest.json`. It does not pause Input or write the device.
+`codex inspect` reads only the five `codex-micro-*` settings from the
+`[desktop]` table in Codex's `config.toml`, validates them against the frozen
+Codex 26.727.51351 contract, and recursively fills inherited defaults in the
+effective view. `codex export` atomically publishes and reopens a typed JSON
+snapshot. Neither command serializes unrelated Codex settings.
+
+`input inspect` is also read-only. `input export` copies the exact source bytes
+into an atomically published directory and records each file's size and SHA-256
+in `manifest.json`. It does not pause Input or write the device.
 
 ## Planned mutation command experience
 
 The intended binary name is `worklouderctl`:
 
 ```console
-worklouderctl codex export
 worklouderctl codex agent-source set priority
 worklouderctl codex command-key set ACT06 --command toggleFastMode
 worklouderctl codex joystick set up --skill SKILL_ID
@@ -176,7 +185,8 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Rust CLI foundation, tier/capability contract, and JSON output | Complete |
 | Provider `doctor` and Input `inspect`/exact-byte `export` | Complete |
 | Bundle `validate` and structural `diff` | Complete |
-| Codex `inspect`/`export` through the settings bridge | In progress |
+| Codex settings contract and TOML `doctor`/`inspect`/`export` | Complete |
+| Codex live settings-bridge write client | Planned |
 | Semantic profile/layer/control commands | Planned |
 | Verified device mutation and rollback | Planned |
 | Input cache/database and Smart Actions synchronization | Planned |
@@ -215,6 +225,7 @@ Read the complete [FAQ](docs/faq.md).
 - [Complete configuration reference](docs/configuration-reference.md)
 - [Configuration parity matrix](docs/configuration-parity.md)
 - [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
+- [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)
 - [Frequently asked questions](docs/faq.md)
 - [Compatibility and support policy](docs/compatibility.md)
 - [Companion architecture](docs/architecture.md)

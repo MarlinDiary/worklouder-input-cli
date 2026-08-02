@@ -7,9 +7,9 @@
 [路线图](docs/roadmap.md)
 
 > **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
-> provider 诊断、Input 只读检查、原字节导出、校验、结构化 diff、JSON 输出和
-> shell completion。尚未发布打包版本；配置写入会等 provider transaction 与
-> rollback 完整验证后再开放。
+> provider 诊断、Codex Micro 设置检查/导出、Input 只读检查/原字节导出、
+> 校验、结构化 diff、JSON 输出和 shell completion。尚未发布打包版本；配置
+> 写入会等 provider transaction 与 rollback 完整验证后再开放。
 
 ## 简单来说，它是什么？
 
@@ -51,6 +51,9 @@ worklouderctl tier list
 worklouderctl tier explain 1
 worklouderctl capability list --tier 2
 worklouderctl doctor [--strict]
+worklouderctl codex doctor [--strict]
+worklouderctl codex inspect
+worklouderctl codex export --output CODEX_SNAPSHOT.json
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
 worklouderctl config validate BACKUP_DIRECTORY
@@ -59,13 +62,18 @@ worklouderctl --json input inspect
 worklouderctl completion bash|zsh|fish
 ```
 
-`input inspect` 全程只读；`input export` 把源文件原字节复制到原子发布的目录，
-并在 `manifest.json` 记录 size 与 SHA-256。它不会暂停 Input，也不会写入设备。
+`codex inspect` 只读取 Codex `config.toml` 中 `[desktop]` 表的五个
+`codex-micro-*` 设置，按照 Codex 26.727.51351 的冻结契约校验，并在 effective
+view 中递归补齐继承的默认值。`codex export` 原子发布并重新打开 typed JSON
+snapshot；两者都不会序列化其他 Codex 设置。
+
+`input inspect` 同样全程只读；`input export` 把源文件原字节复制到原子发布的
+目录，并在 `manifest.json` 记录 size 与 SHA-256。它不会暂停 Input，也不会
+写入设备。
 
 ## 计划中的写入命令
 
 ```console
-worklouderctl codex export
 worklouderctl codex agent-source set priority
 worklouderctl codex command-key set ACT06 --command toggleFastMode
 worklouderctl codex joystick set up --skill SKILL_ID
@@ -112,8 +120,10 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 
 ## 当前进度
 
-仓库目前处于只读 source-alpha 阶段。可安装 binary、Homebrew formula、Codex
-settings bridge 与完整写入命令将在对应 transaction 和真实硬件 readback 验证后发布。
+仓库目前处于只读 source-alpha 阶段。Codex TOML read adapter 的
+`doctor`、`inspect`、`export` 已经实现；可安装 binary、Homebrew formula、
+Codex live settings bridge 写入与完整写入命令将在对应 transaction 和真实硬件
+readback 验证后发布。
 
 配置边界已经确定：**Tier 1 使用 Codex 的设置模型与运行时；Tier 2 及以上
 使用 Input 的设置模型与运行时；CLI 对两边都提供完整配置能力。** 详见

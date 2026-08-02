@@ -21,8 +21,9 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] `worklouderctl doctor`
 - [x] `worklouderctl input inspect`
 - [x] `worklouderctl input export`
-- [ ] `worklouderctl codex inspect`
-- [ ] `worklouderctl codex export`
+- [x] `worklouderctl codex doctor`
+- [x] `worklouderctl codex inspect`
+- [x] `worklouderctl codex export`
 - [x] `worklouderctl tier explain`
 - [ ] `worklouderctl device status`
 - [ ] `worklouderctl device files`
@@ -33,7 +34,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 
 ## M2 — Codex-native configuration beta
 
-- [ ] Exact Codex version and settings-schema adapter
+- [x] Exact Codex 26.727.51351 read contract and settings-schema adapter
 - [ ] `settings-read` and `settings-write` bridge client
 - [ ] Agent source and six Agent Key assignments
 - [ ] six Command Key slots and reset

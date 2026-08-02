@@ -13,7 +13,7 @@ not a public support guarantee.
 | --- | ---: | --- |
 | Device | Work Louder Codex Micro | Initial target |
 | Host OS | macOS | Initial target |
-| Codex app | 26.727.51351 | Tier 1 inspection research baseline |
+| Codex app | 26.727.51351 | Exact Tier 1 settings read adapter verified |
 | Work Louder Input | 0.17.3 | Earlier schema fixture |
 | Work Louder Input | 0.18.0 | Current read-only research baseline |
 | Codex Micro firmware | v0.6.0 | Device read/write fixture baseline |
@@ -23,6 +23,12 @@ not a public support guarantee.
 The 2026-08-02 audit recorded Input updating from 0.17.3 to 0.18.0 during a
 live session. Adapter selection therefore re-reads the installed and running
 version immediately before planning and immediately before writing.
+
+For Codex 26.727.51351, `codex-config-toml-read-v1` has live read-only evidence:
+the five explicit Codex Micro settings validated, inherited layout defaults
+were reconstructed, an atomic typed snapshot was reopened, and the source
+`config.toml` SHA-256 was identical before and after. This claim does not cover
+Codex settings mutation.
 
 ## Compatibility states
 

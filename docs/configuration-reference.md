@@ -17,8 +17,21 @@ and setter for agent source, single-tap behavior, layout, brightness, and
 auto-off.
 
 WorkLouderCTL therefore targets the versioned settings bridge for online
-transactions. An offline adapter requires separate round-trip and restart
-fixtures. Raw Chromium LevelDB mutation is not part of the configuration path.
+transactions. The implemented `codex-config-toml-read-v1` adapter reads the
+`[desktop]` table in `$CODEX_HOME/config.toml`, validates only keys with the
+`codex-micro-` prefix, and preserves unknown prefixed keys. It hashes the source
+before and after capture, recursively fills inherited defaults, and excludes
+all unrelated Codex configuration from its output. Offline mutation still
+requires separate round-trip and restart fixtures. Raw Chromium LevelDB
+mutation is not part of the configuration path.
+
+The current read-only command surface is:
+
+```console
+worklouderctl codex doctor [--strict] [--config PATH] [--app PATH]
+worklouderctl codex inspect [--config PATH] [--app PATH]
+worklouderctl codex export --output FILE [--config PATH] [--app PATH]
+```
 
 ### Persisted setting keys
 
@@ -63,7 +76,7 @@ signals. The observed default Command Keycaps are `FAST`, `APPR`, `REJ`,
 
 ### Codex command/keycap catalog
 
-The inspected build contains 39 keycap identifiers:
+The inspected build contains 38 keycap identifiers:
 
 ```text
 FAST APPR REJ SPLIT MIC CODEX BUG OAI TERM DWN DEL NEW NAV MAGIC
