@@ -38,6 +38,7 @@
     "codex-live-overlay.mjs",
     "codex-live-overlay-v2.mjs",
     "input-live-overlay.mjs",
+    "input-live-overlay-v2.mjs",
     "conformance.mjs"
   ],
   "exports": {

@@ -28,7 +28,7 @@ const EXPECTED_MAIN_SHA256 =
 const CAPTURE_LOCATION = { lineNumber: 40, columnNumber: 51665 };
 const PORT = 9229;
 const OVERLAY_PATH = fileURLToPath(
-  new URL("../companion/input-live-overlay.mjs", import.meta.url),
+  new URL("../companion/input-live-overlay-v2.mjs", import.meta.url),
 );
 
 const action = process.argv.includes("--remove") ? "remove" : "install";
@@ -78,20 +78,30 @@ try {
     console.log(JSON.stringify({ provider: "input", action, pid, ...result }, null, 2));
     process.exitCode = 0;
   } else {
-    const alreadyInstalled = await client.evaluate(
-      `(()=>{const current=globalThis.__worklouderctlInputBridge;return current?{installed:true,idempotent:true,version:process.getBuiltinModule("electron").app.getVersion(),socketPath:current.socketPath,tokenPath:current.tokenPath}:null})()`,
+    const modulePath = JSON.stringify(OVERLAY_PATH);
+    const state = await client.evaluate(
+      `(()=>{const require=process.getBuiltinModule("module").createRequire("/tmp/worklouderctl-input-live.cjs");const overlay=require(${modulePath});if(!Number.isInteger(overlay.INPUT_LIVE_OVERLAY_REVISION))throw new Error("Input overlay revision missing");const current=globalThis.__worklouderctlInputBridge;return {targetRevision:overlay.INPUT_LIVE_OVERLAY_REVISION,currentRevision:current?.overlayRevision??null,installed:!!current,captured:!!globalThis.__worklouderctlInputCapture}})()`,
     );
-    if (alreadyInstalled) {
+    if (state.installed && state.currentRevision === state.targetRevision) {
+      const alreadyInstalled = await client.evaluate(
+        `(()=>{const current=globalThis.__worklouderctlInputBridge,capture=globalThis.__worklouderctlInputCapture;return {installed:true,idempotent:true,overlayRevision:current.overlayRevision,version:capture.app.getVersion(),socketPath:current.socketPath,tokenPath:current.tokenPath}})()`,
+      );
       closeScheduled = await scheduleInspectorClose(client);
       console.log(
         JSON.stringify({ provider: "input", action, pid, ...alreadyInstalled }, null, 2),
       );
     } else {
-      const capture = await captureReleasedServices(client);
-      progress(`captured released service container (${capture.serviceCount} own fields)`);
-      const modulePath = JSON.stringify(OVERLAY_PATH);
+      if (state.installed) {
+        await client.evaluate(
+          `(async()=>{await globalThis.__worklouderctlInputBridge.stop();delete globalThis.__worklouderctlInputBridge;return true})()`,
+        );
+      }
+      if (!state.captured) {
+        const capture = await captureReleasedServices(client);
+        progress(`captured released service container (${capture.serviceCount} own fields)`);
+      }
       const result = await client.evaluate(
-        `(async()=>{const capture=globalThis.__worklouderctlInputCapture;if(!capture?.app||!capture?.services)throw new Error("Input service capture missing");const require=process.getBuiltinModule("module").createRequire("/tmp/worklouderctl-input-live.cjs");const resolved=require.resolve(${modulePath});delete require.cache[resolved];const overlay=require(resolved);const bridge=await overlay.installInputLiveOverlay({app:capture.app,services:capture.services});globalThis.__worklouderctlInputBridge=bridge;return {installed:true,idempotent:false,version:capture.app.getVersion(),socketPath:bridge.socketPath,tokenPath:bridge.tokenPath}})()`,
+        `(async()=>{const capture=globalThis.__worklouderctlInputCapture;if(!capture?.app||!capture?.services)throw new Error("Input service capture missing");const require=process.getBuiltinModule("module").createRequire("/tmp/worklouderctl-input-live.cjs");const overlay=require(${modulePath});const bridge=await overlay.installInputLiveOverlay({app:capture.app,services:capture.services});globalThis.__worklouderctlInputBridge=bridge;return {installed:true,idempotent:false,overlayRevision:bridge.overlayRevision,version:capture.app.getVersion(),socketPath:bridge.socketPath,tokenPath:bridge.tokenPath}})()`,
       );
       progress("installed authenticated bridge without restarting Input");
       closeScheduled = await scheduleInspectorClose(client);

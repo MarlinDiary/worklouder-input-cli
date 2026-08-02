@@ -47,6 +47,7 @@ try {
 
 const client = await InspectorClient.connect(target.webSocketDebuggerUrl);
 try {
+  assertEqual(await client.evaluate("process.execPath"), EXECUTABLE, "inspector process executable");
   if (action === "remove") {
     const result = await client.evaluate(`(async()=>{const current=globalThis.__worklouderctlCodexBridge;if(!current)return {removed:false};await current.stop();delete globalThis.__worklouderctlCodexBridge;return {removed:true}})()`);
     console.log(JSON.stringify({ provider: "codex", action, ...result }, null, 2));
@@ -59,5 +60,10 @@ try {
     console.log(JSON.stringify({ provider: "codex", action, ...result }, null, 2));
   }
 } finally {
+  await client
+    .evaluate(
+      `(()=>{const inspector=process.getBuiltinModule("inspector");process.once("SIGUSR1",()=>inspector.open(${PORT},"127.0.0.1",false));setTimeout(()=>inspector.close(),250);return true})()`,
+    )
+    .catch(() => false);
   client.close();
 }

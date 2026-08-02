@@ -128,6 +128,7 @@ pub fn classify_message(message: &str) -> ErrorCode {
             "request timed out",
             "unsupported bridge capability",
             "missing bridge capability",
+            "does not advertise required capability",
             "doctor found",
         ],
     ) {
@@ -183,6 +184,11 @@ mod tests {
             ("runtime expectation timed out", ErrorCode::Conflict, 5),
             ("snapshot was invalid JSON", ErrorCode::InvalidData, 4),
             ("bridge is not running", ErrorCode::ProviderUnavailable, 3),
+            (
+                "bridge does not advertise required capability input.reset.plan.v1",
+                ErrorCode::ProviderUnavailable,
+                3,
+            ),
             (
                 "doctor found 2 warning(s) and 0 failure(s)",
                 ErrorCode::ProviderUnavailable,

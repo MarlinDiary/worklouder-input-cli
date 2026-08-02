@@ -7,7 +7,10 @@ import {
   createCodexNativeRequest,
   normalizeCodexMicroDefinitions,
 } from "./codex-live-overlay.mjs";
-import { createInputConfigurationWriter } from "./input-live-overlay.mjs";
+import {
+  createInputConfigurationWriter,
+  createInputFirmwareAuthority,
+} from "./input-live-overlay.mjs";
 import { installInputLiveOverlay } from "./input-live-overlay.mjs";
 
 test("Codex live request uses the official renderer message bridge", async () => {
@@ -197,6 +200,30 @@ test("Input live overlay preserves Input service-container prototype getters", a
   } finally {
     await bridge.stop();
   }
+});
+
+test("Input live firmware authority accepts the released update object", async () => {
+  const release = {
+    version: "v0.6.1",
+    fetchedAt: 1,
+    changeLog: "release",
+    downloadUrl: "https://example.test/firmware.bin",
+  };
+  const authority = createInputFirmwareAuthority({
+    deviceFlashService: {
+      async checkForFwUpdates() { return release; },
+      async getLatestFwRelease() { throw new Error("already returned by check"); },
+    },
+    applicationService: { async appVersion() { return "0.18.0"; } },
+  });
+  const status = await authority.readStatus({
+    device: {
+      info: { deviceType: "codex_micro" },
+      rpcService: { async getFirmwareVersion() { return "v0.6.0"; } },
+    },
+  });
+  assert.equal(status.updateAvailable, true);
+  assert.deepEqual(status.release, release);
 });
 
 function browserWindow({ visible, execute }) {

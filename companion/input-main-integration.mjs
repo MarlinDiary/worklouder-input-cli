@@ -136,7 +136,10 @@ function inputFirmwareAuthority(deviceFlashService, applicationService) {
         currentVersion,
         device.info.deviceType,
       );
-      let release = null;
+      let release =
+        available && typeof available === "object" && !Array.isArray(available)
+          ? available
+          : null;
       if (available === true) {
         const appVersion =
           typeof applicationService.appVersion === "function"
@@ -152,7 +155,9 @@ function inputFirmwareAuthority(deviceFlashService, applicationService) {
         updateAvailable:
           available === undefined || available === null
             ? null
-            : Boolean(available),
+            : available === false
+              ? false
+              : true,
         release,
       };
     },
