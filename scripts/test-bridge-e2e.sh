@@ -136,7 +136,7 @@ revision=$(python3 -c \
   --output "$selected_snapshot" >"$root/profile-select.json"
 "$bin" --json profile delete --input "$selected_snapshot" --id 7 \
   --output "$profile_deleted_snapshot" >"$root/profile-delete.json"
-"$bin" --json layer create --input "$config_snapshot" --profile 0 \
+"$bin" --json layer create --input "$profile_created_snapshot" --profile 0 \
   --name 'CLI Layer' --output "$layer_created_snapshot" \
   >"$root/layer-create.json"
 "$bin" --json layer duplicate --input "$config_snapshot" --profile 0 --id 1 \
@@ -152,7 +152,7 @@ revision=$(python3 -c \
   --color '#A1B2C3' --output "$color_snapshot" >"$root/layer-color.json"
 "$bin" --json layer lighting show --input "$config_snapshot" --profile 0 --id 1 \
   >"$root/layer-lighting-show.json"
-"$bin" --json layer lighting set --input "$config_snapshot" --profile 0 --id 1 \
+"$bin" --json layer lighting set --input "$layer_created_snapshot" --profile 0 --id 1 \
   --zone backlight --effect breath --brightness 0.25 --speed 0.75 --magic 0.5 \
   --color '#102030' --apply-to-all --output "$layer_lighting_snapshot" \
   >"$root/layer-lighting-set.json"
@@ -179,7 +179,7 @@ revision=$(python3 -c \
 "$bin" --json multi-action create --input "$config_snapshot" --name 'New Multi' \
   --color '#EDF6FF' --icon icon-new --output "$multi_created_snapshot" \
   >"$root/multi-create.json"
-"$bin" --json multi-action set --input "$config_snapshot" --id 2 \
+"$bin" --json multi-action set --input "$layer_lighting_snapshot" --id 2 \
   --name 'Updated Multi' --color '#A1B2C3' --icon icon-updated \
   --tap KC_X --double-tap KA_A4 --hold KC_Y --tap-hold KA_M1 \
   --tapping-term 999 --output "$candidate_snapshot" >"$root/multi-set.json"
@@ -501,6 +501,7 @@ assert layer_lighting_show == {
 assert layer_lighting_set["changedPaths"] == [
     "/keymap.json/profiles/0/layers/0/lights/backlight",
     "/keymap.json/profiles/0/layers/1/lights/backlight",
+    "/keymap.json/profiles/0/layers/2/lights/backlight",
 ]
 assert control_set["changedPaths"] == [
     "/keymap.json/profiles/0/layers/0/layout/keymap/0/0",
@@ -735,6 +736,12 @@ assert apply["afterRevision"] == candidate["revision"]
 assert replay["idempotentReplay"] is True
 assert replay["afterRevision"] == candidate["revision"]
 assert post_apply["revision"] == candidate["revision"]
+post_apply_keymap = json.loads(payload(post_apply, "keymap.json"))
+assert post_apply_keymap["profiles"][2]["name"] == "CLI Profile"
+assert post_apply_keymap["profiles"][0]["layers"][2]["name"] == "CLI Layer"
+for layer in post_apply_keymap["profiles"][0]["layers"]:
+    assert layer["lights"]["backlight"]["effect"] == "breath"
+    assert layer["lights"]["backlight"]["color"] == 0x102030
 assert (root / "config-apply-stale.status").read_text().strip() != "0"
 assert "revision conflict" in (root / "config-apply-stale.err").read_text()
 assert pre_restore["revision"] == candidate["revision"]
@@ -743,6 +750,8 @@ assert restore["changed"] is True
 assert restore["beforeRevision"] == candidate["revision"]
 assert restore["afterRevision"] == snapshot["revision"]
 assert post_restore["revision"] == snapshot["revision"]
+assert payload(post_restore, "keymap.json") == payload(snapshot, "keymap.json")
+assert payload(post_restore, "smart_actions.json") == payload(snapshot, "smart_actions.json")
 
 print("bridge_protocol=1")
 print("node_conformance=verified")
