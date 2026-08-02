@@ -37,6 +37,7 @@ def main():
         raise SystemExit(f"formula destination already exists: {args.output}")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(rendered)
+    args.output.chmod(0o644)
     print(args.output)
 
 

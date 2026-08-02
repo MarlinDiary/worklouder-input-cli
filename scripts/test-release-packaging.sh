@@ -46,6 +46,7 @@ intel_digest=$(printf '%s' "$digest-x86_64" | shasum -a 256 | awk '{print $1}')
   --base-url "https://github.com/MarlinDiary/worklouder-input-cli/releases/download/v$version" \
   --arm64-sha256 "$digest" --x86-64-sha256 "$intel_digest" \
   --output "$root/Formula/worklouderctl.rb" >"$root/formula.txt"
+test "$(stat -f %Lp "$root/Formula/worklouderctl.rb")" = 644
 ruby -c "$root/Formula/worklouderctl.rb" >"$root/ruby.txt"
 if command -v brew >/dev/null 2>&1; then
   if ! brew style "$root/Formula/worklouderctl.rb" \
