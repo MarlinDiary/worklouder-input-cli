@@ -37,7 +37,9 @@ Input and the headless reader share one JSON-RPC stream. The default
 `require-closed` mode reports contention without changing process state. The
 explicit `restart` mode asks Input to quit gracefully, waits for the main
 process to stop, performs the read, and reopens the exact app path afterward.
-It waits for the reopened Electron process to settle before returning and never
+Input can run normally without a renderer window, so coordination tracks its
+main process. If Input briefly rejects a quit while initializing, the adapter
+retries the same graceful request at bounded intervals and never
 force-terminates Input. Status and list operations expose typed JSON;
 export additionally validates safe relative paths, device SHA-1, host SHA-256,
 exact size, typed manifest readback, file readback, and atomic publication.

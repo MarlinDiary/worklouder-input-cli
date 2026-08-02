@@ -79,7 +79,8 @@ snapshot；两者都不会序列化其他 Codex 设置。
 `--input-mode require-closed` 会在 Input 正在运行时停止；选择
 `--input-mode restart` 后，CLI 会请求 Input 优雅退出，只调用 `sys.version`、
 `device.status`、`fs.list`、`fs.readbin`，完成后即使读取报错也会重新打开
-Input。`device export` 对每个文件核对 device SHA-1 与 host SHA-256，重新读取
+Input。若 Input 拒绝退出，请求会在打开设备前停止，不会强制结束 app。
+`device export` 对每个文件核对 device SHA-1 与 host SHA-256，重新读取
 typed manifest 和文件后，再原子发布目录。
 
 ## 计划中的写入命令

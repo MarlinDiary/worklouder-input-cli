@@ -109,6 +109,8 @@ app; WorkLouderCTL does not ship a second driver. The default
 `--input-mode require-closed` stops when Input is open. `--input-mode restart`
 requests a graceful quit, performs only `sys.version`, `device.status`,
 `fs.list`, and `fs.readbin` calls, and reopens Input even when the read fails.
+If Input declines the quit request, the command stops before opening the device;
+it does not force-terminate the app.
 `device export` verifies the device SHA-1 and host SHA-256 for every file,
 reopens the typed manifest and files, and atomically publishes the directory.
 
