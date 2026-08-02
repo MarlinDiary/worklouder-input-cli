@@ -784,6 +784,77 @@ fn input_cache_snapshot_runs_into_semantic_candidates_end_to_end() {
         serde_json::json!(["/smart_actions.json/smartActions/SA_1"])
     );
 
+    let diff = binary()
+        .args(["--json", "config", "diff"])
+        .arg(&snapshot)
+        .arg(&candidate)
+        .output()
+        .unwrap();
+    assert!(
+        diff.status.success(),
+        "{}",
+        String::from_utf8_lossy(&diff.stderr)
+    );
+    let diff: serde_json::Value = serde_json::from_slice(&diff.stdout).unwrap();
+    let paths = diff["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|change| change["path"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(paths, vec!["/smart_actions.json/smartActions/SA_1"]);
+
+    let layered = root.join("with-shortcuts-layer.json");
+    let deleted = root.join("without-shortcuts-layer.json");
+    let created_layer = binary()
+        .args(["--json", "layer", "create", "--input"])
+        .arg(&snapshot)
+        .args(["--profile", "0", "--name", "Shortcuts", "--output"])
+        .arg(&layered)
+        .output()
+        .unwrap();
+    assert!(created_layer.status.success());
+
+    let deleted_layer = binary()
+        .args(["--json", "layer", "delete", "--input"])
+        .arg(&layered)
+        .args(["--profile", "0", "--id", "1", "--output"])
+        .arg(&deleted)
+        .output()
+        .unwrap();
+    assert!(deleted_layer.status.success());
+    let deleted_layer: serde_json::Value = serde_json::from_slice(&deleted_layer.stdout).unwrap();
+    assert_eq!(deleted_layer["operation"], "layer-delete");
+    assert_eq!(
+        deleted_layer["changedPaths"],
+        serde_json::json!(["/keymap.json/profiles/0/layers/1"])
+    );
+
+    let listed = binary()
+        .args(["--json", "layer", "list", "--input"])
+        .arg(&deleted)
+        .args(["--profile", "0"])
+        .output()
+        .unwrap();
+    assert!(listed.status.success());
+    let listed: serde_json::Value = serde_json::from_slice(&listed.stdout).unwrap();
+    assert_eq!(listed["layers"].as_array().unwrap().len(), 1);
+    assert_eq!(listed["layers"][0]["id"], 0);
+
+    let layer_diff = binary()
+        .args(["--json", "config", "diff"])
+        .arg(&layered)
+        .arg(&deleted)
+        .output()
+        .unwrap();
+    assert!(layer_diff.status.success());
+    let layer_diff: serde_json::Value = serde_json::from_slice(&layer_diff.stdout).unwrap();
+    assert_eq!(
+        layer_diff["changes"][0]["path"],
+        "/keymap.json/profiles/0/layers/1"
+    );
+    assert_eq!(layer_diff["changes"][0]["change"], "removed");
+
     assert_eq!(
         worklouderctl::fsutil::sha256(&device.join("keymap.json")).unwrap(),
         keymap_before

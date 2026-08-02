@@ -2,6 +2,7 @@ use crate::bridge::ADAPTER as BRIDGE_ADAPTER;
 use crate::device::{self, ADAPTER as DEVICE_ADAPTER, EXPORT_KIND as DEVICE_EXPORT_KIND};
 use crate::fsutil;
 use crate::input::{self, BUNDLE_KIND, BUNDLE_SCHEMA_VERSION};
+use crate::semantic;
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use serde_json::Value;
@@ -65,8 +66,14 @@ pub fn validate(path: &Path) -> Result<ValidationReport> {
 }
 
 pub fn diff(base: &Path, candidate: &Path) -> Result<DiffReport> {
-    let base_documents = read_documents(base)?;
-    let candidate_documents = read_documents(candidate)?;
+    let standalone_name = if base.is_file() && candidate.is_file() {
+        base.file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+    } else {
+        None
+    };
+    let base_documents = read_documents(base, standalone_name.as_deref())?;
+    let candidate_documents = read_documents(candidate, standalone_name.as_deref())?;
     let mut changes = Vec::new();
     let names: BTreeSet<&String> = base_documents
         .keys()
@@ -324,14 +331,18 @@ fn validate_json_file(path: &Path) -> Result<ValidationReport> {
     })
 }
 
-fn read_documents(path: &Path) -> Result<BTreeMap<String, Value>> {
+fn read_documents(path: &Path, standalone_name: Option<&str>) -> Result<BTreeMap<String, Value>> {
     if path.is_file() {
-        let value = serde_json::from_slice(&fs::read(path)?)
+        let value: Value = serde_json::from_slice(&fs::read(path)?)
             .with_context(|| format!("invalid JSON at {}", path.display()))?;
-        let name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "config.json".into());
+        if value.get("kind").and_then(Value::as_str) == Some("worklouder-input-config-snapshot") {
+            return Ok(semantic::snapshot_authority(path)?.documents);
+        }
+        let name = standalone_name.map(str::to_owned).unwrap_or_else(|| {
+            path.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "config.json".into())
+        });
         return Ok(BTreeMap::from([(name, value)]));
     }
     if !path.is_dir() {

@@ -5,6 +5,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `config diff` now compares validated files embedded in Input configuration
+  snapshots, so differently named `before.json` and `candidate.json` files
+  report precise `/keymap.json` and `/smart_actions.json` changes.
+
 ## [0.1.0]
 
 ### Added
