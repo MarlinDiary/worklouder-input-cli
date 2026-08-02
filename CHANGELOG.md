@@ -32,6 +32,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a checksum-pinned Homebrew formula, and a deterministic Companion integration
   package.
 
+### Security
+
+- Disabled Clap 3's optional terminal-color feature, removing the unmaintained
+  `atty` dependency affected by `GHSA-g98v-hv3f-hcfr` while preserving the
+  declared Rust 1.61 minimum version and deterministic help output.
+
 ### Verified boundary
 
 - The released Codex `26.727.51351` and Input `0.18.0` applications were
