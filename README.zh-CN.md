@@ -105,9 +105,15 @@ worklouderctl input permission command get --input HOST_SETTINGS.json
 worklouderctl input permission command set --input HOST_SETTINGS.json enabled --output HOST_SETTINGS_ENABLED.json
 worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json
 worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
+worklouderctl input preset snapshot --output PRESET_CATALOG.json
+worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
+worklouderctl preset show --catalog PRESET_CATALOG.json --id PRESET_ID
+worklouderctl preset preview --catalog PRESET_CATALOG.json --id PRESET_ID --output PREVIEW.png
+worklouderctl preset install --input CONFIG.json --catalog PRESET_CATALOG.json --id PRESET_ID --profile PROFILE_ID --output CANDIDATE.json
 worklouderctl cheat-sheet catalog
 worklouderctl cheat-sheet bindings --input CONFIG.json --layer LAYER_ID
 worklouderctl cheat-sheet bind --input CONFIG.json --layer LAYER_ID --control key:0:0 toggle --output CANDIDATE.json
+worklouderctl radial show --input CONFIG.json --profile PROFILE_ID --layer LAYER_ID
 worklouderctl bridge status
 worklouderctl device --transport bridge status
 worklouderctl device --transport bridge files --recursive
@@ -366,6 +372,19 @@ CLI 不直接写 `input_storage.json`；持久化与 command execution 继续由
 使用既有 device apply/readback/restore transaction。生成 candidate 时不会打开或
 关闭 Input window。
 
+`input preset snapshot` 通过 companion authority 读取 Input 按“saved preset 在前、
+bundled default 在后”合并的 catalog。`preset list/show` 不输出大型图片 payload，
+`preset preview` 会对有界 PNG/JPEG/WebP 做 decode、原子写入和 reopen 校验；
+`preset install` 则在完整 offline candidate 中复现 Input 0.18.0 的
+Action/Multi Action/group 去重、ID 分配、`KA_`/`KM_` 引用重映射、preset tag
+传播和 layer append。hash-pinned renderer chunk 内全部 17 个 bundled default 均已
+成功生成严格有效 candidate，fixture apply/readback/restore 也已通过。实时选中 layer
+仍属于 Input renderer/runtime state，不会被虚构成持久化字段。
+
+`radial show` 会解析 Input radial overlay 使用的有序 joystick sector，以及所引用
+Action/Multi Action/Smart Action 的名称、颜色和图标。overlay runtime 继续由 Input
+负责；sector 修改复用已验证的 `layer joystick`、`control set` 和完整 transaction。
+
 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
 adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
 
@@ -432,7 +451,8 @@ lighting brightness/auto-off candidate 与 fixture transaction、Codex voice
 `push-to-talk/realtime` candidate 与 fixture transaction，以及 profile/layer
 lifecycle、selection、ordering、24-bit RGB color 与 per-layer lighting、AppSense
 linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线
-candidate 生成，keys、
+candidate 生成，preset catalog snapshot/list/show/preview、17 个 bundled default
+install candidate 与 fixture transaction，keys、
 encoder gestures 的 control list/show/set、joystick mode 与 2–8 sector
 lifecycle/assignment/精确 angle rebalance，以及 Action
 list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input

@@ -71,7 +71,7 @@ Promises as failures even when the USB interface still enumerates.
 | Backlight | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
 | Underglow | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
 | AppSense links | list/show, application identity, link, update, unlink | `appsense` | candidate and current-cache schema verified; fixture apply/readback/restore verified; live focus transition tracked separately |
-| Presets | inspect, preview, install | `preset` | researched |
+| Presets | merged catalog snapshot, Input-equivalent filters, metadata, preview, Action/Multi Action/group remap and layer install | `input preset snapshot`, `preset list/show/preview/install` | all 17 hash-pinned bundled defaults candidate-verified; fixture validate/apply/readback/restore verified; released Input provider integration pending |
 | Full object | cache capture, export, snapshot, validate, diff, apply, restore | `input config snapshot`, `device export`, `device config snapshot/validate/apply/restore` | cache adapter is byte-exact and revision-equivalent to the bridge core; transaction fixture verified; released writer pending |
 
 ## Tier 3 — Input host configuration
@@ -82,7 +82,7 @@ Promises as failures even when the USB interface still enumerates.
 | Smart Action groups | create, rename, move, delete | `smart-action group` | metadata and ordered member CRUD, empty groups, and container-only delete candidate-verified |
 | Command permission | explicit host command toggle | `input permission command` | snapshot/get/offline set plus bridge CAS/apply/replay/restore/automatic-rollback fixture-verified; released Input integration pending |
 | Cheat Sheet | show, hold, hide, toggle assignments | `cheat-sheet` | exact four-token catalog, binding inventory, strict offline bind candidate, and fixture apply/readback/restore verified |
-| Radial menu | sectors, labels, referenced actions | `radial` | researched |
+| Radial menu | ordered sectors, angles, assignment kinds, and resolved Action/Multi Action/Smart Action labels | `radial show`, `layer joystick`, `control set` | no separate persisted settings exist; inspection plus sector/assignment mutation and fixture apply/readback/restore verified; overlay runtime remains Input-owned |
 | AppSense runtime | focus observer and layer transition | `appsense test` | researched |
 
 ## Tier 4 — Input operations

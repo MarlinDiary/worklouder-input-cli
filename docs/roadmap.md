@@ -77,6 +77,8 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Smart Action typed CRUD, groups, physical bindings, and delete cascade candidates
 - [x] Input host command permission snapshot/candidate/apply/restore transaction
 - [x] Cheat Sheet show/hold/hide/toggle catalog and binding candidates
+- [x] Preset catalog snapshot/list/show/preview and exact Input 0.18.0 install remapping; all 17 bundled defaults candidate-verified
+- [x] Radial-menu sector inspection and Action/Multi Action/Smart Action label resolution; mutation reuses verified joystick/control transactions
 
 ## M4 — Full cross-authority transaction
 

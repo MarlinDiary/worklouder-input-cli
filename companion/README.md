@@ -19,6 +19,11 @@ const companionBridge = await installInputCompanionBridge({
     devicesCommManager,
     applicationService,
     analyticsService,
+    presetCatalogAuthority: {
+      async listPresets() {
+        // Return Input's saved-first/default-second merged preset DTO array.
+      },
+    },
     configurationWriter: {
       async replaceConfiguration({ device, files, operation, targetRevision }) {
         // Route the complete file set through Input's existing queue and
@@ -59,6 +64,13 @@ It does not edit Input's LokiJS file directly. A custom `hostSettingsAuthority`
 with `readSettings()` and `replaceSettings()` can be injected by later Input
 versions.
 
+When `presetCatalogAuthority.listPresets()` is present, the integration
+advertises `input.presets.snapshot.v1`. The provider returns Input's complete
+merged preset DTO array; the adapter clones it through bounded JSON,
+recursively key-sorts it for the catalog revision, and exposes only the
+read-only snapshot method. WorkLouderCTL does not read or edit the LokiJS
+`presets` collection directly.
+
 The reference adapter owns the surrounding transaction: validate every byte
 and digest, capture a pre-mutation snapshot, compare the live revision, invoke
 the writer, read back the complete revision, and automatically restore and
@@ -78,7 +90,8 @@ node companion/conformance.mjs \
   --require device.config.restore.v1 \
   --require input.host-settings.snapshot.v1 \
   --require input.host-settings.apply.v1 \
-  --require input.host-settings.restore.v1
+  --require input.host-settings.restore.v1 \
+  --require input.presets.snapshot.v1
 ```
 
 Nonstandard paths can be supplied with `--socket` and `--token`, or with
@@ -98,5 +111,7 @@ conformance command plus the Rust CLI handshake, live status, file list, exact
 export, dual-hash readback, apply, idempotent replay, stale-revision rejection,
 restore, and final revision recovery. It also verifies host-settings snapshot,
 offline command-permission candidate generation with analytics-field
-preservation, apply/replay/readback, and restore. All mutation conformance runs
-against isolated fixture authorities.
+preservation, apply/replay/readback, and restore. It also verifies preset
+catalog revision, filtering, metadata, preview decode, install reference
+remapping, candidate validation, apply/readback, and restore. All mutation
+conformance runs against isolated fixture authorities.

@@ -84,6 +84,7 @@ Protocol version 1 defines:
 - `device.config.snapshot`
 - `device.config.validate`
 - `input.host-settings.snapshot`
+- `input.presets.snapshot`
 
 File content uses base64 inside JSON. Device SHA-1 and host SHA-256 remain
 separate fields so a CLI export can independently verify both authorities.
@@ -110,6 +111,11 @@ decoded content; request and response lines are each capped at 64 MiB.
 complete `showedAnalyticsPopUp`, `analyticsConsented`, and
 `smartActionCmdEnabled` DTO plus a deterministic SHA-256 revision. It has no
 device ID and does not read or write device configuration files.
+
+`input.presets.snapshot` is a second read-only host authority. Input supplies
+its saved-first/default-second merged preset DTO array; the bridge recursively
+sorts object keys for a deterministic SHA-256 revision and publishes the
+complete catalog without exposing the underlying LokiJS collection.
 
 ```sh
 worklouderctl input config snapshot --output config-snapshot.json
@@ -194,6 +200,14 @@ worklouderctl cheat-sheet bindings --input smart-bound-candidate.json \
 worklouderctl cheat-sheet bind --input smart-bound-candidate.json \
   --profile 0 --layer 1 --control encoder:0:press toggle \
   --output cheat-sheet-candidate.json
+worklouderctl input preset snapshot --output preset-catalog.json
+worklouderctl preset list --catalog preset-catalog.json --device codex_micro \
+  --layout universal --os mac
+worklouderctl preset preview --catalog preset-catalog.json --id 9002 \
+  --output preset-preview.png
+worklouderctl preset install --input config-snapshot.json \
+  --catalog preset-catalog.json --id 9002 --profile 0 \
+  --output preset-candidate.json
 ```
 
 Before publishing, the editor independently verifies every file's canonical
@@ -288,7 +302,7 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
   Unix-socket JSON-RPC server;
 - `companion/input-main-adapter.mjs` — adapter over Input's existing
   `devicesCommManager`, per-device `rpcService`, and application-settings
-  authority;
+  and preset-catalog authorities;
 - `companion/input-main-integration.mjs` — one-call Electron main-process
   installation with Input-owned discovery and lifecycle cleanup;
 - `companion/conformance.mjs` — read-only release conformance command;
@@ -298,7 +312,8 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
   export, semantic profile/layer/lighting/AppSense/control/Action/Multi Action/group
   inspection, lifecycle/CRUD/cascade candidates, independent candidate rehash,
   apply/readback, idempotent retry, stale-CAS rejection, restore, host command
-  permission `false -> true -> false`, and dual-hash conformance test.
+  permission `false -> true -> false`, preset catalog/list/show/preview/install,
+  preset apply/readback/restore, and dual-hash conformance test.
 
 Input maintains only the small adapter from stable bridge method names to its
 current service container. Integration creates the adapter after Input's

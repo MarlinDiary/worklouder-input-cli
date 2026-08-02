@@ -617,6 +617,40 @@ those booleans in that order after
 `worklouder-input-host-settings-revision-v1\0`. Live replacement delegates to
 Input's `ApplicationService.getAppSettings/saveAppSettings` authority.
 
+### Presets
+
+Preset catalog capture uses the Input-owned provider rather than reading or
+editing LokiJS directly:
+
+```sh
+worklouderctl input preset snapshot --output PRESET_CATALOG.json
+worklouderctl preset list --catalog PRESET_CATALOG.json \
+  --device codex_micro --layout universal --os mac --search figma
+worklouderctl preset show --catalog PRESET_CATALOG.json --id 9002
+worklouderctl preset preview --catalog PRESET_CATALOG.json --id 9002 \
+  --output figma.png
+worklouderctl preset install --input CONFIG.json --catalog PRESET_CATALOG.json \
+  --id 9002 --profile 0 --output FIGMA_CANDIDATE.json
+```
+
+The catalog snapshot has a recursive-key-sorted SHA-256 revision and preserves
+the saved-first/default-second order supplied by Input. Filters match exact
+device, layout, and OS membership (`mac` = `0`, `windows` = `1`); search is a
+case-insensitive substring over the preset name and tags. List/show expose
+metadata and resource counts without returning multi-megabyte image fields.
+Preview accepts only bounded base64 PNG, JPEG, or WebP data, publishes to a new
+path atomically, and verifies byte-exact readback.
+
+Install reproduces the frozen Input 0.18.0 algorithm: no more than six layers,
+last-existing-ID allocation for Actions and Multi Actions, maximum-ID
+allocation for groups and the appended layer, exact equality-field reuse,
+preset-tag propagation, and complete `KA_`/`KM_` reference remapping. It then
+rehashes and reopens a full configuration candidate for the existing
+snapshot/CAS/apply/readback/rollback transaction. All 17 hash-pinned bundled
+defaults were candidate-verified, including the literal preset ID `90017`.
+Renderer-only selected-layer state is reported as a runtime boundary, not
+written into the keymap.
+
 ### Cheat Sheet and radial menu
 
 Input hosts windows for Cheat Sheet and the joystick radial menu. Cheat Sheet
@@ -630,6 +664,7 @@ worklouderctl cheat-sheet catalog
 worklouderctl cheat-sheet bindings --input CONFIG.json --profile 0 --layer 1
 worklouderctl cheat-sheet bind --input CONFIG.json --profile 0 --layer 1 \
   --control encoder:0:press hold --output CANDIDATE.json
+worklouderctl radial show --input CONFIG.json --profile 0 --layer 1
 ```
 
 The four values map to the exact released tokens: `show` → `KI_CS_SHOW`,
@@ -639,6 +674,14 @@ firmware `0.5.0`; the tested boundary is Codex Micro `v0.6.0`. The candidate
 uses the same complete-snapshot validation, atomic publication, bridge apply,
 readback, and rollback as other physical-control assignments.
 
+The radial menu has no separate persisted settings in Input 0.18.0.
+`radial show` reads the selected layer's ordered joystick sectors and resolves
+Action, Multi Action, and Smart Action names, colors, and icons from the same
+complete snapshot that Input supplies to its overlay. Sector count, angles,
+and assignments remain editable through `layer joystick` and `control set`.
+Input remains responsible for `kb.radial` notifications, animation, and the
+three-second auto-close; inspection does not open the overlay window.
+
 ## Tier 4: operational configuration
 
 - application and firmware version discovery;
@@ -647,7 +690,7 @@ readback, and rollback as other physical-control assignments.
 - Input logs and input-monitoring permissions;
 - firmware download, USB flashing, progress, and recovery;
 - full settings reset;
-- migration and preset installation.
+- migration and runtime selection after a preset install.
 
 These operations use distinct policy gates from normal semantic edits.
 The installed Input updater/flasher remains the implementation provider. The

@@ -136,9 +136,15 @@ worklouderctl input permission command get --input HOST_SETTINGS.json
 worklouderctl input permission command set --input HOST_SETTINGS.json enabled --output HOST_SETTINGS_ENABLED.json
 worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json
 worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
+worklouderctl input preset snapshot --output PRESET_CATALOG.json
+worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
+worklouderctl preset show --catalog PRESET_CATALOG.json --id PRESET_ID
+worklouderctl preset preview --catalog PRESET_CATALOG.json --id PRESET_ID --output PREVIEW.png
+worklouderctl preset install --input CONFIG.json --catalog PRESET_CATALOG.json --id PRESET_ID --profile PROFILE_ID --output CANDIDATE.json
 worklouderctl cheat-sheet catalog
 worklouderctl cheat-sheet bindings --input CONFIG.json --layer LAYER_ID
 worklouderctl cheat-sheet bind --input CONFIG.json --layer LAYER_ID --control key:0:0 toggle --output CANDIDATE.json
+worklouderctl radial show --input CONFIG.json --profile PROFILE_ID --layer LAYER_ID
 worklouderctl bridge status
 worklouderctl device --transport bridge status
 worklouderctl device --transport bridge files --recursive
@@ -431,6 +437,21 @@ exactly to `KI_CS_SHOW`, `KI_CS_SHOW_TMP`, `KI_CS_HIDE`, and `KI_CS_TOGGLE`.
 unknown and unrelated content, and uses the existing device apply/readback/
 restore transaction. Candidate creation does not open or close Input windows.
 
+`input preset snapshot` reads Input's merged saved-first/default-second preset
+catalog through the companion authority. `preset list/show` omit the large
+image payloads, `preset preview` decodes and reopens a bounded PNG/JPEG/WebP
+file, and `preset install` reproduces Input 0.18.0's Action/Multi Action/group
+deduplication, ID allocation, `KA_`/`KM_` reference remapping, preset-tag
+propagation, and layer append in a complete offline candidate. The exact 17
+bundled defaults from the hash-pinned renderer chunk all generated valid
+candidates; fixture apply/readback/restore also passed. Live selected-layer UI
+state remains Input-owned and is not invented as a persisted field.
+
+`radial show` resolves the same ordered joystick sectors and referenced
+Action/Multi Action/Smart Action labels that Input passes to its radial overlay.
+The overlay stays Input-owned; sector edits use the verified `layer joystick`
+and `control set` candidate/apply/rollback path.
+
 The repository includes an executable Input-main reference server, a service
 adapter for the Input 0.18.0 service shape, authentication tests, and a
 cross-language Rust CLI conformance test:
@@ -535,6 +556,8 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Semantic profile/layer candidates | Full lifecycle, selection, ordering, color, and lighting candidate-verified; combined profile-create/layer-create/lighting apply/readback/restore fixture-verified |
 | Semantic physical controls | List/show/set for keys and encoder gestures; joystick mode, 2–8-sector lifecycle, assignments, and exact angle rebalance; candidate-verified with Input cache hashes unchanged |
 | Semantic Actions | List/show/create/rename/delete and event add/set/delete/move; cascade/apply/restore fixture-verified |
+| Input presets | Catalog snapshot/list/show/preview plus exact offline install remapping; all 17 bundled defaults candidate-verified and fixture apply/readback/restore verified |
+| Input radial menu | Sector/angle inspection and referenced resource resolution verified; edits reuse joystick/control transactions and the overlay remains Input-owned |
 | Real-device mutation and rollback | Planned |
 | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
 | Input cache read adapter | Complete; byte-exact bridge-equivalent semantic snapshot |
