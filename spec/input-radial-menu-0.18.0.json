@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouder-input-radial-menu-model",
+  "inputVersion": "0.18.0",
+  "source": {
+    "asarPath": "/Applications/input.app/Contents/Resources/app.asar",
+    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
+    "mainBundle": "dist-electron/main/index.js",
+    "mainBundleSha256": "7c16191956acb8d0d89c50eb940dc9b757bf6966b19c56499ca2d60d8743154a",
+    "preloadBundle": "dist-electron/preload/radial_menu_preload.mjs",
+    "preloadBundleSha256": "7502275eeab7f2676741e6fc7e12d945221dd2232f83868859320a02c90ca9f2",
+    "rendererChunk": "dist/assets/radial_menu-BHX6oMNj.js",
+    "rendererChunkSha256": "548c886efbf1c55ba34219dbc1d24acc5b9355b40470b27d8268a059ed2ba7a5"
+  },
+  "availability": {
+    "deviceTypes": [
+      "CreatorMicroV2",
+      "CodexMicro"
+    ],
+    "testedFirmware": "v0.6.0",
+    "minimumSectors": 2
+  },
+  "notification": {
+    "method": "kb.radial",
+    "fields": {
+      "a": "finite joystick angle",
+      "d": "finite distance from center",
+      "l": "nonnegative layer array index",
+      "p": "nonnegative profile array index",
+      "o": "operation number",
+      "s": "active sector index when operation is greater than 1"
+    },
+    "operationZero": "hide",
+    "otherOperations": "show or update",
+    "autoCloseMilliseconds": 3000
+  },
+  "initialData": [
+    "joystickAngle",
+    "distanceFromCenter",
+    "actions",
+    "multiactions",
+    "smartActions",
+    "sectors"
+  ],
+  "labelResolution": {
+    "actionPrefix": "KA_A",
+    "multiActionPrefix": "KA_M",
+    "smartActionPrefix": "SA_",
+    "resourceFields": [
+      "name",
+      "color",
+      "icon"
+    ],
+    "basicAndInternal": "Input HID map for the current host operating system",
+    "vendor": "literal 1"
+  },
+  "configurationAuthority": {
+    "sectors": "keymap.json profiles[].layers[].layout.joystick.sectors",
+    "actions": "keymap.json macros",
+    "multiActions": "keymap.json multiActions",
+    "smartActions": "smart_actions.json smartActions",
+    "separateRadialSettingsFound": false,
+    "runtimeWindowAuthority": "Input WindowService"
+  },
+  "cliBoundary": {
+    "inspectCommand": "radial show",
+    "sectorMutationCommands": [
+      "layer joystick sector add",
+      "layer joystick sector delete",
+      "control set --control joystick:SECTOR"
+    ],
+    "opensWindow": false,
+    "preserveUnknownFields": true,
+    "applyVia": "existing complete Input bridge transaction",
+    "requiresReadbackRollback": true
+  }
+}

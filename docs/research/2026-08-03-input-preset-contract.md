@@ -17,6 +17,14 @@ substring match over the preset name and tags. The installed catalog contains
 IDs `9001..9016` plus the literal Windows Affinity ID `90017`; the CLI must
 preserve that observed value rather than normalizing it.
 
+The outer preset names are application names such as `Framer` and `Figma`;
+their nested layer names carry the platform suffixes such as `Framer Mac` and
+`Figma Win`. The two arrays are recorded separately in the frozen spec. An
+independent extraction from renderer chunk SHA-256
+`c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e`
+reproduced all 17 DTOs, and every DTO produced a strict, reopenable install
+candidate against the fixture configuration.
+
 ## Install
 
 Install is offered only while the selected profile has fewer than six layers.
