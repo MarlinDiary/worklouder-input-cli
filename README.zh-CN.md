@@ -105,6 +105,9 @@ worklouderctl input permission command get --input HOST_SETTINGS.json
 worklouderctl input permission command set --input HOST_SETTINGS.json enabled --output HOST_SETTINGS_ENABLED.json
 worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json
 worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
+worklouderctl input permissions [--device DEVICE_ID]
+worklouderctl input firmware check [--device DEVICE_ID]
+worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
 worklouderctl input preset snapshot --output PRESET_CATALOG.json
 worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
 worklouderctl preset show --catalog PRESET_CATALOG.json --id PRESET_ID
@@ -393,6 +396,14 @@ collector、最后一次转发给 firmware 的应用 identity、已注册 device
 timeout 的 typed conflict 已由 fixture 验证，released Input 集成与真实 A/B focus
 transition 仍是 compatibility gate。
 
+`input permissions` 读取 Input 自己的 platform permission check：macOS 对应 released
+`WLPermissions` 的 Input Monitoring 结果（不会虚构一个 Accessibility 结果），Linux
+对应 selected HID path 的读写权限。`input firmware check` 把 release 选择完全委派给已安装
+Input 的 `DeviceFlashService`，不会执行 flash。`input logs collect` 从 Input 的 5,000 条
+内存 log ring 读取有界后缀，先在 Input 内遮蔽 home path、email 与 credential-shaped
+值，再原子发布并 reopen 一个 `0700` bundle；其中 JSON/text 与 SHA-256 manifest 均为
+`0600`。
+
 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
 adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
 
@@ -464,6 +475,8 @@ install candidate 与 fixture transaction，keys、
 encoder gestures 的 control list/show/set、joystick mode 与 2–8 sector
 lifecycle/assignment/精确 angle rebalance，以及 Action
 list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
+permission status、firmware check 与 sanitized diagnostic log bundle 也已通过 bridge/CLI
+fixture；Input
 release 集成、Codex released-app bridge 集成、可安装 binary 与 Homebrew formula
 仍在后续里程碑中。
 

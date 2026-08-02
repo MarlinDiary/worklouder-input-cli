@@ -28,13 +28,13 @@ use cli::{
     CodexResetCommand, CodexRuntimeCommand, CodexVoiceCommand, CodexVoiceMode, Command,
     CompletionShell, ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand,
     DeviceTransport, InputCommand, InputCommandPermissionCommand, InputCommandPermissionValue,
-    InputConfigCommand, InputPermissionCommand, InputPresetCommand, LayerCommand,
-    LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand, LayerJoystickSectorCommand,
-    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
-    MultiActionGroupCommand, MultiActionGroupMemberCommand, PresetCommand, ProfileCommand,
-    RadialCommand, SchemaCommand, SmartActionCommand, SmartActionGroupCommand,
-    SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType, TierCommand,
-    TransactionCommand,
+    InputConfigCommand, InputFirmwareCommand, InputLogsCommand, InputPermissionCommand,
+    InputPresetCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
+    LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect,
+    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
+    PresetCommand, ProfileCommand, RadialCommand, SchemaCommand, SmartActionCommand,
+    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
+    TierCommand, TransactionCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -3260,6 +3260,75 @@ fn run_input(
                     write_input_host_settings_mutation(result, json, &mut out)?;
                 }
             },
+        },
+        InputCommand::Permissions { device } => {
+            let result = bridge::permissions_status(&bridge_paths, device.as_deref())?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "{}={} platform={} device={}",
+                    result.permission.required_permission,
+                    if result.permission.granted {
+                        "granted"
+                    } else {
+                        "missing"
+                    },
+                    result.permission.platform,
+                    result.device.device_pid
+                )?;
+                for path in result.permission.checked_device_paths {
+                    writeln!(out, "PATH\t{path}")?;
+                }
+            }
+        }
+        InputCommand::Firmware { command } => match command {
+            InputFirmwareCommand::Check { device } => {
+                let result = bridge::firmware_status(&bridge_paths, device.as_deref())?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "firmware={} update={}",
+                        result
+                            .status
+                            .firmware_version
+                            .as_deref()
+                            .unwrap_or("unknown"),
+                        match result.update.update_available {
+                            Some(true) => "available",
+                            Some(false) => "current",
+                            None => "unknown",
+                        }
+                    )?;
+                    if let Some(release) = result.update.release {
+                        writeln!(out, "release={}", release.version)?;
+                        writeln!(out, "download={}", release.download_url)?;
+                    }
+                }
+            }
+        },
+        InputCommand::Logs { command } => match command {
+            InputLogsCommand::Collect {
+                output,
+                max_entries,
+            } => {
+                let result = bridge::collect_logs(&bridge_paths, &output, max_entries)?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "Collected {} sanitized Input log entries to {}",
+                        result.manifest.exported_entry_count,
+                        result.output.display()
+                    )?;
+                    writeln!(out, "redactions={}", result.manifest.redaction_count)?;
+                    writeln!(out, "truncated={}", result.manifest.truncated)?;
+                }
+            }
         },
         InputCommand::Preset { command } => match command {
             InputPresetCommand::Snapshot { output } => {

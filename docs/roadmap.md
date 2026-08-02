@@ -79,6 +79,9 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Cheat Sheet show/hold/hide/toggle catalog and binding candidates
 - [x] Preset catalog snapshot/list/show/preview and exact Input 0.18.0 install remapping; all 17 bundled defaults candidate-verified
 - [x] Radial-menu sector inspection and Action/Multi Action/Smart Action label resolution; mutation reuses verified joystick/control transactions
+- [x] Input-owned OS permission status with exact platform semantics
+- [x] Input-owned compatible firmware release check without duplicated release parsing
+- [x] Bounded sanitized Input log bundle with private modes and checksum readback
 
 ## M4 — Full cross-authority transaction
 
@@ -101,6 +104,14 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [ ] Compatibility matrix for every release
 - [ ] Migration and backup inspection tools
 - [ ] Agent-facing protocol over the same transaction core
+
+## M6 — Delegated Input operations
+
+- [x] Hash-pinned Input 0.18.0 permission, firmware-read, log, reset, and update-flow inventory
+- [x] Optional permission, firmware status, and sanitized log bridge authorities
+- [ ] Input-owned high-level firmware update authority with backup, USB/bootloader flash, reconnect, restore, and postflight
+- [ ] Complete default/reset candidate per device/layout/version through the existing configuration transaction
+- [ ] Bootloader recovery authority and exact post-recovery configuration restore
 
 ## Later tracks
 

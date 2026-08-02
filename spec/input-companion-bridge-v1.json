@@ -160,6 +160,33 @@
         "deviceId"
       ],
       "resultKind": "worklouder-input-appsense-runtime"
+    },
+    {
+      "name": "input.permissions.status",
+      "capability": "input.permissions.status.v1",
+      "mutation": false,
+      "optionalParams": [
+        "deviceId"
+      ],
+      "resultKind": "worklouder-input-permissions-status"
+    },
+    {
+      "name": "input.firmware.status",
+      "capability": "input.firmware.status.v1",
+      "mutation": false,
+      "optionalParams": [
+        "deviceId"
+      ],
+      "resultKind": "worklouder-input-firmware-status"
+    },
+    {
+      "name": "input.logs.snapshot",
+      "capability": "input.logs.snapshot.v1",
+      "mutation": false,
+      "optionalParams": [
+        "maxEntries"
+      ],
+      "resultKind": "worklouder-input-log-snapshot"
     }
   ],
   "errors": {
@@ -299,9 +326,38 @@
       "rpcReadFile",
       "connDeviceChangeDeviceConfig",
       "common-get-app-settings",
-      "common-send-app-settings"
+      "common-send-app-settings",
+      "common-check-app-permissions",
+      "devsManGetLatestFwRelease"
     ],
     "quitCleanup": "devicesCommManager.disconnectAllDevices()",
     "externalTransportFound": false
+  },
+  "tier4ReadAuthorities": {
+    "permissions": {
+      "authority": "Input ApplicationService.checkAppPermissions backed by WLPermissions",
+      "macosMeaning": "Input Monitoring permission for the running Input process",
+      "linuxMeaning": "read/write access to the selected HID device path",
+      "capabilityAdvertisement": "advertised only when permissionsAuthority supplies readStatus"
+    },
+    "firmware": {
+      "authority": "Input DeviceFlashService release checker and existing device session",
+      "network": "the check command may use Input's own release-service network request",
+      "mutation": false,
+      "capabilityAdvertisement": "advertised only when firmwareAuthority supplies readStatus"
+    },
+    "logs": {
+      "authority": "Input WindowService in-memory renderer log ring",
+      "maximumEntries": 5000,
+      "maximumMessageBytes": 8192,
+      "sanitizedBeforeBridgeResponse": true,
+      "redactions": [
+        "macOS and Windows user home prefixes",
+        "email addresses",
+        "authorization, bearer, token, API key, password, and secret values",
+        "device IDs, serial values, and UUIDs"
+      ],
+      "capabilityAdvertisement": "advertised only when logsAuthority supplies readLogs"
+    }
   }
 }

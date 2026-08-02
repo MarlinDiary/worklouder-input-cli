@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { platform } from "node:os";
 import { createInputMainAdapter } from "./input-main-adapter.mjs";
 import { startInputCompanionBridge } from "./input-main-bridge.mjs";
 
@@ -35,6 +36,22 @@ export async function installInputCompanionBridge({
           services.focusAppService,
         )
       : undefined);
+  const permissionsAuthority =
+    services.permissionsAuthority ??
+    (services.applicationService
+      ? inputPermissionAuthority(services.applicationService)
+      : undefined);
+  const firmwareAuthority =
+    services.firmwareAuthority ??
+    (services.deviceFlashService && services.applicationService
+      ? inputFirmwareAuthority(
+          services.deviceFlashService,
+          services.applicationService,
+        )
+      : undefined);
+  const logsAuthority =
+    services.logsAuthority ??
+    (services.windowService ? inputWindowLogsAuthority(services.windowService) : undefined);
   const adapter = createInputMainAdapter({
     devicesCommManager: services.devicesCommManager,
     deviceKitVersion,
@@ -42,6 +59,9 @@ export async function installInputCompanionBridge({
     hostSettingsAuthority,
     presetCatalogAuthority: services.presetCatalogAuthority,
     appsenseRuntimeAuthority,
+    permissionsAuthority,
+    firmwareAuthority,
+    logsAuthority,
   });
   const bridge = await startInputCompanionBridge({
     adapter,
@@ -68,6 +88,81 @@ export async function installInputCompanionBridge({
   return {
     ...bridge,
     stop,
+  };
+}
+
+function inputPermissionAuthority(applicationService) {
+  if (typeof applicationService.checkAppPermissions !== "function") {
+    return undefined;
+  }
+  return {
+    async readStatus({ device }) {
+      const currentPlatform = platform();
+      const devicePaths = device.info.portPath
+        ? [String(device.info.portPath)]
+        : [];
+      return {
+        platform: currentPlatform,
+        requiredPermission:
+          currentPlatform === "darwin"
+            ? "input-monitoring"
+            : currentPlatform === "linux"
+              ? "hid-read-write"
+              : "none",
+        granted: Boolean(
+          await applicationService.checkAppPermissions(devicePaths),
+        ),
+        checkedDevicePaths: currentPlatform === "linux" ? devicePaths : [],
+      };
+    },
+  };
+}
+
+function inputFirmwareAuthority(deviceFlashService, applicationService) {
+  if (
+    typeof deviceFlashService.checkForFwUpdates !== "function" ||
+    typeof deviceFlashService.getLatestFwRelease !== "function"
+  ) {
+    return undefined;
+  }
+  return {
+    async readStatus({ device }) {
+      const currentVersion = await device.rpcService.getFirmwareVersion();
+      const available = await deviceFlashService.checkForFwUpdates(
+        currentVersion,
+        device.info.deviceType,
+      );
+      let release = null;
+      if (available === true) {
+        const appVersion =
+          typeof applicationService.appVersion === "function"
+            ? await applicationService.appVersion()
+            : "";
+        release =
+          (await deviceFlashService.getLatestFwRelease(
+            device.info.deviceType,
+            String(appVersion).includes("rc"),
+          )) ?? null;
+      }
+      return {
+        updateAvailable:
+          available === undefined || available === null
+            ? null
+            : Boolean(available),
+        release,
+      };
+    },
+  };
+}
+
+function inputWindowLogsAuthority(windowService) {
+  if (typeof windowService.getWindowsLogs !== "function") {
+    return undefined;
+  }
+  return {
+    async readLogs() {
+      return windowService.getWindowsLogs();
+    },
   };
 }
 

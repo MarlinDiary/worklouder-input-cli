@@ -40,6 +40,15 @@ const METHOD_DEFINITIONS = new Map([
     "input.appsense.runtime",
     ["input.appsense.runtime.v1", "getAppSenseRuntime"],
   ],
+  [
+    "input.permissions.status",
+    ["input.permissions.status.v1", "getPermissionsStatus"],
+  ],
+  [
+    "input.firmware.status",
+    ["input.firmware.status.v1", "getFirmwareStatus"],
+  ],
+  ["input.logs.snapshot", ["input.logs.snapshot.v1", "snapshotLogs"]],
 ]);
 
 const MUTATION_METHODS = new Set([

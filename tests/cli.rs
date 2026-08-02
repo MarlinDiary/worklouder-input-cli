@@ -88,7 +88,7 @@ fn schemas_are_discoverable_and_machine_readable() {
         .unwrap();
     assert!(list.status.success());
     let summaries: serde_json::Value = serde_json::from_slice(&list.stdout).unwrap();
-    assert_eq!(summaries.as_array().unwrap().len(), 4);
+    assert_eq!(summaries.as_array().unwrap().len(), 5);
     assert_eq!(summaries[1]["name"], "configuration-v1");
 
     let show = binary()
@@ -313,6 +313,9 @@ fn input_and_config_help_expose_read_only_workflow() {
     assert!(input_stdout.contains("export"));
     assert!(input_stdout.contains("config"));
     assert!(input_stdout.contains("permission"));
+    assert!(input_stdout.contains("permissions"));
+    assert!(input_stdout.contains("firmware"));
+    assert!(input_stdout.contains("logs"));
     assert!(input_stdout.contains("preset"));
 
     let input_config = binary()
@@ -346,6 +349,31 @@ fn input_and_config_help_expose_read_only_workflow() {
     assert!(config.status.success());
     assert!(config_stdout.contains("validate"));
     assert!(config_stdout.contains("diff"));
+}
+
+#[test]
+fn input_operations_help_exposes_read_only_tier_four_workflows() {
+    let permissions = binary()
+        .args(["input", "permissions", "--help"])
+        .output()
+        .unwrap();
+    assert!(permissions.status.success());
+    assert!(String::from_utf8(permissions.stdout)
+        .unwrap()
+        .contains("device"));
+
+    let firmware = binary()
+        .args(["input", "firmware", "--help"])
+        .output()
+        .unwrap();
+    let firmware_stdout = String::from_utf8(firmware.stdout).unwrap();
+    assert!(firmware.status.success());
+    assert!(firmware_stdout.contains("check"));
+
+    let logs = binary().args(["input", "logs", "--help"]).output().unwrap();
+    let logs_stdout = String::from_utf8(logs.stdout).unwrap();
+    assert!(logs.status.success());
+    assert!(logs_stdout.contains("collect"));
 }
 
 #[test]

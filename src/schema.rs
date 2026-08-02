@@ -5,6 +5,7 @@ use serde_json::Value;
 const COMMAND_ENVELOPE: &str = include_str!("../spec/schemas/command-envelope-v1.schema.json");
 const CONFIGURATION: &str = include_str!("../spec/schemas/configuration-v1.schema.json");
 const ERROR: &str = include_str!("../spec/schemas/error-v1.schema.json");
+const INPUT_OPERATIONS: &str = include_str!("../spec/schemas/input-operations-v1.schema.json");
 const TRANSACTION: &str = include_str!("../spec/schemas/transaction-v1.schema.json");
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -44,6 +45,14 @@ const ENTRIES: &[SchemaEntry] = &[
             description: "Typed machine-readable error envelope",
         },
         source: ERROR,
+    },
+    SchemaEntry {
+        summary: SchemaSummary {
+            name: "input-operations-v1",
+            id: "https://worklouderctl.dev/schemas/input-operations-v1.schema.json",
+            description: "Input permissions, firmware status, and sanitized log bundles",
+        },
+        source: INPUT_OPERATIONS,
     },
     SchemaEntry {
         summary: SchemaSummary {
@@ -90,7 +99,7 @@ mod tests {
     #[test]
     fn registry_is_sorted_and_every_document_reopens() {
         let summaries = list();
-        assert_eq!(summaries.len(), 4);
+        assert_eq!(summaries.len(), 5);
         let names = summaries
             .iter()
             .map(|summary| summary.name)

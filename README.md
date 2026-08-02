@@ -136,6 +136,9 @@ worklouderctl input permission command get --input HOST_SETTINGS.json
 worklouderctl input permission command set --input HOST_SETTINGS.json enabled --output HOST_SETTINGS_ENABLED.json
 worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json
 worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
+worklouderctl input permissions [--device DEVICE_ID]
+worklouderctl input firmware check [--device DEVICE_ID]
+worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
 worklouderctl input preset snapshot --output PRESET_CATALOG.json
 worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
 worklouderctl preset show --catalog PRESET_CATALOG.json --id PRESET_ID
@@ -463,6 +466,15 @@ GUI; the positive transition state and typed timeout conflict are fixture-
 verified. Released Input integration and a real A/B focus transition remain
 compatibility gates.
 
+`input permissions` reads Input's own platform permission check. On macOS this
+means the released `WLPermissions` Input Monitoring check (not a synthesized
+Accessibility result); on Linux it means read/write access to the selected HID
+path. `input firmware check` delegates release selection to Input's installed
+`DeviceFlashService`, and performs no flash. `input logs collect` requests a
+bounded suffix of Input's 5,000-entry in-memory log ring, redacts home paths,
+emails, and credential-shaped values inside Input, then atomically publishes
+and reopens a `0700` bundle of `0600` JSON/text files with SHA-256 records.
+
 `transaction plan/show/apply/restore` now coordinates Codex settings, Codex
 Agent Keys, Input device configuration, and Input host settings behind one
 canonical revision and rollback boundary. It preflights all authorities before
@@ -580,6 +592,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Semantic Actions | List/show/create/rename/delete and event add/set/delete/move; cascade/apply/restore fixture-verified |
 | Input presets | Catalog snapshot/list/show/preview plus exact offline install remapping; all 17 bundled defaults candidate-verified and fixture apply/readback/restore verified |
 | Input radial menu | Sector/angle inspection and referenced resource resolution verified; edits reuse joystick/control transactions and the overlay remains Input-owned |
+| Tier 4 permissions, firmware check, and diagnostic logs | Exact Input 0.18.0 authority paths frozen; bridge/CLI fixture verified with private sanitized bundle |
 | Real-device mutation and rollback | Planned |
 | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
 | Input cache read adapter | Complete; byte-exact bridge-equivalent semantic snapshot |

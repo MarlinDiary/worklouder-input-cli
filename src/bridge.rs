@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
+use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -193,6 +193,107 @@ pub struct AppSenseRuntimeReport {
     pub warnings: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct InputPermissionState {
+    pub platform: String,
+    pub required_permission: String,
+    pub granted: bool,
+    pub checked_device_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InputPermissionsReport {
+    pub schema_version: u64,
+    pub kind: String,
+    pub adapter: String,
+    pub input_app_version: String,
+    pub device_kit_version: String,
+    pub device: DeviceInfo,
+    pub permission: InputPermissionState,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct FirmwareRelease {
+    pub version: String,
+    pub fetched_at: u64,
+    pub download_url: String,
+    pub change_log: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct FirmwareUpdateState {
+    pub update_available: Option<bool>,
+    pub release: Option<FirmwareRelease>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FirmwareStatusReport {
+    pub schema_version: u64,
+    pub kind: String,
+    pub adapter: String,
+    pub input_app_version: String,
+    pub device_kit_version: String,
+    pub device: DeviceInfo,
+    pub status: DeviceStatus,
+    pub update: FirmwareUpdateState,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct InputLogEntry {
+    pub time: String,
+    pub level: String,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct InputLogSnapshot {
+    pub schema_version: u64,
+    pub kind: String,
+    pub sanitized: bool,
+    pub source_entry_count: usize,
+    pub truncated: bool,
+    pub redaction_count: usize,
+    pub entries: Vec<InputLogEntry>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct InputLogBundleFile {
+    pub relative_path: String,
+    pub size: u64,
+    pub sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct InputLogBundleManifest {
+    pub schema_version: u64,
+    pub kind: String,
+    pub adapter: String,
+    pub input_app_version: String,
+    pub sanitized: bool,
+    pub source_entry_count: usize,
+    pub exported_entry_count: usize,
+    pub truncated: bool,
+    pub redaction_count: usize,
+    pub files: Vec<InputLogBundleFile>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InputLogBundleReceipt {
+    pub output: PathBuf,
+    pub manifest: InputLogBundleManifest,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ConfigMutationResponse {
@@ -255,6 +356,29 @@ struct BridgeAppSenseRuntimeReport {
     device: DeviceInfo,
     status: DeviceStatus,
     runtime: AppSenseRuntimeState,
+    #[serde(default)]
+    warnings: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct BridgePermissionsReport {
+    schema_version: u64,
+    kind: String,
+    device_kit_version: String,
+    device: DeviceInfo,
+    permission: InputPermissionState,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct BridgeFirmwareStatusReport {
+    schema_version: u64,
+    kind: String,
+    device_kit_version: String,
+    device: DeviceInfo,
+    status: DeviceStatus,
+    update: FirmwareUpdateState,
     #[serde(default)]
     warnings: Vec<String>,
 }
@@ -393,6 +517,327 @@ pub fn appsense_runtime(
         runtime: report.runtime,
         warnings: report.warnings,
     })
+}
+
+pub fn permissions_status(
+    paths: &BridgePaths,
+    device_id: Option<&str>,
+) -> Result<InputPermissionsReport> {
+    let mut client = BridgeClient::connect(paths)?;
+    let report: BridgePermissionsReport = client.call(
+        "input.permissions.status",
+        "input.permissions.status.v1",
+        json!({ "deviceId": device_id }),
+    )?;
+    ensure!(
+        report.schema_version == 1 && report.kind == "worklouder-input-permissions-status",
+        "Input permissions response header was invalid"
+    );
+    validate_permission_state(&report.permission)?;
+    Ok(InputPermissionsReport {
+        schema_version: 1,
+        kind: "worklouderctl-input-permissions-status".into(),
+        adapter: ADAPTER.into(),
+        input_app_version: client.handshake.input_version,
+        device_kit_version: report.device_kit_version,
+        device: report.device,
+        permission: report.permission,
+    })
+}
+
+pub fn firmware_status(
+    paths: &BridgePaths,
+    device_id: Option<&str>,
+) -> Result<FirmwareStatusReport> {
+    let mut client = BridgeClient::connect(paths)?;
+    let report: BridgeFirmwareStatusReport = client.call(
+        "input.firmware.status",
+        "input.firmware.status.v1",
+        json!({ "deviceId": device_id }),
+    )?;
+    ensure!(
+        report.schema_version == 1 && report.kind == "worklouder-input-firmware-status",
+        "Input firmware response header was invalid"
+    );
+    validate_firmware_update(&report.update)?;
+    Ok(FirmwareStatusReport {
+        schema_version: 1,
+        kind: "worklouderctl-input-firmware-status".into(),
+        adapter: ADAPTER.into(),
+        input_app_version: client.handshake.input_version,
+        device_kit_version: report.device_kit_version,
+        device: report.device,
+        status: report.status,
+        update: report.update,
+        warnings: report.warnings,
+    })
+}
+
+pub fn collect_logs(
+    paths: &BridgePaths,
+    output: &Path,
+    max_entries: u32,
+) -> Result<InputLogBundleReceipt> {
+    ensure!(
+        (1..=5000).contains(&max_entries),
+        "log entry limit must be from 1 through 5000"
+    );
+    ensure!(
+        !output.exists(),
+        "log bundle destination already exists: {}",
+        output.display()
+    );
+    let mut client = BridgeClient::connect(paths)?;
+    let snapshot: InputLogSnapshot = client.call(
+        "input.logs.snapshot",
+        "input.logs.snapshot.v1",
+        json!({ "maxEntries": max_entries }),
+    )?;
+    validate_log_snapshot(&snapshot, max_entries as usize)?;
+    let input_app_version = client.handshake.input_version.clone();
+
+    let parent = output
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(parent)
+        .with_context(|| format!("failed to create log bundle parent {}", parent.display()))?;
+    let staging = device::staging_path(output)?;
+    fs::create_dir(&staging).with_context(|| {
+        format!(
+            "failed to create log staging directory {}",
+            staging.display()
+        )
+    })?;
+    fs::set_permissions(&staging, fs::Permissions::from_mode(0o700))?;
+
+    let result = (|| -> Result<InputLogBundleReceipt> {
+        let snapshot_path = staging.join("logs.json");
+        let mut snapshot_bytes = serde_json::to_vec_pretty(&snapshot)?;
+        snapshot_bytes.push(b'\n');
+        write_private_file(&snapshot_path, &snapshot_bytes)?;
+
+        let text_path = staging.join("logs.txt");
+        let mut text_bytes = Vec::new();
+        for entry in &snapshot.entries {
+            let message = entry.message.replace('\r', "\\r").replace('\n', "\\n");
+            writeln!(
+                &mut text_bytes,
+                "{}\t{}\t{}",
+                entry.time, entry.level, message
+            )?;
+        }
+        write_private_file(&text_path, &text_bytes)?;
+
+        let files = ["logs.json", "logs.txt"]
+            .into_iter()
+            .map(|name| {
+                let path = staging.join(name);
+                Ok(InputLogBundleFile {
+                    relative_path: name.into(),
+                    size: fs::metadata(&path)?.len(),
+                    sha256: fsutil::sha256(&path)?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let manifest = InputLogBundleManifest {
+            schema_version: 1,
+            kind: "worklouderctl-input-log-bundle".into(),
+            adapter: ADAPTER.into(),
+            input_app_version,
+            sanitized: snapshot.sanitized,
+            source_entry_count: snapshot.source_entry_count,
+            exported_entry_count: snapshot.entries.len(),
+            truncated: snapshot.truncated,
+            redaction_count: snapshot.redaction_count,
+            files,
+        };
+        let manifest_path = staging.join("manifest.json");
+        let mut manifest_bytes = serde_json::to_vec_pretty(&manifest)?;
+        manifest_bytes.push(b'\n');
+        write_private_file(&manifest_path, &manifest_bytes)?;
+        validate_log_bundle(&staging, &manifest)?;
+        ensure!(
+            !output.exists(),
+            "log bundle destination appeared during capture"
+        );
+        fs::rename(&staging, output).with_context(|| {
+            format!(
+                "failed to atomically publish {} as {}",
+                staging.display(),
+                output.display()
+            )
+        })?;
+        validate_log_bundle(output, &manifest)?;
+        Ok(InputLogBundleReceipt {
+            output: output.to_path_buf(),
+            manifest,
+        })
+    })();
+    if result.is_err() && staging.exists() {
+        let _ = fs::remove_dir_all(&staging);
+    }
+    result
+}
+
+fn validate_permission_state(permission: &InputPermissionState) -> Result<()> {
+    ensure!(
+        !permission.platform.is_empty()
+            && permission.platform.len() <= 32
+            && !permission.platform.contains('\0'),
+        "Input permission platform was invalid"
+    );
+    ensure!(
+        ["input-monitoring", "hid-read-write", "none"]
+            .contains(&permission.required_permission.as_str()),
+        "Input required permission was unknown"
+    );
+    ensure!(
+        permission.checked_device_paths.len() <= 256
+            && permission
+                .checked_device_paths
+                .windows(2)
+                .all(|pair| pair[0] < pair[1])
+            && permission
+                .checked_device_paths
+                .iter()
+                .all(|path| { !path.is_empty() && path.len() <= 4096 && !path.contains('\0') }),
+        "Input checked device paths were invalid"
+    );
+    ensure!(
+        permission.required_permission == "hid-read-write"
+            || permission.checked_device_paths.is_empty(),
+        "Input returned device paths for a permission that does not use them"
+    );
+    Ok(())
+}
+
+fn validate_firmware_update(update: &FirmwareUpdateState) -> Result<()> {
+    ensure!(
+        update.update_available != Some(true) || update.release.is_some(),
+        "Input reported a firmware update without release metadata"
+    );
+    if let Some(release) = &update.release {
+        ensure!(
+            !release.version.is_empty()
+                && release.version.len() <= 128
+                && !release.version.contains('\0'),
+            "Input firmware version was invalid"
+        );
+        ensure!(
+            (release.download_url.starts_with("https://")
+                || release.download_url.starts_with("http://"))
+                && release.download_url.len() <= 8192
+                && !release
+                    .download_url
+                    .bytes()
+                    .any(|byte| byte.is_ascii_whitespace())
+                && release
+                    .download_url
+                    .split_once("://")
+                    .map(|(_, rest)| !rest.is_empty() && !rest.starts_with('/'))
+                    .unwrap_or(false),
+            "Input firmware download URL used an unsupported origin"
+        );
+        if let Some(change_log) = &release.change_log {
+            ensure!(
+                change_log.len() <= 1024 * 1024 && !change_log.contains('\0'),
+                "Input firmware change log was invalid"
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_log_snapshot(snapshot: &InputLogSnapshot, limit: usize) -> Result<()> {
+    ensure!(
+        snapshot.schema_version == 1
+            && snapshot.kind == "worklouder-input-log-snapshot"
+            && snapshot.sanitized,
+        "Input log snapshot header was invalid"
+    );
+    ensure!(
+        snapshot.entries.len() <= limit
+            && snapshot.entries.len() <= snapshot.source_entry_count
+            && snapshot.truncated == (snapshot.source_entry_count > snapshot.entries.len()),
+        "Input log snapshot counts were inconsistent"
+    );
+    for entry in &snapshot.entries {
+        ensure!(
+            !entry.time.is_empty()
+                && entry.time.len() <= 128
+                && !entry.time.contains('\0')
+                && !entry.level.is_empty()
+                && entry.level.len() <= 32
+                && entry
+                    .level
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte == b'-')
+                && !entry.message.is_empty()
+                && entry.message.len() <= 8192
+                && !entry.message.contains('\0'),
+            "Input log entry was invalid"
+        );
+        ensure!(
+            !entry.message.contains("/Users/")
+                && !entry.message.to_ascii_lowercase().contains(":\\users\\"),
+            "Input log snapshot contained an unredacted home path"
+        );
+    }
+    Ok(())
+}
+
+fn write_private_file(path: &Path, bytes: &[u8]) -> Result<()> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)
+        .with_context(|| format!("failed to create {}", path.display()))?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    ensure!(
+        fs::metadata(path)?.permissions().mode() & 0o777 == 0o600,
+        "private artifact mode was not 0600"
+    );
+    Ok(())
+}
+
+fn validate_log_bundle(root: &Path, expected: &InputLogBundleManifest) -> Result<()> {
+    let metadata = fs::symlink_metadata(root)?;
+    ensure!(
+        metadata.is_dir() && !metadata.file_type().is_symlink(),
+        "log bundle must be a regular directory"
+    );
+    ensure!(
+        metadata.permissions().mode() & 0o777 == 0o700,
+        "log bundle mode was not 0700"
+    );
+    let manifest_path = root.join("manifest.json");
+    let reopened: InputLogBundleManifest = serde_json::from_slice(&fs::read(&manifest_path)?)?;
+    ensure!(
+        &reopened == expected,
+        "log bundle manifest readback differed"
+    );
+    ensure!(
+        fs::metadata(&manifest_path)?.permissions().mode() & 0o777 == 0o600,
+        "log bundle manifest mode was not 0600"
+    );
+    for record in &reopened.files {
+        let relative = device::safe_relative_path(&record.relative_path)?;
+        let path = root.join(relative);
+        let file_metadata = fs::symlink_metadata(&path)?;
+        ensure!(
+            file_metadata.is_file()
+                && !file_metadata.file_type().is_symlink()
+                && file_metadata.permissions().mode() & 0o777 == 0o600
+                && file_metadata.len() == record.size
+                && fsutil::sha256(&path)? == record.sha256,
+            "log bundle file verification failed for {}",
+            record.relative_path
+        );
+    }
+    Ok(())
 }
 
 fn validate_appsense_runtime(runtime: &AppSenseRuntimeState) -> Result<()> {

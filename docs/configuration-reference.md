@@ -718,6 +718,23 @@ The installed Input updater/flasher remains the implementation provider. The
 CLI invokes and observes that provider rather than owning a second firmware or
 transport implementation.
 
+The first read-only operational commands are implemented:
+
+```sh
+worklouderctl input permissions [--device DEVICE_ID]
+worklouderctl input firmware check [--device DEVICE_ID]
+worklouderctl input logs collect --output INPUT_LOG_BUNDLE \
+  [--max-entries 5000]
+```
+
+On macOS, the permission result is Input's one released Input Monitoring
+boolean; it is not expanded into an Accessibility claim. Firmware check uses
+Input's current compatibility and `.bin` release selection. Log collection
+sanitizes inside the Input adapter before bridge transport, then publishes a
+private, hash-verified bundle. Firmware flashing, reset, and bootloader recovery
+remain separate high-level Input-owned mutation authorities so the CLI does not
+reimplement the released updater sequence.
+
 ## Verification levels
 
 Each capability records one of four evidence levels:

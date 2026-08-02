@@ -11,6 +11,28 @@
   ],
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "device": {
+      "type": "object",
+      "required": ["devicePid", "deviceType", "layoutType", "connectionType", "isUsbConnection"],
+      "properties": {
+        "devicePid": { "type": "string" },
+        "deviceType": { "type": "string" },
+        "layoutType": { "type": "string" },
+        "connectionType": { "type": "string" },
+        "isUsbConnection": { "type": "boolean" }
+      }
+    },
+    "deviceStatus": {
+      "type": "object",
+      "required": ["firmwareVersion", "selectedProfileIndex", "selectedLayerIndex", "batteryPercentage", "isCharging"],
+      "properties": {
+        "firmwareVersion": { "type": ["string", "null"] },
+        "selectedProfileIndex": { "type": ["integer", "null"], "minimum": 0 },
+        "selectedLayerIndex": { "type": ["integer", "null"], "minimum": 0 },
+        "batteryPercentage": { "type": ["integer", "null"], "minimum": 0 },
+        "isCharging": { "type": ["boolean", "null"] }
+      }
+    },
     "codexSettings": {
       "type": "object",
       "additionalProperties": false,
@@ -68,6 +90,9 @@
         "revisionAlgorithm": { "const": "sha256:path-u32be-path-bytes-size-u64be-content-v1" },
         "revision": { "$ref": "#/$defs/sha256" },
         "deviceId": { "type": "string", "minLength": 1 },
+        "deviceKitVersion": { "type": "string", "minLength": 1 },
+        "device": { "$ref": "#/$defs/device" },
+        "status": { "$ref": "#/$defs/deviceStatus" },
         "files": { "type": "array", "items": { "$ref": "#/$defs/inputConfigFile" }, "minItems": 1, "maxItems": 4096 }
       }
     },

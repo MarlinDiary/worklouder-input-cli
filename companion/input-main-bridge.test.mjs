@@ -575,6 +575,60 @@ test("Input adapter exposes AppSense focus forwarding and device layer state", a
   );
 });
 
+test("Input adapter normalizes Tier 4 permission, firmware, and sanitized log state", async () => {
+  const device = configDevice("operations-device", new Map());
+  const adapter = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [device] },
+    deviceKitVersion: "0.1.29",
+    permissionsAuthority: {
+      readStatus: async () => ({
+        platform: "darwin",
+        requiredPermission: "input-monitoring",
+        granted: true,
+        checkedDevicePaths: [],
+      }),
+    },
+    firmwareAuthority: {
+      readStatus: async () => ({
+        updateAvailable: true,
+        release: {
+          version: "v0.7.0",
+          fetchedAt: 1234,
+          changeLog: "Fixture",
+          downloadUrl: "https://example.test/firmware.bin",
+        },
+      }),
+    },
+    logsAuthority: {
+      readLogs: async () => [
+        {
+          time: "2026-08-03T00:00:00.000Z",
+          level: "INFO",
+          message:
+            "path=/Users/alice/Library token=secret alice@example.test",
+        },
+      ],
+    },
+  });
+
+  const permissions = await adapter.getPermissionsStatus({ deviceId: null });
+  assert.equal(permissions.permission.requiredPermission, "input-monitoring");
+  assert.equal(permissions.permission.granted, true);
+
+  const firmware = await adapter.getFirmwareStatus({ deviceId: null });
+  assert.equal(firmware.status.firmwareVersion, "v0.6.0");
+  assert.equal(firmware.update.release.version, "v0.7.0");
+
+  const logs = await adapter.snapshotLogs({ maxEntries: 10 });
+  assert.equal(logs.sanitized, true);
+  assert.equal(logs.entries[0].level, "info");
+  assert.equal(
+    logs.entries[0].message,
+    "path=$HOME/Library token=<REDACTED> <REDACTED_EMAIL>",
+  );
+  assert.equal(logs.redactionCount, 3);
+});
+
 test("one-call Input integration owns discovery and lifecycle paths", async () => {
   const root = await mkdtemp("/tmp/wlb-integration-");
   class FixtureApp extends EventEmitter {
@@ -649,6 +703,20 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
           },
         }),
       },
+      permissionsAuthority: {
+        readStatus: () => ({
+          platform: "darwin",
+          requiredPermission: "input-monitoring",
+          granted: true,
+          checkedDevicePaths: [],
+        }),
+      },
+      firmwareAuthority: {
+        readStatus: () => ({ updateAvailable: false, release: null }),
+      },
+      logsAuthority: {
+        readLogs: () => [],
+      },
     },
     deviceKitVersion: "0.1.29-integration",
     bridgeVersion: "0.1.0-integration",
@@ -672,6 +740,9 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
   );
   assert.ok(integration.capabilities.includes("input.presets.snapshot.v1"));
   assert.ok(integration.capabilities.includes("input.appsense.runtime.v1"));
+  assert.ok(integration.capabilities.includes("input.permissions.status.v1"));
+  assert.ok(integration.capabilities.includes("input.firmware.status.v1"));
+  assert.ok(integration.capabilities.includes("input.logs.snapshot.v1"));
   assert.equal(app.listenerCount("before-quit"), 1);
   await integration.stop();
   assert.equal(app.listenerCount("before-quit"), 0);

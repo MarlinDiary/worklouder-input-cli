@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouder-input-operations-model",
+  "inputVersion": "0.18.0",
+  "source": {
+    "asarPath": "/Applications/input.app/Contents/Resources/app.asar",
+    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
+    "mainRelativePath": "dist-electron/main/index.js",
+    "mainSha256": "7c16191956acb8d0d89c50eb940dc9b757bf6966b19c56499ca2d60d8743154a",
+    "updateRendererRelativePath": "dist/assets/Main-t727T3s1.js",
+    "updateRendererSha256": "5e3daafb76372722cd4a1d65d338ed04fef618f7205acb40c84f537e4a52cf06",
+    "deviceConfigRendererRelativePath": "dist/assets/device_config_data-BMUs-0m4.js",
+    "deviceConfigRendererSha256": "c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e",
+    "deviceKitVersion": "0.1.29",
+    "deviceKitIndexSha256": "c0c25fce60054c8bee49e71dd31e2e38ffc2edade02a825191991bcd9f413729",
+    "darwinPermissionsAddonSha256": "86fc0ee18b2152dca382250627426a1b2722562cd992c0c1ae32ba042b759c6a"
+  },
+  "permissions": {
+    "mainMethodOffset": 71349,
+    "deviceKitClassOffset": 510565,
+    "darwinCheckOffset": 511212,
+    "darwinNativeCallOffset": 511484,
+    "mainCall": "ApplicationService.checkAppPermissions(devicePaths)",
+    "deviceKitCall": "WLPermissions.check(devicePaths)",
+    "darwinMeaning": "permissions.node hasInputMonitoringPermission for the Input process",
+    "linuxMeaning": "R_OK and W_OK for every unique supplied HID path",
+    "windowsMeaning": "true",
+    "accessibilitySeparateCheckFound": false,
+    "bridgeCapability": "input.permissions.status.v1"
+  },
+  "firmwareRead": {
+    "mainServiceClassOffset": 188230,
+    "checkMethodOffset": 188634,
+    "latestReleaseMethodOffset": 188960,
+    "flashMethodOffset": 189059,
+    "updateInfoReadOffset": 12506,
+    "releaseFields": ["version", "fetchedAt", "changeLog", "downloadUrl"],
+    "assetSelection": "first .bin asset from the device firmware repository",
+    "bridgeCapability": "input.firmware.status.v1",
+    "mutationInReadCapability": false
+  },
+  "firmwareUpdateWorkflow": {
+    "backupOffset": 15693,
+    "bootloaderOffset": 13429,
+    "flashOffset": 14683,
+    "restoreOffset": 15560,
+    "orderedSteps": [
+      "backup every non-empty device file",
+      "download Input-selected release asset",
+      "enter and rediscover bootloader",
+      "flash through Input DeviceFlashService/WLDeviceProgrammer",
+      "rediscover the original devicePid",
+      "restore changed backup files",
+      "read firmware and configuration post-state"
+    ],
+    "highLevelMainServiceMethodFound": false,
+    "cliMutationBoundary": "optional injected Input-owned high-level authority; no duplicated driver or programmer"
+  },
+  "logs": {
+    "mainReadMethodOffset": 80661,
+    "authority": "WindowService.getWindowsLogs in-memory ring",
+    "ringLimit": 5000,
+    "bridgeCapability": "input.logs.snapshot.v1",
+    "sanitizedBeforeTransport": true
+  },
+  "reset": {
+    "rendererResetHookOffset": 10224466,
+    "classification": "renderer state/default-layout flow rather than a standalone main-process reset service",
+    "highLevelMainServiceMethodFound": false
+  }
+}

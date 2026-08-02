@@ -8,6 +8,7 @@ artifacts.
 worklouderctl --json schema list
 worklouderctl --json schema show command-envelope-v1
 worklouderctl --json schema show configuration-v1
+worklouderctl --json schema show input-operations-v1
 worklouderctl --json schema show transaction-v1
 worklouderctl --json schema show error-v1
 ```
@@ -22,6 +23,7 @@ use JSON Schema Draft 2020-12.
 | `configuration-v1` | Codex settings, Codex Agent Keys, Input device configuration, and Input host settings snapshots |
 | `transaction-v1` | coordinated plan, transaction receipt, and private backup catalog |
 | `error-v1` | typed JSON error written to stderr |
+| `input-operations-v1` | Input permission/firmware status and sanitized diagnostic log bundle |
 
 Schemas are additive within a version. A field removal, changed meaning, or
 stricter accepted value creates a new registry name and `$id`. Unknown

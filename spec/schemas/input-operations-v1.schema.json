@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worklouderctl.dev/schemas/input-operations-v1.schema.json",
+  "title": "WorkLouderCTL Input operations v1",
+  "oneOf": [
+    { "$ref": "#/$defs/permissions" },
+    { "$ref": "#/$defs/firmware" },
+    { "$ref": "#/$defs/logBundle" }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "device": {
+      "type": "object",
+      "required": ["devicePid", "deviceType", "layoutType", "connectionType", "isUsbConnection"]
+    },
+    "permissions": {
+      "type": "object",
+      "required": ["schemaVersion", "kind", "adapter", "inputAppVersion", "deviceKitVersion", "device", "permission"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-input-permissions-status" },
+        "adapter": { "const": "input-companion-bridge-v1" },
+        "inputAppVersion": { "type": "string" },
+        "deviceKitVersion": { "type": "string" },
+        "device": { "$ref": "#/$defs/device" },
+        "permission": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["platform", "requiredPermission", "granted", "checkedDevicePaths"],
+          "properties": {
+            "platform": { "type": "string", "minLength": 1, "maxLength": 32 },
+            "requiredPermission": { "enum": ["input-monitoring", "hid-read-write", "none"] },
+            "granted": { "type": "boolean" },
+            "checkedDevicePaths": { "type": "array", "items": { "type": "string" }, "maxItems": 256 }
+          }
+        }
+      }
+    },
+    "firmware": {
+      "type": "object",
+      "required": ["schemaVersion", "kind", "adapter", "inputAppVersion", "deviceKitVersion", "device", "status", "update", "warnings"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-input-firmware-status" },
+        "adapter": { "const": "input-companion-bridge-v1" },
+        "inputAppVersion": { "type": "string" },
+        "deviceKitVersion": { "type": "string" },
+        "device": { "$ref": "#/$defs/device" },
+        "status": { "type": "object" },
+        "update": {
+          "type": "object",
+          "required": ["updateAvailable", "release"],
+          "properties": {
+            "updateAvailable": { "type": ["boolean", "null"] },
+            "release": {
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["version", "fetchedAt", "downloadUrl", "changeLog"],
+                  "properties": {
+                    "version": { "type": "string", "minLength": 1 },
+                    "fetchedAt": { "type": "integer", "minimum": 0 },
+                    "downloadUrl": { "type": "string", "pattern": "^https?://" },
+                    "changeLog": { "type": ["string", "null"] }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "logBundleFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relativePath", "size", "sha256"],
+      "properties": {
+        "relativePath": { "enum": ["logs.json", "logs.txt"] },
+        "size": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "logBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "adapter", "inputAppVersion", "sanitized", "sourceEntryCount", "exportedEntryCount", "truncated", "redactionCount", "files"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-input-log-bundle" },
+        "adapter": { "const": "input-companion-bridge-v1" },
+        "inputAppVersion": { "type": "string" },
+        "sanitized": { "const": true },
+        "sourceEntryCount": { "type": "integer", "minimum": 0 },
+        "exportedEntryCount": { "type": "integer", "minimum": 0, "maximum": 5000 },
+        "truncated": { "type": "boolean" },
+        "redactionCount": { "type": "integer", "minimum": 0 },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/logBundleFile" }, "minItems": 2, "maxItems": 2 }
+      }
+    }
+  }
+}

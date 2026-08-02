@@ -86,6 +86,9 @@ Protocol version 1 defines:
 - `input.host-settings.snapshot`
 - `input.presets.snapshot`
 - `input.appsense.runtime`
+- `input.permissions.status`
+- `input.firmware.status`
+- `input.logs.snapshot`
 
 File content uses base64 inside JSON. Device SHA-1 and host SHA-256 remain
 separate fields so a CLI export can independently verify both authorities.
@@ -125,12 +128,23 @@ raw selected profile/layer status. The one-call integration delegates to
 Input 0.18.0 `nativeService.getWindowInFocus`, `focusAppService`, and the
 existing device session; the CLI does not synthesize focus or control a GUI.
 
+`input.permissions.status` delegates to Input's installed permission service and
+reports the exact platform meaning of its single boolean. `input.firmware.status`
+delegates update compatibility and release selection to Input's installed
+firmware service but never flashes. `input.logs.snapshot` returns at most 5,000
+newest in-memory renderer entries, with home paths, email addresses, and common
+credential forms redacted before bridge transport. Each capability is advertised
+only when its matching Input-owned authority is available.
+
 ```sh
 worklouderctl input config snapshot --output config-snapshot.json
 worklouderctl device config snapshot --output config-snapshot.json
 worklouderctl device config validate --input config-snapshot.json
 worklouderctl device config validate --input config-snapshot.json \
   --expected-revision REVISION
+worklouderctl input permissions
+worklouderctl input firmware check
+worklouderctl input logs collect --output input-log-bundle
 ```
 
 The first command reads Input's current cache with no bridge/device transport

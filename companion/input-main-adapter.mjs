@@ -19,6 +19,8 @@ const MAX_CONFIG_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_CONFIG_TOTAL_BYTES = 32 * 1024 * 1024;
 const MAX_PRESETS = 1024;
 const MAX_PRESET_CATALOG_BYTES = 32 * 1024 * 1024;
+const MAX_LOG_ENTRIES = 5000;
+const MAX_LOG_MESSAGE_BYTES = 8192;
 
 export function createInputMainAdapter({
   devicesCommManager,
@@ -27,6 +29,9 @@ export function createInputMainAdapter({
   hostSettingsAuthority,
   presetCatalogAuthority,
   appsenseRuntimeAuthority,
+  permissionsAuthority,
+  firmwareAuthority,
+  logsAuthority,
 }) {
   if (
     !devicesCommManager ||
@@ -69,6 +74,25 @@ export function createInputMainAdapter({
       typeof appsenseRuntimeAuthority.readState !== "function")
   ) {
     throw new TypeError("appsenseRuntimeAuthority.readState must be a function");
+  }
+  if (
+    permissionsAuthority !== undefined &&
+    (!permissionsAuthority ||
+      typeof permissionsAuthority.readStatus !== "function")
+  ) {
+    throw new TypeError("permissionsAuthority.readStatus must be a function");
+  }
+  if (
+    firmwareAuthority !== undefined &&
+    (!firmwareAuthority || typeof firmwareAuthority.readStatus !== "function")
+  ) {
+    throw new TypeError("firmwareAuthority.readStatus must be a function");
+  }
+  if (
+    logsAuthority !== undefined &&
+    (!logsAuthority || typeof logsAuthority.readLogs !== "function")
+  ) {
+    throw new TypeError("logsAuthority.readLogs must be a function");
   }
   const idempotencyCache = new Map();
   const hostSettingsIdempotencyCache = new Map();
@@ -616,7 +640,217 @@ export function createInputMainAdapter({
       };
     };
   }
+  if (permissionsAuthority) {
+    adapter.getPermissionsStatus = async ({ deviceId = null }) => {
+      const device = selectDevice(deviceId);
+      const status = normalizePermissionsStatus(
+        await permissionsAuthority.readStatus({ device }),
+      );
+      return {
+        schemaVersion: 1,
+        kind: "worklouder-input-permissions-status",
+        deviceKitVersion,
+        device: publicDevice(device.info),
+        permission: status,
+      };
+    };
+  }
+  if (firmwareAuthority) {
+    adapter.getFirmwareStatus = async ({ deviceId = null }) => {
+      const device = selectDevice(deviceId);
+      const [deviceStatus, update] = await Promise.all([
+        common(device),
+        firmwareAuthority.readStatus({ device }),
+      ]);
+      return {
+        schemaVersion: 1,
+        kind: "worklouder-input-firmware-status",
+        ...deviceStatus,
+        update: normalizeFirmwareStatus(update),
+      };
+    };
+  }
+  if (logsAuthority) {
+    adapter.snapshotLogs = async ({ maxEntries = MAX_LOG_ENTRIES }) => {
+      const limit = safeInteger(maxEntries, "maxEntries", 1, MAX_LOG_ENTRIES);
+      const source = await logsAuthority.readLogs({ maxEntries: limit });
+      return normalizeLogsSnapshot(source, limit);
+    };
+  }
   return adapter;
+}
+
+function normalizePermissionsStatus(status) {
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new BridgeError(-32008, "Input permission status was invalid");
+  }
+  const platform = safeBoundedString(status.platform, "permission platform", 32);
+  const requiredPermission = safeBoundedString(
+    status.requiredPermission,
+    "required permission",
+    64,
+  );
+  if (![
+    "input-monitoring",
+    "hid-read-write",
+    "none",
+  ].includes(requiredPermission)) {
+    throw new BridgeError(-32008, "Input required permission was unknown");
+  }
+  if (typeof status.granted !== "boolean") {
+    throw new BridgeError(-32008, "Input permission grant was invalid");
+  }
+  const checkedDevicePaths = Array.isArray(status.checkedDevicePaths)
+    ? [...new Set(status.checkedDevicePaths.map((path) =>
+      safeBoundedString(path, "checked device path", 4096),
+    ))].sort()
+    : [];
+  if (checkedDevicePaths.length > 256) {
+    throw new BridgeError(-32008, "Input permission path list was too large");
+  }
+  return { platform, requiredPermission, granted: status.granted, checkedDevicePaths };
+}
+
+function normalizeFirmwareStatus(status) {
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new BridgeError(-32008, "Input firmware status was invalid");
+  }
+  if (
+    status.updateAvailable !== null &&
+    typeof status.updateAvailable !== "boolean"
+  ) {
+    throw new BridgeError(-32008, "Input firmware update availability was invalid");
+  }
+  let release = null;
+  if (status.release !== null && status.release !== undefined) {
+    if (typeof status.release !== "object" || Array.isArray(status.release)) {
+      throw new BridgeError(-32008, "Input firmware release was invalid");
+    }
+    release = {
+      version: safeBoundedString(status.release.version, "firmware version", 128),
+      fetchedAt: safeInteger(
+        status.release.fetchedAt,
+        "firmware fetchedAt",
+        0,
+        Number.MAX_SAFE_INTEGER,
+      ),
+      downloadUrl: safeHttpUrl(status.release.downloadUrl, "firmware download URL"),
+      changeLog: optionalBoundedString(
+        status.release.changeLog,
+        "firmware change log",
+        1024 * 1024,
+      ),
+    };
+  }
+  if (status.updateAvailable === true && release === null) {
+    throw new BridgeError(-32008, "Input reported an update without release metadata");
+  }
+  return { updateAvailable: status.updateAvailable, release };
+}
+
+function normalizeLogsSnapshot(source, limit) {
+  if (!Array.isArray(source)) {
+    throw new BridgeError(-32008, "Input logs were not an array");
+  }
+  const selected = source.slice(-limit);
+  let redactionCount = 0;
+  const entries = selected.map((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new BridgeError(-32008, "Input log entry was invalid");
+    }
+    const message = redactLogMessage(
+      safeBoundedString(entry.message, "log message", MAX_LOG_MESSAGE_BYTES),
+    );
+    redactionCount += message.redactionCount;
+    return {
+      time: safeBoundedString(entry.time, "log timestamp", 128),
+      level: safeBoundedString(entry.level, "log level", 32).toLowerCase(),
+      message: message.value,
+    };
+  });
+  return {
+    schemaVersion: 1,
+    kind: "worklouder-input-log-snapshot",
+    sanitized: true,
+    sourceEntryCount: source.length,
+    truncated: source.length > selected.length,
+    redactionCount,
+    entries,
+  };
+}
+
+function redactLogMessage(value) {
+  let redactionCount = 0;
+  const replace = (pattern, replacement) => {
+    value = value.replace(pattern, (...args) => {
+      redactionCount += 1;
+      return typeof replacement === "function" ? replacement(...args) : replacement;
+    });
+  };
+  replace(/\/Users\/[^/\s"']+/g, "$HOME");
+  replace(/[A-Za-z]:\\Users\\[^\\\s"']+/g, "$HOME");
+  replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "<REDACTED_EMAIL>");
+  replace(/\bBearer\s+[^\s,;]+/gi, "Bearer <REDACTED>");
+  replace(
+    /\b(authorization|token|api[_-]?key|password|secret|device[_-]?id|serial)(\s*[:=]\s*)([^\s,;]+)/gi,
+    (_match, name, separator) => `${name}${separator}<REDACTED>`,
+  );
+  replace(
+    /([?&](?:token|api[_-]?key|password|secret)=)[^&#\s]+/gi,
+    "$1<REDACTED>",
+  );
+  replace(
+    /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi,
+    "<REDACTED_UUID>",
+  );
+  return { value, redactionCount };
+}
+
+function safeBoundedString(value, label, maxBytes) {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    Buffer.byteLength(value, "utf8") > maxBytes ||
+    value.includes("\0")
+  ) {
+    throw new BridgeError(-32008, `${label} was invalid`);
+  }
+  return value;
+}
+
+function optionalBoundedString(value, label, maxBytes) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (
+    typeof value !== "string" ||
+    Buffer.byteLength(value, "utf8") > maxBytes ||
+    value.includes("\0")
+  ) {
+    throw new BridgeError(-32008, `${label} was invalid`);
+  }
+  return value;
+}
+
+function safeInteger(value, label, minimum, maximum) {
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new BridgeError(-32602, `${label} was invalid`);
+  }
+  return value;
+}
+
+function safeHttpUrl(value, label) {
+  const url = safeBoundedString(value, label, 8192);
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new BridgeError(-32008, `${label} was invalid`);
+  }
+  if (!["https:", "http:"].includes(parsed.protocol)) {
+    throw new BridgeError(-32008, `${label} used an unsupported protocol`);
+  }
+  return parsed.toString();
 }
 
 function normalizeAppSenseRuntime(runtime, selectedDeviceId) {

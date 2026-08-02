@@ -317,6 +317,45 @@ const adapter = createInputMainAdapter({
       };
     },
   },
+  permissionsAuthority: {
+    async readStatus() {
+      return {
+        platform: "darwin",
+        requiredPermission: "input-monitoring",
+        granted: true,
+        checkedDevicePaths: [],
+      };
+    },
+  },
+  firmwareAuthority: {
+    async readStatus() {
+      return {
+        updateAvailable: true,
+        release: {
+          version: "v0.7.0-fixture",
+          fetchedAt: 1785680000000,
+          changeLog: "Fixture firmware release",
+          downloadUrl: "https://example.test/codex-micro-v0.7.0.bin",
+        },
+      };
+    },
+  },
+  logsAuthority: {
+    async readLogs() {
+      return [
+        {
+          time: "2026-08-03T00:00:00.000Z",
+          level: "info",
+          message: "Input fixture ready at /Users/fixture/Library token=fixture-secret",
+        },
+        {
+          time: "2026-08-03T00:00:01.000Z",
+          level: "warn",
+          message: "fixture@example.test requested diagnostic snapshot",
+        },
+      ];
+    },
+  },
 });
 
 const bridge = await startInputCompanionBridge({

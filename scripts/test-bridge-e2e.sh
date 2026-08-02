@@ -99,12 +99,22 @@ node "$repo/companion/conformance.mjs" \
   --require input.host-settings.restore.v1 \
   --require input.presets.snapshot.v1 \
   --require input.appsense.runtime.v1 \
+  --require input.permissions.status.v1 \
+  --require input.firmware.status.v1 \
+  --require input.logs.snapshot.v1 \
   >"$root/node-conformance.json"
 "$bin" --json bridge --socket "$socket" --token "$token" status \
   >"$root/bridge-status.json"
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" status \
   >"$root/device-status.json"
+"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
+  permissions --device fixture-device >"$root/input-permissions.json"
+"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
+  firmware check --device fixture-device >"$root/input-firmware.json"
+"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
+  logs collect --output "$root/input-logs" --max-entries 2 \
+  >"$root/input-logs-receipt.json"
 "$bin" --json appsense test \
   --bridge-socket "$socket" --bridge-token "$token" \
   --device fixture-device \
@@ -491,6 +501,11 @@ root = pathlib.Path(sys.argv[1])
 conformance = json.loads((root / "node-conformance.json").read_text())
 bridge = json.loads((root / "bridge-status.json").read_text())
 status = json.loads((root / "device-status.json").read_text())
+input_permissions = json.loads((root / "input-permissions.json").read_text())
+input_firmware = json.loads((root / "input-firmware.json").read_text())
+input_logs_receipt = json.loads((root / "input-logs-receipt.json").read_text())
+input_logs_manifest = json.loads((root / "input-logs" / "manifest.json").read_text())
+input_logs = json.loads((root / "input-logs" / "logs.json").read_text())
 appsense_runtime_test = json.loads((root / "appsense-runtime-test.json").read_text())
 appsense_runtime_mismatch = json.loads((root / "appsense-runtime-mismatch.json").read_text())
 files = json.loads((root / "device-files.json").read_text())
@@ -684,8 +699,34 @@ assert "input.host-settings.apply.v1" in bridge["capabilities"]
 assert "input.host-settings.restore.v1" in bridge["capabilities"]
 assert "input.presets.snapshot.v1" in bridge["capabilities"]
 assert "input.appsense.runtime.v1" in bridge["capabilities"]
+assert "input.permissions.status.v1" in bridge["capabilities"]
+assert "input.firmware.status.v1" in bridge["capabilities"]
+assert "input.logs.snapshot.v1" in bridge["capabilities"]
 assert status["adapter"] == "input-companion-bridge-v1"
 assert status["status"]["selectedLayerIndex"] == 2
+assert input_permissions["permission"] == {
+    "platform": "darwin",
+    "requiredPermission": "input-monitoring",
+    "granted": True,
+    "checkedDevicePaths": [],
+}
+assert input_firmware["status"]["firmwareVersion"] == "v0.6.0-fixture"
+assert input_firmware["update"]["updateAvailable"] is True
+assert input_firmware["update"]["release"]["version"] == "v0.7.0-fixture"
+assert input_logs_receipt["output"] == str(root / "input-logs")
+assert input_logs_manifest["sanitized"] is True
+assert input_logs_manifest["exportedEntryCount"] == 2
+assert input_logs_manifest["redactionCount"] == 3
+assert input_logs["entries"][0]["message"] == (
+    "Input fixture ready at $HOME/Library token=<REDACTED>"
+)
+assert input_logs["entries"][1]["message"].startswith("<REDACTED_EMAIL>")
+assert (root / "input-logs").stat().st_mode & 0o777 == 0o700
+for record in input_logs_manifest["files"]:
+    path = root / "input-logs" / record["relativePath"]
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert len(path.read_bytes()) == record["size"]
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == record["sha256"]
 assert appsense_runtime_test["matched"] is True
 assert appsense_runtime_test["samples"] == 1
 assert appsense_runtime_test["state"]["runtime"]["collecting"] is True
@@ -1326,6 +1367,9 @@ print("semantic_appsense_link_set_unlink=verified")
 print("semantic_appsense_apply_readback_restore=verified")
 print("semantic_appsense_runtime_focus_layer=verified")
 print("semantic_appsense_runtime_mismatch=typed-conflict")
+print("tier4_input_permission_status=verified")
+print("tier4_firmware_check=verified")
+print("tier4_sanitized_log_bundle=verified")
 print("semantic_control_list=verified")
 print("semantic_control_show=verified")
 print("semantic_control_set=verified")

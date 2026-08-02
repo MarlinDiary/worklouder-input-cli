@@ -77,6 +77,15 @@ This read-only method returns collector/registration state, the native focused
 application, the last payload forwarded to firmware, and the selected device
 profile/layer status. It does not focus an application or open an Input window.
 
+`permissionsAuthority.readStatus()`, `firmwareAuthority.readStatus()`, and
+`logsAuthority.readLogs()` enable the optional Tier 4 read capabilities
+`input.permissions.status.v1`, `input.firmware.status.v1`, and
+`input.logs.snapshot.v1`. The one-call integration derives them from
+`ApplicationService.checkAppPermissions`, `DeviceFlashService`, and
+`WindowService.getWindowsLogs` when those exact released services are supplied.
+Logs are bounded and sanitized by the adapter before transport. Firmware status
+is read-only; flashing requires a separate high-level Input-owned authority.
+
 The reference adapter owns the surrounding transaction: validate every byte
 and digest, capture a pre-mutation snapshot, compare the live revision, invoke
 the writer, read back the complete revision, and automatically restore and
@@ -98,7 +107,10 @@ node companion/conformance.mjs \
   --require input.host-settings.apply.v1 \
   --require input.host-settings.restore.v1 \
   --require input.presets.snapshot.v1 \
-  --require input.appsense.runtime.v1
+  --require input.appsense.runtime.v1 \
+  --require input.permissions.status.v1 \
+  --require input.firmware.status.v1 \
+  --require input.logs.snapshot.v1
 ```
 
 Nonstandard paths can be supplied with `--socket` and `--token`, or with
