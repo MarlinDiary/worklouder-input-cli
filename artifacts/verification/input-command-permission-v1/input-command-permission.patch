@@ -1,0 +1,2313 @@
+diff --git a/README.md b/README.md
+index 626f92d..8bae099 100644
+--- a/README.md
++++ b/README.md
+@@ -131,6 +131,11 @@ worklouderctl codex runtime recover [--timeout-seconds 15]
+ worklouderctl input inspect [--device DEVICE_ID]
+ worklouderctl input export --output BACKUP_DIRECTORY
+ worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
++worklouderctl input permission command snapshot --output HOST_SETTINGS.json
++worklouderctl input permission command get --input HOST_SETTINGS.json
++worklouderctl input permission command set --input HOST_SETTINGS.json enabled --output HOST_SETTINGS_ENABLED.json
++worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json
++worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
+ worklouderctl bridge status
+ worklouderctl device --transport bridge status
+ worklouderctl device --transport bridge files --recursive
+@@ -395,6 +400,26 @@ to `KC_NONE` and removes group membership while preserving the group container.
+ Smart-only candidates preserve the exact `keymap.json` bytes. Command actions
+ report `requiresCommandPermission`; the host gate remains Input's
+ `smartActionCmdEnabled` setting and is not silently changed by definition CRUD.
++`input permission command` snapshots all three Input host-setting booleans and
++changes only this gate. Its bridge transaction preserves the analytics fields,
++uses revision CAS and idempotency, verifies complete DTO readback, and restores
++the pre-write settings automatically after a failed readback.
++
++```console
++worklouderctl input permission command snapshot --output host-settings.json
++worklouderctl input permission command get --input host-settings.json
++worklouderctl input permission command set --input host-settings.json enabled \
++  --output host-settings-enabled.json
++worklouderctl input permission command apply \
++  --input host-settings-enabled.json --backup host-settings-before-apply.json \
++  --expected-revision REVISION --idempotency-key enable-command-actions
++worklouderctl input permission command restore \
++  --input host-settings.json --backup host-settings-before-restore.json \
++  --expected-revision CURRENT_REVISION --idempotency-key restore-command-actions
++```
++
++The CLI does not write `input_storage.json`; Input remains responsible for
++persistence and command execution.
+ 
+ The repository includes an executable Input-main reference server, a service
+ adapter for the Input 0.18.0 service shape, authentication tests, and a
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index a0fc0fd..20d7c35 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -100,6 +100,11 @@ worklouderctl codex runtime recover [--timeout-seconds 15]
+ worklouderctl input inspect [--device DEVICE_ID]
+ worklouderctl input export --output BACKUP_DIRECTORY
+ worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
++worklouderctl input permission command snapshot --output HOST_SETTINGS.json
++worklouderctl input permission command get --input HOST_SETTINGS.json
++worklouderctl input permission command set --input HOST_SETTINGS.json enabled --output HOST_SETTINGS_ENABLED.json
++worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json
++worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
+ worklouderctl bridge status
+ worklouderctl device --transport bridge status
+ worklouderctl device --transport bridge files --recursive
+@@ -332,6 +337,24 @@ groups。Action ID 按 maximum-ID-plus-one 分配并从 1 开始；group ID 从
+ membership，并保留 group container。只修改 Smart Action 的 candidate 会保持
+ `keymap.json` 原字节不变。Command action 会显式报告 `requiresCommandPermission`；
+ Input 的 `smartActionCmdEnabled` host permission 不会被 definition CRUD 隐式修改。
++`input permission command` 会 snapshot 三个完整的 Input host-setting boolean，
++只修改 command gate；bridge transaction 保留 analytics siblings，并覆盖 revision
++CAS、idempotency、完整 DTO readback 与失败后的自动 rollback。
++
++```console
++worklouderctl input permission command snapshot --output host-settings.json
++worklouderctl input permission command get --input host-settings.json
++worklouderctl input permission command set --input host-settings.json enabled \
++  --output host-settings-enabled.json
++worklouderctl input permission command apply \
++  --input host-settings-enabled.json --backup host-settings-before-apply.json \
++  --expected-revision REVISION --idempotency-key enable-command-actions
++worklouderctl input permission command restore \
++  --input host-settings.json --backup host-settings-before-restore.json \
++  --expected-revision CURRENT_REVISION --idempotency-key restore-command-actions
++```
++
++CLI 不直接写 `input_storage.json`；持久化与 command execution 继续由 Input 负责。
+ 
+ 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
+ adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
+diff --git a/companion/README.md b/companion/README.md
+index d967416..a802953 100644
+--- a/companion/README.md
++++ b/companion/README.md
+@@ -17,6 +17,8 @@ const companionBridge = await installInputCompanionBridge({
+   app,
+   services: {
+     devicesCommManager,
++    applicationService,
++    analyticsService,
+     configurationWriter: {
+       async replaceConfiguration({ device, files, operation, targetRevision }) {
+         // Route the complete file set through Input's existing queue and
+@@ -47,6 +49,16 @@ queue and finish any cache/database synchronization before returning. Only then
+ does the bridge advertise `device.config.apply.v1` and
+ `device.config.restore.v1`.
+ 
++When `applicationService` provides Input's existing `getAppSettings()` and
++`saveAppSettings()` methods, the integration also advertises
++`input.host-settings.snapshot.v1`, `input.host-settings.apply.v1`, and
++`input.host-settings.restore.v1`. It reuses the current model instance,
++replaces the complete three-boolean DTO through Input, runs the existing
++analytics-consent refresh when available, and verifies CAS/readback/rollback.
++It does not edit Input's LokiJS file directly. A custom `hostSettingsAuthority`
++with `readSettings()` and `replaceSettings()` can be injected by later Input
++versions.
++
+ The reference adapter owns the surrounding transaction: validate every byte
+ and digest, capture a pre-mutation snapshot, compare the live revision, invoke
+ the writer, read back the complete revision, and automatically restore and
+@@ -63,7 +75,10 @@ node companion/conformance.mjs \
+   --require device.files.list.v1 \
+   --require device.files.read.v1 \
+   --require device.config.apply.v1 \
+-  --require device.config.restore.v1
++  --require device.config.restore.v1 \
++  --require input.host-settings.snapshot.v1 \
++  --require input.host-settings.apply.v1 \
++  --require input.host-settings.restore.v1
+ ```
+ 
+ Nonstandard paths can be supplied with `--socket` and `--token`, or with
+@@ -81,5 +96,7 @@ The first command checks server, adapter, lifecycle, authentication, and path
+ ownership. The second starts an isolated fixture and verifies the Node
+ conformance command plus the Rust CLI handshake, live status, file list, exact
+ export, dual-hash readback, apply, idempotent replay, stale-revision rejection,
+-restore, and final revision recovery. All mutation conformance runs against the
+-isolated fixture writer.
++restore, and final revision recovery. It also verifies host-settings snapshot,
++offline command-permission candidate generation with analytics-field
++preservation, apply/replay/readback, and restore. All mutation conformance runs
++against isolated fixture authorities.
+diff --git a/companion/fixture-server.mjs b/companion/fixture-server.mjs
+index 753902f..5a2e679 100644
+--- a/companion/fixture-server.mjs
++++ b/companion/fixture-server.mjs
+@@ -178,6 +178,12 @@ const files = new Map([
+   ],
+ ]);
+ 
++let hostSettings = {
++  showedAnalyticsPopUp: true,
++  analyticsConsented: false,
++  smartActionCmdEnabled: false,
++};
++
+ const device = {
+   id: "fixture-device",
+   info: {
+@@ -223,6 +229,14 @@ const adapter = createInputMainAdapter({
+       }
+     },
+   },
++  hostSettingsAuthority: {
++    async readSettings() {
++      return { ...hostSettings };
++    },
++    async replaceSettings(settings) {
++      hostSettings = { ...settings };
++    },
++  },
+ });
+ 
+ const bridge = await startInputCompanionBridge({
+diff --git a/companion/index.mjs b/companion/index.mjs
+index 999b910..1d96514 100644
+--- a/companion/index.mjs
++++ b/companion/index.mjs
+@@ -7,7 +7,11 @@ export {
+   CONFIG_REVISION_ALGORITHM,
+   CONFIG_SNAPSHOT_KIND,
+   CONFIG_SNAPSHOT_SCHEMA_VERSION,
++  HOST_SETTINGS_KIND,
++  HOST_SETTINGS_REVISION_ALGORITHM,
++  HOST_SETTINGS_SCHEMA_VERSION,
+   createInputMainAdapter,
++  hostSettingsRevision,
+ } from "./input-main-adapter.mjs";
+ export { installInputCompanionBridge } from "./input-main-integration.mjs";
+ export { inspectInputCompanionBridge } from "./conformance.mjs";
+diff --git a/companion/input-main-adapter.mjs b/companion/input-main-adapter.mjs
+index cbfb23f..80496d5 100644
+--- a/companion/input-main-adapter.mjs
++++ b/companion/input-main-adapter.mjs
+@@ -5,6 +5,10 @@ export const CONFIG_SNAPSHOT_SCHEMA_VERSION = 1;
+ export const CONFIG_SNAPSHOT_KIND = "worklouder-input-config-snapshot";
+ export const CONFIG_REVISION_ALGORITHM =
+   "sha256:path-u32be-path-bytes-size-u64be-content-v1";
++export const HOST_SETTINGS_SCHEMA_VERSION = 1;
++export const HOST_SETTINGS_KIND = "worklouder-input-host-settings";
++export const HOST_SETTINGS_REVISION_ALGORITHM =
++  "sha256:input-host-settings-three-booleans-v1";
+ 
+ const MAX_CONFIG_FILES = 4096;
+ const MAX_CONFIG_FILE_BYTES = 16 * 1024 * 1024;
+@@ -14,6 +18,7 @@ export function createInputMainAdapter({
+   devicesCommManager,
+   deviceKitVersion,
+   configurationWriter,
++  hostSettingsAuthority,
+ }) {
+   if (
+     !devicesCommManager ||
+@@ -33,7 +38,18 @@ export function createInputMainAdapter({
+       "configurationWriter.replaceConfiguration must be a function",
+     );
+   }
++  if (
++    hostSettingsAuthority !== undefined &&
++    (!hostSettingsAuthority ||
++      typeof hostSettingsAuthority.readSettings !== "function" ||
++      typeof hostSettingsAuthority.replaceSettings !== "function")
++  ) {
++    throw new TypeError(
++      "hostSettingsAuthority must provide readSettings and replaceSettings",
++    );
++  }
+   const idempotencyCache = new Map();
++  const hostSettingsIdempotencyCache = new Map();
+ 
+   const selectDevice = (deviceId) => {
+     const devices = devicesCommManager
+@@ -66,10 +82,7 @@ export function createInputMainAdapter({
+       device.rpcService.getFirmwareVersion(),
+       device.rpcService.getDeviceStatus(),
+     ]);
+-    if (
+-      status.firmwareVersion &&
+-      status.firmwareVersion !== firmwareVersion
+-    ) {
++    if (status.firmwareVersion && status.firmwareVersion !== firmwareVersion) {
+       throw new BridgeError(
+         -32008,
+         "sys.version and device.status firmware versions differed",
+@@ -147,7 +160,10 @@ export function createInputMainAdapter({
+       await device.rpcService.getFileList({ recursive: true }),
+     );
+     if (listingIdentity(listed) !== listingIdentity(secondListing)) {
+-      throw new BridgeError(-32006, "device configuration changed during snapshot");
++      throw new BridgeError(
++        -32006,
++        "device configuration changed during snapshot",
++      );
+     }
+     return {
+       schemaVersion: CONFIG_SNAPSHOT_SCHEMA_VERSION,
+@@ -171,7 +187,10 @@ export function createInputMainAdapter({
+     const expected = safeSha256(expectedRevision, "expected revision");
+     const device = selectDevice(deviceId);
+     if (String(device.id) !== target.deviceId) {
+-      throw new BridgeError(-32602, "configuration deviceId did not match request");
++      throw new BridgeError(
++        -32602,
++        "configuration deviceId did not match request",
++      );
+     }
+     const requestDigest = mutationRequestDigest({
+       operation,
+@@ -253,18 +272,142 @@ export function createInputMainAdapter({
+           );
+         }
+       } catch (rollbackError) {
+-        throw new BridgeError(-32008, "configuration mutation and rollback failed", {
++        throw new BridgeError(
++          -32008,
++          "configuration mutation and rollback failed",
++          {
++            operation,
++            beforeRevision: before.revision,
++            targetRevision: target.revision,
++            rollbackRevision,
++            mutationError: errorMessage(mutationError),
++            rollbackError: errorMessage(rollbackError),
++          },
++        );
++      }
++      throw new BridgeError(
++        -32008,
++        "configuration mutation failed and was rolled back",
++        {
+           operation,
+           beforeRevision: before.revision,
+           targetRevision: target.revision,
+           rollbackRevision,
++          rollbackPerformed: true,
+           mutationError: errorMessage(mutationError),
+-          rollbackError: errorMessage(rollbackError),
+-        });
++        },
++      );
++    }
++  };
++
++  const captureHostSettings = async () => {
++    const settings = normalizeHostSettings(
++      await hostSettingsAuthority.readSettings(),
++    );
++    return hostSettingsSnapshot(settings);
++  };
++
++  const runHostSettingsMutation = async ({
++    operation,
++    expectedRevision,
++    idempotencyKey,
++    candidate,
++  }) => {
++    const target = validateHostSettingsSnapshot(candidate);
++    const expected = safeSha256(expectedRevision, "expected revision");
++    const requestDigest = mutationRequestDigest({
++      operation: `host-settings-${operation}`,
++      deviceId: "input-host-settings",
++      expectedRevision: expected,
++      targetRevision: target.revision,
++    });
++    const cached = hostSettingsIdempotencyCache.get(idempotencyKey);
++    if (cached) {
++      if (cached.requestDigest !== requestDigest) {
++        throw new BridgeError(
++          -32602,
++          "idempotency key was reused with a different mutation",
++        );
++      }
++      return { ...cached.result, idempotentReplay: true };
++    }
++
++    const before = await captureHostSettings();
++    if (before.revision !== expected) {
++      throw new BridgeError(-32005, "host settings revision conflict", {
++        expectedRevision: expected,
++        liveRevision: before.revision,
++      });
++    }
++    if (before.revision === target.revision) {
++      const result = hostSettingsMutationResult({
++        operation,
++        idempotencyKey,
++        beforeRevision: before.revision,
++        afterRevision: before.revision,
++        targetRevision: target.revision,
++        changed: false,
++      });
++      cacheMutation(
++        hostSettingsIdempotencyCache,
++        idempotencyKey,
++        requestDigest,
++        result,
++      );
++      return result;
++    }
++
++    try {
++      await hostSettingsAuthority.replaceSettings({ ...target.settings });
++      const after = await captureHostSettings();
++      if (after.revision !== target.revision) {
++        throw new Error(
++          `host settings readback revision ${after.revision} did not match ${target.revision}`,
++        );
++      }
++      const result = hostSettingsMutationResult({
++        operation,
++        idempotencyKey,
++        beforeRevision: before.revision,
++        afterRevision: after.revision,
++        targetRevision: target.revision,
++        changed: true,
++      });
++      cacheMutation(
++        hostSettingsIdempotencyCache,
++        idempotencyKey,
++        requestDigest,
++        result,
++      );
++      return result;
++    } catch (mutationError) {
++      let rollbackRevision = null;
++      try {
++        await hostSettingsAuthority.replaceSettings({ ...before.settings });
++        const restored = await captureHostSettings();
++        rollbackRevision = restored.revision;
++        if (rollbackRevision !== before.revision) {
++          throw new Error(
++            `host settings rollback revision ${rollbackRevision} did not match ${before.revision}`,
++          );
++        }
++      } catch (rollbackError) {
++        throw new BridgeError(
++          -32008,
++          "host settings mutation and rollback failed",
++          {
++            operation,
++            beforeRevision: before.revision,
++            targetRevision: target.revision,
++            rollbackRevision,
++            mutationError: errorMessage(mutationError),
++            rollbackError: errorMessage(rollbackError),
++          },
++        );
+       }
+       throw new BridgeError(
+         -32008,
+-        "configuration mutation failed and was rolled back",
++        "host settings mutation failed and was rolled back",
+         {
+           operation,
+           beforeRevision: before.revision,
+@@ -346,14 +489,20 @@ export function createInputMainAdapter({
+         deviceId !== undefined &&
+         String(deviceId) !== validation.deviceId
+       ) {
+-        throw new BridgeError(-32602, "snapshot deviceId did not match request");
++        throw new BridgeError(
++          -32602,
++          "snapshot deviceId did not match request",
++        );
+       }
+       let liveRevision = null;
+       if (expectedRevision !== null && expectedRevision !== undefined) {
+         const expected = safeSha256(expectedRevision, "expected revision");
+         const live = await captureConfigSnapshot(selectDevice(deviceId));
+         liveRevision = live.revision;
+-        if (live.deviceId !== validation.deviceId || liveRevision !== expected) {
++        if (
++          live.deviceId !== validation.deviceId ||
++          liveRevision !== expected
++        ) {
+           throw new BridgeError(-32005, "device revision conflict", {
+             expectedRevision: expected,
+             liveRevision,
+@@ -401,6 +550,31 @@ export function createInputMainAdapter({
+         candidate: snapshot,
+       });
+   }
++  if (hostSettingsAuthority) {
++    adapter.snapshotHostSettings = async () => captureHostSettings();
++    adapter.applyHostSettings = async ({
++      expectedRevision,
++      idempotencyKey,
++      settings,
++    }) =>
++      runHostSettingsMutation({
++        operation: "apply",
++        expectedRevision,
++        idempotencyKey,
++        candidate: settings,
++      });
++    adapter.restoreHostSettings = async ({
++      expectedRevision,
++      idempotencyKey,
++      snapshot,
++    }) =>
++      runHostSettingsMutation({
++        operation: "restore",
++        expectedRevision,
++        idempotencyKey,
++        candidate: snapshot,
++      });
++  }
+   return adapter;
+ }
+ 
+@@ -445,6 +619,92 @@ function mutationResult({
+   };
+ }
+ 
++function hostSettingsSnapshot(settings) {
++  const normalized = normalizeHostSettings(settings);
++  return {
++    schemaVersion: HOST_SETTINGS_SCHEMA_VERSION,
++    kind: HOST_SETTINGS_KIND,
++    revisionAlgorithm: HOST_SETTINGS_REVISION_ALGORITHM,
++    revision: hostSettingsRevision(normalized),
++    settings: normalized,
++  };
++}
++
++function validateHostSettingsSnapshot(snapshot) {
++  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
++    throw new BridgeError(-32602, "host settings snapshot must be an object");
++  }
++  if (
++    snapshot.schemaVersion !== HOST_SETTINGS_SCHEMA_VERSION ||
++    snapshot.kind !== HOST_SETTINGS_KIND ||
++    snapshot.revisionAlgorithm !== HOST_SETTINGS_REVISION_ALGORITHM
++  ) {
++    throw new BridgeError(-32602, "host settings snapshot header was invalid");
++  }
++  const settings = normalizeHostSettings(snapshot.settings, -32602);
++  const revision = hostSettingsRevision(settings);
++  if (safeSha256(snapshot.revision, "host settings revision") !== revision) {
++    throw new BridgeError(
++      -32602,
++      "host settings revision did not match content",
++    );
++  }
++  return { revision, settings };
++}
++
++function normalizeHostSettings(settings, code = -32008) {
++  if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
++    throw new BridgeError(code, "Input returned invalid host settings");
++  }
++  const normalized = {};
++  for (const field of [
++    "showedAnalyticsPopUp",
++    "analyticsConsented",
++    "smartActionCmdEnabled",
++  ]) {
++    if (typeof settings[field] !== "boolean") {
++      throw new BridgeError(code, `host settings ${field} was not boolean`);
++    }
++    normalized[field] = settings[field];
++  }
++  return normalized;
++}
++
++export function hostSettingsRevision(settings) {
++  return createHash("sha256")
++    .update("worklouder-input-host-settings-revision-v1\0", "utf8")
++    .update(
++      Buffer.from([
++        settings.showedAnalyticsPopUp ? 1 : 0,
++        settings.analyticsConsented ? 1 : 0,
++        settings.smartActionCmdEnabled ? 1 : 0,
++      ]),
++    )
++    .digest("hex");
++}
++
++function hostSettingsMutationResult({
++  operation,
++  idempotencyKey,
++  beforeRevision,
++  afterRevision,
++  targetRevision,
++  changed,
++}) {
++  return {
++    schemaVersion: 1,
++    kind: "worklouder-input-host-settings-mutation",
++    operation,
++    idempotencyKey,
++    idempotentReplay: false,
++    changed,
++    rollbackPerformed: false,
++    beforeRevision,
++    afterRevision,
++    targetRevision,
++  };
++}
++
+ function mutationRequestDigest({
+   operation,
+   deviceId,
+@@ -545,11 +805,17 @@ function validateConfigSnapshot(snapshot) {
+     }
+     const deviceChecksumSha1 = safeSha1(file.deviceChecksumSha1, -32602);
+     if (createHash("sha1").update(bytes).digest("hex") !== deviceChecksumSha1) {
+-      throw new BridgeError(-32602, "snapshot file SHA-1 did not match content");
++      throw new BridgeError(
++        -32602,
++        "snapshot file SHA-1 did not match content",
++      );
+     }
+     const sha256 = safeSha256(file.sha256, "snapshot file SHA-256");
+     if (createHash("sha256").update(bytes).digest("hex") !== sha256) {
+-      throw new BridgeError(-32602, "snapshot file SHA-256 did not match content");
++      throw new BridgeError(
++        -32602,
++        "snapshot file SHA-256 did not match content",
++      );
+     }
+     return { relativePath, bytes };
+   });
+diff --git a/companion/input-main-bridge.mjs b/companion/input-main-bridge.mjs
+index 625175b..2a51d62 100644
+--- a/companion/input-main-bridge.mjs
++++ b/companion/input-main-bridge.mjs
+@@ -19,21 +19,29 @@ const METHOD_DEFINITIONS = new Map([
+   ["device.status", ["device.status.v1", "getDeviceStatus"]],
+   ["device.files.list", ["device.files.list.v1", "listFiles"]],
+   ["device.files.read", ["device.files.read.v1", "readFile"]],
++  ["device.config.snapshot", ["device.config.snapshot.v1", "snapshotConfig"]],
++  ["device.config.validate", ["device.config.validate.v1", "validateConfig"]],
++  ["device.config.apply", ["device.config.apply.v1", "applyConfig"]],
++  ["device.config.restore", ["device.config.restore.v1", "restoreConfig"]],
+   [
+-    "device.config.snapshot",
+-    ["device.config.snapshot.v1", "snapshotConfig"],
++    "input.host-settings.snapshot",
++    ["input.host-settings.snapshot.v1", "snapshotHostSettings"],
+   ],
+   [
+-    "device.config.validate",
+-    ["device.config.validate.v1", "validateConfig"],
++    "input.host-settings.apply",
++    ["input.host-settings.apply.v1", "applyHostSettings"],
++  ],
++  [
++    "input.host-settings.restore",
++    ["input.host-settings.restore.v1", "restoreHostSettings"],
+   ],
+-  ["device.config.apply", ["device.config.apply.v1", "applyConfig"]],
+-  ["device.config.restore", ["device.config.restore.v1", "restoreConfig"]],
+ ]);
+ 
+ const MUTATION_METHODS = new Set([
+   "device.config.apply",
+   "device.config.restore",
++  "input.host-settings.apply",
++  "input.host-settings.restore",
+ ]);
+ 
+ export class BridgeError extends Error {
+@@ -65,7 +73,9 @@ export async function startInputCompanionBridge({
+     "bridge.handshake.v1",
+     "bridge.health.v1",
+     ...[...METHOD_DEFINITIONS.values()]
+-      .filter(([, adapterMethod]) => typeof adapter[adapterMethod] === "function")
++      .filter(
++        ([, adapterMethod]) => typeof adapter[adapterMethod] === "function",
++      )
+       .map(([capability]) => capability),
+   ];
+   const sessionId = randomBytes(16).toString("hex");
+@@ -323,6 +333,19 @@ function constantTimeEqual(left, right) {
+ }
+ 
+ function validateMutationParams(method, params) {
++  if (method.startsWith("input.host-settings.")) {
++    validateRevisionAndIdempotency(params);
++    const payload =
++      method === "input.host-settings.apply" ? "settings" : "snapshot";
++    if (
++      !params[payload] ||
++      typeof params[payload] !== "object" ||
++      Array.isArray(params[payload])
++    ) {
++      throw new BridgeError(-32602, payload + " is required");
++    }
++    return;
++  }
+   if (
+     typeof params.deviceId !== "string" ||
+     params.deviceId.length === 0 ||
+@@ -331,6 +354,18 @@ function validateMutationParams(method, params) {
+   ) {
+     throw new BridgeError(-32602, "deviceId is invalid");
+   }
++  validateRevisionAndIdempotency(params);
++  const payload = method === "device.config.apply" ? "config" : "snapshot";
++  if (
++    !params[payload] ||
++    typeof params[payload] !== "object" ||
++    Array.isArray(params[payload])
++  ) {
++    throw new BridgeError(-32602, payload + " is required");
++  }
++}
++
++function validateRevisionAndIdempotency(params) {
+   if (
+     typeof params.expectedRevision !== "string" ||
+     !/^[0-9a-f]{64}$/i.test(params.expectedRevision)
+@@ -345,14 +380,6 @@ function validateMutationParams(method, params) {
+   ) {
+     throw new BridgeError(-32602, "idempotencyKey is invalid");
+   }
+-  const payload = method === "device.config.apply" ? "config" : "snapshot";
+-  if (
+-    !params[payload] ||
+-    typeof params[payload] !== "object" ||
+-    Array.isArray(params[payload])
+-  ) {
+-    throw new BridgeError(-32602, payload + " is required");
+-  }
+ }
+ 
+ function writeKnownError(socket, id, error) {
+diff --git a/companion/input-main-bridge.test.mjs b/companion/input-main-bridge.test.mjs
+index 8d09938..8797b6c 100644
+--- a/companion/input-main-bridge.test.mjs
++++ b/companion/input-main-bridge.test.mjs
+@@ -4,7 +4,10 @@ import { EventEmitter } from "node:events";
+ import { mkdtemp, readFile, stat } from "node:fs/promises";
+ import { createConnection } from "node:net";
+ import test from "node:test";
+-import { createInputMainAdapter } from "./input-main-adapter.mjs";
++import {
++  createInputMainAdapter,
++  hostSettingsRevision,
++} from "./input-main-adapter.mjs";
+ import { startInputCompanionBridge } from "./input-main-bridge.mjs";
+ import { installInputCompanionBridge } from "./input-main-integration.mjs";
+ 
+@@ -146,7 +149,10 @@ test("Input adapter maps the existing connected session", async () => {
+   assert.equal(status.status.firmwareVersion, "v0.6.0");
+   assert.equal(status.status.selectedLayerIndex, 2);
+   assert.equal(files.files[0].relativePath, "keymap.json");
+-  assert.equal(Buffer.from(read.dataBase64, "base64").toString(), keymap.toString());
++  assert.equal(
++    Buffer.from(read.dataBase64, "base64").toString(),
++    keymap.toString(),
++  );
+ });
+ 
+ test("Input adapter snapshots and validates a compare-and-swap revision", async () => {
+@@ -243,10 +249,7 @@ test("Input adapter applies, replays, rejects stale CAS, and restores", async ()
+   const baseline = await adapter.snapshotConfig({
+     deviceId: "device-transaction",
+   });
+-  files.set(
+-    "keymap.json",
+-    Buffer.from('{"version":1,"layer":"candidate"}'),
+-  );
++  files.set("keymap.json", Buffer.from('{"version":1,"layer":"candidate"}'));
+   const candidate = await adapter.snapshotConfig({
+     deviceId: "device-transaction",
+   });
+@@ -342,9 +345,13 @@ test("Input adapter automatically restores the pre-mutation snapshot", async ()
+       },
+     },
+   });
+-  const baseline = await adapter.snapshotConfig({ deviceId: "device-rollback" });
++  const baseline = await adapter.snapshotConfig({
++    deviceId: "device-rollback",
++  });
+   files.set("keymap.json", Buffer.from('{"version":1,"layer":"target"}'));
+-  const candidate = await adapter.snapshotConfig({ deviceId: "device-rollback" });
++  const candidate = await adapter.snapshotConfig({
++    deviceId: "device-rollback",
++  });
+   replaceFileMap(
+     files,
+     baseline.files.map((file) => ({
+@@ -360,11 +367,141 @@ test("Input adapter automatically restores the pre-mutation snapshot", async ()
+       idempotencyKey: "apply-auto-rollback",
+       config: candidate,
+     }),
+-    (error) =>
+-      error.code === -32008 && error.data?.rollbackPerformed === true,
++    (error) => error.code === -32008 && error.data?.rollbackPerformed === true,
+   );
+   assert.deepEqual(operations, ["apply", "automatic-rollback"]);
+-  const restored = await adapter.snapshotConfig({ deviceId: "device-rollback" });
++  const restored = await adapter.snapshotConfig({
++    deviceId: "device-rollback",
++  });
++  assert.equal(restored.revision, baseline.revision);
++});
++
++test("Input adapter applies, replays, rejects stale CAS, and restores host settings", async () => {
++  let settings = {
++    showedAnalyticsPopUp: true,
++    analyticsConsented: false,
++    smartActionCmdEnabled: false,
++  };
++  const replacements = [];
++  const adapter = createInputMainAdapter({
++    devicesCommManager: { getDevices: () => [] },
++    deviceKitVersion: "0.1.29",
++    hostSettingsAuthority: {
++      async readSettings() {
++        return { ...settings };
++      },
++      async replaceSettings(candidate) {
++        replacements.push({ ...candidate });
++        settings = { ...candidate };
++      },
++    },
++  });
++  const baseline = await adapter.snapshotHostSettings();
++  assert.equal(baseline.kind, "worklouder-input-host-settings");
++  assert.equal(baseline.settings.smartActionCmdEnabled, false);
++  assert.match(baseline.revision, /^[0-9a-f]{64}$/);
++
++  const candidate = structuredClone(baseline);
++  candidate.settings.smartActionCmdEnabled = true;
++  candidate.revision = hostSettingsRevision(candidate.settings);
++  const apply = await adapter.applyHostSettings({
++    expectedRevision: baseline.revision,
++    idempotencyKey: "host-settings-apply-1",
++    settings: candidate,
++  });
++  assert.equal(apply.changed, true);
++  assert.equal(apply.idempotentReplay, false);
++  assert.equal(apply.afterRevision, candidate.revision);
++  assert.deepEqual(replacements, [candidate.settings]);
++  assert.equal(settings.showedAnalyticsPopUp, true);
++  assert.equal(settings.analyticsConsented, false);
++
++  const replay = await adapter.applyHostSettings({
++    expectedRevision: baseline.revision,
++    idempotencyKey: "host-settings-apply-1",
++    settings: candidate,
++  });
++  assert.equal(replay.idempotentReplay, true);
++  assert.equal(replacements.length, 1);
++
++  await assert.rejects(
++    adapter.applyHostSettings({
++      expectedRevision: baseline.revision,
++      idempotencyKey: "host-settings-stale",
++      settings: candidate,
++    }),
++    (error) => error.code === -32005,
++  );
++  const restore = await adapter.restoreHostSettings({
++    expectedRevision: candidate.revision,
++    idempotencyKey: "host-settings-restore-1",
++    snapshot: baseline,
++  });
++  assert.equal(restore.changed, true);
++  assert.equal(restore.afterRevision, baseline.revision);
++  assert.equal(settings.smartActionCmdEnabled, false);
++  assert.equal(replacements.length, 2);
++
++  const noOp = await adapter.restoreHostSettings({
++    expectedRevision: baseline.revision,
++    idempotencyKey: "host-settings-restore-no-op",
++    snapshot: baseline,
++  });
++  assert.equal(noOp.changed, false);
++  assert.equal(replacements.length, 2);
++
++  const tampered = structuredClone(baseline);
++  tampered.settings.analyticsConsented = true;
++  await assert.rejects(
++    adapter.applyHostSettings({
++      expectedRevision: baseline.revision,
++      idempotencyKey: "host-settings-tampered",
++      settings: tampered,
++    }),
++    (error) => error.code === -32602,
++  );
++});
++
++test("Input adapter automatically restores host settings after failed readback", async () => {
++  const baselineSettings = {
++    showedAnalyticsPopUp: false,
++    analyticsConsented: true,
++    smartActionCmdEnabled: false,
++  };
++  let settings = { ...baselineSettings };
++  let replacementCount = 0;
++  const adapter = createInputMainAdapter({
++    devicesCommManager: { getDevices: () => [] },
++    deviceKitVersion: "0.1.29",
++    hostSettingsAuthority: {
++      async readSettings() {
++        return { ...settings };
++      },
++      async replaceSettings(candidate) {
++        replacementCount += 1;
++        settings =
++          replacementCount === 1
++            ? { ...candidate, analyticsConsented: false }
++            : { ...candidate };
++      },
++    },
++  });
++  const baseline = await adapter.snapshotHostSettings();
++  const candidate = structuredClone(baseline);
++  candidate.settings.smartActionCmdEnabled = true;
++  candidate.revision = hostSettingsRevision(candidate.settings);
++
++  await assert.rejects(
++    adapter.applyHostSettings({
++      expectedRevision: baseline.revision,
++      idempotencyKey: "host-settings-auto-rollback",
++      settings: candidate,
++    }),
++    (error) => error.code === -32008 && error.data?.rollbackPerformed === true,
++  );
++  assert.equal(replacementCount, 2);
++  assert.deepEqual(settings, baselineSettings);
++  const restored = await adapter.snapshotHostSettings();
+   assert.equal(restored.revision, baseline.revision);
+ });
+ 
+@@ -406,32 +543,49 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
+     },
+   };
+   const app = new FixtureApp();
++  const appSettings = {
++    showedAnalyticsPopUp: true,
++    analyticsConsented: false,
++    smartActionCmdEnabled: false,
++    toDTO() {
++      return {
++        showedAnalyticsPopUp: this.showedAnalyticsPopUp,
++        analyticsConsented: this.analyticsConsented,
++        smartActionCmdEnabled: this.smartActionCmdEnabled,
++      };
++    },
++  };
+   const integration = await installInputCompanionBridge({
+     app,
+     services: {
+       devicesCommManager: {
+         getDevices: () => [device],
+       },
++      applicationService: {
++        getAppSettings: () => appSettings,
++        saveAppSettings: () => {},
++      },
+     },
+     deviceKitVersion: "0.1.29-integration",
+     bridgeVersion: "0.1.0-integration",
+   });
+ 
+   assert.equal(integration.inputVersion, "0.18.0-integration");
+-  assert.equal(
+-    integration.socketPath,
+-    root + "/worklouderctl-bridge-v1.sock",
+-  );
+-  assert.equal(
+-    integration.tokenPath,
+-    root + "/worklouderctl-bridge-v1.token",
+-  );
++  assert.equal(integration.socketPath, root + "/worklouderctl-bridge-v1.sock");
++  assert.equal(integration.tokenPath, root + "/worklouderctl-bridge-v1.token");
+   assert.equal((await stat(integration.socketPath)).mode & 0o777, 0o600);
+   assert.equal((await stat(integration.tokenPath)).mode & 0o777, 0o600);
+   assert.ok(integration.capabilities.includes("device.config.snapshot.v1"));
+   assert.ok(integration.capabilities.includes("device.config.validate.v1"));
+   assert.ok(!integration.capabilities.includes("device.config.apply.v1"));
+   assert.ok(!integration.capabilities.includes("device.config.restore.v1"));
++  assert.ok(
++    integration.capabilities.includes("input.host-settings.snapshot.v1"),
++  );
++  assert.ok(integration.capabilities.includes("input.host-settings.apply.v1"));
++  assert.ok(
++    integration.capabilities.includes("input.host-settings.restore.v1"),
++  );
+   assert.equal(app.listenerCount("before-quit"), 1);
+   await integration.stop();
+   assert.equal(app.listenerCount("before-quit"), 0);
+@@ -471,9 +625,7 @@ function configDevice(id, files) {
+ }
+ 
+ function cloneFileMap(files) {
+-  return new Map(
+-    [...files].map(([path, bytes]) => [path, Buffer.from(bytes)]),
+-  );
++  return new Map([...files].map(([path, bytes]) => [path, Buffer.from(bytes)]));
+ }
+ 
+ function replaceFileMap(target, files) {
+diff --git a/companion/input-main-integration.mjs b/companion/input-main-integration.mjs
+index 74c5f9d..cbafb5c 100644
+--- a/companion/input-main-integration.mjs
++++ b/companion/input-main-integration.mjs
+@@ -19,10 +19,19 @@ export async function installInputCompanionBridge({
+     socketPath ?? join(userData, "worklouderctl-bridge-v1.sock");
+   const resolvedToken =
+     tokenPath ?? join(userData, "worklouderctl-bridge-v1.token");
++  const hostSettingsAuthority =
++    services.hostSettingsAuthority ??
++    (services.applicationService
++      ? applicationServiceHostSettingsAuthority(
++          services.applicationService,
++          services.analyticsService,
++        )
++      : undefined);
+   const adapter = createInputMainAdapter({
+     devicesCommManager: services.devicesCommManager,
+     deviceKitVersion,
+     configurationWriter: services.configurationWriter,
++    hostSettingsAuthority,
+   });
+   const bridge = await startInputCompanionBridge({
+     adapter,
+@@ -52,6 +61,54 @@ export async function installInputCompanionBridge({
+   };
+ }
+ 
++function applicationServiceHostSettingsAuthority(
++  applicationService,
++  analyticsService,
++) {
++  if (
++    typeof applicationService.getAppSettings !== "function" ||
++    typeof applicationService.saveAppSettings !== "function"
++  ) {
++    throw new TypeError(
++      "applicationService must provide getAppSettings and saveAppSettings",
++    );
++  }
++  const readModel = () => {
++    const model = applicationService.getAppSettings();
++    if (!model || typeof model !== "object") {
++      throw new Error("Input application settings were unavailable");
++    }
++    return model;
++  };
++  const toSettings = (model) => {
++    const dto = typeof model.toDTO === "function" ? model.toDTO() : model;
++    return {
++      showedAnalyticsPopUp: dto.showedAnalyticsPopUp,
++      analyticsConsented: dto.analyticsConsented,
++      smartActionCmdEnabled: dto.smartActionCmdEnabled,
++    };
++  };
++  return {
++    async readSettings() {
++      return toSettings(readModel());
++    },
++    async replaceSettings(settings) {
++      const model = readModel();
++      const previous = toSettings(model);
++      Object.assign(model, settings);
++      try {
++        await applicationService.saveAppSettings(model);
++        if (typeof analyticsService?.checkUserConsented === "function") {
++          await analyticsService.checkUserConsented();
++        }
++      } catch (error) {
++        Object.assign(model, previous);
++        throw error;
++      }
++    },
++  };
++}
++
+ function validateApp(app) {
+   if (
+     !app ||
+diff --git a/docs/companion-bridge.md b/docs/companion-bridge.md
+index 013612d..194144c 100644
+--- a/docs/companion-bridge.md
++++ b/docs/companion-bridge.md
+@@ -83,6 +83,7 @@ Protocol version 1 defines:
+ - `device.files.read`
+ - `device.config.snapshot`
+ - `device.config.validate`
++- `input.host-settings.snapshot`
+ 
+ File content uses base64 inside JSON. Device SHA-1 and host SHA-256 remain
+ separate fields so a CLI export can independently verify both authorities.
+@@ -105,6 +106,11 @@ compare-and-swap preflight. WorkLouderCTL exposes these methods as:
+ Protocol v1 bounds a snapshot at 4,096 files, 16 MiB per file, and 32 MiB of
+ decoded content; request and response lines are each capped at 64 MiB.
+ 
++`input.host-settings.snapshot` is an independent host authority. It returns the
++complete `showedAnalyticsPopUp`, `analyticsConsented`, and
++`smartActionCmdEnabled` DTO plus a deterministic SHA-256 revision. It has no
++device ID and does not read or write device configuration files.
++
+ ```sh
+ worklouderctl input config snapshot --output config-snapshot.json
+ worklouderctl device config snapshot --output config-snapshot.json
+@@ -197,12 +203,14 @@ Configuration apply and restore are capability-gated:
+ 
+ - `device.config.apply`
+ - `device.config.restore`
++- `input.host-settings.apply`
++- `input.host-settings.restore`
+ 
+-Every mutation carries a device ID, expected revision, unique idempotency key,
+-and complete typed input. Input serializes mutations on its existing device
+-queue. It snapshots before apply, checks the revision immediately before the
+-first write, reads back after the write, and restores the snapshot if any
+-authority fails to synchronize.
++Every mutation carries an expected revision, unique idempotency key, and
++complete typed input; device configuration mutations also carry a device ID.
++Input serializes mutations in its main process. It snapshots before apply,
++checks the revision immediately before the first write, reads back after the
++write, and restores the snapshot if any authority fails to synchronize.
+ 
+ This makes the GUI and CLI two clients of the same transaction owner rather
+ than two independent writers.
+@@ -221,6 +229,14 @@ worklouderctl device config apply \
+ worklouderctl device config restore \
+   --input original.json --backup pre-restore.json \
+   --expected-revision CURRENT_REVISION --idempotency-key RESTORE_KEY
++
++worklouderctl input permission command apply \
++  --input host-settings-enabled.json --backup host-settings-before.json \
++  --expected-revision REVISION --idempotency-key HOST_RETRY_KEY
++
++worklouderctl input permission command restore \
++  --input host-settings-original.json --backup host-settings-current.json \
++  --expected-revision CURRENT_REVISION --idempotency-key HOST_RESTORE_KEY
+ ```
+ 
+ Input advertises these methods only when its version adapter injects a
+@@ -230,6 +246,11 @@ its state synchronization before returning. The bridge then performs a fresh
+ full snapshot and revision readback. A writer/readback failure triggers a full
+ pre-mutation restore plus another revision readback.
+ 
++Host-setting methods are advertised separately when Input injects its
++application-settings authority. They replace the complete three-boolean DTO
++through `ApplicationService`, including the existing analytics-consent refresh,
++and use an independent revision/idempotency domain.
++
+ The reference writer and cross-language fixture verify this transaction model.
+ Enabling it for an installed Input release remains a separate version-adapter
+ and real-device rollback milestone.
+@@ -261,7 +282,8 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
+ - `companion/input-main-bridge.mjs` — authenticated, allowlisted, serialized
+   Unix-socket JSON-RPC server;
+ - `companion/input-main-adapter.mjs` — adapter over Input's existing
+-  `devicesCommManager` and per-device `rpcService`;
++  `devicesCommManager`, per-device `rpcService`, and application-settings
++  authority;
+ - `companion/input-main-integration.mjs` — one-call Electron main-process
+   installation with Input-owned discovery and lifecycle cleanup;
+ - `companion/conformance.mjs` — read-only release conformance command;
+@@ -270,8 +292,8 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
+ - `scripts/test-bridge-e2e.sh` — Rust CLI handshake, status, file list, exact
+   export, semantic profile/layer/lighting/AppSense/control/Action/Multi Action/group
+   inspection, lifecycle/CRUD/cascade candidates, independent candidate rehash,
+-  apply/readback, idempotent retry, stale-CAS rejection, restore, and dual-hash
+-  conformance test.
++  apply/readback, idempotent retry, stale-CAS rejection, restore, host command
++  permission `false -> true -> false`, and dual-hash conformance test.
+ 
+ Input maintains only the small adapter from stable bridge method names to its
+ current service container. Integration creates the adapter after Input's
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index 2e458e7..68f2aab 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -80,7 +80,7 @@ Promises as failures even when the USB interface still enumerates.
+ | --- | --- | --- | --- |
+ | Smart Actions | text, command, URL, application | `smart-action` | typed list/show/create/set/delete, `SA_<ID>` control binding, and reference cascade candidate-verified against current Input 0.18.0 cache bytes |
+ | Smart Action groups | create, rename, move, delete | `smart-action group` | metadata and ordered member CRUD, empty groups, and container-only delete candidate-verified |
+-| Command permission | explicit host command toggle | `input permission command` | researched |
++| Command permission | explicit host command toggle | `input permission command` | snapshot/get/offline set plus bridge CAS/apply/replay/restore/automatic-rollback fixture-verified; released Input integration pending |
+ | Cheat Sheet | show, hold, hide, toggle assignments | `cheat-sheet` | researched |
+ | Radial menu | sectors, labels, referenced actions | `radial` | researched |
+ | AppSense runtime | focus observer and layer transition | `appsense test` | researched |
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index 58fba75..4b6138c 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -593,8 +593,29 @@ The CLI reports command definitions with `requiresCommandPermission: true`;
+ definition editing does not toggle the host permission.
+ 
+ The Input database has a `smartActionCmdEnabled` permission field. Command
+-execution must remain explicitly enabled and must be reported separately from
+-device deployment.
++execution remains explicitly separate from device deployment:
++
++```console
++worklouderctl input permission command snapshot --output HOST_SETTINGS.json
++worklouderctl input permission command get --input HOST_SETTINGS.json
++worklouderctl input permission command set --input HOST_SETTINGS.json enabled \
++  --output HOST_SETTINGS_ENABLED.json
++worklouderctl input permission command apply \
++  --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json \
++  --expected-revision REVISION --idempotency-key RETRY_KEY
++worklouderctl input permission command restore \
++  --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json \
++  --expected-revision CURRENT_REVISION --idempotency-key RESTORE_KEY
++```
++
++The snapshot includes `showedAnalyticsPopUp`, `analyticsConsented`, and
++`smartActionCmdEnabled`. Offline set changes only the last field. The Input
++Companion Bridge owns complete-DTO replacement, CAS, idempotent replay, exact
++readback, explicit restore, and automatic rollback; it never writes LokiJS
++storage behind the running application's back. The SHA-256 revision frames
++those booleans in that order after
++`worklouder-input-host-settings-revision-v1\0`. Live replacement delegates to
++Input's `ApplicationService.getAppSettings/saveAppSettings` authority.
+ 
+ ### Cheat Sheet and radial menu
+ 
+diff --git a/docs/research/2026-08-02-input-host-settings-contract.md b/docs/research/2026-08-02-input-host-settings-contract.md
+new file mode 100644
+index 0000000..1fff2fd
+--- /dev/null
++++ b/docs/research/2026-08-02-input-host-settings-contract.md
+@@ -0,0 +1,24 @@
++# Input host settings contract (Input 0.18.0)
++
++The exact Input 0.18.0 main bundle owns a three-boolean application-settings
++DTO: `showedAnalyticsPopUp`, `analyticsConsented`, and
++`smartActionCmdEnabled`. Renderer IPC reads the complete DTO through
++`common-get-app-settings` and writes it through `common-send-app-settings`.
++The main process converts that DTO to its application-settings model and saves
++it through `ApplicationService`; the LokiJS `app_settings` collection in
++`input_storage.json` is an implementation detail, not a CLI write target.
++
++The command Smart Action editor toggles only `smartActionCmdEnabled` on the
++complete in-memory DTO. The `kb.sa.exec` host notification checks the same
++field immediately before executing a command and returns without execution
++when it is false. The observed default is `false`.
++
++## CLI contract
++
++WorkLouderCTL exposes the field through the versioned Input Companion Bridge.
++Snapshots contain all three booleans plus a canonical revision. A command
++permission candidate changes only `smartActionCmdEnabled`, preserving both
++analytics fields. Apply and restore require compare-and-swap, idempotency,
++immutable backup, complete DTO replacement through Input, exact readback, and
++automatic rollback. Direct `input_storage.json` mutation stays outside this
++adapter.
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 323b85f..8979a57 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -75,6 +75,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Multi Action field CRUD, timing, groups, and reference cascade
+ - [x] Linked-app/AppSense list/show/link/update/unlink candidates and fixture transaction
+ - [x] Smart Action typed CRUD, groups, physical bindings, and delete cascade candidates
++- [x] Input host command permission snapshot/candidate/apply/restore transaction
+ 
+ ## M4 — Full cross-authority transaction
+ 
+diff --git a/scripts/test-bridge-e2e.sh b/scripts/test-bridge-e2e.sh
+index dcf7241..a23d503 100755
+--- a/scripts/test-bridge-e2e.sh
++++ b/scripts/test-bridge-e2e.sh
+@@ -10,6 +10,8 @@ config_snapshot=$root/config-snapshot.json
+ cache_support=$root/input-cache
+ cache_snapshot=$root/config-cache-snapshot.json
+ candidate_snapshot=$root/config-candidate.json
++host_settings_snapshot=$root/host-settings.json
++host_settings_enabled=$root/host-settings-enabled.json
+ color_snapshot=$root/config-color.json
+ control_snapshot=$root/config-control.json
+ action_created_snapshot=$root/config-action-created.json
+@@ -88,6 +90,9 @@ node "$repo/companion/conformance.mjs" \
+   --require device.config.validate.v1 \
+   --require device.config.apply.v1 \
+   --require device.config.restore.v1 \
++  --require input.host-settings.snapshot.v1 \
++  --require input.host-settings.apply.v1 \
++  --require input.host-settings.restore.v1 \
+   >"$root/node-conformance.json"
+ "$bin" --json bridge --socket "$socket" --token "$token" status \
+   >"$root/bridge-status.json"
+@@ -105,6 +110,44 @@ node "$repo/companion/conformance.mjs" \
+ "$bin" --json device --transport bridge \
+   --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+   --output "$config_snapshot" >"$root/config-snapshot-receipt.json"
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  permission command snapshot --output "$host_settings_snapshot" \
++  >"$root/host-settings-snapshot-receipt.json"
++"$bin" --json input permission command get --input "$host_settings_snapshot" \
++  >"$root/host-settings-get.json"
++"$bin" --json input permission command set --input "$host_settings_snapshot" \
++  enabled --output "$host_settings_enabled" \
++  >"$root/host-settings-set.json"
++host_settings_revision=$(python3 -c \
++  'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
++  "$host_settings_snapshot")
++host_settings_enabled_revision=$(python3 -c \
++  'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
++  "$host_settings_enabled")
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  permission command apply --input "$host_settings_enabled" \
++  --backup "$root/host-settings-pre-apply.json" \
++  --expected-revision "$host_settings_revision" \
++  --idempotency-key host-settings-apply-1 \
++  >"$root/host-settings-apply.json"
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  permission command apply --input "$host_settings_enabled" \
++  --backup "$root/host-settings-pre-apply.json" \
++  --expected-revision "$host_settings_revision" \
++  --idempotency-key host-settings-apply-1 \
++  >"$root/host-settings-apply-replay.json"
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  permission command snapshot --output "$root/host-settings-post-apply.json" \
++  >"$root/host-settings-post-apply-receipt.json"
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  permission command restore --input "$host_settings_snapshot" \
++  --backup "$root/host-settings-pre-restore.json" \
++  --expected-revision "$host_settings_enabled_revision" \
++  --idempotency-key host-settings-restore-1 \
++  >"$root/host-settings-restore.json"
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  permission command snapshot --output "$root/host-settings-post-restore.json" \
++  >"$root/host-settings-post-restore-receipt.json"
+ mkdir -p "$cache_support/devices/fixture-device"
+ cp "$export_dir/keymap.json" "$cache_support/devices/fixture-device/keymap.json"
+ cp "$export_dir/smart_actions.json" \
+@@ -457,6 +500,17 @@ post_apply = json.loads((root / "post-apply.json").read_text())
+ pre_restore = json.loads((root / "pre-restore.json").read_text())
+ restore = json.loads((root / "config-restore.json").read_text())
+ post_restore = json.loads((root / "post-restore.json").read_text())
++host_settings = json.loads((root / "host-settings.json").read_text())
++host_settings_get = json.loads((root / "host-settings-get.json").read_text())
++host_settings_enabled = json.loads((root / "host-settings-enabled.json").read_text())
++host_settings_set = json.loads((root / "host-settings-set.json").read_text())
++host_settings_pre_apply = json.loads((root / "host-settings-pre-apply.json").read_text())
++host_settings_apply = json.loads((root / "host-settings-apply.json").read_text())
++host_settings_replay = json.loads((root / "host-settings-apply-replay.json").read_text())
++host_settings_post_apply = json.loads((root / "host-settings-post-apply.json").read_text())
++host_settings_pre_restore = json.loads((root / "host-settings-pre-restore.json").read_text())
++host_settings_restore = json.loads((root / "host-settings-restore.json").read_text())
++host_settings_post_restore = json.loads((root / "host-settings-post-restore.json").read_text())
+ 
+ assert conformance["conformant"] is True
+ assert conformance["protocolVersion"] == 1
+@@ -468,6 +522,9 @@ assert "device.config.snapshot.v1" in bridge["capabilities"]
+ assert "device.config.validate.v1" in bridge["capabilities"]
+ assert "device.config.apply.v1" in bridge["capabilities"]
+ assert "device.config.restore.v1" in bridge["capabilities"]
++assert "input.host-settings.snapshot.v1" in bridge["capabilities"]
++assert "input.host-settings.apply.v1" in bridge["capabilities"]
++assert "input.host-settings.restore.v1" in bridge["capabilities"]
+ assert status["adapter"] == "input-companion-bridge-v1"
+ assert status["status"]["selectedLayerIndex"] == 2
+ assert len(files["files"]) == 2
+@@ -954,6 +1011,31 @@ assert restore["afterRevision"] == snapshot["revision"]
+ assert post_restore["revision"] == snapshot["revision"]
+ assert payload(post_restore, "keymap.json") == payload(snapshot, "keymap.json")
+ assert payload(post_restore, "smart_actions.json") == payload(snapshot, "smart_actions.json")
++assert host_settings["settings"] == {
++    "showedAnalyticsPopUp": True,
++    "analyticsConsented": False,
++    "smartActionCmdEnabled": False,
++}
++assert host_settings_get == host_settings
++assert host_settings_enabled["settings"] == {
++    "showedAnalyticsPopUp": True,
++    "analyticsConsented": False,
++    "smartActionCmdEnabled": True,
++}
++assert host_settings_set["changed"] is True
++assert host_settings_set["changedPaths"] == ["/settings/smartActionCmdEnabled"]
++assert host_settings_pre_apply == host_settings
++assert host_settings_apply["operation"] == "apply"
++assert host_settings_apply["changed"] is True
++assert host_settings_apply["beforeRevision"] == host_settings["revision"]
++assert host_settings_apply["afterRevision"] == host_settings_enabled["revision"]
++assert host_settings_replay["idempotentReplay"] is True
++assert host_settings_post_apply == host_settings_enabled
++assert host_settings_pre_restore == host_settings_enabled
++assert host_settings_restore["operation"] == "restore"
++assert host_settings_restore["changed"] is True
++assert host_settings_restore["afterRevision"] == host_settings["revision"]
++assert host_settings_post_restore == host_settings
+ 
+ print("bridge_protocol=1")
+ print("node_conformance=verified")
+@@ -1005,4 +1087,8 @@ print("config_apply_readback=verified")
+ print("config_idempotent_replay=verified")
+ print("config_stale_cas_rejected=verified")
+ print("config_restore_readback=verified")
++print("host_settings_snapshot_revision=verified")
++print("host_command_permission_candidate=verified")
++print("host_command_permission_sibling_preservation=verified")
++print("host_settings_apply_replay_restore=verified")
+ PY
+diff --git a/spec/input-companion-bridge-v1.json b/spec/input-companion-bridge-v1.json
+index d817b0c..81ac8bd 100644
+--- a/spec/input-companion-bridge-v1.json
++++ b/spec/input-companion-bridge-v1.json
+@@ -117,6 +117,34 @@
+         "snapshot"
+       ],
+       "resultKind": "worklouder-input-config-mutation"
++    },
++    {
++      "name": "input.host-settings.snapshot",
++      "capability": "input.host-settings.snapshot.v1",
++      "mutation": false,
++      "resultKind": "worklouder-input-host-settings"
++    },
++    {
++      "name": "input.host-settings.apply",
++      "capability": "input.host-settings.apply.v1",
++      "mutation": true,
++      "requiredParams": [
++        "expectedRevision",
++        "idempotencyKey",
++        "settings"
++      ],
++      "resultKind": "worklouder-input-host-settings-mutation"
++    },
++    {
++      "name": "input.host-settings.restore",
++      "capability": "input.host-settings.restore.v1",
++      "mutation": true,
++      "requiredParams": [
++        "expectedRevision",
++        "idempotencyKey",
++        "snapshot"
++      ],
++      "resultKind": "worklouder-input-host-settings-mutation"
+     }
+   ],
+   "errors": {
+@@ -185,6 +213,46 @@
+     "consistency": "list-read-list",
+     "validateExpectedRevision": "optional live compare-and-swap preflight"
+   },
++  "hostSettings": {
++    "schemaVersion": 1,
++    "kind": "worklouder-input-host-settings",
++    "fields": [
++      "showedAnalyticsPopUp",
++      "analyticsConsented",
++      "smartActionCmdEnabled"
++    ],
++    "revisionAlgorithm": "sha256:input-host-settings-three-booleans-v1",
++    "revisionFraming": [
++      "utf8(worklouder-input-host-settings-revision-v1\\0)",
++      "u8(showedAnalyticsPopUp ? 1 : 0)",
++      "u8(analyticsConsented ? 1 : 0)",
++      "u8(smartActionCmdEnabled ? 1 : 0)"
++    ],
++    "authority": "Input ApplicationService.getAppSettings/saveAppSettings",
++    "directDatabaseWrite": false,
++    "completeDtoReplacement": true,
++    "preserveSiblingFields": true,
++    "snapshotBeforeApply": true,
++    "compareAndSwapRevision": true,
++    "idempotencyRequired": true,
++    "readbackAfterApply": true,
++    "rollbackOnFailure": true,
++    "capabilityAdvertisement": "all three methods are advertised only when hostSettingsAuthority supplies readSettings and replaceSettings"
++  },
++  "hostSettingsMutationResult": {
++    "schemaVersion": 1,
++    "kind": "worklouder-input-host-settings-mutation",
++    "fields": [
++      "operation",
++      "idempotencyKey",
++      "idempotentReplay",
++      "changed",
++      "rollbackPerformed",
++      "beforeRevision",
++      "afterRevision",
++      "targetRevision"
++    ]
++  },
+   "inputEvidence": {
+     "testedVersion": "0.18.0",
+     "bundleId": "it.focusense.input-app",
+@@ -196,7 +264,9 @@
+       "rpcGetDeviceStatus",
+       "rpcGetFileList",
+       "rpcReadFile",
+-      "connDeviceChangeDeviceConfig"
++      "connDeviceChangeDeviceConfig",
++      "common-get-app-settings",
++      "common-send-app-settings"
+     ],
+     "quitCleanup": "devicesCommManager.disconnectAllDevices()",
+     "externalTransportFound": false
+diff --git a/spec/input-host-settings-0.18.0.json b/spec/input-host-settings-0.18.0.json
+new file mode 100644
+index 0000000..ff5d343
+--- /dev/null
++++ b/spec/input-host-settings-0.18.0.json
+@@ -0,0 +1,47 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouder-input-host-settings-model",
++  "inputVersion": "0.18.0",
++  "source": {
++    "asarPath": "/Applications/input.app/Contents/Resources/app.asar",
++    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
++    "mainBundle": "dist-electron/main/index.js",
++    "mainBundleSha256": "7c16191956acb8d0d89c50eb940dc9b757bf6966b19c56499ca2d60d8743154a",
++    "rendererChunk": "dist/assets/device_config_data-BMUs-0m4.js",
++    "rendererChunkSha256": "c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e"
++  },
++  "ipc": {
++    "read": "common-get-app-settings",
++    "write": "common-send-app-settings",
++    "writeSemantics": "complete three-field DTO replacement through ApplicationService"
++  },
++  "storage": {
++    "path": "input_storage.json",
++    "engine": "LokiJS",
++    "collection": "app_settings",
++    "cardinality": "zero or one record",
++    "fields": [
++      "showedAnalyticsPopUp",
++      "analyticsConsented",
++      "smartActionCmdEnabled"
++    ]
++  },
++  "commandPermission": {
++    "field": "smartActionCmdEnabled",
++    "type": "boolean",
++    "default": false,
++    "runtimeGate": "kb.sa.exec notifications execute only when true",
++    "guiMutation": "read complete DTO, replace smartActionCmdEnabled, save complete DTO"
++  },
++  "candidateBoundary": {
++    "bridgeCapabilities": [
++      "input.host-settings.snapshot.v1",
++      "input.host-settings.apply.v1",
++      "input.host-settings.restore.v1"
++    ],
++    "directDatabaseWrite": false,
++    "preserveSiblingFields": true,
++    "compareAndSwap": "canonical complete-setting revision",
++    "requiresBackupReadbackRollback": true
++  }
++}
+diff --git a/src/bridge.rs b/src/bridge.rs
+index 7cc8977..843dcdd 100644
+--- a/src/bridge.rs
++++ b/src/bridge.rs
+@@ -23,6 +23,8 @@ const MAX_TOKEN_BYTES: usize = 4096;
+ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+ const CONFIG_SNAPSHOT_KIND: &str = "worklouder-input-config-snapshot";
+ const CONFIG_REVISION_ALGORITHM: &str = "sha256:path-u32be-path-bytes-size-u64be-content-v1";
++const HOST_SETTINGS_KIND: &str = "worklouder-input-host-settings";
++const HOST_SETTINGS_REVISION_ALGORITHM: &str = "sha256:input-host-settings-three-booleans-v1";
+ static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
+ 
+ #[derive(Clone, Debug)]
+@@ -83,6 +85,58 @@ pub struct ConfigMutationReceipt {
+     pub total_bytes: u64,
+ }
+ 
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(rename_all = "camelCase")]
++pub struct HostSettings {
++    pub showed_analytics_pop_up: bool,
++    pub analytics_consented: bool,
++    pub smart_action_cmd_enabled: bool,
++}
++
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(rename_all = "camelCase")]
++pub struct HostSettingsSnapshot {
++    pub schema_version: u64,
++    pub kind: String,
++    pub revision_algorithm: String,
++    pub revision: String,
++    pub settings: HostSettings,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct HostSettingsSnapshotReceipt {
++    pub output: PathBuf,
++    pub revision: String,
++    pub settings: HostSettings,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct HostSettingsCandidateReceipt {
++    pub output: PathBuf,
++    pub changed: bool,
++    pub changed_paths: Vec<String>,
++    pub before_revision: String,
++    pub after_revision: String,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct HostSettingsMutationReceipt {
++    pub backup: PathBuf,
++    pub schema_version: u64,
++    pub kind: String,
++    pub operation: String,
++    pub idempotency_key: String,
++    pub idempotent_replay: bool,
++    pub changed: bool,
++    pub rollback_performed: bool,
++    pub before_revision: String,
++    pub after_revision: String,
++    pub target_revision: String,
++}
++
+ #[derive(Clone, Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ struct ConfigMutationResponse {
+@@ -101,6 +155,21 @@ struct ConfigMutationResponse {
+     total_bytes: u64,
+ }
+ 
++#[derive(Clone, Debug, Deserialize)]
++#[serde(rename_all = "camelCase")]
++struct HostSettingsMutationResponse {
++    schema_version: u64,
++    kind: String,
++    operation: String,
++    idempotency_key: String,
++    idempotent_replay: bool,
++    changed: bool,
++    rollback_performed: bool,
++    before_revision: String,
++    after_revision: String,
++    target_revision: String,
++}
++
+ #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ struct Handshake {
+@@ -476,6 +545,178 @@ pub fn config_restore(
+     )
+ }
+ 
++pub fn host_settings_snapshot(
++    paths: &BridgePaths,
++    output: &Path,
++) -> Result<HostSettingsSnapshotReceipt> {
++    let mut client = BridgeClient::connect(paths)?;
++    let snapshot: HostSettingsSnapshot = client.call(
++        "input.host-settings.snapshot",
++        "input.host-settings.snapshot.v1",
++        json!({}),
++    )?;
++    validate_host_settings_snapshot(&snapshot)?;
++    write_atomic_json(output, &serde_json::to_value(&snapshot)?)?;
++    let reopened = read_host_settings_snapshot(output)?;
++    ensure!(
++        reopened.revision == snapshot.revision,
++        "published host settings snapshot readback differed"
++    );
++    Ok(HostSettingsSnapshotReceipt {
++        output: output.to_path_buf(),
++        revision: snapshot.revision,
++        settings: snapshot.settings,
++    })
++}
++
++pub fn host_settings_show(input: &Path) -> Result<HostSettingsSnapshot> {
++    read_host_settings_snapshot(input)
++}
++
++pub fn host_settings_command_candidate(
++    input: &Path,
++    enabled: bool,
++    output: &Path,
++) -> Result<HostSettingsCandidateReceipt> {
++    ensure!(input != output, "input and output paths must differ");
++    let mut snapshot = read_host_settings_snapshot(input)?;
++    let before_revision = snapshot.revision.clone();
++    let changed = snapshot.settings.smart_action_cmd_enabled != enabled;
++    snapshot.settings.smart_action_cmd_enabled = enabled;
++    snapshot.revision = host_settings_revision(&snapshot.settings)?;
++    validate_host_settings_snapshot(&snapshot)?;
++    write_atomic_json(output, &serde_json::to_value(&snapshot)?)?;
++    let reopened = read_host_settings_snapshot(output)?;
++    ensure!(
++        reopened.revision == snapshot.revision
++            && reopened.settings.smart_action_cmd_enabled == enabled,
++        "host settings candidate readback differed"
++    );
++    Ok(HostSettingsCandidateReceipt {
++        output: output.to_path_buf(),
++        changed,
++        changed_paths: if changed {
++            vec!["/settings/smartActionCmdEnabled".into()]
++        } else {
++            Vec::new()
++        },
++        before_revision,
++        after_revision: snapshot.revision,
++    })
++}
++
++pub fn host_settings_apply(
++    paths: &BridgePaths,
++    input: &Path,
++    backup: &Path,
++    expected_revision: Option<&str>,
++    idempotency_key: Option<&str>,
++) -> Result<HostSettingsMutationReceipt> {
++    host_settings_mutate(
++        paths,
++        "apply",
++        "input.host-settings.apply",
++        "input.host-settings.apply.v1",
++        "settings",
++        input,
++        backup,
++        expected_revision,
++        idempotency_key,
++    )
++}
++
++pub fn host_settings_restore(
++    paths: &BridgePaths,
++    input: &Path,
++    backup: &Path,
++    expected_revision: Option<&str>,
++    idempotency_key: Option<&str>,
++) -> Result<HostSettingsMutationReceipt> {
++    host_settings_mutate(
++        paths,
++        "restore",
++        "input.host-settings.restore",
++        "input.host-settings.restore.v1",
++        "snapshot",
++        input,
++        backup,
++        expected_revision,
++        idempotency_key,
++    )
++}
++
++#[allow(clippy::too_many_arguments)]
++fn host_settings_mutate(
++    paths: &BridgePaths,
++    operation: &str,
++    method: &str,
++    capability: &str,
++    payload_field: &str,
++    input: &Path,
++    backup: &Path,
++    expected_revision: Option<&str>,
++    idempotency_key: Option<&str>,
++) -> Result<HostSettingsMutationReceipt> {
++    ensure!(input != backup, "input and backup paths must differ");
++    let candidate = read_host_settings_snapshot(input)?;
++    let backup_receipt = if backup.exists() {
++        let existing = read_host_settings_snapshot(backup)?;
++        HostSettingsSnapshotReceipt {
++            output: backup.to_path_buf(),
++            revision: existing.revision,
++            settings: existing.settings,
++        }
++    } else {
++        host_settings_snapshot(paths, backup)?
++    };
++    let expected = expected_revision.unwrap_or(&backup_receipt.revision);
++    ensure!(
++        is_sha256(expected),
++        "expected revision must be a SHA-256 digest"
++    );
++    ensure!(
++        backup_receipt.revision.eq_ignore_ascii_case(expected),
++        "host settings backup revision did not match expected revision"
++    );
++    let key = idempotency_key
++        .map(str::to_owned)
++        .unwrap_or_else(|| generated_idempotency_key(operation, &candidate.revision));
++    ensure!(
++        !key.is_empty() && key.len() <= 256 && !key.contains('\0'),
++        "idempotency key was invalid"
++    );
++    let mut params = json!({
++        "expectedRevision": expected,
++        "idempotencyKey": key,
++    });
++    params
++        .as_object_mut()
++        .context("host settings mutation params were not an object")?
++        .insert(payload_field.to_owned(), serde_json::to_value(&candidate)?);
++    let mut client = BridgeClient::connect(paths)?;
++    let response: HostSettingsMutationResponse = client.call(method, capability, params)?;
++    validate_host_settings_mutation_response(
++        &response,
++        operation,
++        &key,
++        expected,
++        &candidate.revision,
++    )?;
++    Ok(HostSettingsMutationReceipt {
++        backup: backup.to_path_buf(),
++        schema_version: response.schema_version,
++        kind: response.kind,
++        operation: response.operation,
++        idempotency_key: response.idempotency_key,
++        idempotent_replay: response.idempotent_replay,
++        changed: response.changed,
++        rollback_performed: response.rollback_performed,
++        before_revision: response.before_revision,
++        after_revision: response.after_revision,
++        target_revision: response.target_revision,
++    })
++}
++
+ #[allow(clippy::too_many_arguments)]
+ fn config_mutate(
+     paths: &BridgePaths,
+@@ -624,6 +865,100 @@ fn validate_mutation_response(
+     Ok(())
+ }
+ 
++fn validate_host_settings_mutation_response(
++    response: &HostSettingsMutationResponse,
++    operation: &str,
++    idempotency_key: &str,
++    expected_revision: &str,
++    target_revision: &str,
++) -> Result<()> {
++    ensure!(
++        response.schema_version == 1 && response.kind == "worklouder-input-host-settings-mutation",
++        "bridge returned an unknown host settings mutation result schema"
++    );
++    ensure!(
++        response.operation == operation,
++        "bridge returned the wrong host settings operation"
++    );
++    ensure!(
++        response.idempotency_key == idempotency_key,
++        "bridge returned the wrong host settings idempotency key"
++    );
++    ensure!(
++        response
++            .before_revision
++            .eq_ignore_ascii_case(expected_revision),
++        "host settings mutation began from an unexpected revision"
++    );
++    ensure!(
++        response.target_revision == target_revision && response.after_revision == target_revision,
++        "host settings mutation readback did not match the candidate revision"
++    );
++    ensure!(
++        response.changed
++            != response
++                .before_revision
++                .eq_ignore_ascii_case(&response.target_revision),
++        "bridge returned an inconsistent host settings changed flag"
++    );
++    ensure!(
++        !response.rollback_performed,
++        "bridge reported rollback for a successful host settings mutation"
++    );
++    Ok(())
++}
++
++fn read_host_settings_snapshot(input: &Path) -> Result<HostSettingsSnapshot> {
++    let metadata = fs::symlink_metadata(input).with_context(|| {
++        format!(
++            "failed to inspect host settings snapshot {}",
++            input.display()
++        )
++    })?;
++    ensure!(
++        metadata.file_type().is_file() && !metadata.file_type().is_symlink(),
++        "host settings snapshot must be a regular file"
++    );
++    let bytes = fs::read(input)
++        .with_context(|| format!("failed to read host settings snapshot {}", input.display()))?;
++    ensure!(
++        bytes.len() <= 1024 * 1024,
++        "host settings snapshot exceeded 1 MiB"
++    );
++    let snapshot: HostSettingsSnapshot = serde_json::from_slice(&bytes).with_context(|| {
++        format!(
++            "host settings snapshot was invalid JSON: {}",
++            input.display()
++        )
++    })?;
++    validate_host_settings_snapshot(&snapshot)?;
++    Ok(snapshot)
++}
++
++fn validate_host_settings_snapshot(snapshot: &HostSettingsSnapshot) -> Result<()> {
++    ensure!(
++        snapshot.schema_version == 1
++            && snapshot.kind == HOST_SETTINGS_KIND
++            && snapshot.revision_algorithm == HOST_SETTINGS_REVISION_ALGORITHM,
++        "host settings snapshot header was invalid"
++    );
++    ensure!(
++        snapshot.revision == host_settings_revision(&snapshot.settings)?,
++        "host settings snapshot revision did not match content"
++    );
++    Ok(())
++}
++
++fn host_settings_revision(settings: &HostSettings) -> Result<String> {
++    let mut bytes = b"worklouder-input-host-settings-revision-v1\0".to_vec();
++    bytes.extend([
++        u8::from(settings.showed_analytics_pop_up),
++        u8::from(settings.analytics_consented),
++        u8::from(settings.smart_action_cmd_enabled),
++    ]);
++    fsutil::sha256_bytes(&bytes)
++}
++
+ fn read_config_snapshot(input: &Path) -> Result<(Value, ConfigSnapshotMetadata)> {
+     let bytes = fs::read(input)
+         .with_context(|| format!("failed to read config snapshot {}", input.display()))?;
+@@ -1061,6 +1396,22 @@ mod tests {
+         })
+     }
+ 
++    fn host_settings_hello() -> Value {
++        json!({
++            "protocolVersion": 1,
++            "bridgeVersion": "0.1.0-test",
++            "inputVersion": "0.18.0-test",
++            "sessionId": "fixture-session",
++            "capabilities": [
++                "bridge.handshake.v1",
++                "bridge.health.v1",
++                "input.host-settings.snapshot.v1",
++                "input.host-settings.apply.v1",
++                "input.host-settings.restore.v1"
++            ]
++        })
++    }
++
+     #[test]
+     fn bridge_handshake_is_authenticated_and_typed() {
+         let (paths, server) = fixture(|method, _| match method {
+@@ -1109,6 +1460,111 @@ mod tests {
+         fs::remove_dir_all(paths.socket.parent().unwrap()).unwrap();
+     }
+ 
++    #[test]
++    fn host_settings_snapshot_candidate_and_apply_are_strict() {
++        let root = PathBuf::from("/tmp").join(format!(
++            "wlb-host-settings-{}-{}",
++            std::process::id(),
++            NEXT_TEST.fetch_add(1, Ordering::Relaxed)
++        ));
++        fs::create_dir(&root).unwrap();
++        let snapshot_path = root.join("snapshot.json");
++        let candidate_path = root.join("candidate.json");
++        let backup_path = root.join("backup.json");
++        let settings = HostSettings {
++            showed_analytics_pop_up: true,
++            analytics_consented: false,
++            smart_action_cmd_enabled: false,
++        };
++        let revision = host_settings_revision(&settings).unwrap();
++        let snapshot = json!({
++            "schemaVersion": 1,
++            "kind": HOST_SETTINGS_KIND,
++            "revisionAlgorithm": HOST_SETTINGS_REVISION_ALGORITHM,
++            "revision": revision,
++            "settings": {
++                "showedAnalyticsPopUp": true,
++                "analyticsConsented": false,
++                "smartActionCmdEnabled": false
++            }
++        });
++        let snapshot_response = snapshot;
++        let (paths, server) = fixture(move |method, _| match method {
++            "bridge.hello" => host_settings_hello(),
++            "input.host-settings.snapshot" => snapshot_response.clone(),
++            other => panic!("unexpected method {other}"),
++        });
++        let receipt = host_settings_snapshot(&paths, &snapshot_path).unwrap();
++        assert_eq!(receipt.revision, revision);
++        assert!(!receipt.settings.smart_action_cmd_enabled);
++        server.join().unwrap();
++        fs::remove_dir_all(paths.socket.parent().unwrap()).unwrap();
++
++        let candidate =
++            host_settings_command_candidate(&snapshot_path, true, &candidate_path).unwrap();
++        assert!(candidate.changed);
++        assert_eq!(
++            candidate.changed_paths,
++            vec!["/settings/smartActionCmdEnabled"]
++        );
++        let candidate_snapshot = host_settings_show(&candidate_path).unwrap();
++        assert!(candidate_snapshot.settings.smart_action_cmd_enabled);
++        assert!(candidate_snapshot.settings.showed_analytics_pop_up);
++        assert!(!candidate_snapshot.settings.analytics_consented);
++        fs::copy(&snapshot_path, &backup_path).unwrap();
++
++        let expected = revision;
++        let target = candidate_snapshot.revision;
++        let expected_for_handler = expected.clone();
++        let target_for_handler = target.clone();
++        let (paths, server) = fixture(move |method, params| match method {
++            "bridge.hello" => host_settings_hello(),
++            "input.host-settings.apply" => {
++                assert_eq!(params["expectedRevision"], expected_for_handler);
++                assert_eq!(
++                    params["settings"]["settings"]["smartActionCmdEnabled"],
++                    true
++                );
++                json!({
++                    "schemaVersion": 1,
++                    "kind": "worklouder-input-host-settings-mutation",
++                    "operation": "apply",
++                    "idempotencyKey": "fixture-host-settings",
++                    "idempotentReplay": false,
++                    "changed": true,
++                    "rollbackPerformed": false,
++                    "beforeRevision": expected_for_handler,
++                    "afterRevision": target_for_handler,
++                    "targetRevision": target_for_handler
++                })
++            }
++            other => panic!("unexpected method {other}"),
++        });
++        let applied = host_settings_apply(
++            &paths,
++            &candidate_path,
++            &backup_path,
++            Some(&expected),
++            Some("fixture-host-settings"),
++        )
++        .unwrap();
++        assert!(applied.changed);
++        assert_eq!(applied.after_revision, target);
++        server.join().unwrap();
++        fs::remove_dir_all(paths.socket.parent().unwrap()).unwrap();
++
++        let mut tampered: Value =
++            serde_json::from_slice(&fs::read(&candidate_path).unwrap()).unwrap();
++        tampered["settings"]["analyticsConsented"] = Value::Bool(true);
++        fs::write(
++            root.join("tampered.json"),
++            serde_json::to_vec(&tampered).unwrap(),
++        )
++        .unwrap();
++        assert!(host_settings_show(&root.join("tampered.json")).is_err());
++        fs::remove_dir_all(root).unwrap();
++    }
++
+     #[test]
+     fn bridge_base64_decoder_is_strict() {
+         assert_eq!(decode_base64("").unwrap(), b"");
+diff --git a/src/cli.rs b/src/cli.rs
+index 9498e0a..bacf011 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -45,6 +45,14 @@ pub enum Command {
+ 
+     /// Inspect or export Input-owned configuration.
+     Input {
++        /// Override the Input Companion Bridge Unix socket path.
++        #[clap(long, value_parser)]
++        bridge_socket: Option<PathBuf>,
++
++        /// Override the Input Companion Bridge token file path.
++        #[clap(long, value_parser)]
++        bridge_token: Option<PathBuf>,
++
+         #[clap(subcommand)]
+         command: InputCommand,
+     },
+@@ -199,6 +207,76 @@ pub enum InputCommand {
+         #[clap(subcommand)]
+         command: InputConfigCommand,
+     },
++
++    /// Inspect or change Input-owned host permission settings.
++    Permission {
++        #[clap(subcommand)]
++        command: InputPermissionCommand,
++    },
++}
++
++#[derive(Debug, Subcommand)]
++pub enum InputPermissionCommand {
++    /// Manage the host gate for command Smart Actions.
++    Command {
++        #[clap(subcommand)]
++        command: InputCommandPermissionCommand,
++    },
++}
++
++#[derive(Clone, Copy, Debug, ValueEnum)]
++pub enum InputCommandPermissionValue {
++    Enabled,
++    Disabled,
++}
++
++#[derive(Debug, Subcommand)]
++pub enum InputCommandPermissionCommand {
++    /// Snapshot all Input host settings through the running Input bridge.
++    Snapshot {
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Read command permission from an offline host-settings snapshot.
++    Get {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++    },
++
++    /// Build an offline candidate while preserving both analytics settings.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(value_enum)]
++        value: InputCommandPermissionValue,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Apply a complete host-settings candidate with backup, CAS, and rollback.
++    Apply {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long, value_parser)]
++        backup: PathBuf,
++        #[clap(long)]
++        expected_revision: Option<String>,
++        #[clap(long)]
++        idempotency_key: Option<String>,
++    },
++
++    /// Restore a complete host-settings snapshot with a new backup.
++    Restore {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long, value_parser)]
++        backup: PathBuf,
++        #[clap(long)]
++        expected_revision: Option<String>,
++        #[clap(long)]
++        idempotency_key: Option<String>,
++    },
+ }
+ 
+ #[derive(Debug, Subcommand)]
+diff --git a/src/lib.rs b/src/lib.rs
+index 9d25827..a6b8bc4 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -23,11 +23,12 @@ use cli::{
+     CodexJoystickDirection, CodexLightingAutoOff, CodexLightingAutoOffCommand,
+     CodexLightingBrightnessCommand, CodexLightingCommand, CodexResetCommand, CodexRuntimeCommand,
+     CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand,
+-    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand,
+-    LayerCommand, LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand,
+-    LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect, LightingZone,
+-    MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand,
+-    SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
++    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand,
++    InputCommandPermissionCommand, InputCommandPermissionValue, InputConfigCommand,
++    InputPermissionCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
++    LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect,
++    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
++    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+     SmartActionType as CliSmartActionType, TierCommand,
+ };
+ use serde::Serialize;
+@@ -60,7 +61,16 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
+         Command::Capability { command } => run_capability(command, cli.json, &mut out)?,
+         Command::Doctor { strict } => run_doctor(strict, cli.json, &mut out)?,
+         Command::Codex { command } => run_codex(command, cli.json, &mut out)?,
+-        Command::Input { command } => run_input(command, cli.json, &mut out)?,
++        Command::Input {
++            bridge_socket,
++            bridge_token,
++            command,
++        } => run_input(
++            command,
++            bridge::paths(bridge_socket, bridge_token),
++            cli.json,
++            &mut out,
++        )?,
+         Command::Device {
+             transport,
+             input_mode,
+@@ -2583,7 +2593,12 @@ fn run_completion(shell: CompletionShell, mut out: impl Write) {
+     clap_complete::generate(generator, &mut command, "worklouderctl", &mut out);
+ }
+ 
+-fn run_input(command: InputCommand, json: bool, mut out: impl Write) -> Result<()> {
++fn run_input(
++    command: InputCommand,
++    bridge_paths: bridge::BridgePaths,
++    json: bool,
++    mut out: impl Write,
++) -> Result<()> {
+     match command {
+         InputCommand::Inspect {
+             device,
+@@ -2660,6 +2675,123 @@ fn run_input(command: InputCommand, json: bool, mut out: impl Write) -> Result<(
+                 }
+             }
+         },
++        InputCommand::Permission { command } => match command {
++            InputPermissionCommand::Command { command } => match command {
++                InputCommandPermissionCommand::Snapshot { output } => {
++                    let result = bridge::host_settings_snapshot(&bridge_paths, &output)?;
++                    if json {
++                        write_json(&mut out, &result)?;
++                    } else {
++                        writeln!(out, "Saved Input host settings to {}", output.display())?;
++                        writeln!(out, "revision={}", result.revision)?;
++                        writeln!(
++                            out,
++                            "command={}",
++                            if result.settings.smart_action_cmd_enabled {
++                                "enabled"
++                            } else {
++                                "disabled"
++                            }
++                        )?;
++                    }
++                }
++                InputCommandPermissionCommand::Get { input } => {
++                    let result = bridge::host_settings_show(&input)?;
++                    if json {
++                        write_json(&mut out, &result)?;
++                    } else {
++                        writeln!(
++                            out,
++                            "{}",
++                            if result.settings.smart_action_cmd_enabled {
++                                "enabled"
++                            } else {
++                                "disabled"
++                            }
++                        )?;
++                        writeln!(out, "revision={}", result.revision)?;
++                    }
++                }
++                InputCommandPermissionCommand::Set {
++                    input,
++                    value,
++                    output,
++                } => {
++                    let enabled = match value {
++                        InputCommandPermissionValue::Enabled => true,
++                        InputCommandPermissionValue::Disabled => false,
++                    };
++                    let result = bridge::host_settings_command_candidate(&input, enabled, &output)?;
++                    if json {
++                        write_json(&mut out, &result)?;
++                    } else {
++                        writeln!(
++                            out,
++                            "Candidate command permission: changed={} output={}",
++                            result.changed,
++                            result.output.display()
++                        )?;
++                        writeln!(out, "beforeRevision={}", result.before_revision)?;
++                        writeln!(out, "afterRevision={}", result.after_revision)?;
++                        for path in result.changed_paths {
++                            writeln!(out, "CHANGE\t{path}")?;
++                        }
++                    }
++                }
++                InputCommandPermissionCommand::Apply {
++                    input,
++                    backup,
++                    expected_revision,
++                    idempotency_key,
++                } => {
++                    let result = bridge::host_settings_apply(
++                        &bridge_paths,
++                        &input,
++                        &backup,
++                        expected_revision.as_deref(),
++                        idempotency_key.as_deref(),
++                    )?;
++                    write_input_host_settings_mutation(result, json, &mut out)?;
++                }
++                InputCommandPermissionCommand::Restore {
++                    input,
++                    backup,
++                    expected_revision,
++                    idempotency_key,
++                } => {
++                    let result = bridge::host_settings_restore(
++                        &bridge_paths,
++                        &input,
++                        &backup,
++                        expected_revision.as_deref(),
++                        idempotency_key.as_deref(),
++                    )?;
++                    write_input_host_settings_mutation(result, json, &mut out)?;
++                }
++            },
++        },
++    }
++    Ok(())
++}
++
++fn write_input_host_settings_mutation(
++    result: bridge::HostSettingsMutationReceipt,
++    json: bool,
++    mut out: impl Write,
++) -> Result<()> {
++    if json {
++        write_json(&mut out, &result)?;
++    } else {
++        writeln!(
++            out,
++            "Input host settings {}: changed={} replay={} backup={}",
++            result.operation,
++            result.changed,
++            result.idempotent_replay,
++            result.backup.display()
++        )?;
++        writeln!(out, "beforeRevision={}", result.before_revision)?;
++        writeln!(out, "afterRevision={}", result.after_revision)?;
+     }
+     Ok(())
+ }
+diff --git a/tests/cli.rs b/tests/cli.rs
+index 3164bc8..b7d835f 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -234,6 +234,7 @@ fn input_and_config_help_expose_read_only_workflow() {
+     assert!(input_stdout.contains("inspect"));
+     assert!(input_stdout.contains("export"));
+     assert!(input_stdout.contains("config"));
++    assert!(input_stdout.contains("permission"));
+ 
+     let input_config = binary()
+         .args(["input", "config", "--help"])
+@@ -243,6 +244,16 @@ fn input_and_config_help_expose_read_only_workflow() {
+     assert!(input_config.status.success());
+     assert!(input_config_stdout.contains("snapshot"));
+ 
++    let permission = binary()
++        .args(["input", "permission", "command", "--help"])
++        .output()
++        .unwrap();
++    let permission_stdout = String::from_utf8(permission.stdout).unwrap();
++    assert!(permission.status.success());
++    for command in ["snapshot", "get", "set", "apply", "restore"] {
++        assert!(permission_stdout.contains(command));
++    }
++
+     let config = binary().args(["config", "--help"]).output().unwrap();
+     let config_stdout = String::from_utf8(config.stdout).unwrap();
+     assert!(config.status.success());

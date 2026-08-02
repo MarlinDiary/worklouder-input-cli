@@ -1,0 +1,217 @@
+WorkLouderCTL Input command permission v1 verification record
+=============================================================
+
+Scope
+-----
+Base commit: 2b2a6e275a799c1e79cc89a9025e4b7bcbfc1b62
+Feature commit: 991ee4177646638455169f5283fa0fb257ec9f29
+Feature commits:
+  5b05f62 spec: freeze Input host settings
+  5d72d5c spec: freeze Input command permission
+  aa69861 spec: keep host settings behind Input bridge
+  a07445b feat: add Input command permission transaction
+  991ee41 docs: publish Input command permission workflow
+Changed branch:
+  input permission command
+Changed field:
+  /settings/smartActionCmdEnabled
+Preserved sibling fields:
+  /settings/showedAnalyticsPopUp
+  /settings/analyticsConsented
+Input GUI, device files, Input cache, direct LokiJS mutation, and runtime process mutation: none
+
+Released behavior contract
+--------------------------
+Static inspection boundary: exact Input 0.18.0 app.asar and extracted main/
+renderer bundles. The released GUI reads and saves the complete three-boolean
+application-settings DTO through ApplicationService. Command Smart Action
+execution is gated by smartActionCmdEnabled. WorkLouderCTL delegates the same
+complete DTO to an Input-owned Companion Bridge authority and never edits
+input_storage.json directly.
+Input app.asar SHA-256:
+  8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8
+Main bundle SHA-256:
+  7c16191956acb8d0d89c50eb940dc9b757bf6966b19c56499ca2d60d8743154a
+Renderer chunk SHA-256:
+  c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e
+Frozen specs:
+  spec/input-host-settings-0.18.0.json
+  spec/input-companion-bridge-v1.json
+
+Preserved original artifact and baseline-red
+--------------------------------------------
+Source commit: 2b2a6e275a799c1e79cc89a9025e4b7bcbfc1b62
+Build command:
+  CARGO_TARGET_DIR=/tmp/worklouderctl-input-command-permission-v1.mceNKK/base-target cargo build --release --locked \
+    --manifest-path /tmp/worklouderctl-input-command-permission-v1.mceNKK/base-worktree/Cargo.toml
+Path:
+  /tmp/worklouderctl-input-command-permission-v1.mceNKK/original/worklouderctl
+SHA-256 after reopen/execute:
+  ccb58db6584e64e7236a1d03c22a67d4e34f74837922147086a7f3ba0e0fa727
+Command:
+  ORIGINAL_BIN input permission command --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'permission' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl input [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
+
+Modified release behavior
+-------------------------
+Path:
+  /tmp/worklouderctl-input-command-permission-v1.mceNKK/modified/worklouderctl
+Repository artifact:
+  target/release/worklouderctl
+SHA-256 after reopen/execute:
+  a69e5a50650874f17c109abc9e626e5770a2309a3d8c7f5d454cb765ec368013
+Command:
+  MODIFIED_BIN input permission command --help
+Literal stdout includes:
+  Manage the host gate for command Smart Actions
+  snapshot    Snapshot all Input host settings through the running Input bridge
+  get         Read command permission from an offline host-settings snapshot
+  set         Build an offline candidate while preserving both analytics settings
+  apply       Apply a complete host-settings candidate with backup, CAS, and rollback
+  restore     Restore a complete host-settings snapshot with a new backup
+Literal stderr: (empty)
+Exit status: 0
+
+Isolated Input-owned authority E2E
+----------------------------------
+Fixture transport:
+  JSON-RPC 2.0 over private Unix socket
+Fixture Input version:
+  0.18.0-fixture
+Commands:
+  MODIFIED_BIN --json input --bridge-socket SOCKET --bridge-token TOKEN \
+    permission command snapshot --output E2E/host-settings.json
+  MODIFIED_BIN --json input permission command get \
+    --input E2E/host-settings.json
+  MODIFIED_BIN --json input permission command set \
+    --input E2E/host-settings.json enabled \
+    --output E2E/host-settings-enabled.json
+  MODIFIED_BIN --json input --bridge-socket SOCKET --bridge-token TOKEN \
+    permission command apply --input E2E/host-settings-enabled.json \
+    --backup E2E/pre-apply.json \
+    --expected-revision 9bd5bdd7f8901e2a100b25deb83ec0e756252c445ed0c0716aa2b8476095fb87 \
+    --idempotency-key evidence-apply-1
+  MODIFIED_BIN --json input --bridge-socket SOCKET --bridge-token TOKEN \
+    permission command restore --input E2E/host-settings.json \
+    --backup E2E/pre-restore.json \
+    --expected-revision 8dd797d87fcebbbf45d04361d96b1696513afb54fd308d82a5c40d7cf7ef6a9c \
+    --idempotency-key evidence-restore-1
+Exit status: 0 for all commands
+
+Literal baseline snapshot:
+  {"showedAnalyticsPopUp":true,"analyticsConsented":false,"smartActionCmdEnabled":false}
+  revision=9bd5bdd7f8901e2a100b25deb83ec0e756252c445ed0c0716aa2b8476095fb87
+Literal candidate snapshot:
+  {"showedAnalyticsPopUp":true,"analyticsConsented":false,"smartActionCmdEnabled":true}
+  revision=8dd797d87fcebbbf45d04361d96b1696513afb54fd308d82a5c40d7cf7ef6a9c
+Literal candidate receipt:
+  changed=true
+  changedPaths=["/settings/smartActionCmdEnabled"]
+Literal apply receipt:
+  operation=apply
+  changed=true
+  idempotentReplay=false
+  rollbackPerformed=false
+  beforeRevision=9bd5bdd7f8901e2a100b25deb83ec0e756252c445ed0c0716aa2b8476095fb87
+  afterRevision=8dd797d87fcebbbf45d04361d96b1696513afb54fd308d82a5c40d7cf7ef6a9c
+Literal replay receipt:
+  operation=apply
+  idempotentReplay=true
+  afterRevision=8dd797d87fcebbbf45d04361d96b1696513afb54fd308d82a5c40d7cf7ef6a9c
+Literal restore receipt:
+  operation=restore
+  changed=true
+  beforeRevision=8dd797d87fcebbbf45d04361d96b1696513afb54fd308d82a5c40d7cf7ef6a9c
+  afterRevision=9bd5bdd7f8901e2a100b25deb83ec0e756252c445ed0c0716aa2b8476095fb87
+Literal final readback:
+  {"showedAnalyticsPopUp":true,"analyticsConsented":false,"smartActionCmdEnabled":false}
+Literal assertions:
+  assertions=pass
+  baseline=false
+  modified=true
+  rollback=false
+  analytics_siblings=preserved
+  idempotent_replay=verified
+
+Automated quality gates
+-----------------------
+Command: jq empty spec/input-companion-bridge-v1.json spec/input-host-settings-0.18.0.json
+Exit status: 0
+Command: sh -n scripts/test-bridge-e2e.sh
+Exit status: 0
+Command: npm --prefix companion test
+Literal result: 17 passed; 0 failed
+Exit status: 0
+Command: cargo fmt --all -- --check
+Exit status: 0
+Command: cargo clippy --locked --all-targets --all-features -- -D warnings
+Literal result: Finished dev
+Exit status: 0
+Command: cargo test --locked
+Literal result:
+  66 passed; 0 failed (library)
+  19 passed; 0 failed (CLI integration)
+  0 failed (binary and doc tests)
+Exit status: 0
+Command: ./scripts/test-bridge-e2e.sh
+Literal host markers:
+  host_settings_snapshot_revision=verified
+  host_command_permission_candidate=verified
+  host_command_permission_sibling_preservation=verified
+  host_settings_apply_replay_restore=verified
+Exit status: 0
+Command: cargo build --release --locked
+Literal result: Finished release
+Exit status: 0
+
+Tested boundaries
+-----------------
+  exact Input 0.18.0 DTO and static source hashes
+  authenticated capability negotiation for snapshot/apply/restore
+  canonical three-boolean revision shared by Node and Rust
+  offline one-field candidate and analytics sibling preservation
+  immutable pre-apply and pre-restore backups
+  live CAS, session-scoped idempotent replay, exact readback, and restore
+  adapter automatic rollback after corrupt readback
+  no GUI, hardware, device-file, cache, or direct database mutation
+
+Modified artifact
+-----------------
+Path:
+  target/release/worklouderctl
+Preserved copy:
+  /tmp/worklouderctl-input-command-permission-v1.mceNKK/modified/worklouderctl
+SHA-256 after reopen/execute:
+  a69e5a50650874f17c109abc9e626e5770a2309a3d8c7f5d454cb765ec368013
+Reopen/execute command:
+  ./target/release/worklouderctl input permission command --help
+Exit status: 0
+
+Patch
+-----
+Path:
+  artifacts/verification/input-command-permission-v1/input-command-permission.patch
+SHA-256:
+  41130d6d83497c838c79ed51ea3b79d19f4b984e7f4bc763daff644a4c9e5628
+Command:
+  git apply --check --reverse artifacts/verification/input-command-permission-v1/input-command-permission.patch
+Exit status: 0
+
+Rollback
+--------
+Path:
+  artifacts/verification/input-command-permission-v1/rollback.sh
+SHA-256:
+  43a6d0d87e725878324eb0996043734153455bd0a9fc6c568db26e76568874b1
+Syntax command:
+  sh -n artifacts/verification/input-command-permission-v1/rollback.sh
+Exit status: 0
+The isolated rollback execution is appended after the artifact commit.
