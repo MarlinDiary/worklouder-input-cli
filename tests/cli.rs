@@ -1446,3 +1446,29 @@ fn capability_filter_runs_end_to_end_as_json() {
     assert!(stdout.contains("\"capability\":\"firmware-update\""));
     assert!(!stdout.contains("agent-keys"));
 }
+
+#[test]
+fn runtime_errors_have_typed_status_and_json_envelope() {
+    let missing = fixture_root().join("missing-plan.json");
+    let output = binary()
+        .args(["--json", "transaction", "show", "--input"])
+        .arg(missing)
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(4));
+    assert!(output.stdout.is_empty());
+    let error: serde_json::Value = serde_json::from_slice(&output.stderr).unwrap();
+    assert_eq!(error["schemaVersion"], 1);
+    assert_eq!(error["kind"], "worklouderctl-error");
+    assert_eq!(error["code"], "invalid-data");
+    assert_eq!(error["exitStatus"], 4);
+    assert!(error["message"].as_str().unwrap().contains("failed to inspect"));
+}
+
+#[test]
+fn clap_usage_errors_keep_status_two() {
+    let output = binary().arg("not-a-command").output().unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("USAGE"));
+}

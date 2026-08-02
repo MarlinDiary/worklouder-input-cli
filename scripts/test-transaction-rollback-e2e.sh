@@ -51,13 +51,17 @@ bin=$repo/target/debug/worklouderctl
   --input-host-settings-candidate "$root/host-candidate.json" \
   --output "$root/plan.json" >"$root/plan-receipt.json"
 
-if "$bin" --json transaction apply \
+set +e
+"$bin" --json transaction apply \
   --plan "$root/plan.json" --backup-dir "$root/apply-backup" \
   --receipt "$root/apply-receipt.json" \
   --idempotency-key transaction-injected-post-write \
   --input-socket "$socket" --input-token "$token" \
-  >"$root/apply.stdout" 2>"$root/apply.stderr"; then
-  echo "injected transaction failure unexpectedly succeeded" >&2
+  >"$root/apply.stdout" 2>"$root/apply.stderr"
+apply_status=$?
+set -e
+if [ "$apply_status" -ne 6 ]; then
+  echo "injected transaction failure returned status $apply_status, expected 6" >&2
   exit 1
 fi
 

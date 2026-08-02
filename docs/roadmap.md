@@ -39,7 +39,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [ ] Integrate the bridge adapter into an official Input release
 - [x] Structural `validate` and `diff`
 - [x] JSON output
-- [ ] Typed exit statuses
+- [x] Typed exit statuses and JSON error envelopes
 
 ## M2 — Codex-native configuration beta
 
@@ -88,10 +88,10 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [ ] Input process coordination
 - [x] Codex settings-bridge protocol, client, and reference process integration
 - [ ] Released Codex process integration
-- [ ] Private backup catalog
-- [ ] Plan/apply conflict detection
-- [ ] Exact readback and checksum verification
-- [ ] Automatic and manual rollback
+- [x] Private backup catalog with atomic publication and mode-0700/0600 containment
+- [x] Plan/apply all-authority CAS conflict detection and retry drift rejection
+- [x] Exact provider readback plus coordinated all-authority postflight
+- [x] Automatic reverse rollback and manual restore with roll-forward recovery
 
 ## M5 — Stable distribution
 

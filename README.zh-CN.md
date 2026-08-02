@@ -461,6 +461,15 @@ list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实
 release 集成、Codex released-app bridge 集成、可安装 binary 与 Homebrew formula
 仍在后续里程碑中。
 
+`transaction plan/show/apply/restore` 已把 Codex settings、六键 Agent
+assignments、Input device configuration 与 Input host settings 纳入同一个 canonical
+revision 和 rollback boundary。执行前会一次性 CAS 预检四个 authority，原子发布
+`0700` 目录/`0600` 文件的自包含 backup catalog，执行后做全 authority readback；
+失败时反向自动回滚，手动 restore 也有独立 recovery catalog 与失败 roll-forward。
+完整命令和验证边界见[跨 authority transaction 指南](docs/transactions.md)。
+自动化可使用固定的 `0`–`8` 状态与 `worklouderctl-error` JSON；详见
+[exit statuses](docs/exit-statuses.md)。
+
 配置边界已经确定：**Tier 1 使用 Codex 的设置模型与运行时；Tier 2 及以上
 使用 Input 的设置模型与运行时；CLI 对两边都提供完整配置能力。** 详见
 [Tier 模型](docs/tier-model.md)、

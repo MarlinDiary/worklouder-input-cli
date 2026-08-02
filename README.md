@@ -453,6 +453,14 @@ plus the exact macOS HID primary label for `KC_*`/`KI_*` under every released
 Input language. The overlay stays Input-owned; sector edits use the verified
 `layer joystick` and `control set` candidate/apply/rollback path.
 
+`transaction plan/show/apply/restore` now coordinates Codex settings, Codex
+Agent Keys, Input device configuration, and Input host settings behind one
+canonical revision and rollback boundary. It preflights all authorities before
+the first write, atomically publishes a private self-contained backup catalog,
+performs exact all-authority postflight, rejects drifted retries, automatically
+restores earlier writes after failure, and supports verified manual restore.
+See the [cross-authority transaction guide](docs/transactions.md).
+
 The repository includes an executable Input-main reference server, a service
 adapter for the Input 0.18.0 service shape, authentication tests, and a
 cross-language Rust CLI conformance test:
@@ -461,6 +469,8 @@ cross-language Rust CLI conformance test:
 node --test companion/input-main-bridge.test.mjs
 ./scripts/test-bridge-e2e.sh
 ./scripts/test-codex-bridge-e2e.sh
+./scripts/test-transaction-e2e.sh
+./scripts/test-transaction-rollback-e2e.sh
 ```
 
 ## Additional planned mutation commands
@@ -552,6 +562,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Companion Bridge v1 contract, CLI client, and reference server | Complete |
 | Bridge config snapshot, deterministic revision, and live CAS preflight | Complete |
 | Bridge apply/restore transaction and automatic rollback fixture | Complete |
+| Four-authority plan/apply/postflight/manual restore transaction | Complete in isolated Codex + Input fixtures; released bridges pending |
 | Companion Bridge integration in a released Input build | Upstream integration pending |
 | Codex Companion Bridge client/reference integration | Complete; released Codex integration pending |
 | Semantic profile/layer candidates | Full lifecycle, selection, ordering, color, and lighting candidate-verified; combined profile-create/layer-create/lighting apply/readback/restore fixture-verified |
@@ -600,6 +611,8 @@ Read the complete [FAQ](docs/faq.md).
 
 - [Configuration tier model](docs/tier-model.md)
 - [Complete configuration reference](docs/configuration-reference.md)
+- [Cross-authority transaction guide](docs/transactions.md)
+- [Exit statuses and JSON error envelopes](docs/exit-statuses.md)
 - [Configuration parity matrix](docs/configuration-parity.md)
 - [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
 - [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)

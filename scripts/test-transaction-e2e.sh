@@ -132,6 +132,35 @@ run_case() {
       --input-socket "$input_socket" --input-token "$input_token" \
       --codex-socket "$codex_socket" --codex-token "$codex_token" \
       >"$root/apply-retry.json"
+    local host_candidate_revision
+    host_candidate_revision=$(python3 -c \
+      'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
+      "$root/host-candidate.json")
+    local host_base_revision
+    host_base_revision=$(python3 -c \
+      'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
+      "$root/host-base.json")
+    "$BIN" --json input --bridge-socket "$input_socket" --bridge-token "$input_token" \
+      permission command restore --input "$root/host-base.json" \
+      --backup "$root/retry-drift-host-target.json" \
+      --expected-revision "$host_candidate_revision" \
+      --idempotency-key "four-authority-$label-retry-drift" \
+      >"$root/retry-drift.json"
+    if "$BIN" --json transaction apply --plan "$root/plan.json" \
+      --backup-dir "$root/apply-backup" --receipt "$root/apply.json" \
+      --idempotency-key "four-authority-$label-apply" \
+      --input-socket "$input_socket" --input-token "$input_token" \
+      --codex-socket "$codex_socket" --codex-token "$codex_token" \
+      >"$root/drifted-retry.stdout" 2>"$root/drifted-retry.stderr"; then
+      echo "transaction retry accepted drifted live state" >&2
+      return 1
+    fi
+    "$BIN" --json input --bridge-socket "$input_socket" --bridge-token "$input_token" \
+      permission command apply --input "$root/host-candidate.json" \
+      --backup "$root/retry-drift-host-base.json" \
+      --expected-revision "$host_base_revision" \
+      --idempotency-key "four-authority-$label-retry-reset" \
+      >"$root/retry-reset.json"
     "$BIN" --json transaction restore --apply-receipt "$root/apply.json" \
       --backup-dir "$root/restore-backup" --receipt "$root/restore.json" \
       --idempotency-key "four-authority-$label-restore" \
@@ -155,7 +184,7 @@ run_case() {
     "$BIN" --json codex agent-key snapshot --socket "$codex_socket" --token "$codex_token" \
       --output "$root/agent-restored.json" >"$root/agent-restored-receipt.json"
   else
-    [[ "$apply_status" != 0 ]]
+    [[ "$apply_status" == 6 ]]
   fi
 
   python3 - "$root" "$fail_settings_writes" <<'PY'
@@ -211,6 +240,7 @@ if failed:
 else:
     assert apply["operation"] == "apply" and apply["status"] == "applied"
     assert load("apply-stdout.json") == apply == load("apply-retry.json")
+    assert "differed during transaction postflight" in (root / "drifted-retry.stderr").read_text()
     assert [item["id"] for item in apply["mutations"]] == [
         "input-host-settings", "input-config", "codex-agent-keys", "codex-settings",
     ]
@@ -240,5 +270,6 @@ printf '%s\n' \
   'cross_authority_four_provider_plan=verified' \
   'cross_authority_apply_readback_restore=verified' \
   'cross_authority_idempotent_retry=verified' \
+  'cross_authority_retry_drift_rejected=verified' \
   'cross_authority_private_catalog_permissions=verified' \
   'cross_authority_failure_auto_rollback=verified'

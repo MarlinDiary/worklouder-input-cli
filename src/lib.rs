@@ -8,6 +8,7 @@ pub mod config;
 pub mod contract;
 pub mod device;
 pub mod doctor;
+pub mod exit_status;
 pub mod fsutil;
 pub mod input;
 pub mod semantic;
