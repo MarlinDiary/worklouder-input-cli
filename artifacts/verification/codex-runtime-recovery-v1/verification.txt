@@ -1,0 +1,249 @@
+WorkLouderCTL Codex runtime recovery v1 verification record
+===========================================================
+
+Scope
+-----
+Base commit: 0977dcec9b35660064efeb5dae5faba1485c068c
+Feature commit: 2d119d40af0ae899ec5cf77c4c0a2d0e7faca3ea
+Feature commits:
+  687ae66 spec: freeze Codex runtime recovery
+  1456ea3 feat: add Codex runtime recovery CLI
+  f92b53b test: verify Codex runtime diagnostics
+  8c841b3 docs: publish Codex runtime recovery
+  2d119d4 test: align runtime checks with command hierarchy
+Changed CLI branches:
+  codex runtime status
+  codex runtime recover [--timeout-seconds 15]
+Changed runtime branch:
+  stale CodexMicroService reconnect -> service-only stop/start -> connected
+Configuration fields changed: none
+GUI windows closed, clicked, or relaunched: none
+
+Why every Codex Tier button stopped
+-----------------------------------
+The USB device, Codex settings, and Input keymap were intact. At
+2026-08-02T10:03:56.982Z a v.oai.thstatus write failed. Codex then removed both
+v.oai.hid and v.oai.rad handlers, attempted an HID reconnect, and retained
+never-settled connection/topology Promises. The released service remained in
+"detected" instead of "connected", so every Codex Tier event lost its runtime
+subscription even though the keyboard still enumerated.
+
+Captured failed service state:
+  lifecycleState=started
+  deviceState.status=detected
+  deviceState.transport=usb
+  deviceState.model=codex-micro
+  hasComm=true
+  hasApi=true
+  hasConnectPromise=true
+  hasTopologyPromise=true
+  topologyReconciliationPending=true
+  topologySettleRetryIndex=3
+  hasHidSubscription=false
+  hasJoystickSubscription=false
+
+Literal failure log:
+  2026-08-02T10:03:56.982Z ... method:"v.oai.thstatus" ... code:"WRITE_FAILED"
+  2026-08-02T10:03:56.982Z ... Cannot write to hid device
+  2026-08-02T10:03:56.986Z ... Removed notify handler ... "v.oai.hid"
+  2026-08-02T10:03:56.986Z ... Removed notify handler ... "v.oai.rad"
+  2026-08-02T10:03:57.138Z ... Connecting with HID
+
+Live service-only recovery
+--------------------------
+Operation sequence:
+  attach to PID 88596 with a loopback Node inspector
+  SIGSTOP Input PID 26415
+  clear only the stale service attempt/Promise references
+  call the released CodexMicroService stop()/start() path
+  require the full connected/subscribed readback
+  SIGCONT Input PID 26415
+Both PIDs stayed unchanged. No settings, keymap, cache, app bundle, firmware, or
+driver bytes were written.
+
+Literal recovered service readback:
+  {"lifecycleState":"started","deviceState":{"status":"connected","transport":"usb","model":"codex-micro","error":null,"battery":{"percentage":99,"isCharging":true}},"hasComm":true,"hasApi":true,"hasConnectPromise":false,"hasTopologyPromise":false,"topologyReconciliationPending":false,"topologySettleRetryIndex":0,"hasHidSubscription":true,"hasJoystickSubscription":true,"connectedDevicePortPath":"DevSrvsID:4295111514","connectionAttemptId":3}
+Exit status: 0
+
+Literal recovery log:
+  2026-08-02T10:35:53.197Z ... Connecting with HID
+  2026-08-02T10:35:53.263Z ... Added notify handler ... "v.oai.hid"
+  2026-08-02T10:35:53.263Z ... Added notify handler ... "v.oai.rad"
+  2026-08-02T10:35:53.321Z ... method:"device.status"
+  2026-08-02T10:35:53.321Z ... {"version":"v0.6.0","profile_index":0,"layer_index":1,"battery":99,"is_charging":true}
+
+Stability readback:
+  2026-08-02T10:51:53.473Z ... method:"device.status"
+  2026-08-02T10:51:53.473Z ... {"version":"v0.6.0","profile_index":0,"layer_index":1,"battery":99,"is_charging":true}
+Result: the restored service kept its once-per-minute device heartbeat for at
+least 16 minutes after recovery, on the Codex layer.
+
+Installed-app compatibility gate
+--------------------------------
+Commands:
+  /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+    /Applications/ChatGPT.app/Contents/Info.plist
+  /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+    /Applications/input.app/Contents/Info.plist
+  shasum -a 256 \
+    /Applications/ChatGPT.app/Contents/Resources/app.asar \
+    /Applications/ChatGPT.app/Contents/Resources/native/hid-topology-watcher.node \
+    /Applications/ChatGPT.app/Contents/Resources/native/input-monitoring-permission.node
+Literal output:
+  26.727.51351
+  0.18.0
+  a529edd72e10b08931c0d695b5e3e6a0be7f51874610dafc04f578436ab7d74d  app.asar
+  a6b9b01f33cc3fb9f2974ee39e4614d8eac71edbcae983b43cc0a2b1f3e4f441  hid-topology-watcher.node
+  47bb934388889b276aa964fb20a64e657089d11a3c05aa5f3b4bfe12a2909ebb  input-monitoring-permission.node
+Exit status: 0
+
+Preserved configuration readback
+--------------------------------
+Commands:
+  shasum -a 256 ~/.codex/config.toml \
+    ~/Library/Application\ Support/input/devices/33632/keymap.json
+Literal output:
+  e0ada13d8d8c046cb7007ae356af270762a4faefc4e933b659cd207bd4000392  config.toml
+  803779884034f0268339f3b227b550db043068403e5024cc5270bc229467a6c6  keymap.json
+Keymap Codex tokens still present:
+  KV_OAI_ACT06 through KV_OAI_ACT12
+  KV_OAI_AG00 through KV_OAI_AG05
+  KV_OAI_ENC_CC, KV_OAI_ENC_CLK, KV_OAI_ENC_CW
+Exit status: 0
+
+Preserved original artifact
+---------------------------
+Source commit: 0977dcec9b35660064efeb5dae5faba1485c068c
+Build command:
+  cargo build --release --locked --manifest-path BASE_WORKTREE/Cargo.toml
+Preserved path:
+  /tmp/worklouderctl-codex-runtime-recovery-v1.7scyVY/original/worklouderctl
+SHA-256:
+  b97b5d7af37fa096c1d8128f801b57e305230cd1b1ef433a5bf215c30e204692
+Exit status: 0
+
+Functional baseline-red
+-----------------------
+Command:
+  /tmp/worklouderctl-codex-runtime-recovery-v1.7scyVY/original/worklouderctl \
+    codex runtime --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'runtime' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl codex [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
+
+Modified behavior: CLI surface
+------------------------------
+Command:
+  /tmp/worklouderctl-codex-runtime-recovery-v1.7scyVY/modified/worklouderctl \
+    codex runtime --help
+Literal subcommands:
+  recover    Restart only a stuck CodexMicroService with automatic Input coordination
+  status     Read the one live CodexMicroService instance and its subscriptions
+Literal options:
+  --app <APP>
+  --input-app <INPUT_APP>
+  --json
+  --timeout-seconds <TIMEOUT_SECONDS> (recover)
+Exit status: 0
+
+Runtime implementation boundary
+-------------------------------
+Verified in the live service operation:
+  exact released service state query
+  stale reconnect classification
+  Input pause/resume without closing its window
+  service-only recovery
+  connected device, battery, HID/joystick subscription readback
+  repeated post-recovery device heartbeat
+Verified in the release source and tests:
+  exact app version and three-file SHA-256 gate
+  exact main-process PID matching
+  inspector port ownership and loopback-only WebSocket enforcement
+  one live service object requirement
+  healthy/stuck state classification
+  WebSocket/CDP request-response round trip
+  Drop guard that resumes Input on every return path
+  post-resume stability window
+  close-and-rearm behavior for an inspector opened by the CLI
+
+The pre-implementation diagnostic opened and then closed the current process's
+default one-shot SIGUSR1 inspector before close-and-rearm code existed. A later
+release-binary status attempt on that same PID returned:
+  error: Codex loopback inspector did not start
+Exit status: 1
+The current GUI was intentionally left running. Therefore live recovery and
+long-run heartbeat are confirmed, and release CLI transport is confirmed by the
+mock CDP E2E plus source tests; the first repeated release-binary attach is left
+to the next normal Codex process start, where the CLI installs its reattach
+handler before closing the inspector.
+
+Automated quality gates
+-----------------------
+Command: cargo fmt --all -- --check
+Literal output: (empty)
+Exit status: 0
+
+Command: cargo clippy --locked --all-targets -- -D warnings
+Literal result:
+  Finished dev [unoptimized + debuginfo] target(s)
+Exit status: 0
+
+Command: cargo test --locked
+Literal result:
+  59 passed; 0 failed (library)
+  14 passed; 0 failed (CLI integration)
+  0 failed (binary and doc tests)
+Exit status: 0
+
+Runtime-specific tested behaviors:
+  healthy state requires both subscriptions and settled Promises
+  exact process parser rejects argument/helper false matches
+  loopback inspector URL parser
+  frozen service chunk/export contract
+  real local mock WebSocket/CDP round trip
+  CLI help exposes status, recover, Input coordination, and timeout
+
+Command: cargo build --release --locked
+Literal result:
+  Finished release [optimized] target(s)
+Exit status: 0
+
+Modified artifact
+-----------------
+Build command:
+  cargo build --release --locked
+Repository path:
+  target/release/worklouderctl
+Preserved copy:
+  /tmp/worklouderctl-codex-runtime-recovery-v1.7scyVY/modified/worklouderctl
+SHA-256 (both paths):
+  c0c492f2af48fef405aadcac82d8143a7d89f3eb29c3aebe4cc7abc914074b42
+Reopen/execute command:
+  ./target/release/worklouderctl codex runtime --help
+Exit status: 0
+
+Patch
+-----
+Path:
+  artifacts/verification/codex-runtime-recovery-v1/codex-runtime-recovery.patch
+SHA-256:
+  f65315a5e44afb9618b0f5b5ae8853bf33e89d0a70ed67f7e03c356cd376bb0e
+Command:
+  git apply --check --reverse \
+    artifacts/verification/codex-runtime-recovery-v1/codex-runtime-recovery.patch
+Literal output: (empty)
+Exit status: 0
+
+Rollback
+--------
+Path:
+  artifacts/verification/codex-runtime-recovery-v1/rollback.sh
+SHA-256:
+  4618ee1f8bc6f110ea514a2c09b71d1041a0febad6c3fd01447fa908a260a925
+The isolated-worktree execution result is appended after the artifact commit.
