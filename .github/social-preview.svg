@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">WorkLouderCTL</title>
+  <desc id="desc">Companion CLI for Work Louder Input and Codex Micro</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#090B10"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FF6B35"/>
+      <stop offset="0.5" stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#22C55E"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="15" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <circle cx="1120" cy="80" r="260" fill="#304FFE" opacity="0.08"/>
+  <circle cx="1040" cy="570" r="260" fill="#FF6B35" opacity="0.07"/>
+  <rect x="70" y="70" width="9" height="500" rx="4.5" fill="url(#accent)"/>
+
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <text x="120" y="185" fill="#F9FAFB" font-size="76" font-weight="750" letter-spacing="-2">WorkLouderCTL</text>
+    <text x="124" y="244" fill="#9CA3AF" font-size="26" font-weight="500">Companion CLI for Work Louder Input + Codex Micro</text>
+    <text x="124" y="340" fill="#E5E7EB" font-size="28" font-weight="600">Plan · Diff · Apply · Verify · Roll Back</text>
+
+    <g font-size="18" font-weight="600">
+      <rect x="122" y="390" width="126" height="43" rx="21.5" fill="#1F2937" stroke="#374151"/>
+      <text x="150" y="418" fill="#D1D5DB">Profiles</text>
+      <rect x="263" y="390" width="116" height="43" rx="21.5" fill="#1F2937" stroke="#374151"/>
+      <text x="291" y="418" fill="#D1D5DB">Layers</text>
+      <rect x="394" y="390" width="171" height="43" rx="21.5" fill="#1F2937" stroke="#374151"/>
+      <text x="421" y="418" fill="#D1D5DB">Smart Actions</text>
+      <rect x="580" y="390" width="127" height="43" rx="21.5" fill="#1F2937" stroke="#374151"/>
+      <text x="608" y="418" fill="#D1D5DB">Rollback</text>
+    </g>
+
+    <text x="124" y="520" fill="#6B7280" font-size="18">Open source · Agent friendly · Transaction safe</text>
+  </g>
+
+  <g transform="translate(850 178)">
+    <rect x="-35" y="-55" width="365" height="330" rx="56" fill="#0B0F16" stroke="#374151" stroke-width="3"/>
+    <rect x="-16" y="-35" width="327" height="286" rx="42" fill="#121923" stroke="#1F2937" stroke-width="2"/>
+    <g filter="url(#glow)">
+      <rect x="12" y="-5" width="74" height="74" rx="18" fill="#304FFE" opacity="0.85"/>
+      <rect x="98" y="-5" width="74" height="74" rx="18" fill="#FF6D00" opacity="0.85"/>
+      <rect x="184" y="-5" width="74" height="74" rx="18" fill="#00C853" opacity="0.85"/>
+    </g>
+    <g fill="#202938" stroke="#38465A" stroke-width="2">
+      <rect x="12" y="82" width="74" height="74" rx="18"/>
+      <rect x="98" y="82" width="74" height="74" rx="18"/>
+      <rect x="184" y="82" width="74" height="74" rx="18"/>
+      <rect x="12" y="169" width="74" height="55" rx="17"/>
+      <rect x="98" y="169" width="74" height="55" rx="17"/>
+      <rect x="184" y="169" width="74" height="55" rx="17"/>
+    </g>
+    <circle cx="286" cy="32" r="30" fill="#202938" stroke="#52647E" stroke-width="3"/>
+    <circle cx="286" cy="125" r="24" fill="#151D29" stroke="#52647E" stroke-width="3"/>
+    <path d="M286 94v62M255 125h62" stroke="#52647E" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <text x="1188" y="595" text-anchor="end" fill="#4B5563" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">github.com/MarlinDiary/worklouder-input-cli</text>
+</svg>
