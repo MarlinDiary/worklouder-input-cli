@@ -1,6 +1,7 @@
 pub mod bridge;
 pub mod cli;
 pub mod codex;
+pub mod codex_bridge;
 pub mod config;
 pub mod contract;
 pub mod device;
@@ -14,13 +15,13 @@ use clap::CommandFactory;
 use cli::{
     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
     AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
-    CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexCommand,
-    CodexCommandKeyCommand, Command, CompletionShell, ConfigCommand, ControlCommand, DeviceCommand,
-    DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand, LayerCommand,
-    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
-    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
-    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
-    TierCommand,
+    CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand,
+    CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, Command, CompletionShell,
+    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
+    InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand, LightingEffect,
+    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
+    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+    SmartActionType as CliSmartActionType, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -1565,6 +1566,88 @@ fn optional_number(value: Option<u64>) -> String {
 
 fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<()> {
     match command {
+        CodexCommand::Bridge {
+            socket,
+            token,
+            command,
+        } => match command {
+            CodexBridgeCommand::Inspect => {
+                let result = codex_bridge::inspect(&codex_bridge::paths(socket, token))?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "Codex bridge {} protocol={} codex={}",
+                        result.bridge_version, result.protocol_version, result.codex_version
+                    )?;
+                    writeln!(out, "socket={}", result.socket.display())?;
+                    writeln!(out, "session={}", result.session_id)?;
+                    for capability in result.capabilities {
+                        writeln!(out, "CAPABILITY\t{capability}")?;
+                    }
+                }
+            }
+        },
+        CodexCommand::Config {
+            socket,
+            token,
+            command,
+        } => {
+            let paths = codex_bridge::paths(socket, token);
+            match command {
+                CodexConfigCommand::Snapshot { output } => {
+                    let result = codex_bridge::settings_snapshot(&paths, &output)?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "Saved Codex settings snapshot to {} (revision {})",
+                            result.output.display(),
+                            result.settings_revision
+                        )?;
+                        writeln!(out, "source-sha256={}", result.source_sha256)?;
+                    }
+                }
+                CodexConfigCommand::Apply {
+                    input,
+                    backup,
+                    expected_source_sha256,
+                    expected_settings_revision,
+                    idempotency_key,
+                } => write_codex_mutation_result(
+                    codex_bridge::settings_apply(
+                        &paths,
+                        &input,
+                        &backup,
+                        expected_source_sha256.as_deref(),
+                        expected_settings_revision.as_deref(),
+                        idempotency_key.as_deref(),
+                    )?,
+                    json,
+                    &mut out,
+                )?,
+                CodexConfigCommand::Restore {
+                    input,
+                    backup,
+                    expected_source_sha256,
+                    expected_settings_revision,
+                    idempotency_key,
+                } => write_codex_mutation_result(
+                    codex_bridge::settings_restore(
+                        &paths,
+                        &input,
+                        &backup,
+                        expected_source_sha256.as_deref(),
+                        expected_settings_revision.as_deref(),
+                        idempotency_key.as_deref(),
+                    )?,
+                    json,
+                    &mut out,
+                )?,
+            }
+        }
         CodexCommand::Doctor {
             strict,
             config,
@@ -1671,6 +1754,23 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
             )?,
         },
         CodexCommand::AgentKey { command } => match command {
+            CodexAgentKeyCommand::Assignments { socket, token } => {
+                let result =
+                    codex_bridge::agent_keys_snapshot(&codex_bridge::paths(socket, token))?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    for slot in &result.slots {
+                        writeln!(
+                            out,
+                            "{}\t{}",
+                            slot,
+                            serde_json::to_string(&result.assignments[slot])?
+                        )?;
+                    }
+                    writeln!(out, "revision={}", result.global_state_revision)?;
+                }
+            }
             CodexAgentKeyCommand::TapMode { command } => match command {
                 CodexAgentTapModeCommand::Get { input } => {
                     let result = codex::agent_tap_mode_get(&input)?;
@@ -1760,6 +1860,32 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
                 &mut out,
             )?,
         },
+    }
+    Ok(())
+}
+
+fn write_codex_mutation_result(
+    result: codex_bridge::SettingsMutationReceipt,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    if json {
+        write_json(&mut out, &result)?;
+    } else {
+        writeln!(
+            out,
+            "Codex settings {} {} (revision {} -> {})",
+            result.operation,
+            if result.changed {
+                "changed"
+            } else {
+                "unchanged"
+            },
+            result.before_settings_revision,
+            result.after_settings_revision
+        )?;
+        writeln!(out, "backup={}", result.backup.display())?;
+        writeln!(out, "idempotency-key={}", result.idempotency_key)?;
     }
     Ok(())
 }

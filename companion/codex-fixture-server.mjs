@@ -74,5 +74,11 @@ process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
 async function persist() {
-  await writeFile(sourcePath, JSON.stringify({ desktop: settings }, null, 2) + "\n", { mode: 0o600 });
+  await writeFile(sourcePath, JSON.stringify(canonicalJson({ desktop: settings }), null, 2) + "\n", { mode: 0o600 });
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalJson(value[key])]));
 }

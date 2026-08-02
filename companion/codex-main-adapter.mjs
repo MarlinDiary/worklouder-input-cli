@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { CodexBridgeError } from "./codex-main-bridge.mjs";
 
 export const CODEX_SETTINGS_SNAPSHOT_SCHEMA_VERSION = 1;
-export const CODEX_SETTINGS_SNAPSHOT_KIND = "worklouder-codex-settings-snapshot";
+export const CODEX_SETTINGS_SNAPSHOT_KIND = "worklouderctl-codex-settings-snapshot";
 export const CODEX_SETTINGS_REVISION_ALGORITHM = "codex-settings-revision-v1";
 export const CODEX_AGENT_KEYS_SNAPSHOT_KIND = "worklouder-codex-agent-keys-snapshot";
 export const CODEX_AGENT_KEYS_STATE_KEY = "codex-micro-custom-agent-assignments";
@@ -232,7 +232,7 @@ function assertReadback(after, target) {
 function mutationResult({ operation, idempotencyKey, before, after, changed }) {
   return {
     schemaVersion: 1,
-    kind: "worklouder-codex-settings-mutation",
+    kind: "worklouderctl-codex-settings-mutation",
     operation,
     idempotencyKey,
     idempotentReplay: false,

@@ -252,7 +252,7 @@ pub fn inspect(config_path: &Path, app_path: &Path) -> Result<Snapshot> {
         schema_version: SNAPSHOT_SCHEMA_VERSION,
         kind: SNAPSHOT_KIND.into(),
         adapter: contract.storage.adapter,
-        contract_app_version: contract.app_version,
+        contract_app_version: contract.app_version.clone(),
         installed_app_version,
         source_path: config_path.to_path_buf(),
         source_sha256: source_after,
@@ -261,6 +261,57 @@ pub fn inspect(config_path: &Path, app_path: &Path) -> Result<Snapshot> {
         definitions,
         warnings,
     })
+}
+
+pub fn snapshot_from_bridge(
+    installed_app_version: String,
+    source_path: PathBuf,
+    source_sha256: String,
+    settings: BTreeMap<String, Value>,
+    effective_settings: BTreeMap<String, Value>,
+    observed_definitions: BTreeMap<String, Value>,
+) -> Result<Snapshot> {
+    let contract = load_contract()?;
+    let parsed_definitions = observed_definitions
+        .into_iter()
+        .map(|(key, value)| {
+            serde_json::from_value::<Definition>(value)
+                .map(|definition| (key, definition))
+                .context("Codex bridge returned an invalid setting definition")
+        })
+        .collect::<Result<BTreeMap<_, _>>>()?;
+    ensure!(
+        parsed_definitions == contract.definitions,
+        "Codex bridge definitions differ from the frozen contract"
+    );
+    validate_settings(&settings, &contract)?;
+    ensure!(
+        effective_settings == compute_effective_settings(&settings, &contract),
+        "Codex bridge effectiveSettings differed from the frozen contract"
+    );
+    let warnings = if installed_app_version == contract.app_version {
+        Vec::new()
+    } else {
+        vec![format!(
+            "connected Codex version {installed_app_version} differs from frozen contract {}",
+            contract.app_version
+        )]
+    };
+    let snapshot = Snapshot {
+        schema_version: SNAPSHOT_SCHEMA_VERSION,
+        kind: SNAPSHOT_KIND.into(),
+        adapter: "codex-companion-bridge-v1".into(),
+        contract_app_version: contract.app_version.clone(),
+        installed_app_version: Some(installed_app_version),
+        source_path,
+        source_sha256,
+        settings,
+        effective_settings,
+        definitions: definition_values(&contract)?,
+        warnings,
+    };
+    validate_snapshot(&snapshot)?;
+    Ok(snapshot)
 }
 
 pub fn export(config_path: &Path, app_path: &Path, output: &Path) -> Result<Snapshot> {
@@ -633,7 +684,7 @@ fn command_key_slot<'a>(layout: &'a Map<String, Value>, slot: &str) -> Result<&'
         .with_context(|| format!("Command Key slot {slot} was missing"))
 }
 
-fn read_snapshot(path: &Path) -> Result<Snapshot> {
+pub fn read_snapshot(path: &Path) -> Result<Snapshot> {
     let metadata = fs::symlink_metadata(path)
         .with_context(|| format!("failed to inspect Codex snapshot {}", path.display()))?;
     ensure!(
@@ -649,7 +700,7 @@ fn read_snapshot(path: &Path) -> Result<Snapshot> {
     Ok(snapshot)
 }
 
-fn validate_snapshot(snapshot: &Snapshot) -> Result<()> {
+pub fn validate_snapshot(snapshot: &Snapshot) -> Result<()> {
     let contract = load_contract()?;
     ensure!(
         snapshot.schema_version == SNAPSHOT_SCHEMA_VERSION,
@@ -660,7 +711,8 @@ fn validate_snapshot(snapshot: &Snapshot) -> Result<()> {
         "Codex snapshot kind is invalid"
     );
     ensure!(
-        snapshot.adapter == contract.storage.adapter,
+        snapshot.adapter == contract.storage.adapter
+            || snapshot.adapter == "codex-companion-bridge-v1",
         "Codex snapshot adapter is invalid"
     );
     ensure!(
@@ -775,7 +827,7 @@ fn publish_candidate(
     })
 }
 
-fn settings_revision(settings: &BTreeMap<String, Value>) -> Result<String> {
+pub fn settings_revision(settings: &BTreeMap<String, Value>) -> Result<String> {
     let mut framed = REVISION_PREFIX.to_vec();
     let value = serde_json::to_value(settings)?;
     framed.extend(serde_json::to_vec(&canonical_json(&value))?);

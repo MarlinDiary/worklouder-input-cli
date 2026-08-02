@@ -353,6 +353,34 @@ pub enum InputCoordinationMode {
 
 #[derive(Debug, Subcommand)]
 pub enum CodexCommand {
+    /// Inspect the authenticated Codex Companion Bridge.
+    Bridge {
+        /// Override the Codex Companion Bridge Unix socket path.
+        #[clap(long, value_parser)]
+        socket: Option<PathBuf>,
+
+        /// Override the Codex Companion Bridge token file path.
+        #[clap(long, value_parser)]
+        token: Option<PathBuf>,
+
+        #[clap(subcommand)]
+        command: CodexBridgeCommand,
+    },
+
+    /// Snapshot, apply, or restore settings through the running Codex authority.
+    Config {
+        /// Override the Codex Companion Bridge Unix socket path.
+        #[clap(long, value_parser)]
+        socket: Option<PathBuf>,
+
+        /// Override the Codex Companion Bridge token file path.
+        #[clap(long, value_parser)]
+        token: Option<PathBuf>,
+
+        #[clap(subcommand)]
+        command: CodexConfigCommand,
+    },
+
     /// Diagnose the Codex app and Codex Micro settings source.
     Doctor {
         /// Treat warnings as a failing exit status.
@@ -442,10 +470,83 @@ pub enum CodexAgentSourceCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum CodexAgentKeyCommand {
+    /// Read all six live Agent Key assignments through Codex.
+    Assignments {
+        /// Override the Codex Companion Bridge Unix socket path.
+        #[clap(long, value_parser)]
+        socket: Option<PathBuf>,
+
+        /// Override the Codex Companion Bridge token file path.
+        #[clap(long, value_parser)]
+        token: Option<PathBuf>,
+    },
+
     /// Inspect or edit the single-tap focus behavior.
     TapMode {
         #[clap(subcommand)]
         command: CodexAgentTapModeCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexBridgeCommand {
+    /// Authenticate and print the negotiated Codex bridge capabilities.
+    Inspect,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexConfigCommand {
+    /// Save a frozen-contract settings snapshot from the running Codex process.
+    Snapshot {
+        /// Destination JSON file. It must not already exist.
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Apply a complete settings candidate with backup, CAS, and exact readback.
+    Apply {
+        /// Candidate from `codex config snapshot` or an offline Codex editor.
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        /// Immutable pre-apply snapshot; an existing file is reused for retry.
+        #[clap(long, value_parser)]
+        backup: PathBuf,
+
+        /// Require this exact settings source SHA-256 before mutation.
+        #[clap(long)]
+        expected_source_sha256: Option<String>,
+
+        /// Require this exact canonical settings revision before mutation.
+        #[clap(long)]
+        expected_settings_revision: Option<String>,
+
+        /// Stable retry key; reuse it only with the exact same mutation.
+        #[clap(long)]
+        idempotency_key: Option<String>,
+    },
+
+    /// Restore a complete settings snapshot with backup, CAS, and exact readback.
+    Restore {
+        /// Snapshot to restore.
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        /// Immutable pre-restore snapshot; an existing file is reused for retry.
+        #[clap(long, value_parser)]
+        backup: PathBuf,
+
+        /// Require this exact settings source SHA-256 before mutation.
+        #[clap(long)]
+        expected_source_sha256: Option<String>,
+
+        /// Require this exact canonical settings revision before mutation.
+        #[clap(long)]
+        expected_settings_revision: Option<String>,
+
+        /// Stable retry key; reuse it only with the exact same mutation.
+        #[clap(long)]
+        idempotency_key: Option<String>,
     },
 }
 
