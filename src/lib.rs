@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod codex;
 pub mod config;
 pub mod contract;
 pub mod doctor;
@@ -8,7 +9,8 @@ pub mod input;
 use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
-    CapabilityCommand, Cli, Command, CompletionShell, ConfigCommand, InputCommand, TierCommand,
+    CapabilityCommand, Cli, CodexCommand, Command, CompletionShell, ConfigCommand, InputCommand,
+    TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -37,11 +39,99 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Tier { command } => run_tier(command, cli.json, &mut out)?,
         Command::Capability { command } => run_capability(command, cli.json, &mut out)?,
         Command::Doctor { strict } => run_doctor(strict, cli.json, &mut out)?,
+        Command::Codex { command } => run_codex(command, cli.json, &mut out)?,
         Command::Input { command } => run_input(command, cli.json, &mut out)?,
         Command::Config { command } => run_config(command, cli.json, &mut out)?,
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
+    Ok(())
+}
+
+fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        CodexCommand::Doctor {
+            strict,
+            config,
+            app,
+        } => {
+            let config = codex::config_path(config);
+            let app = codex::app_path(app);
+            let report = codex::doctor(&config, &app);
+            if json {
+                write_json(&mut out, &report)?;
+            } else {
+                writeln!(
+                    out,
+                    "codex doctor: {:?} ({} pass, {} warn, {} fail)",
+                    report.status,
+                    report.pass_count(),
+                    report.warning_count(),
+                    report.failure_count()
+                )?;
+                for check in &report.checks {
+                    writeln!(out, "{:?}\t{}\t{}", check.status, check.id, check.summary)?;
+                }
+            }
+            if report.strict_failure(strict) {
+                anyhow::bail!(
+                    "Codex doctor found {} warning(s) and {} failure(s)",
+                    report.warning_count(),
+                    report.failure_count()
+                );
+            }
+        }
+        CodexCommand::Inspect { config, app } => {
+            let config = codex::config_path(config);
+            let app = codex::app_path(app);
+            let snapshot = codex::inspect(&config, &app)?;
+            if json {
+                write_json(&mut out, &snapshot)?;
+            } else {
+                writeln!(
+                    out,
+                    "Codex Micro settings at {} (sha256 {})",
+                    snapshot.source_path.display(),
+                    snapshot.source_sha256
+                )?;
+                writeln!(
+                    out,
+                    "adapter={} contract={} installed={}",
+                    snapshot.adapter,
+                    snapshot.contract_app_version,
+                    snapshot
+                        .installed_app_version
+                        .as_deref()
+                        .unwrap_or("unknown")
+                )?;
+                for (key, value) in &snapshot.settings {
+                    writeln!(out, "{key}\t{}", serde_json::to_string(value)?)?;
+                }
+                for warning in &snapshot.warnings {
+                    writeln!(out, "WARN\t{warning}")?;
+                }
+            }
+        }
+        CodexCommand::Export {
+            output,
+            config,
+            app,
+        } => {
+            let config = codex::config_path(config);
+            let app = codex::app_path(app);
+            let snapshot = codex::export(&config, &app, &output)?;
+            if json {
+                write_json(&mut out, &snapshot)?;
+            } else {
+                writeln!(
+                    out,
+                    "Exported Codex Micro settings to {} (source sha256 {})",
+                    output.display(),
+                    snapshot.source_sha256
+                )?;
+            }
+        }
+    }
     Ok(())
 }
 

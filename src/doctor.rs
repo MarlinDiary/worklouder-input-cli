@@ -328,7 +328,7 @@ fn default_input_support_root() -> PathBuf {
         .join("Library/Application Support/input")
 }
 
-fn bundle_version(app_path: &Path) -> Option<String> {
+pub fn bundle_version(app_path: &Path) -> Option<String> {
     let plist = app_path.join("Contents/Info.plist");
     ["CFBundleShortVersionString", "CFBundleVersion"]
         .iter()

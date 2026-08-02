@@ -37,6 +37,12 @@ pub enum Command {
         strict: bool,
     },
 
+    /// Inspect or export Codex-owned Codex Micro settings.
+    Codex {
+        #[clap(subcommand)]
+        command: CodexCommand,
+    },
+
     /// Inspect or export Input-owned configuration.
     Input {
         #[clap(subcommand)]
@@ -104,6 +110,50 @@ pub enum InputCommand {
         /// Override Input's application support directory.
         #[clap(long, value_parser)]
         support_root: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexCommand {
+    /// Diagnose the Codex app and Codex Micro settings source.
+    Doctor {
+        /// Treat warnings as a failing exit status.
+        #[clap(long)]
+        strict: bool,
+
+        /// Override the Codex config.toml path.
+        #[clap(long, value_parser)]
+        config: Option<PathBuf>,
+
+        /// Override the Codex application bundle path.
+        #[clap(long, value_parser)]
+        app: Option<PathBuf>,
+    },
+
+    /// Inspect Codex Micro settings without changing them.
+    Inspect {
+        /// Override the Codex config.toml path.
+        #[clap(long, value_parser)]
+        config: Option<PathBuf>,
+
+        /// Override the Codex application bundle path.
+        #[clap(long, value_parser)]
+        app: Option<PathBuf>,
+    },
+
+    /// Export a stable Codex Micro settings snapshot as JSON.
+    Export {
+        /// Destination JSON file. It must not already exist.
+        #[clap(long, value_parser)]
+        output: PathBuf,
+
+        /// Override the Codex config.toml path.
+        #[clap(long, value_parser)]
+        config: Option<PathBuf>,
+
+        /// Override the Codex application bundle path.
+        #[clap(long, value_parser)]
+        app: Option<PathBuf>,
     },
 }
 

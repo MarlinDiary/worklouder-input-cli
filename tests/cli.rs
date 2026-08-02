@@ -1,7 +1,25 @@
+use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 
 fn binary() -> Command {
     Command::new(env!("CARGO_BIN_EXE_worklouderctl"))
+}
+
+fn fixture_root() -> PathBuf {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "worklouderctl-cli-{}-{nonce}-{}",
+        std::process::id(),
+        NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed)
+    ))
 }
 
 #[test]
@@ -15,6 +33,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("tier"));
     assert!(stdout.contains("capability"));
     assert!(stdout.contains("doctor"));
+    assert!(stdout.contains("codex"));
     assert!(stdout.contains("input"));
     assert!(stdout.contains("config"));
     assert!(stdout.contains("completion"));
@@ -43,6 +62,46 @@ fn input_and_config_help_expose_read_only_workflow() {
     assert!(config.status.success());
     assert!(config_stdout.contains("validate"));
     assert!(config_stdout.contains("diff"));
+}
+
+#[test]
+fn codex_help_exposes_read_only_workflow() {
+    let codex = binary().args(["codex", "--help"]).output().unwrap();
+    let stdout = String::from_utf8(codex.stdout).unwrap();
+
+    assert!(codex.status.success());
+    assert!(stdout.contains("doctor"));
+    assert!(stdout.contains("inspect"));
+    assert!(stdout.contains("export"));
+}
+
+#[test]
+fn codex_inspect_emits_only_the_micro_settings_subset() {
+    let root = fixture_root();
+    fs::create_dir_all(&root).unwrap();
+    let config = root.join("config.toml");
+    fs::write(
+        &config,
+        b"model = \"unrelated-secret\"\n[desktop]\ncodex-micro-lighting-brightness = 64\nunrelated = \"also-private\"\n",
+    )
+    .unwrap();
+
+    let output = binary()
+        .args(["--json", "codex", "inspect", "--config"])
+        .arg(&config)
+        .arg("--app")
+        .arg(root.join("missing.app"))
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+
+    assert!(output.status.success());
+    let snapshot: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(snapshot["settings"].as_object().unwrap().len(), 1);
+    assert_eq!(snapshot["settings"]["codex-micro-lighting-brightness"], 64);
+    assert!(!stdout.contains("unrelated-secret"));
+    assert!(!stdout.contains("also-private"));
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
