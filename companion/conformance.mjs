@@ -236,21 +236,36 @@ function parseArguments(argv) {
 async function main() {
   const options = parseArguments(process.argv.slice(2));
   if (options.help) {
-    process.stdout.write(
+    await writeStream(
+      process.stdout,
       "usage: input-companion-conformance [--socket PATH] [--token PATH] [--require CAPABILITY]...\n",
     );
     return;
   }
   const report = await inspectInputCompanionBridge(options);
-  process.stdout.write(JSON.stringify(report) + "\n");
+  await writeStream(process.stdout, JSON.stringify(report) + "\n");
+}
+
+function writeStream(stream, value) {
+  return new Promise((resolveWrite, rejectWrite) => {
+    stream.write(value, (error) => {
+      if (error) {
+        rejectWrite(error);
+      } else {
+        resolveWrite();
+      }
+    });
+  });
 }
 
 if (
   process.argv[1] &&
   resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
 ) {
-  main().catch((error) => {
-    process.stderr.write(error.message + "\n");
+  try {
+    await main();
+  } catch (error) {
+    await writeStream(process.stderr, error.message + "\n");
     process.exitCode = 1;
-  });
+  }
 }
