@@ -454,6 +454,12 @@ pub enum CodexCommand {
         command: CodexCommandKeyCommand,
     },
 
+    /// Inspect or edit Codex-native dial behavior in an offline snapshot.
+    Dial {
+        #[clap(subcommand)]
+        command: CodexDialCommand,
+    },
+
     /// Inspect or edit Codex-native global lighting in an offline snapshot.
     Lighting {
         #[clap(subcommand)]
@@ -784,6 +790,96 @@ pub enum CodexCommandKeyCommand {
         input: PathBuf,
         /// Logical slot: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12.
         slot: String,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexDialCommand {
+    /// Inspect or edit the built-in/custom dial mode.
+    Mode {
+        #[clap(subcommand)]
+        command: CodexDialModeCommand,
+    },
+
+    /// Inspect or edit one custom dial gesture.
+    Gesture {
+        #[clap(subcommand)]
+        command: CodexDialGestureCommand,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CodexDialMode {
+    ComposerNavigation,
+    Reasoning,
+    ConversationScroll,
+    Custom,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CodexDialGesture {
+    Left,
+    Right,
+    Click,
+    LongPress,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexDialModeCommand {
+    /// Read the effective dial mode.
+    Get {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Write an offline candidate with a new dial mode.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(value_enum)]
+        value: CodexDialMode,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexDialGestureCommand {
+    /// Read one effective custom dial gesture assignment.
+    Get {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(value_enum)]
+        gesture: CodexDialGesture,
+    },
+
+    /// Assign one command or Skill while the dial mode is custom.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(value_enum)]
+        gesture: CodexDialGesture,
+        /// Assign a Codex command ID.
+        #[clap(long)]
+        command: Option<String>,
+        /// Assign a Skill display name; pair with --skill-path.
+        #[clap(long)]
+        skill_name: Option<String>,
+        /// Assign a Skill path; pair with --skill-name.
+        #[clap(long)]
+        skill_path: Option<String>,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Clear one custom dial gesture while preserving the other gestures.
+    Clear {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(value_enum)]
+        gesture: CodexDialGesture,
         #[clap(long, value_parser)]
         output: PathBuf,
     },

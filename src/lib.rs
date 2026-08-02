@@ -18,7 +18,8 @@ use cli::{
     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
     AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
     CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand,
-    CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexLightingAutoOff,
+    CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexDialCommand, CodexDialGesture,
+    CodexDialGestureCommand, CodexDialMode, CodexDialModeCommand, CodexLightingAutoOff,
     CodexLightingAutoOffCommand, CodexLightingBrightnessCommand, CodexLightingCommand,
     CodexRuntimeCommand, CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell,
     ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
@@ -2069,6 +2070,84 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
                 &mut out,
             )?,
         },
+        CodexCommand::Dial { command } => match command {
+            CodexDialCommand::Mode { command } => match command {
+                CodexDialModeCommand::Get { input } => {
+                    let result = codex::dial_mode_get(&input)?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "dial-mode={}\tinherited={}",
+                            result.value, result.inherited
+                        )?;
+                        writeln!(out, "revision={}", result.revision)?;
+                    }
+                }
+                CodexDialModeCommand::Set {
+                    input,
+                    value,
+                    output,
+                } => write_codex_candidate_result(
+                    codex::dial_mode_set(&input, codex_dial_mode_value(value), &output)?,
+                    json,
+                    &mut out,
+                )?,
+            },
+            CodexDialCommand::Gesture { command } => match command {
+                CodexDialGestureCommand::Get { input, gesture } => {
+                    let result =
+                        codex::dial_gesture_get(&input, codex_dial_gesture_value(gesture))?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "dial-gesture={}\ttype={}\tinherited={}",
+                            result.gesture, result.assignment_type, result.inherited
+                        )?;
+                        if let Some(value) = result.command_id {
+                            writeln!(out, "command={value}")?;
+                        }
+                        if let (Some(name), Some(path)) = (result.skill_name, result.skill_path) {
+                            writeln!(out, "skill={name}\t{path}")?;
+                        }
+                        writeln!(out, "revision={}", result.revision)?;
+                    }
+                }
+                CodexDialGestureCommand::Set {
+                    input,
+                    gesture,
+                    command,
+                    skill_name,
+                    skill_path,
+                    output,
+                } => write_codex_candidate_result(
+                    codex::dial_gesture_set(
+                        &input,
+                        codex_dial_gesture_value(gesture),
+                        codex::DialGestureUpdate {
+                            command: command.as_deref(),
+                            skill_name: skill_name.as_deref(),
+                            skill_path: skill_path.as_deref(),
+                        },
+                        &output,
+                    )?,
+                    json,
+                    &mut out,
+                )?,
+                CodexDialGestureCommand::Clear {
+                    input,
+                    gesture,
+                    output,
+                } => write_codex_candidate_result(
+                    codex::dial_gesture_clear(&input, codex_dial_gesture_value(gesture), &output)?,
+                    json,
+                    &mut out,
+                )?,
+            },
+        },
         CodexCommand::Lighting { command } => match command {
             CodexLightingCommand::Brightness { command } => match command {
                 CodexLightingBrightnessCommand::Get { input } => {
@@ -2302,6 +2381,24 @@ fn codex_voice_mode_value(value: CodexVoiceMode) -> &'static str {
     match value {
         CodexVoiceMode::PushToTalk => "push-to-talk",
         CodexVoiceMode::Realtime => "realtime",
+    }
+}
+
+fn codex_dial_mode_value(value: CodexDialMode) -> &'static str {
+    match value {
+        CodexDialMode::ComposerNavigation => "composer-navigation",
+        CodexDialMode::Reasoning => "reasoning",
+        CodexDialMode::ConversationScroll => "conversation-scroll",
+        CodexDialMode::Custom => "custom",
+    }
+}
+
+fn codex_dial_gesture_value(value: CodexDialGesture) -> &'static str {
+    match value {
+        CodexDialGesture::Left => "left",
+        CodexDialGesture::Right => "right",
+        CodexDialGesture::Click => "click",
+        CodexDialGesture::LongPress => "longPress",
     }
 }
 

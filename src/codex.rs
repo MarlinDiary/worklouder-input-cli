@@ -50,6 +50,7 @@ struct LayoutContract {
     slots: Vec<String>,
     keycaps: Vec<String>,
     encoder_modes: Vec<String>,
+    encoder_gestures: Vec<String>,
     voice_button_modes: Vec<String>,
 }
 
@@ -146,6 +147,47 @@ pub struct VoiceModeView {
     pub revision: String,
     pub value: String,
     pub inherited: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DialModeView {
+    pub schema_version: u8,
+    pub kind: &'static str,
+    pub revision: String,
+    pub value: String,
+    pub inherited: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DialGestureView {
+    pub schema_version: u8,
+    pub kind: &'static str,
+    pub revision: String,
+    pub gesture: String,
+    pub assignment_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skill_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skill_path: Option<String>,
+    pub inherited: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct DialGestureUpdate<'a> {
+    pub command: Option<&'a str>,
+    pub skill_name: Option<&'a str>,
+    pub skill_path: Option<&'a str>,
+}
+
+struct ParsedActionView {
+    assignment_type: String,
+    command_id: Option<String>,
+    skill_name: Option<String>,
+    skill_path: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -645,6 +687,167 @@ pub fn voice_mode_set(input: &Path, value: &str, output: &Path) -> Result<Candid
     )
 }
 
+pub fn dial_mode_get(input: &Path) -> Result<DialModeView> {
+    let snapshot = read_snapshot(input)?;
+    let field = "encoderMode";
+    let value = effective_layout(&snapshot)?
+        .get(field)
+        .and_then(Value::as_str)
+        .context("effective layout.encoderMode was missing")?;
+    let inherited = snapshot
+        .settings
+        .get("codex-micro-layout")
+        .and_then(Value::as_object)
+        .map_or(true, |layout| !layout.contains_key(field));
+    Ok(DialModeView {
+        schema_version: 1,
+        kind: "worklouderctl-codex-dial-mode",
+        revision: settings_revision(&snapshot.settings)?,
+        value: value.to_owned(),
+        inherited,
+    })
+}
+
+pub fn dial_mode_set(input: &Path, value: &str, output: &Path) -> Result<CandidateReceipt> {
+    let mut snapshot = read_snapshot(input)?;
+    let contract = load_contract()?;
+    ensure!(
+        contract
+            .layout
+            .encoder_modes
+            .iter()
+            .any(|candidate| candidate == value),
+        "dial mode must be one of {}",
+        contract.layout.encoder_modes.join(", ")
+    );
+    let before_revision = settings_revision(&snapshot.settings)?;
+    let current = effective_layout(&snapshot)?
+        .get("encoderMode")
+        .and_then(Value::as_str)
+        .context("effective layout.encoderMode was missing")?;
+    let changed = current != value;
+    if changed {
+        let mut layout = editable_layout(&snapshot, &contract)?;
+        layout.insert("encoderMode".into(), Value::String(value.to_owned()));
+        validate_layout(&Value::Object(layout.clone()), &contract.layout)?;
+        snapshot
+            .settings
+            .insert("codex-micro-layout".into(), Value::Object(layout));
+        refresh_effective_settings(&mut snapshot, &contract)?;
+    }
+    publish_candidate(
+        snapshot,
+        output,
+        "codex-dial-mode-set",
+        before_revision,
+        changed
+            .then(|| "/settings/codex-micro-layout/encoderMode".into())
+            .into_iter()
+            .collect(),
+    )
+}
+
+pub fn dial_gesture_get(input: &Path, gesture: &str) -> Result<DialGestureView> {
+    let snapshot = read_snapshot(input)?;
+    let contract = load_contract()?;
+    validate_dial_gesture(gesture, &contract)?;
+    let action = effective_layout(&snapshot)?
+        .get("encoder")
+        .and_then(Value::as_object)
+        .and_then(|encoder| encoder.get(gesture))
+        .with_context(|| format!("effective layout.encoder.{gesture} was missing"))?;
+    let action = nullable_action_view(action, &format!("layout.encoder.{gesture}"))?;
+    let inherited = snapshot
+        .settings
+        .get("codex-micro-layout")
+        .and_then(Value::as_object)
+        .and_then(|layout| layout.get("encoder"))
+        .and_then(Value::as_object)
+        .map_or(true, |encoder| !encoder.contains_key(gesture));
+    Ok(DialGestureView {
+        schema_version: 1,
+        kind: "worklouderctl-codex-dial-gesture",
+        revision: settings_revision(&snapshot.settings)?,
+        gesture: gesture.to_owned(),
+        assignment_type: action.assignment_type,
+        command_id: action.command_id,
+        skill_name: action.skill_name,
+        skill_path: action.skill_path,
+        inherited,
+    })
+}
+
+pub fn dial_gesture_set(
+    input: &Path,
+    gesture: &str,
+    update: DialGestureUpdate<'_>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let action = dial_gesture_action(update)?;
+    dial_gesture_write(input, gesture, action, "codex-dial-gesture-set", output)
+}
+
+pub fn dial_gesture_clear(input: &Path, gesture: &str, output: &Path) -> Result<CandidateReceipt> {
+    dial_gesture_write(
+        input,
+        gesture,
+        Value::Null,
+        "codex-dial-gesture-clear",
+        output,
+    )
+}
+
+fn dial_gesture_write(
+    input: &Path,
+    gesture: &str,
+    action: Value,
+    operation: &'static str,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let mut snapshot = read_snapshot(input)?;
+    let contract = load_contract()?;
+    validate_dial_gesture(gesture, &contract)?;
+    ensure!(
+        effective_layout(&snapshot)?
+            .get("encoderMode")
+            .and_then(Value::as_str)
+            == Some("custom"),
+        "dial gesture edits require encoder mode custom"
+    );
+    validate_nullable_action(&action, &format!("layout.encoder.{gesture}"))?;
+    let before_revision = settings_revision(&snapshot.settings)?;
+    let before_action = effective_layout(&snapshot)?
+        .get("encoder")
+        .and_then(Value::as_object)
+        .and_then(|encoder| encoder.get(gesture))
+        .with_context(|| format!("effective layout.encoder.{gesture} was missing"))?
+        .clone();
+    let changed = before_action != action;
+    if changed {
+        let mut layout = editable_layout(&snapshot, &contract)?;
+        layout
+            .get_mut("encoder")
+            .and_then(Value::as_object_mut)
+            .context("layout.encoder was missing")?
+            .insert(gesture.to_owned(), action);
+        validate_layout(&Value::Object(layout.clone()), &contract.layout)?;
+        snapshot
+            .settings
+            .insert("codex-micro-layout".into(), Value::Object(layout));
+        refresh_effective_settings(&mut snapshot, &contract)?;
+    }
+    publish_candidate(
+        snapshot,
+        output,
+        operation,
+        before_revision,
+        changed
+            .then(|| format!("/settings/codex-micro-layout/encoder/{gesture}"))
+            .into_iter()
+            .collect(),
+    )
+}
+
 pub fn command_key_get(input: &Path, slot: &str) -> Result<CommandKeyView> {
     let snapshot = read_snapshot(input)?;
     command_key_view(&snapshot, slot)
@@ -870,6 +1073,97 @@ fn command_key_slot<'a>(layout: &'a Map<String, Value>, slot: &str) -> Result<&'
         .and_then(Value::as_object)
         .and_then(|slots| slots.get(slot))
         .with_context(|| format!("Command Key slot {slot} was missing"))
+}
+
+fn editable_layout(snapshot: &Snapshot, contract: &Contract) -> Result<Map<String, Value>> {
+    if let Some(layout) = snapshot
+        .settings
+        .get("codex-micro-layout")
+        .and_then(Value::as_object)
+    {
+        return Ok(layout.clone());
+    }
+    contract
+        .definitions
+        .get("codex-micro-layout")
+        .context("frozen layout definition was missing")?
+        .default
+        .as_object()
+        .cloned()
+        .context("frozen layout default was invalid")
+}
+
+fn validate_dial_gesture(gesture: &str, contract: &Contract) -> Result<()> {
+    ensure!(
+        contract
+            .layout
+            .encoder_gestures
+            .iter()
+            .any(|candidate| candidate == gesture),
+        "dial gesture must be one of {}",
+        contract.layout.encoder_gestures.join(", ")
+    );
+    Ok(())
+}
+
+fn dial_gesture_action(update: DialGestureUpdate<'_>) -> Result<Value> {
+    let skill_requested = update.skill_name.is_some() || update.skill_path.is_some();
+    let assignment_count = usize::from(update.command.is_some()) + usize::from(skill_requested);
+    ensure!(
+        assignment_count == 1,
+        "select exactly one dial gesture assignment: --command or --skill-name with --skill-path"
+    );
+    if let Some(command_id) = update.command {
+        ensure!(!command_id.trim().is_empty(), "--command must be non-empty");
+        return Ok(serde_json::json!({
+            "type": "command",
+            "commandId": command_id,
+        }));
+    }
+    let skill_name = update.skill_name.context("--skill-name is required")?;
+    let skill_path = update.skill_path.context("--skill-path is required")?;
+    ensure!(
+        !skill_name.trim().is_empty(),
+        "--skill-name must be non-empty"
+    );
+    ensure!(
+        !skill_path.trim().is_empty(),
+        "--skill-path must be non-empty"
+    );
+    Ok(serde_json::json!({
+        "type": "skill",
+        "skillName": skill_name,
+        "skillPath": skill_path,
+    }))
+}
+
+fn nullable_action_view(value: &Value, path: &str) -> Result<ParsedActionView> {
+    if value.is_null() {
+        return Ok(ParsedActionView {
+            assignment_type: "empty".into(),
+            command_id: None,
+            skill_name: None,
+            skill_path: None,
+        });
+    }
+    let action = value
+        .as_object()
+        .with_context(|| format!("{path} must be an object or null"))?;
+    match nonempty_string_field(action, "type", path)? {
+        "command" => Ok(ParsedActionView {
+            assignment_type: "command".into(),
+            command_id: Some(nonempty_string_field(action, "commandId", path)?.to_owned()),
+            skill_name: None,
+            skill_path: None,
+        }),
+        "skill" => Ok(ParsedActionView {
+            assignment_type: "skill".into(),
+            command_id: None,
+            skill_name: Some(nonempty_string_field(action, "skillName", path)?.to_owned()),
+            skill_path: Some(nonempty_string_field(action, "skillPath", path)?.to_owned()),
+        }),
+        action_type => bail!("{path}.type has unknown action type {action_type}"),
+    }
 }
 
 pub fn read_snapshot(path: &Path) -> Result<Snapshot> {
@@ -1674,6 +1968,147 @@ mod tests {
             .unwrap()
             .settings
             .contains_key("codex-micro-layout"));
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn dial_candidates_preserve_mapping_and_require_custom_mode_for_gestures() {
+        let root = fixture_root();
+        fs::create_dir_all(&root).unwrap();
+        let config = root.join("config.toml");
+        let snapshot_path = root.join("snapshot.json");
+        let custom_path = root.join("custom.json");
+        let command_path = root.join("command.json");
+        let skill_path = root.join("skill.json");
+        let cleared_path = root.join("cleared.json");
+        let scroll_path = root.join("scroll.json");
+        fs::write(&config, b"[desktop]\ncodex-micro-future = \"preserved\"\n").unwrap();
+        let source_sha = fsutil::sha256(&config).unwrap();
+        let mut snapshot = export(&config, &root.join("missing.app"), &snapshot_path).unwrap();
+        let default_view = dial_gesture_get(&snapshot_path, "left").unwrap();
+        assert_eq!(default_view.assignment_type, "empty");
+        assert!(default_view.inherited);
+
+        let contract = load_contract().unwrap();
+        let mut layout = contract.definitions["codex-micro-layout"]
+            .default
+            .as_object()
+            .unwrap()
+            .clone();
+        layout.insert("encoderMode".into(), Value::String("reasoning".into()));
+        layout.insert(
+            "futureDialMetadata".into(),
+            serde_json::json!({"preserved": true}),
+        );
+        snapshot
+            .settings
+            .insert("codex-micro-layout".into(), Value::Object(layout));
+        refresh_effective_settings(&mut snapshot, &contract).unwrap();
+        let mut bytes = serde_json::to_vec_pretty(&snapshot).unwrap();
+        bytes.push(b'\n');
+        fs::write(&snapshot_path, bytes).unwrap();
+
+        let mode = dial_mode_get(&snapshot_path).unwrap();
+        assert_eq!(mode.value, "reasoning");
+        assert!(!mode.inherited);
+        let inactive = dial_gesture_set(
+            &snapshot_path,
+            "left",
+            DialGestureUpdate {
+                command: Some("navigateBack"),
+                skill_name: None,
+                skill_path: None,
+            },
+            &root.join("inactive.json"),
+        )
+        .unwrap_err();
+        assert!(inactive.to_string().contains("require encoder mode custom"));
+
+        let custom = dial_mode_set(&snapshot_path, "custom", &custom_path).unwrap();
+        assert_eq!(
+            custom.changed_paths,
+            vec!["/settings/codex-micro-layout/encoderMode"]
+        );
+        let custom_snapshot = read_snapshot(&custom_path).unwrap();
+        assert_eq!(
+            custom_snapshot.settings["codex-micro-layout"]["futureDialMetadata"]["preserved"],
+            true
+        );
+        assert!(custom_snapshot.settings["codex-micro-layout"]["encoder"]["right"].is_null());
+
+        let command = dial_gesture_set(
+            &custom_path,
+            "left",
+            DialGestureUpdate {
+                command: Some("navigateBack"),
+                skill_name: None,
+                skill_path: None,
+            },
+            &command_path,
+        )
+        .unwrap();
+        assert_eq!(
+            command.changed_paths,
+            vec!["/settings/codex-micro-layout/encoder/left"]
+        );
+        let command_view = dial_gesture_get(&command_path, "left").unwrap();
+        assert_eq!(command_view.assignment_type, "command");
+        assert_eq!(command_view.command_id.as_deref(), Some("navigateBack"));
+        assert!(!command_view.inherited);
+
+        dial_gesture_set(
+            &command_path,
+            "right",
+            DialGestureUpdate {
+                command: None,
+                skill_name: Some("Review"),
+                skill_path: Some("/tmp/review/SKILL.md"),
+            },
+            &skill_path,
+        )
+        .unwrap();
+        let skill_view = dial_gesture_get(&skill_path, "right").unwrap();
+        assert_eq!(skill_view.assignment_type, "skill");
+        assert_eq!(skill_view.skill_name.as_deref(), Some("Review"));
+        assert_eq!(
+            skill_view.skill_path.as_deref(),
+            Some("/tmp/review/SKILL.md")
+        );
+
+        dial_gesture_clear(&skill_path, "left", &cleared_path).unwrap();
+        let cleared = dial_gesture_get(&cleared_path, "left").unwrap();
+        assert_eq!(cleared.assignment_type, "empty");
+        assert!(!cleared.inherited);
+        assert_eq!(
+            dial_gesture_get(&cleared_path, "right")
+                .unwrap()
+                .assignment_type,
+            "skill"
+        );
+
+        dial_mode_set(&cleared_path, "conversation-scroll", &scroll_path).unwrap();
+        assert_eq!(
+            dial_gesture_get(&scroll_path, "right")
+                .unwrap()
+                .assignment_type,
+            "skill"
+        );
+        assert_eq!(
+            read_snapshot(&scroll_path).unwrap().settings["codex-micro-future"],
+            "preserved"
+        );
+        assert_eq!(fsutil::sha256(&config).unwrap(), source_sha);
+
+        let invalid_mode =
+            dial_mode_set(&scroll_path, "spin", &root.join("spin.json")).unwrap_err();
+        assert!(invalid_mode
+            .to_string()
+            .contains("dial mode must be one of"));
+        let invalid_gesture = dial_gesture_get(&scroll_path, "doubleClick").unwrap_err();
+        assert!(invalid_gesture
+            .to_string()
+            .contains("dial gesture must be one of"));
 
         fs::remove_dir_all(root).unwrap();
     }

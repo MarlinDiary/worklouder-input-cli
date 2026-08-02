@@ -325,6 +325,7 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
     assert!(stdout.contains("agent-source"));
     assert!(stdout.contains("agent-key"));
     assert!(stdout.contains("command-key"));
+    assert!(stdout.contains("dial"));
     assert!(stdout.contains("lighting"));
     assert!(stdout.contains("voice"));
 
@@ -454,6 +455,130 @@ fn codex_settings_diff_runs_end_to_end_without_opening_a_bridge() {
     assert_eq!(report["changes"][0]["change"], "added");
     assert_eq!(report["changes"][0]["after"], 37);
     assert_ne!(report["baseRevision"], report["candidateRevision"]);
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn codex_dial_candidates_run_end_to_end_without_writing_source() {
+    let root = fixture_root();
+    fs::create_dir_all(&root).unwrap();
+    let config = root.join("config.toml");
+    let snapshot = root.join("snapshot.json");
+    let custom = root.join("custom.json");
+    let command = root.join("command.json");
+    let skill = root.join("skill.json");
+    let cleared = root.join("cleared.json");
+    fs::write(
+        &config,
+        b"[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
+    )
+    .unwrap();
+    let source_sha = worklouderctl::fsutil::sha256(&config).unwrap();
+
+    let export = binary()
+        .args(["codex", "export", "--config"])
+        .arg(&config)
+        .arg("--app")
+        .arg(root.join("missing.app"))
+        .arg("--output")
+        .arg(&snapshot)
+        .output()
+        .unwrap();
+    assert!(export.status.success());
+
+    let inactive = binary()
+        .args(["codex", "dial", "gesture", "set", "--input"])
+        .arg(&snapshot)
+        .args(["left", "--command", "navigateBack", "--output"])
+        .arg(root.join("inactive.json"))
+        .output()
+        .unwrap();
+    assert_eq!(inactive.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&inactive.stderr).contains("require encoder mode custom"));
+
+    let mode = binary()
+        .args(["--json", "codex", "dial", "mode", "set", "--input"])
+        .arg(&snapshot)
+        .arg("custom")
+        .arg("--output")
+        .arg(&custom)
+        .output()
+        .unwrap();
+    assert!(mode.status.success());
+    let mode: serde_json::Value = serde_json::from_slice(&mode.stdout).unwrap();
+    assert_eq!(
+        mode["changedPaths"],
+        serde_json::json!(["/settings/codex-micro-layout/encoderMode"])
+    );
+
+    let set_command = binary()
+        .args(["--json", "codex", "dial", "gesture", "set", "--input"])
+        .arg(&custom)
+        .args(["left", "--command", "navigateBack", "--output"])
+        .arg(&command)
+        .output()
+        .unwrap();
+    assert!(set_command.status.success());
+    let set_command: serde_json::Value = serde_json::from_slice(&set_command.stdout).unwrap();
+    assert_eq!(
+        set_command["changedPaths"],
+        serde_json::json!(["/settings/codex-micro-layout/encoder/left"])
+    );
+
+    let set_skill = binary()
+        .args(["codex", "dial", "gesture", "set", "--input"])
+        .arg(&command)
+        .args([
+            "right",
+            "--skill-name",
+            "Review",
+            "--skill-path",
+            "/tmp/review/SKILL.md",
+            "--output",
+        ])
+        .arg(&skill)
+        .output()
+        .unwrap();
+    assert!(set_skill.status.success());
+
+    let get = binary()
+        .args(["--json", "codex", "dial", "gesture", "get", "--input"])
+        .arg(&skill)
+        .arg("right")
+        .output()
+        .unwrap();
+    assert!(get.status.success());
+    let get: serde_json::Value = serde_json::from_slice(&get.stdout).unwrap();
+    assert_eq!(get["assignmentType"], "skill");
+    assert_eq!(get["skillName"], "Review");
+    assert_eq!(get["skillPath"], "/tmp/review/SKILL.md");
+
+    let clear = binary()
+        .args(["--json", "codex", "dial", "gesture", "clear", "--input"])
+        .arg(&skill)
+        .arg("left")
+        .arg("--output")
+        .arg(&cleared)
+        .output()
+        .unwrap();
+    assert!(clear.status.success());
+    let clear: serde_json::Value = serde_json::from_slice(&clear.stdout).unwrap();
+    assert_eq!(
+        clear["changedPaths"],
+        serde_json::json!(["/settings/codex-micro-layout/encoder/left"])
+    );
+
+    let cleared_view = binary()
+        .args(["--json", "codex", "dial", "gesture", "get", "--input"])
+        .arg(&cleared)
+        .arg("left")
+        .output()
+        .unwrap();
+    assert!(cleared_view.status.success());
+    let cleared_view: serde_json::Value = serde_json::from_slice(&cleared_view.stdout).unwrap();
+    assert_eq!(cleared_view["assignmentType"], "empty");
+    assert_eq!(worklouderctl::fsutil::sha256(&config).unwrap(), source_sha);
 
     fs::remove_dir_all(root).unwrap();
 }
