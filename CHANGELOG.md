@@ -10,6 +10,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `config diff` now compares validated files embedded in Input configuration
   snapshots, so differently named `before.json` and `candidate.json` files
   report precise `/keymap.json` and `/smart_actions.json` changes.
+- Input `control set` and the commands that delegate to it now keep the Codex
+  protected layer read-only, preserving its reserved `KV_OAI_*` protocol
+  assignments and routing customization to the Codex-native command family.
 
 ## [0.1.0]
 

@@ -49,6 +49,13 @@ fn semantic_keymap_bytes() -> Vec<u8> {
     .unwrap()
 }
 
+fn codex_protected_keymap_bytes() -> Vec<u8> {
+    let mut keymap: serde_json::Value = serde_json::from_slice(&semantic_keymap_bytes()).unwrap();
+    keymap["profiles"][0]["layers"][0]["layout"]["keymap"][0][0] =
+        serde_json::Value::String("KV_OAI_AG00".into());
+    serde_json::to_vec(&keymap).unwrap()
+}
+
 #[test]
 fn help_lists_the_binary_and_version_command() {
     let output = binary().arg("--help").output().unwrap();
@@ -863,6 +870,68 @@ fn input_cache_snapshot_runs_into_semantic_candidates_end_to_end() {
         worklouderctl::fsutil::sha256(&device.join("smart_actions.json")).unwrap(),
         smart_before
     );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn input_control_set_keeps_codex_protected_layer_read_only() {
+    let root = fixture_root();
+    let support = root.join("support");
+    let device = support.join("devices/33632");
+    let snapshot = root.join("codex-layer.json");
+    let candidate = root.join("overwritten.json");
+    fs::create_dir_all(&device).unwrap();
+    fs::write(device.join("keymap.json"), codex_protected_keymap_bytes()).unwrap();
+    fs::write(
+        device.join("smart_actions.json"),
+        b"{\"version\":1,\"smartActions\":{}}",
+    )
+    .unwrap();
+
+    let captured = binary()
+        .args(["input", "config", "snapshot", "--support-root"])
+        .arg(&support)
+        .arg("--output")
+        .arg(&snapshot)
+        .output()
+        .unwrap();
+    assert!(captured.status.success());
+
+    let shown = binary()
+        .args(["--json", "control", "show", "--input"])
+        .arg(&snapshot)
+        .args(["--profile", "0", "--layer", "0", "--control", "key:0:0"])
+        .output()
+        .unwrap();
+    assert!(shown.status.success());
+    let shown: serde_json::Value = serde_json::from_slice(&shown.stdout).unwrap();
+    assert_eq!(shown["control"]["assignment"], "KV_OAI_AG00");
+
+    let overwrite = binary()
+        .args(["--json", "control", "set", "--input"])
+        .arg(&snapshot)
+        .args([
+            "--profile",
+            "0",
+            "--layer",
+            "0",
+            "--control",
+            "key:0:0",
+            "--assignment",
+            "KC_A",
+            "--output",
+        ])
+        .arg(&candidate)
+        .output()
+        .unwrap();
+    assert_eq!(overwrite.status.code(), Some(1));
+    let error: serde_json::Value = serde_json::from_slice(&overwrite.stderr).unwrap();
+    assert!(error["message"]
+        .as_str()
+        .unwrap()
+        .contains("Codex protected layer"));
+    assert!(!candidate.exists());
+
     fs::remove_dir_all(root).unwrap();
 }
 

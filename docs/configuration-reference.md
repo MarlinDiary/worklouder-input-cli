@@ -363,10 +363,14 @@ layer template with layer ID zero and no per-layer lights.
 
 A layer is protected when any layout assignment begins with `KV_OAI_`. The
 protected layer stays at position zero and is excluded from duplicate, delete,
-move-to/from-zero, and per-layer lighting edits. New normal layers use the
-frozen Codex Micro empty layout and copy the last layer's lighting when present.
-Duplicate performs a deep copy with a new ID and removes `linkedAppId` so the
-copy does not silently inherit an AppSense binding.
+move-to/from-zero, per-layer lighting edits, and Input `control set` writes.
+`control list` and `control show` remain available for inspection. Configure
+its six Agent Keys, six Command Key slots, voice key, dial, and joystick through
+the `codex` command family; `codex reset layout` is the Codex GUI Reset layout
+equivalent. New normal layers use the frozen Codex Micro empty layout and copy
+the last layer's lighting when present. Duplicate performs a deep copy with a
+new ID and removes `linkedAppId` so the copy does not silently inherit an
+AppSense binding.
 
 The observed Input 0.18.0 layer `color` is a 24-bit RGB integer. The CLI accepts
 `#RRGGBB`, `0xRRGGBB`, or decimal `0..16777215`, stores the integer, and reports
@@ -606,7 +610,9 @@ does not delete member actions. A Smart Action deletion replaces physical
 the group valid. Unknown root, record, and payload fields survive edits, and a
 Smart-only candidate leaves the exact `keymap.json` bytes unchanged.
 
-`control set` accepts an existing `SA_<ID>` only for physical controls. Action
+`control set` accepts an existing `SA_<ID>` only for physical controls on normal
+Input layers. It rejects every write to the Codex protected layer before a
+candidate is published; `cheat-sheet bind` inherits the same guard. Action
 events and Multi Action branches retain their own frozen assignment grammar.
 The CLI reports command definitions with `requiresCommandPermission: true`;
 definition editing does not toggle the host permission.

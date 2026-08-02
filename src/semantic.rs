@@ -1213,6 +1213,11 @@ pub fn control_set(
         "control id must use canonical form {canonical_id}"
     );
     let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let layer = &profile_layers(find_profile(&snapshot.keymap, selected_id)?)?[layer_index];
+    ensure!(
+        !is_protected_layer(layer),
+        "the Codex protected layer is read-only through Input control commands; use `worklouderctl codex agent-key`, `worklouderctl codex command-key`, `worklouderctl codex voice`, `worklouderctl codex dial`, `worklouderctl codex joystick`, or `worklouderctl codex reset layout`"
+    );
     let assignment_path = control_json_path(profile_index, layer_index, address);
     let previous = snapshot
         .keymap
@@ -8258,6 +8263,29 @@ mod tests {
             assert!(error.contains(needle), "unexpected error: {error}");
             assert!(!output.exists());
         }
+        fs::remove_file(source).unwrap();
+    }
+
+    #[test]
+    fn control_set_rejects_codex_protected_layer() {
+        let source = root("control-protected");
+        let output = root("control-protected-output");
+        let cheat_sheet_output = root("control-protected-cheat-sheet-output");
+        write_fixture(&source);
+
+        let error = control_set(&source, Some(7), 9, "key:0:0", "KC_A", &output)
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("Codex protected layer"), "{error}");
+        assert!(error.contains("codex agent-key"), "{error}");
+        assert!(!output.exists());
+
+        let error = cheat_sheet_bind(&source, Some(7), 9, "key:0:0", "show", &cheat_sheet_output)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("Codex protected layer"), "{error}");
+        assert!(!cheat_sheet_output.exists());
         fs::remove_file(source).unwrap();
     }
 

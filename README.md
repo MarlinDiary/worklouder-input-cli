@@ -146,6 +146,9 @@ worklouderctl codex config apply \
 
 The same command family covers Agent Keys, Command Keys, dial gestures,
 joystick directions, voice behavior, global lighting and whole-layout reset.
+The Codex layer's reserved `KV_OAI_*` device assignments remain read-only in
+Input `control set`; inspect them with `control list/show` and configure their
+behavior through these Codex-native commands.
 
 ### Run a coordinated four-authority transaction
 
