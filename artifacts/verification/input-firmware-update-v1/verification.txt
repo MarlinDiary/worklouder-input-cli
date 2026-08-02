@@ -43,10 +43,10 @@ Literal stdout:
 
 Literal stderr:
   error: Found argument 'update' which wasn't expected, or isn't valid in this context
-  
+
   USAGE:
       worklouderctl input firmware [OPTIONS] <SUBCOMMAND>
-  
+
   For more information try --help
 Exit status: 2
 Baseline behavior:
@@ -66,32 +66,32 @@ Command:
 Literal stdout:
   worklouderctl-input-firmware-update 0.1.0
   Delegate the complete update workflow to Input and verify firmware/config postflight
-  
+
   USAGE:
       worklouderctl input firmware update [OPTIONS] --plan <PLAN> --backup <BACKUP> --receipt <RECEIPT>
-  
+
   OPTIONS:
           --backup <BACKUP>
               Immutable complete pre-update configuration snapshot
-  
+
           --expected-revision <EXPECTED_REVISION>
               Require the live configuration to have this exact revision
-  
+
       -h, --help
               Print help information
-  
+
           --idempotency-key <IDEMPOTENCY_KEY>
               Stable retry key; reuse it only with the exact same plan
-  
+
           --json
               Emit machine-readable JSON when the command supports it
-  
+
           --plan <PLAN>
               Immutable plan produced by `input firmware plan`
-  
+
           --receipt <RECEIPT>
               Destination for the verified update receipt
-  
+
       -V, --version
               Print version information
 Literal stderr:
@@ -235,3 +235,30 @@ Syntax command:
   sh -n artifacts/verification/input-firmware-update-v1/rollback.sh
 Exit status: 0
 The isolated rollback execution is appended after the artifact commit.
+Isolated rollback execution
+---------------------------
+Artifact commit:
+  7ccd4b3ba9c7c693868532e7c9b1dc45c47fab70
+Command:
+  artifacts/verification/input-firmware-update-v1/rollback.sh /tmp/worklouderctl-input-firmware-rollback.U9Pptp/worktree
+Literal stdout:
+  rollback=verified
+  base=3662f3f
+Literal stderr:
+
+Exit status: 0
+Postcondition:
+  worktree equals 3662f3ff4d1f048ae974b41e891d9ff146fd2cb9 outside artifacts/verification/input-firmware-update-v1
+Exit status: 0
+Rolled-back behavior command:
+  CARGO_TARGET_DIR=/tmp/worklouderctl-input-firmware-rollback.U9Pptp/rollback-target cargo run --quiet --locked --manifest-path ROLLBACK_WORKTREE/Cargo.toml -- input firmware update --help
+Literal stdout:
+
+Literal stderr:
+  error: Found argument 'update' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl input firmware [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
