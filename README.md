@@ -136,6 +136,9 @@ worklouderctl input permission command get --input HOST_SETTINGS.json
 worklouderctl input permission command set --input HOST_SETTINGS.json enabled --output HOST_SETTINGS_ENABLED.json
 worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json
 worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
+worklouderctl cheat-sheet catalog
+worklouderctl cheat-sheet bindings --input CONFIG.json --layer LAYER_ID
+worklouderctl cheat-sheet bind --input CONFIG.json --layer LAYER_ID --control key:0:0 toggle --output CANDIDATE.json
 worklouderctl bridge status
 worklouderctl device --transport bridge status
 worklouderctl device --transport bridge files --recursive
@@ -420,6 +423,13 @@ worklouderctl input permission command restore \
 
 The CLI does not write `input_storage.json`; Input remains responsible for
 persistence and command execution.
+
+`cheat-sheet catalog/bindings/bind` gives the four released Input 0.18.0
+behaviors first-class names: `show`, `hold`, `hide`, and `toggle`. They map
+exactly to `KI_CS_SHOW`, `KI_CS_SHOW_TMP`, `KI_CS_HIDE`, and `KI_CS_TOGGLE`.
+`bind` changes one physical control in a complete offline snapshot, preserves
+unknown and unrelated content, and uses the existing device apply/readback/
+restore transaction. Candidate creation does not open or close Input windows.
 
 The repository includes an executable Input-main reference server, a service
 adapter for the Input 0.18.0 service shape, authentication tests, and a

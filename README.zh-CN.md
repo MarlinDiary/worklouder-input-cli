@@ -105,6 +105,9 @@ worklouderctl input permission command get --input HOST_SETTINGS.json
 worklouderctl input permission command set --input HOST_SETTINGS.json enabled --output HOST_SETTINGS_ENABLED.json
 worklouderctl input permission command apply --input HOST_SETTINGS_ENABLED.json --backup HOST_SETTINGS_BEFORE.json
 worklouderctl input permission command restore --input HOST_SETTINGS.json --backup HOST_SETTINGS_CURRENT.json
+worklouderctl cheat-sheet catalog
+worklouderctl cheat-sheet bindings --input CONFIG.json --layer LAYER_ID
+worklouderctl cheat-sheet bind --input CONFIG.json --layer LAYER_ID --control key:0:0 toggle --output CANDIDATE.json
 worklouderctl bridge status
 worklouderctl device --transport bridge status
 worklouderctl device --transport bridge files --recursive
@@ -355,6 +358,13 @@ worklouderctl input permission command restore \
 ```
 
 CLI 不直接写 `input_storage.json`；持久化与 command execution 继续由 Input 负责。
+
+`cheat-sheet catalog/bindings/bind` 为 Input 0.18.0 released behavior 提供四个
+明确名称：`show`、`hold`、`hide`、`toggle`，并精确映射到
+`KI_CS_SHOW`、`KI_CS_SHOW_TMP`、`KI_CS_HIDE`、`KI_CS_TOGGLE`。`bind` 只修改
+完整 offline snapshot 中的一个 physical control，保留未知字段与其他原字节，再
+使用既有 device apply/readback/restore transaction。生成 candidate 时不会打开或
+关闭 Input window。
 
 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
 adapter、认证测试，以及 Rust CLI 跨语言 conformance test：

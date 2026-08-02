@@ -81,7 +81,7 @@ Promises as failures even when the USB interface still enumerates.
 | Smart Actions | text, command, URL, application | `smart-action` | typed list/show/create/set/delete, `SA_<ID>` control binding, and reference cascade candidate-verified against current Input 0.18.0 cache bytes |
 | Smart Action groups | create, rename, move, delete | `smart-action group` | metadata and ordered member CRUD, empty groups, and container-only delete candidate-verified |
 | Command permission | explicit host command toggle | `input permission command` | snapshot/get/offline set plus bridge CAS/apply/replay/restore/automatic-rollback fixture-verified; released Input integration pending |
-| Cheat Sheet | show, hold, hide, toggle assignments | `cheat-sheet` | researched |
+| Cheat Sheet | show, hold, hide, toggle assignments | `cheat-sheet` | exact four-token catalog, binding inventory, strict offline bind candidate, and fixture apply/readback/restore verified |
 | Radial menu | sectors, labels, referenced actions | `radial` | researched |
 | AppSense runtime | focus observer and layer transition | `appsense test` | researched |
 

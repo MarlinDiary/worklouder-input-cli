@@ -76,6 +76,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Linked-app/AppSense list/show/link/update/unlink candidates and fixture transaction
 - [x] Smart Action typed CRUD, groups, physical bindings, and delete cascade candidates
 - [x] Input host command permission snapshot/candidate/apply/restore transaction
+- [x] Cheat Sheet show/hold/hide/toggle catalog and binding candidates
 
 ## M4 — Full cross-authority transaction
 

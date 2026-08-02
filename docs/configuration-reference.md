@@ -623,6 +623,22 @@ Input hosts windows for Cheat Sheet and the joystick radial menu. Cheat Sheet
 combines Keys, Actions, Multi Actions, and Smart Actions for the active layer.
 The device emits show/hide/toggle notifications while Input renders the result.
 
+The configuration side is available without opening either window:
+
+```sh
+worklouderctl cheat-sheet catalog
+worklouderctl cheat-sheet bindings --input CONFIG.json --profile 0 --layer 1
+worklouderctl cheat-sheet bind --input CONFIG.json --profile 0 --layer 1 \
+  --control encoder:0:press hold --output CANDIDATE.json
+```
+
+The four values map to the exact released tokens: `show` → `KI_CS_SHOW`,
+`hold` → `KI_CS_SHOW_TMP`, `hide` → `KI_CS_HIDE`, and `toggle` →
+`KI_CS_TOGGLE`. Input exposes them for Creator Micro V2 and Codex Micro from
+firmware `0.5.0`; the tested boundary is Codex Micro `v0.6.0`. The candidate
+uses the same complete-snapshot validation, atomic publication, bridge apply,
+readback, and rollback as other physical-control assignments.
+
 ## Tier 4: operational configuration
 
 - application and firmware version discovery;

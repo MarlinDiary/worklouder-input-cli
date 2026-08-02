@@ -189,6 +189,11 @@ worklouderctl smart-action group create --input smart-url-candidate.json --name 
   --smart-action 1 --smart-action 2 --output smart-group-candidate.json
 worklouderctl control set --input smart-group-candidate.json --profile 0 --layer 1 \
   --control key:0:0 --assignment SA_1 --output smart-bound-candidate.json
+worklouderctl cheat-sheet bindings --input smart-bound-candidate.json \
+  --profile 0 --layer 1
+worklouderctl cheat-sheet bind --input smart-bound-candidate.json \
+  --profile 0 --layer 1 --control encoder:0:press toggle \
+  --output cheat-sheet-candidate.json
 ```
 
 Before publishing, the editor independently verifies every file's canonical
