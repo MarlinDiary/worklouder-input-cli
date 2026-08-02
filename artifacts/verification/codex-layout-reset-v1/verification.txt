@@ -17,11 +17,12 @@ Source settings, GUI, bridge, device, and runtime mutation: none
 
 Released behavior contract
 --------------------------
-Exact Codex 26.727.51351 static inspection shows the settings confirmation
-calling the normal settings setter with the installed-build cxt default layout.
-The complete default contains Command Keys, analog stick, dial gestures and
-mode, plus voice-button mode. Agent Key assignment storage and Agent source are
-separate and are not reset.
+Static inspection of exact Codex 26.727.51351 extracted
+webview/assets/codex-micro-settings-DpDF0zLO.js. The reset confirmation invokes
+the ordinary settings setter for q.layout with the app-initial cxt default
+object. The frozen object covers all six Command Keys, four joystick directions,
+four dial gestures, encoder mode, and voice-button mode. Agent Key assignments
+and Agent source are separate authorities.
 
 Preserved original artifact and baseline-red
 --------------------------------------------
@@ -30,7 +31,7 @@ Build command:
   cargo build --release --locked --manifest-path BASE_WORKTREE/Cargo.toml
 Path:
   /tmp/worklouderctl-codex-layout-reset-v1.cRYKaS/original/worklouderctl
-SHA-256:
+SHA-256 after reopen/execute:
   52d5f1a9379764373f32ef54f4968f4b0a71fc949a0e9874a7fa4763e85be24c
 Command:
   ORIGINAL_BIN codex reset --help
@@ -47,56 +48,68 @@ Exit status: 2
 Modified release E2E
 --------------------
 Input:
-  /tmp/worklouderctl-codex-layout-reset-v1.cRYKaS/e2e-verified/config.toml
+  /tmp/worklouderctl-codex-layout-reset-v1.cRYKaS/e2e/config.toml
 Literal input:
   [desktop]
   codex-micro-agent-source = "priority"
+  codex-micro-lighting-brightness = 73
   codex-micro-future = "preserved"
 Source SHA-256 before and after:
-  1553740be6de1a662597b29726362be4dc25cc1143ae045df1dff4d000d1e45e
+  0b98c4823dbcb7b752a32139018c1309e476c73ca2e03d92bbaf34ca70b9ab78
 
-Commands:
-  MODIFIED_BIN --json codex export --config E2E/config.toml \
-    --app E2E/missing.app --output E2E/baseline.json
+Mutation commands before reset:
   MODIFIED_BIN --json codex command-key set --input E2E/baseline.json \
     ACT06 --keycap BUG --command fixture.command --output E2E/command-key.json
   MODIFIED_BIN --json codex joystick set --input E2E/command-key.json up \
     --skill-name "Plan Skill" --skill-path /tmp/plan/SKILL.md \
     --output E2E/joystick.json
-  MODIFIED_BIN --json codex dial mode set --input E2E/joystick.json \
-    custom --output E2E/custom.json
-  MODIFIED_BIN --json codex dial gesture set --input E2E/custom.json left \
-    --command navigateBack --output E2E/dial.json
-  MODIFIED_BIN --json codex voice set --input E2E/dial.json realtime \
+  MODIFIED_BIN --json codex dial mode set --input E2E/joystick.json custom \
+    --output E2E/dial-mode.json
+  MODIFIED_BIN --json codex dial gesture set --input E2E/dial-mode.json left \
+    --command navigateBack --output E2E/dial-gesture.json
+  MODIFIED_BIN --json codex voice set --input E2E/dial-gesture.json realtime \
     --output E2E/voice.json
-  MODIFIED_BIN --json codex reset layout --input E2E/voice.json \
-    --output E2E/reset.json
-  MODIFIED_BIN --json codex command-key get --input E2E/reset.json ACT06
-  MODIFIED_BIN --json codex joystick get --input E2E/reset.json up
-  MODIFIED_BIN --json codex dial mode get --input E2E/reset.json
-  MODIFIED_BIN --json codex dial gesture get --input E2E/reset.json left
-  MODIFIED_BIN --json codex voice get --input E2E/reset.json
 Exit status: 0 for all commands
 
-Literal reset receipt:
+Reset command:
+  MODIFIED_BIN --json codex reset layout --input E2E/voice.json \
+    --output E2E/reset.json
+Exit status: 0
+Literal receipt:
   operation=codex-layout-reset
+  changed=true
   changedPaths=["/settings/codex-micro-layout"]
-  expectedSourceSha256=1553740be6de1a662597b29726362be4dc25cc1143ae045df1dff4d000d1e45e
-  beforeRevision=bcfb0a2240bd72a1665e41ab03bb34c7d5edd752882cdcf0516014f18ba140ad
-  afterRevision=fe797c0904fd82d71a3299eee06fe1e5fda68caff682269fbac5fbce809f876e
-Literal readback:
-  command-key ACT06: keycapId=FAST assignmentType=keycap
-  joystick up: commandId=composer.togglePlanMode assignmentType=command
-  dial mode: composer-navigation
-  dial left: assignmentType=empty
-  voice mode: push-to-talk
-  revision=fe797c0904fd82d71a3299eee06fe1e5fda68caff682269fbac5fbce809f876e
+  beforeRevision=909df2b157e7ea314774c53cd4b290074b6a33c61c21abef2334f9ece4825207
+  afterRevision=d9aee673e170b77f9d30f7ea37f28c9409436e52dc5d9522740ff46463aade60
+
+Literal readbacks after reset:
+  command-key ACT06: keycapId=FAST, assignmentType=keycap
+  joystick up: commandId=composer.togglePlanMode, assignmentType=command
+  dial mode: value=composer-navigation
+  dial gesture left: assignmentType=empty
+  voice: value=push-to-talk
+  inherited=false for all materialized layout fields
 Literal assertions:
   assertions=pass
-  explicit layout equals embedded definition default exactly
+  complete layout equals frozen installed-build default
   source bytes unchanged
-  codex-micro-agent-source=priority preserved
-  unknown codex-micro-future=preserved
+  agent source priority preserved
+  lighting brightness 73 preserved
+  unknown codex-micro-future preserved
+
+Inherited-default no-op
+-----------------------
+Command:
+  MODIFIED_BIN --json codex reset layout --input E2E/baseline.json \
+    --output E2E/noop.json
+Literal receipt:
+  changed=false
+  changedPaths=[]
+  beforeRevision=bf3b0ebe9dc51cc264278d644393359e792420ae60c945978e0462be62f849c6
+  afterRevision=bf3b0ebe9dc51cc264278d644393359e792420ae60c945978e0462be62f849c6
+Literal assertion:
+  codex-micro-layout remains implicit
+Exit status: 0
 
 Automated quality gates
 -----------------------
@@ -116,12 +129,12 @@ Literal result: Finished release
 Exit status: 0
 
 Tested boundaries:
-  inherited-default no-op remains implicit
-  changed complete layout becomes exact installed-build default
-  Command Key, joystick, dial, and voice reset together
-  Agent source and unknown sibling setting preservation
-  source hash preservation
-  atomic publish and final reopen
+  exact complete frozen default replacement
+  Command Key, joystick, dial mode/gesture, and voice restoration
+  inherited and explicit default no-op behavior
+  sibling setting and source-byte preservation
+  unknown layout metadata removal through exact replacement
+  atomic publish, canonical revision, and final reopen
 
 Modified artifact
 -----------------
@@ -129,7 +142,7 @@ Path:
   target/release/worklouderctl
 Preserved copy:
   /tmp/worklouderctl-codex-layout-reset-v1.cRYKaS/modified/worklouderctl
-SHA-256:
+SHA-256 after reopen/execute:
   1c97340607a095a12d1b2a560b1b5df880ffb1b8fd5b288bf460dff7eb6f6398
 Reopen/execute command:
   ./target/release/worklouderctl codex reset --help
@@ -152,7 +165,6 @@ Path:
 SHA-256:
   334995e19f2e390bbae372bc245c9a275e8522de860d2acbeeeceff03a0b15d9
 The isolated rollback execution is appended after the artifact commit.
-
 Isolated rollback execution
 ---------------------------
 Artifact commit:
