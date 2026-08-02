@@ -725,6 +725,9 @@ worklouderctl input permissions [--device DEVICE_ID]
 worklouderctl input firmware check [--device DEVICE_ID]
 worklouderctl input firmware plan --output FIRMWARE_PLAN.json \
   [--device DEVICE_ID]
+worklouderctl input firmware update --plan FIRMWARE_PLAN.json \
+  --backup FIRMWARE_CONFIG_BEFORE.json --receipt FIRMWARE_UPDATE.json \
+  --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
 worklouderctl input logs collect --output INPUT_LOG_BUNDLE \
   [--max-entries 5000]
 ```
@@ -735,9 +738,10 @@ Input's current compatibility and `.bin` release selection. Log collection
 sanitizes inside the Input adapter before bridge transport, then publishes a
 private, hash-verified bundle. Firmware planning freezes the release, exact
 configuration revision, USB blocker, and seven Input-owned update phases without
-flashing. Firmware flashing, reset, and bootloader recovery
-remain separate high-level Input-owned mutation authorities so the CLI does not
-reimplement the released updater sequence.
+flashing. When Input injects the complete high-level update authority, the CLI
+adds immutable backup, plan/config CAS, idempotent delegation, exact firmware
+and configuration postflight, and an inspectable receipt around that provider.
+Reset and bootloader recovery remain separate Input-owned mutation authorities.
 
 ## Verification levels
 

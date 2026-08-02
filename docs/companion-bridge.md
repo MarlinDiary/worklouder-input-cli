@@ -89,6 +89,7 @@ Protocol version 1 defines:
 - `input.permissions.status`
 - `input.firmware.status`
 - `input.firmware.plan`
+- `input.firmware.update`
 - `input.logs.snapshot`
 
 File content uses base64 inside JSON. Device SHA-1 and host SHA-256 remain
@@ -134,7 +135,11 @@ reports the exact platform meaning of its single boolean. `input.firmware.status
 delegates update compatibility and release selection to Input's installed
 firmware service but never flashes. `input.firmware.plan` additionally freezes
 the exact configuration revision, Input-selected release, USB readiness, and
-the seven ordered renderer workflow phases. `input.logs.snapshot` returns at most 5,000
+the seven ordered renderer workflow phases. `input.firmware.update` is exposed
+only by an injected high-level Input authority; it applies plan/config CAS,
+idempotent serialization, a long-running timeout, exact firmware/config
+postflight, and a recovery-required outcome without implementing the flasher.
+`input.logs.snapshot` returns at most 5,000
 newest in-memory renderer entries, with home paths, email addresses, and common
 credential forms redacted before bridge transport. Each capability is advertised
 only when its matching Input-owned authority is available.
@@ -148,6 +153,9 @@ worklouderctl device config validate --input config-snapshot.json \
 worklouderctl input permissions
 worklouderctl input firmware check
 worklouderctl input firmware plan --output firmware-plan.json
+worklouderctl input firmware update --plan firmware-plan.json \
+  --backup firmware-config-before.json --receipt firmware-update.json \
+  --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
 worklouderctl input logs collect --output input-log-bundle
 ```
 

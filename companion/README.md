@@ -30,6 +30,12 @@ const companionBridge = await installInputCompanionBridge({
         // synchronize every Input-owned state authority before returning.
       },
     },
+    firmwareOperationsAuthority: {
+      async updateFirmware({ device, release, configurationSnapshot, plan }) {
+        // Run Input's complete existing renderer/updater workflow and return
+        // all seven completed phases after reconnect and config restore.
+      },
+    },
   },
   deviceKitVersion: DEVICE_KIT_VERSION,
   bridgeVersion: "0.1.0",
@@ -79,7 +85,7 @@ profile/layer status. It does not focus an application or open an Input window.
 
 `permissionsAuthority.readStatus()`, `firmwareAuthority.readStatus()`, and
 `logsAuthority.readLogs()` enable the optional Tier 4 read capabilities
-`input.permissions.status.v1`, `input.firmware.status.v1`, and
+`input.permissions.status.v1`, `input.firmware.status.v1`,
 `input.firmware.plan.v1`, and `input.logs.snapshot.v1`. The one-call integration derives them from
 `ApplicationService.checkAppPermissions`, `DeviceFlashService`, and
 `WindowService.getWindowsLogs` when those exact released services are supplied.
@@ -87,6 +93,15 @@ Logs are bounded and sanitized by the adapter before transport. Firmware status
 and planning are read-only. A plan freezes the Input-selected release, exact
 configuration revision, USB readiness, and the seven released workflow phases;
 flashing still requires a separate high-level Input-owned authority.
+
+When `firmwareOperationsAuthority.updateFirmware()` is injected, the adapter
+advertises `input.firmware.update.v1`. The bridge first re-derives the plan and
+configuration CAS, then supplies Input with the selected release and complete
+snapshot. After Input finishes, the adapter independently requires the exact
+target firmware and original configuration revision. Same-key retries replay
+the verified receipt. An ambiguous provider error is accepted only when this
+same postflight proves completion; every other ambiguous state returns
+`recoveryRequired` rather than attempting a CLI-owned downgrade.
 
 The reference adapter owns the surrounding transaction: validate every byte
 and digest, capture a pre-mutation snapshot, compare the live revision, invoke
@@ -113,6 +128,7 @@ node companion/conformance.mjs \
   --require input.permissions.status.v1 \
   --require input.firmware.status.v1 \
   --require input.firmware.plan.v1 \
+  --require input.firmware.update.v1 \
   --require input.logs.snapshot.v1
 ```
 
@@ -125,6 +141,7 @@ Run the full reference suite before each Input release:
 ```sh
 npm --prefix companion test
 ./scripts/test-bridge-e2e.sh
+./scripts/test-firmware-update-e2e.sh
 ```
 
 The first command checks server, adapter, lifecycle, authentication, and path
