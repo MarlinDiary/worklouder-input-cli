@@ -1,0 +1,212 @@
+diff --git a/scripts/test-transaction-e2e.sh b/scripts/test-transaction-e2e.sh
+index f475d8f..9b646e4 100755
+--- a/scripts/test-transaction-e2e.sh
++++ b/scripts/test-transaction-e2e.sh
+@@ -72,9 +72,35 @@ run_case() {
+   "$BIN" --json device --transport bridge \
+     --bridge-socket "$input_socket" --bridge-token "$input_token" config snapshot \
+     --output "$root/input-base.json" >"$root/input-base-receipt.json"
+-  "$BIN" --json layer rename --input "$root/input-base.json" \
+-    --profile 0 --id 1 --name "Transaction $label" \
++  "$BIN" --json profile create --input "$root/input-base.json" \
++    --name "Transaction Profile $label" --output "$root/input-profile.json" \
++    >"$root/input-profile-receipt.json"
++  "$BIN" --json layer create --input "$root/input-profile.json" --profile 0 \
++    --name "Transaction Layer $label" --output "$root/input-layer.json" \
++    >"$root/input-layer-receipt.json"
++  "$BIN" --json layer lighting set --input "$root/input-layer.json" \
++    --profile 0 --id 1 --zone backlight --effect breath --brightness 0.25 \
++    --speed 0.75 --magic 0.5 --color '#102030' --apply-to-all \
++    --output "$root/input-lighting.json" >"$root/input-lighting-receipt.json"
++  "$BIN" --json appsense link --input "$root/input-lighting.json" \
++    --profile 0 --layer 0 --name "Transaction App $label-mac" \
++    --process "com.example.transaction.$label" --output "$root/input-appsense.json" \
++    >"$root/input-appsense-receipt.json"
++  "$BIN" --json action create --input "$root/input-appsense.json" \
++    --name "Transaction Action $label" --output "$root/input-action.json" \
++    >"$root/input-action-receipt.json"
++  "$BIN" --json smart-action create --input "$root/input-action.json" \
++    --name "Transaction Smart $label" --type text \
++    --text "Transaction text $label" --color '#EDF6FF' \
++    --output "$root/input-smart.json" >"$root/input-smart-receipt.json"
++  "$BIN" --json control set --input "$root/input-smart.json" \
++    --profile 0 --layer 1 --control key:0:0 --assignment SA_1 \
+     --output "$root/input-candidate.json" >"$root/input-candidate-receipt.json"
++  "$BIN" --json input --bridge-socket "$input_socket" --bridge-token "$input_token" \
++    firmware plan --device fixture-device --output "$root/firmware-plan.json" \
++    >"$root/firmware-plan-receipt.json"
++  "$BIN" --json backup inspect --input "$root/firmware-plan.json" \
++    >"$root/firmware-plan-inspection.json"
+   "$BIN" --json input --bridge-socket "$input_socket" --bridge-token "$input_token" \
+     permission command snapshot --output "$root/host-base.json" \
+     >"$root/host-base-receipt.json"
+@@ -83,8 +109,26 @@ run_case() {
+ 
+   "$BIN" --json codex config --socket "$codex_socket" --token "$codex_token" snapshot \
+     --output "$root/codex-base.json" >"$root/codex-base-receipt.json"
+-  "$BIN" --json codex lighting brightness set --input "$root/codex-base.json" 41 \
+-    --output "$root/codex-candidate.json" >"$root/codex-candidate-receipt.json"
++  "$BIN" --json codex agent-source set --input "$root/codex-base.json" custom \
++    --output "$root/codex-source.json" >"$root/codex-source-receipt.json"
++  "$BIN" --json codex lighting brightness set --input "$root/codex-source.json" 41 \
++    --output "$root/codex-brightness.json" >"$root/codex-brightness-receipt.json"
++  "$BIN" --json codex lighting auto-off set --input "$root/codex-brightness.json" \
++    10-minutes --output "$root/codex-lighting.json" \
++    >"$root/codex-lighting-receipt.json"
++  "$BIN" --json codex voice set --input "$root/codex-lighting.json" realtime \
++    --output "$root/codex-voice.json" >"$root/codex-voice-receipt.json"
++  "$BIN" --json codex dial mode set --input "$root/codex-voice.json" custom \
++    --output "$root/codex-dial.json" >"$root/codex-dial-receipt.json"
++  "$BIN" --json codex dial gesture set --input "$root/codex-dial.json" left \
++    --command fixture.navigate-back --output "$root/codex-dial-left.json" \
++    >"$root/codex-dial-left-receipt.json"
++  "$BIN" --json codex joystick set --input "$root/codex-dial-left.json" up \
++    --command fixture.navigate-up --output "$root/codex-joystick.json" \
++    >"$root/codex-joystick-receipt.json"
++  "$BIN" --json codex command-key set --input "$root/codex-joystick.json" ACT06 \
++    --keycap BUG --command fixture.command-key --output "$root/codex-candidate.json" \
++    >"$root/codex-candidate-receipt.json"
+   "$BIN" --json codex agent-key snapshot --socket "$codex_socket" --token "$codex_token" \
+     --output "$root/agent-base.json" >"$root/agent-base-receipt.json"
+   "$BIN" --json codex agent-key set --input "$root/agent-base.json" AG01 \
+@@ -123,6 +167,28 @@ run_case() {
+     --output "$root/codex-post-apply.json" >"$root/codex-post-apply-receipt.json"
+   "$BIN" --json codex agent-key snapshot --socket "$codex_socket" --token "$codex_token" \
+     --output "$root/agent-post-apply.json" >"$root/agent-post-apply-receipt.json"
++  if [[ "$fail_settings_writes" == 0 ]]; then
++    "$BIN" --json profile list --input "$root/input-post-apply.json" \
++      >"$root/profile-post-apply.json"
++    "$BIN" --json layer list --input "$root/input-post-apply.json" --profile 0 \
++      >"$root/layer-post-apply.json"
++    "$BIN" --json layer lighting show --input "$root/input-post-apply.json" \
++      --profile 0 --id 1 >"$root/lighting-post-apply.json"
++    "$BIN" --json control show --input "$root/input-post-apply.json" \
++      --profile 0 --layer 1 --control key:0:0 >"$root/control-post-apply.json"
++    "$BIN" --json action list --input "$root/input-post-apply.json" \
++      >"$root/action-post-apply.json"
++    "$BIN" --json smart-action list --input "$root/input-post-apply.json" \
++      >"$root/smart-post-apply.json"
++    "$BIN" --json appsense list --input "$root/input-post-apply.json" \
++      >"$root/appsense-post-apply.json"
++    "$BIN" --json appsense test \
++      --bridge-socket "$input_socket" --bridge-token "$input_token" \
++      --device fixture-device --expected-app-name 'Fixture App' \
++      --expected-process com.example.fixture \
++      --expected-profile-index 0 --expected-layer-index 2 \
++      --timeout-ms 100 --poll-ms 10 >"$root/appsense-runtime.json"
++  fi
+   "$BIN" --json backup inspect --input "$root/apply.json" \
+     >"$root/apply-inspection.json"
+   "$BIN" --json backup inspect --input "$root/apply-backup" \
+@@ -205,6 +271,7 @@ root = pathlib.Path(sys.argv[1])
+ failed = int(sys.argv[2]) > 0
+ load = lambda name: json.loads((root / name).read_text())
+ plan = load("plan.json")
++plan_receipt = load("plan-receipt.json")
+ apply = load("apply.json")
+ input_base = load("input-base.json")
+ input_candidate = load("input-candidate.json")
+@@ -218,6 +285,8 @@ codex_post = load("codex-post-apply.json")
+ agent_base = load("agent-base.json")
+ agent_candidate = load("agent-candidate.json")
+ agent_post = load("agent-post-apply.json")
++firmware_plan = load("firmware-plan.json")
++firmware_plan_inspection = load("firmware-plan-inspection.json")
+ catalog = load("apply-backup/catalog.json")
+ apply_inspection = load("apply-inspection.json")
+ catalog_inspection = load("catalog-inspection.json")
+@@ -229,6 +298,45 @@ assert all(item["changed"] for item in plan["authorities"])
+ assert [item["id"] for item in plan["authorities"]] == [
+     "codex-settings", "codex-agent-keys", "input-config", "input-host-settings",
+ ]
++assert plan_receipt["authorityCount"] == 4
++assert plan_receipt["changedAuthorityCount"] == 4
++assert plan_receipt["changeCount"] >= 20
++changes = {item["id"]: item["changes"] for item in plan["authorities"]}
++codex_paths = {item["path"] for item in changes["codex-settings"]}
++assert {
++    "/settings/codex-micro-agent-source",
++    "/settings/codex-micro-layout/analogStick/up/commandId",
++    "/settings/codex-micro-layout/encoderMode",
++    "/settings/codex-micro-layout/slots/ACT06/commandId",
++    "/settings/codex-micro-layout/voiceButtonMode",
++    "/settings/codex-micro-lighting-auto-off",
++    "/settings/codex-micro-lighting-brightness",
++}.issubset(codex_paths)
++input_paths = {item["path"] for item in changes["input-config"]}
++assert any("/profiles/" in path and "/layers/" in path for path in input_paths)
++assert any("/lights/" in path or path.endswith("/lights") for path in input_paths)
++assert any("/linkedApps/" in path for path in input_paths)
++assert any("/macros/" in path for path in input_paths)
++assert any(path.startswith("/files/smart_actions.json/") for path in input_paths)
++assert firmware_plan["kind"] == "worklouder-input-firmware-plan"
++assert firmware_plan["configRevision"] == input_base["revision"]
++assert firmware_plan["ready"] is False
++assert firmware_plan["blockers"] == ["usb-required"]
++assert firmware_plan_inspection["valid"] is True
++assert firmware_plan_inspection["restoreAvailable"] is False
++codex_settings = codex_candidate["settings"]
++codex_layout = codex_settings["codex-micro-layout"]
++assert codex_settings["codex-micro-agent-source"] == "custom"
++assert codex_settings["codex-micro-lighting-brightness"] == 41
++assert codex_settings["codex-micro-lighting-auto-off"] == "10-minutes"
++assert codex_layout["voiceButtonMode"] == "realtime"
++assert codex_layout["encoderMode"] == "custom"
++assert codex_layout["encoder"]["left"]["commandId"] == "fixture.navigate-back"
++assert codex_layout["analogStick"]["up"]["commandId"] == "fixture.navigate-up"
++assert codex_layout["slots"]["ACT06"] == {
++    "keycapId": "BUG", "commandId": "fixture.command-key",
++}
++assert agent_candidate["assignments"]["AG01"]["commandId"] == "fixture.transaction"
+ assert catalog["operation"] == "apply"
+ assert catalog["planRevision"] == plan["revision"]
+ assert apply_inspection["artifactKind"] == "worklouderctl-cross-authority-transaction"
+@@ -264,6 +372,35 @@ else:
+     assert host_post["revision"] == host_candidate["revision"]
+     assert codex_post["settings"] == codex_candidate["settings"]
+     assert agent_post["assignments"] == agent_candidate["assignments"]
++    profiles = load("profile-post-apply.json")
++    layers = load("layer-post-apply.json")
++    lighting = load("lighting-post-apply.json")
++    control = load("control-post-apply.json")
++    actions = load("action-post-apply.json")
++    smart_actions = load("smart-post-apply.json")
++    apps = load("appsense-post-apply.json")
++    appsense_runtime = load("appsense-runtime.json")
++    assert any(item["name"] == "Transaction Profile success" for item in profiles["profiles"])
++    assert any(item["name"] == "Transaction Layer success" for item in layers["layers"])
++    assert lighting["backlight"] == {
++        "effect": "breath",
++        "brightness": 0.25,
++        "speed": 0.75,
++        "magic": 0.5,
++        "color": 1056816,
++        "colorHex": "#102030",
++    }
++    assert control["control"]["assignment"] == "SA_1"
++    assert control["control"]["assignmentKind"] == "smartAction"
++    assert any(item["name"] == "Transaction Action success" for item in actions["actions"])
++    smart = next(item for item in smart_actions["smartActions"] if item["id"] == 1)
++    assert smart["name"] == "Transaction Smart success"
++    assert smart["payload"] == {"text": "Transaction text success"}
++    assert smart["physicalReferenceCount"] == 1
++    assert any(item["process"] == "com.example.transaction.success" for item in apps["linkedApps"])
++    assert appsense_runtime["matched"] is True
++    assert appsense_runtime["state"]["status"]["selectedProfileIndex"] == 0
++    assert appsense_runtime["state"]["status"]["selectedLayerIndex"] == 2
+     restore = load("restore.json")
+     restore_inspection = load("restore-inspection.json")
+     assert restore["operation"] == "restore" and restore["status"] == "restored"
+@@ -286,6 +423,12 @@ run_case injected-failure 1
+ 
+ printf '%s\n' \
+   'cross_authority_four_provider_plan=verified' \
++  'full_parity_unified_diff=verified' \
++  'full_parity_tier1_settings_and_agent_keys=verified' \
++  'full_parity_tier2_profile_layer_control_action_lighting=verified' \
++  'full_parity_tier3_smart_action_appsense_host_action=verified' \
++  'full_parity_tier4_firmware_plan=verified' \
++  'full_parity_observed_key_layer_lighting_behavior=verified' \
+   'cross_authority_apply_readback_restore=verified' \
+   'cross_authority_idempotent_retry=verified' \
+   'cross_authority_retry_drift_rejected=verified' \

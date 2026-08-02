@@ -1,0 +1,110 @@
+WorkLouderCTL full-parity transaction v1 verification record
+============================================================
+
+Scope
+-----
+Base commit: b529330
+Feature commit: 828f44c
+Changed branch/field: cross-authority acceptance fixture breadth and semantic behavior assertions
+Authorities: codex-settings, codex-agent-keys, input-config, input-host-settings
+Tiers: Tier 1 settings/Agent Keys; Tier 2 profile/layer/control/Action/lighting;
+Tier 3 Smart Action/AppSense/host command; Tier 4 firmware plan
+Provider boundary: isolated Codex/Input reference providers only; released-app
+and physical-device behaviors are not inferred from this fixture
+
+Preserved original and baseline-red
+-----------------------------------
+Path: /tmp/worklouderctl-full-parity-baseline.Dqf7Gr/base
+Source commit: b529330
+Modified artifact path: /tmp/worklouderctl-full-parity-baseline.Dqf7Gr/target/release/worklouderctl
+Build command: CARGO_TARGET_DIR=BASE_TARGET cargo build --release --locked --manifest-path BASE/Cargo.toml
+SHA-256 after reopen/execute: 572ffb312ba6c8ec0bff2bef2d4c3cf3c87e7d067e51adcccff434c4ce680c13
+Command: KEEP_TRANSACTION_E2E=1 WORKLOUDERCTL_BIN=BASE_BINARY ./scripts/test-transaction-e2e.sh
+Literal stdout markers:
+cross_authority_four_provider_plan=verified
+cross_authority_apply_readback_restore=verified
+cross_authority_idempotent_retry=verified
+cross_authority_retry_drift_rejected=verified
+cross_authority_private_catalog_permissions=verified
+cross_authority_backup_inspection=verified
+cross_authority_migration_plan=verified
+cross_authority_failure_auto_rollback=verified
+Literal stderr:
+
+Exit status: 0
+Baseline plan receipt:
+baseline_authority_count=4
+baseline_changed_authority_count=4
+baseline_change_count=4
+Baseline behavior: the transaction verifies one simple change per authority,
+but has no single-fixture proof for the required semantic surfaces or Tier 4
+plan; every full_parity marker is absent.
+
+Modified artifact
+-----------------
+Path: /Users/marlin/Documents/Codex/2026-07-31/cod/worklouder-input-cli/target/release/worklouderctl
+Build command: cargo build --release --locked
+SHA-256 after reopen/execute: 55edce0d9e7d291e0c442e726df4ff1b13ddbfcf1004f632007c64806bf6b152
+Command: KEEP_TRANSACTION_E2E=1 WORKLOUDERCTL_BIN=target/release/worklouderctl ./scripts/test-transaction-e2e.sh
+Literal stdout markers:
+cross_authority_four_provider_plan=verified
+full_parity_unified_diff=verified
+full_parity_tier1_settings_and_agent_keys=verified
+full_parity_tier2_profile_layer_control_action_lighting=verified
+full_parity_tier3_smart_action_appsense_host_action=verified
+full_parity_tier4_firmware_plan=verified
+full_parity_observed_key_layer_lighting_behavior=verified
+cross_authority_apply_readback_restore=verified
+cross_authority_idempotent_retry=verified
+cross_authority_retry_drift_rejected=verified
+cross_authority_private_catalog_permissions=verified
+cross_authority_backup_inspection=verified
+cross_authority_migration_plan=verified
+cross_authority_failure_auto_rollback=verified
+Literal stderr:
+
+Exit status: 0
+Modified plan receipt:
+modified_authority_count=4
+modified_changed_authority_count=4
+modified_change_count=24
+modified_authorities=codex-settings,codex-agent-keys,input-config,input-host-settings
+
+Verified modified behavior
+--------------------------
+Tier 1 exact candidate/readback includes Agent source, Command Key, voice,
+dial mode/gesture, joystick, brightness, auto-off, and Agent Key assignment.
+Tier 2 exact candidate/readback includes profile/layer creation, control
+assignment, Action creation, and backlight effect/brightness/speed/magic/color.
+Tier 3 exact candidate/readback includes Smart Action definition plus physical
+binding, AppSense link/runtime state, and Input host command permission.
+Tier 4 creates and reopens an Input-owned firmware plan bound to the exact
+baseline configuration revision and verifies the USB-required blocker.
+The unified plan contains 24 typed structural changes. Apply, semantic reads,
+complete postflight, idempotent replay, drift rejection, manual restore, and an
+injected-failure automatic rollback all recover the original four revisions.
+Observed key/layer/lighting behavior is synthetic provider-fixture evidence.
+
+Patch/diff
+----------
+Path: artifacts/verification/full-parity-transaction-v1/full-parity-transaction.patch
+Command: git diff --binary b529330..828f44c -- . ':(exclude)artifacts/verification/full-parity-transaction-v1'
+SHA-256 after reopen: 332a872ae6feea2bf6585bea8a1bfb6f6e2ce6b40a13f8a04d4edc7890f6359d
+Reverse apply check exit status: 0
+
+Rollback
+--------
+Path: artifacts/verification/full-parity-transaction-v1/rollback.sh
+SHA-256 after reopen: df9809df89c63f5331fba146fb0a5b5f9f3b283f754461e2b3b2de14afb36237
+Verification command: execute rollback.sh against a detached copy of feature
+commit 828f44c and compare it to base commit b529330, excluding this artifact
+directory.
+Literal stdout:
+rollback=verified
+base=b529330
+feature=828f44c
+Exit status: 0
+
+Rollback behavior: the detached feature copy exactly matches b529330 and the
+cross-authority fixture returns to four simple structural changes without
+full-parity acceptance markers.
