@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouder-input-cheat-sheet-model",
+  "inputVersion": "0.18.0",
+  "source": {
+    "asarPath": "/Applications/input.app/Contents/Resources/app.asar",
+    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
+    "mainBundle": "dist-electron/main/index.js",
+    "mainBundleSha256": "7c16191956acb8d0d89c50eb940dc9b757bf6966b19c56499ca2d60d8743154a",
+    "rendererChunk": "dist/assets/device_config_data-BMUs-0m4.js",
+    "rendererChunkSha256": "c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e"
+  },
+  "availability": {
+    "deviceTypes": [
+      "CreatorMicroV2",
+      "CodexMicro"
+    ],
+    "minimumFirmware": "0.5.0",
+    "testedFirmware": "v0.6.0"
+  },
+  "assignments": [
+    {
+      "behavior": "show",
+      "token": "KI_CS_SHOW",
+      "label": "Show Cheat-Sheet",
+      "notification": "kb.cs.show",
+      "hostOperation": 1
+    },
+    {
+      "behavior": "hold",
+      "token": "KI_CS_SHOW_TMP",
+      "label": "Show Cheat-Sheet Hold",
+      "notification": "firmware-owned show/hide pair",
+      "hostOperation": "show while held"
+    },
+    {
+      "behavior": "hide",
+      "token": "KI_CS_HIDE",
+      "label": "Hide Cheat-Sheet",
+      "notification": "kb.cs.hide",
+      "hostOperation": 0
+    },
+    {
+      "behavior": "toggle",
+      "token": "KI_CS_TOGGLE",
+      "label": "Toggle Cheat-Sheet",
+      "notification": "kb.cs.toggle",
+      "hostOperation": 2
+    }
+  ],
+  "window": {
+    "initialMode": "advanced",
+    "initialData": [
+      "deviceConfig",
+      "profileIdx",
+      "layerIdx",
+      "mode"
+    ],
+    "runtimeAuthority": "Input WindowService and device notifications"
+  },
+  "candidateBoundary": {
+    "commandFamily": "cheat-sheet",
+    "changedAuthority": "keymap.json physical control assignment",
+    "offlineCandidateOnly": true,
+    "runtimeWindowMutation": false,
+    "applyVia": "existing complete Input bridge transaction",
+    "preserveUnknownFields": true,
+    "requiresReadbackRollback": true
+  }
+}
