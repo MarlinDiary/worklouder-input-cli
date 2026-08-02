@@ -1,0 +1,227 @@
+WorkLouderCTL Codex voice v1 verification record
+================================================
+
+Scope
+-----
+Base commit: 9b47175a2516786c5e5b7c045eb44813e15e4741
+Feature commits:
+  5f26ff7 spec: freeze Codex voice candidates
+  7291248 feat: add Codex voice candidates
+  9f2d64b feat: add Codex voice CLI
+  fbd8492 test: verify Codex voice transaction
+  3627af6 docs: publish Codex voice workflow
+Changed authority: Codex settings.
+Changed branch: `CodexCommand::Voice`.
+Changed field: codex-micro-layout.voiceButtonMode.
+Allowed values: push-to-talk and realtime (Voice Chat).
+Provider boundary: candidate probes and mutation E2E used local files and the
+  isolated Codex Companion Bridge fixture. Codex/Input GUIs and device transport
+  were not launched or controlled.
+
+Installed Codex boundary (static reads only)
+--------------------------------------------
+Command:
+  /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' /Applications/ChatGPT.app/Contents/Info.plist
+Literal output:
+  26.727.51351
+Exit status: 0
+
+Command:
+  shasum -a 256 /Applications/ChatGPT.app/Contents/Resources/app.asar
+Literal output:
+  a529edd72e10b08931c0d695b5e3e6a0be7f51874610dafc04f578436ab7d74d  /Applications/ChatGPT.app/Contents/Resources/app.asar
+Exit status: 0
+The same hash was read again after verification.
+
+Preserved original and modified release binaries
+-------------------------------------------------
+Base build command:
+  cargo build --release --locked --manifest-path BASE_WORKTREE/Cargo.toml
+Literal result:
+  Finished release [optimized] target(s)
+Exit status: 0
+Preserved original path:
+  /tmp/worklouderctl-codex-voice-v1.LNFPZH/original/worklouderctl
+Original SHA-256:
+  123ca36e778e9cd76490059035906cba94a7b96065418a39982f7d14e34ccb34
+
+Modified build command:
+  cargo build --release --locked
+Literal result:
+  Finished release [optimized] target(s)
+Exit status: 0
+Modified artifact path:
+  target/release/worklouderctl
+Preserved modified copy:
+  /tmp/worklouderctl-codex-voice-v1.LNFPZH/modified/worklouderctl
+Modified SHA-256 for both paths:
+  68ebb7ea12ef5905df1401635e5f15aefb81d05c42504676986892c3ef8c7109
+
+Functional baseline-red
+-----------------------
+Binary input: /tmp/worklouderctl-codex-voice-v1.LNFPZH/original/worklouderctl
+Command:
+  ORIGINAL codex voice --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'voice' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl codex [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
+
+Modified command surface
+------------------------
+Binary input: /tmp/worklouderctl-codex-voice-v1.LNFPZH/modified/worklouderctl
+Commands:
+  MODIFIED codex voice --help
+  MODIFIED codex voice set --help
+Exit statuses:
+  voice_help=0
+  voice_set_help=0
+Literal set synopsis:
+  worklouderctl codex voice set [OPTIONS] --input <INPUT> --output <OUTPUT> <VALUE>
+Literal possible values:
+  push-to-talk, realtime
+
+Offline candidate input and source preservation
+-----------------------------------------------
+Input file: /tmp/worklouderctl-codex-voice-v1.LNFPZH/source.toml
+Literal input:
+  [desktop]
+  codex-micro-future = "preserved"
+Command:
+  shasum -a 256 /tmp/worklouderctl-codex-voice-v1.LNFPZH/source.toml
+Baseline and post-candidate literal SHA-256:
+  45b23a033de70cae96c6ebaf3d1692b98549477bc2249f08953bda6fc4fcaa69
+Source byte equality: true
+Export command:
+  MODIFIED --json codex export --config /tmp/worklouderctl-codex-voice-v1.LNFPZH/source.toml --app /tmp/worklouderctl-codex-voice-v1.LNFPZH/missing.app --output SNAPSHOT.json
+Exit status: 0
+
+Default read
+------------
+Command:
+  MODIFIED --json codex voice get --input SNAPSHOT.json
+Literal output:
+  {"schemaVersion":1,"kind":"worklouderctl-codex-voice-mode","revision":"e1c81433f9ab80f0fca802a2f472321bea5e10e26dffd276ff686cf2a7ccf356","value":"push-to-talk","inherited":true}
+Exit status: 0
+
+Realtime candidate
+------------------
+Command:
+  MODIFIED --json codex voice set --input SNAPSHOT.json realtime --output REALTIME.json
+Literal output:
+  {"schemaVersion":1,"kind":"worklouderctl-codex-settings-candidate","operation":"codex-voice-mode-set","output":"/tmp/worklouderctl-codex-voice-v1.LNFPZH/modified-results/realtime.json","changed":true,"changedPaths":["/settings/codex-micro-layout/voiceButtonMode"],"expectedSourceSha256":"45b23a033de70cae96c6ebaf3d1692b98549477bc2249f08953bda6fc4fcaa69","revisionAlgorithm":"codex-settings-revision-v1","beforeRevision":"e1c81433f9ab80f0fca802a2f472321bea5e10e26dffd276ff686cf2a7ccf356","afterRevision":"62e96496f0bbf476347ce89fe793aa9df0feb820da7f5883de38c057ea3b271d"}
+Exit status: 0
+Changed path:
+  /settings/codex-micro-layout/voiceButtonMode
+Unknown codex-micro-future field preserved: true
+
+Modified exact readback
+-----------------------
+Command:
+  MODIFIED --json codex voice get --input REALTIME.json
+Literal output:
+  {"schemaVersion":1,"kind":"worklouderctl-codex-voice-mode","revision":"62e96496f0bbf476347ce89fe793aa9df0feb820da7f5883de38c057ea3b271d","value":"realtime","inherited":false}
+Exit status: 0
+
+Unknown layout-field and no-op boundary
+---------------------------------------
+Command:
+  cargo test codex::tests::voice_candidates_are_typed_atomic_and_preserve_unknown_layout_fields -- --exact
+Literal result:
+  test codex::tests::voice_candidates_are_typed_atomic_and_preserve_unknown_layout_fields ... ok
+Verified fields:
+  futureVoiceMetadata.preserved=true survived the voice edit
+  ACT06.keycapId remained FAST
+  inherited push-to-talk no-op kept codex-micro-layout implicit
+Exit status: 0
+
+Invalid-value boundary
+----------------------
+Command:
+  MODIFIED --json codex voice set --input SNAPSHOT.json telephone --output INVALID.json
+Literal stdout: (empty)
+Literal stderr key lines:
+  error: "telephone" isn't a valid value for '<VALUE>'
+  [possible values: push-to-talk, realtime]
+Exit status: 2
+Output created: false
+
+Modified release transaction E2E
+--------------------------------
+Command:
+  TMPDIR=/tmp/worklouderctl-codex-voice-v1.LNFPZH KEEP_CODEX_BRIDGE_E2E=1 WORKLOUDERCTL_BIN=/tmp/worklouderctl-codex-voice-v1.LNFPZH/modified/worklouderctl ./scripts/test-codex-bridge-e2e.sh
+Literal stdout:
+  {"status":"pass","baselineAgentSource":"recent","modifiedAgentSource":"custom","restoredAgentSource":"recent","baselineLightingBrightness":100,"modifiedLightingBrightness":37,"restoredLightingBrightness":100,"baselineLightingAutoOff":"3-minutes","modifiedLightingAutoOff":"10-minutes","restoredLightingAutoOff":"3-minutes","baselineVoiceMode":"push-to-talk","modifiedVoiceMode":"realtime","restoredVoiceMode":"push-to-talk","baselineSourceSha256":"8d47e4f69727e8c5371e5b84d3578857a7255af3fb4e4b72bc171134ab4bcb00","modifiedSourceSha256":"5673b86150af621a9a734e04d306e872012b69e9728e2f824004b587f13cab6f","restoredSourceSha256":"8d47e4f69727e8c5371e5b84d3578857a7255af3fb4e4b72bc171134ab4bcb00","agentKeySlots":6,"agentKeysBaselineRevision":"c1a788b94510693884366cebe7ca36c42b097851285b1c6068c925a337310be5","agentKeysModifiedRevision":"75a9d75d0812c9ab7553cff71a69aa13de80415d38a4d5ae8cb18d2dc0759d55","agentKeysRestoredRevision":"c1a788b94510693884366cebe7ca36c42b097851285b1c6068c925a337310be5","agentKeysIdempotentReplay":true,"agentKeysStaleCasRejected":true}
+Literal stderr: (empty)
+Exit status: 0
+Verified voice behavior:
+  push-to-talk -> realtime -> push-to-talk
+  source SHA-256 restored exactly
+
+Automated quality gates
+-----------------------
+Command: rustc --version
+Literal output: rustc 1.61.0 (fe5b13d68 2022-05-18)
+Exit status: 0
+
+Command: python3 parse every spec/*.json
+Literal output: parsed=14
+Exit status: 0
+
+Command: cargo fmt --check
+Literal output: (empty)
+Exit status: 0
+
+Command: cargo clippy --all-targets -- -D warnings
+Literal result:
+  Finished dev [unoptimized + debuginfo] target(s)
+Exit status: 0
+
+Command: cargo test --all-targets
+Literal result:
+  54 passed; 0 failed (library)
+  13 passed; 0 failed (CLI integration)
+Exit status: 0
+
+Command: npm test --prefix companion
+Literal result:
+  tests 15
+  pass 15
+  fail 0
+Exit status: 0
+
+Command: ./scripts/test-bridge-e2e.sh
+Literal selected result lines:
+  bridge_protocol=1
+  node_conformance=verified
+  semantic_unknown_fields=preserved
+  config_live_cas=verified
+  config_apply_readback=verified
+  config_idempotent_replay=verified
+  config_stale_cas_rejected=verified
+  config_restore_readback=verified
+Exit status: 0
+
+Command: git diff --check
+Literal output: (empty)
+Exit status: 0
+
+Patch
+-----
+Path: artifacts/verification/codex-voice-v1/codex-voice.patch
+SHA-256: 18b5902f57609224caaa309fd497823250bda3321cf782aaed9c191105b3214b
+Command:
+  git apply --check --reverse artifacts/verification/codex-voice-v1/codex-voice.patch
+Literal output: (empty)
+Exit status: 0
+
+Rollback
+--------
+Path: artifacts/verification/codex-voice-v1/rollback.sh
+SHA-256: efab67b3659613a934a7a9c02be4e874f6fd329f0b03ae59d137691103ea530f
+The isolated-worktree execution result is appended after the rollback test.

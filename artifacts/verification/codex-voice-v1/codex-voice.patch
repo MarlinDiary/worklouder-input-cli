@@ -1,0 +1,643 @@
+diff --git a/README.md b/README.md
+index c9b91c0..baa7ffc 100644
+--- a/README.md
++++ b/README.md
+@@ -112,6 +112,8 @@ worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
+ worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
+ worklouderctl codex lighting auto-off set --input CODEX_BRIGHTNESS.json 10-minutes --output CODEX_LIGHTING.json
++worklouderctl codex voice get --input CODEX_LIGHTING.json
++worklouderctl codex voice set --input CODEX_LIGHTING.json realtime --output CODEX_VOICE.json
+ worklouderctl input inspect [--device DEVICE_ID]
+ worklouderctl input export --output BACKUP_DIRECTORY
+ worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
+@@ -193,9 +195,9 @@ Codex 26.727.51351 contract, and recursively fills inherited defaults in the
+ effective view. `codex export` atomically publishes and reopens a typed JSON
+ snapshot. Neither command serializes unrelated Codex settings.
+ 
+-`codex agent-source`, `codex agent-key tap-mode`, `codex command-key`, and
+-`codex lighting` are strict offline Tier 1 editors. They validate the embedded
+-frozen definitions,
++`codex agent-source`, `codex agent-key tap-mode`, `codex command-key`,
++`codex lighting`, and `codex voice` are strict offline Tier 1 editors. They
++validate the embedded frozen definitions,
+ recompute effective settings and a recursive-key-sorted revision, preserve
+ unknown `codex-micro-*` values, publish atomically, and reopen the result. Each
+ receipt carries `expectedSourceSha256` for the Codex `settings-write` CAS
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 1c84f1e..1e13907 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -81,6 +81,8 @@ worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
+ worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
+ worklouderctl codex lighting auto-off set --input CODEX_BRIGHTNESS.json 10-minutes --output CODEX_LIGHTING.json
++worklouderctl codex voice get --input CODEX_LIGHTING.json
++worklouderctl codex voice set --input CODEX_LIGHTING.json realtime --output CODEX_VOICE.json
+ worklouderctl input inspect [--device DEVICE_ID]
+ worklouderctl input export --output BACKUP_DIRECTORY
+ worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
+@@ -157,8 +159,8 @@ worklouderctl completion bash|zsh|fish
+ view 中递归补齐继承的默认值。`codex export` 原子发布并重新打开 typed JSON
+ snapshot；两者都不会序列化其他 Codex 设置。
+ 
+-`codex agent-source`、`codex agent-key tap-mode`、`codex command-key` 与
+-`codex lighting` 是严格的
++`codex agent-source`、`codex agent-key tap-mode`、`codex command-key`、
++`codex lighting` 与 `codex voice` 是严格的
+ Tier 1 离线 editor：核对内嵌 frozen definitions，重算 effective settings 与
+ recursive-key-sorted revision，保留未知 `codex-micro-*` 值，原子发布并重新打开。
+ receipt 中的 `expectedSourceSha256` 供 Codex `settings-write` CAS transaction
+@@ -337,8 +339,11 @@ contract/client/reference server、
+ revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
+ Input 自动恢复、Codex Companion Bridge settings snapshot/CAS/apply/restore/rollback
+ 与六键 Agent assignment snapshot/get/set/clear/apply/restore transaction、Codex 全局
+-lighting brightness/auto-off candidate 与 fixture transaction，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
+-与 per-layer lighting、AppSense linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线 candidate 生成，keys、
++lighting brightness/auto-off candidate 与 fixture transaction、Codex voice
++`push-to-talk/realtime` candidate 与 fixture transaction，以及 profile/layer
++lifecycle、selection、ordering、24-bit RGB color 与 per-layer lighting、AppSense
++linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线
++candidate 生成，keys、
+ encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
+ list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
+ release 集成、Codex released-app bridge 集成、可安装 binary 与 Homebrew formula
+diff --git a/docs/architecture.md b/docs/architecture.md
+index 1c50080..67e412f 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -47,7 +47,7 @@ CAS, immutable backup, exact explicit/effective readback, idempotency, restore,
+ and automatic rollback. A separate injected Agent Key replacer advertises
+ complete six-slot global-state apply/restore with its own revision CAS, backup,
+ idempotency, exact readback, restore, and rollback. The cross-language fixture
+-verifies `recent -> custom -> recent`, global brightness and auto-off
++verifies `recent -> custom -> recent`, global brightness, auto-off, and voice mode
+ apply/readback/restore, every Agent Key assignment type, exact Agent Key revision
+ recovery, and exact source SHA recovery. Codex 26.727.51351
+ contains the internal handlers but does not yet ship the external listener,
+diff --git a/docs/codex-companion-bridge.md b/docs/codex-companion-bridge.md
+index 3e6d0b4..6c51314 100644
+--- a/docs/codex-companion-bridge.md
++++ b/docs/codex-companion-bridge.md
+@@ -171,7 +171,8 @@ WORKLOUDERCTL_BIN=./target/release/worklouderctl \
+ 
+ The E2E test proves `recent -> custom -> recent`, global brightness
+ `100 -> 37 -> 100`, and lighting auto-off
+-`3-minutes -> 10-minutes -> 3-minutes`; applies command/Skill/task/keycap/empty
+-Agent Key assignments; verifies idempotent replay and stale-CAS rejection;
++`3-minutes -> 10-minutes -> 3-minutes`, plus voice mode
++`push-to-talk -> realtime -> push-to-talk`; applies command/Skill/task/keycap/
++empty Agent Key assignments; verifies idempotent replay and stale-CAS rejection;
+ restores the exact six-slot revision; and requires the restored settings source
+ SHA-256 to equal the baseline source SHA-256.
+diff --git a/docs/compatibility.md b/docs/compatibility.md
+index 280b8ca..2f234fb 100644
+--- a/docs/compatibility.md
++++ b/docs/compatibility.md
+@@ -42,8 +42,9 @@ slots, command/Skill/task/keycap/empty assignment types, a separate canonical
+ global-state revision, complete-object apply, idempotent replay, stale-CAS
+ rejection, explicit restore, and automatic rollback after corrupt readback. Its
+ E2E path proves `recent -> custom -> recent`, brightness `100 -> 37 -> 100`,
+-auto-off `3-minutes -> 10-minutes -> 3-minutes`, restores the exact Agent Key
+-revision, and recovers the exact baseline settings source SHA-256. This is bridge
++auto-off `3-minutes -> 10-minutes -> 3-minutes`, and voice mode
++`push-to-talk -> realtime -> push-to-talk`; restores the exact Agent Key revision;
++and recovers the exact baseline settings source SHA-256. This is bridge
+ transaction evidence; released-Codex mutation begins when Codex installs the
+ reference integration and supplies exact settings and Agent Key replacers.
+ 
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index dd95b14..eeb5bf6 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -27,7 +27,7 @@ parity contract.
+ | Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key snapshot/get/set/clear/apply/restore` | strict candidate, all assignment types, CAS, idempotency, stale rejection, exact readback, restore, and rollback fixture verified |
+ | Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | strict offline candidate verified; generic complete-settings bridge transaction verified |
+ | Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; generic complete-settings bridge transaction verified |
+-| Voice button | push-to-talk, Voice Chat | `codex voice get/set` | researched |
++| Voice button | push-to-talk, Voice Chat | `codex voice get/set` | strict offline candidate plus `push-to-talk -> realtime -> push-to-talk` bridge apply/readback/restore fixture verified |
+ | Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | researched |
+ | Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | researched |
+ | Joystick | up, right, down, left command/Skill/empty | `codex joystick get/set/clear` | researched |
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index 33daa6a..5f4d933 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -60,6 +60,8 @@ worklouderctl codex lighting brightness get --input SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input SNAPSHOT.json VALUE --output CANDIDATE.json
+ worklouderctl codex lighting auto-off get --input SNAPSHOT.json
+ worklouderctl codex lighting auto-off set --input SNAPSHOT.json VALUE --output CANDIDATE.json
++worklouderctl codex voice get --input SNAPSHOT.json
++worklouderctl codex voice set --input SNAPSHOT.json push-to-talk|realtime --output CANDIDATE.json
+ ```
+ 
+ Candidate input is a complete `codex export` snapshot. The editor verifies the
+@@ -78,6 +80,12 @@ or `1-hour`. Both editors preserve unknown settings, keep inherited defaults
+ implicit for no-op candidates, and use the complete settings bridge transaction
+ for CAS apply/readback/restore.
+ 
++Voice mode reads or replaces `codex-micro-layout.voiceButtonMode`. Its exact
++values are `push-to-talk` and `realtime`; the latter is labeled Voice Chat in
++the GUI. The editor materializes the effective layout only for a real change,
++preserves unknown layout fields, and leaves an inherited default implicit for a
++no-op candidate.
++
+ Agent Key snapshots use the separate `codex-agent-keys-revision-v1` global-state
+ revision. Offline set/clear changes one `AG00`–`AG05` slot, preserves the other
+ five values and their unknown fields, atomically publishes, and reopens the
+diff --git a/docs/faq.md b/docs/faq.md
+index 15c44d0..4c5a9f7 100644
+--- a/docs/faq.md
++++ b/docs/faq.md
+@@ -59,6 +59,10 @@ offline `codex lighting brightness/auto-off get/set` candidates. The isolated
+ Codex bridge E2E applies both fields, reads them back exactly, and restores their
+ baseline values through the complete settings transaction.
+ 
++The voice button also has typed `codex voice get/set` candidates for
++`push-to-talk` and `realtime` (Voice Chat). The editor preserves future layout
++fields and the bridge fixture restores the exact baseline mode and source hash.
++
+ ## Can an AI agent configure Codex Micro?
+ 
+ Yes, through the deterministic JSON contract. Human and agent clients share
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 0b77204..d505584 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -50,7 +50,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Six Agent Key task/command/Skill/keycap assignment snapshot and validation
+ - [x] Six Agent Key offline get/set/clear plus bridge apply/restore transaction
+ - [x] Six Command Key slots get/set/reset offline candidates
+-- [ ] voice mode
++- [x] voice mode
+ - [ ] dial modes and custom gestures
+ - [ ] joystick directions and Skills
+ - [x] global brightness and auto-off
+diff --git a/docs/tier-model.md b/docs/tier-model.md
+index 149faad..d4c99c1 100644
+--- a/docs/tier-model.md
++++ b/docs/tier-model.md
+@@ -63,7 +63,7 @@ worklouderctl codex agent-key tap-mode get|set --input SNAPSHOT
+ worklouderctl codex command-key get|set|reset --input SNAPSHOT ACT06
+ worklouderctl codex dial get|set|reset
+ worklouderctl codex joystick get|set|reset
+-worklouderctl codex voice get|set
++worklouderctl codex voice get|set --input SNAPSHOT
+ worklouderctl codex lighting brightness get|set --input SNAPSHOT
+ worklouderctl codex lighting auto-off get|set --input SNAPSHOT
+ worklouderctl codex apply CONFIG
+diff --git a/llms.txt b/llms.txt
+index 75b201d..88cf878 100644
+--- a/llms.txt
++++ b/llms.txt
+@@ -32,8 +32,8 @@ Important: the project is currently a source alpha. The repository builds a work
+ - Non-goal: implementing a replacement hardware driver or firmware protocol
+ - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
+ - Current maturity: source alpha; read paths and isolated bridge apply/restore transaction conformance implemented; no packaged release
+-- Current Codex commands: `codex doctor/inspect/export`, `codex bridge inspect`, `codex config snapshot/apply/restore`, six-slot `codex agent-key assignments/snapshot/get/set/clear/apply/restore`, and `codex lighting brightness/auto-off get/set`
+-- Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`, and global lighting provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; six-slot Agent Key candidates preserve untargeted unknown fields and use a separate global-state revision; the Codex Companion Bridge fixture verifies complete settings and Agent Key apply/readback/restore/rollback while released-Codex integration remains pending
++- Current Codex commands: `codex doctor/inspect/export`, `codex bridge inspect`, `codex config snapshot/apply/restore`, six-slot `codex agent-key assignments/snapshot/get/set/clear/apply/restore`, `codex lighting brightness/auto-off get/set`, and `codex voice get/set`
++- Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`, global lighting, and voice mode provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; six-slot Agent Key candidates preserve untargeted unknown fields and use a separate global-state revision; the Codex Companion Bridge fixture verifies complete settings and Agent Key apply/readback/restore/rollback while released-Codex integration remains pending
+ - Input cache command: `input config snapshot` captures `keymap.json` plus optional `smart_actions.json` byte-for-byte, excludes host-only state, and emits a bridge-revision-equivalent semantic snapshot without controlling the Input GUI or device transport
+ - Primary device transport: authenticated Input Companion Bridge v1 over a private Unix socket; Rust client, one-call Input-main integration, release conformance command, and cross-language tests are implemented
+ - Bridge config commands: deterministic byte-exact snapshot/validate plus capability-gated apply/restore with immutable CLI backup, CAS, session idempotency, full readback, and automatic rollback
+diff --git a/scripts/test-codex-bridge-e2e.sh b/scripts/test-codex-bridge-e2e.sh
+index 5b5ba56..709af92 100755
+--- a/scripts/test-codex-bridge-e2e.sh
++++ b/scripts/test-codex-bridge-e2e.sh
+@@ -45,11 +45,15 @@ done
+ "$BIN" --json codex lighting brightness set --input "$ROOT/source-candidate.json" 37 \
+   --output "$ROOT/brightness-candidate.json" >"$ROOT/brightness-candidate-receipt.json"
+ "$BIN" --json codex lighting auto-off set --input "$ROOT/brightness-candidate.json" \
+-  10-minutes --output "$ROOT/candidate.json" >"$ROOT/candidate-receipt.json"
++  10-minutes --output "$ROOT/lighting-candidate.json" >"$ROOT/lighting-candidate-receipt.json"
++"$BIN" --json codex voice set --input "$ROOT/lighting-candidate.json" realtime \
++  --output "$ROOT/candidate.json" >"$ROOT/candidate-receipt.json"
+ "$BIN" --json codex lighting brightness get --input "$ROOT/candidate.json" \
+   >"$ROOT/brightness-get.json"
+ "$BIN" --json codex lighting auto-off get --input "$ROOT/candidate.json" \
+   >"$ROOT/auto-off-get.json"
++"$BIN" --json codex voice get --input "$ROOT/candidate.json" \
++  >"$ROOT/voice-get.json"
+ "$BIN" --json codex config --socket "$SOCKET" --token "$TOKEN" apply \
+   --input "$ROOT/candidate.json" --backup "$ROOT/pre-apply.json" \
+   --idempotency-key fixture-apply-v1 >"$ROOT/apply.json"
+@@ -116,6 +120,7 @@ apply = json.loads((root / "apply.json").read_text())
+ restore = json.loads((root / "restore.json").read_text())
+ brightness_get = json.loads((root / "brightness-get.json").read_text())
+ auto_off_get = json.loads((root / "auto-off-get.json").read_text())
++voice_get = json.loads((root / "voice-get.json").read_text())
+ agent_baseline = json.loads((root / "agent-baseline.json").read_text())
+ agent_modified = json.loads((root / "agent-modified.json").read_text())
+ agent_restored = json.loads((root / "agent-restored.json").read_text())
+@@ -129,10 +134,13 @@ assert "codex.agentKeys.restore.v1" in bridge["capabilities"]
+ assert modified["settings"]["codex-micro-agent-source"] == "custom"
+ assert baseline["effectiveSettings"]["codex-micro-lighting-brightness"] == 100
+ assert baseline["effectiveSettings"]["codex-micro-lighting-auto-off"] == "3-minutes"
++assert baseline["effectiveSettings"]["codex-micro-layout"]["voiceButtonMode"] == "push-to-talk"
+ assert brightness_get["value"] == 37 and brightness_get["explicit"] is True
+ assert auto_off_get["value"] == "10-minutes" and auto_off_get["explicit"] is True
++assert voice_get["value"] == "realtime" and voice_get["inherited"] is False
+ assert modified["settings"]["codex-micro-lighting-brightness"] == 37
+ assert modified["settings"]["codex-micro-lighting-auto-off"] == "10-minutes"
++assert modified["settings"]["codex-micro-layout"]["voiceButtonMode"] == "realtime"
+ assert apply["changed"] is True and apply["rollbackPerformed"] is False
+ assert restore["changed"] is True and restore["rollbackPerformed"] is False
+ assert restored["settings"] == baseline["settings"]
+@@ -164,6 +172,9 @@ print(json.dumps({
+     "baselineLightingAutoOff": baseline["effectiveSettings"]["codex-micro-lighting-auto-off"],
+     "modifiedLightingAutoOff": modified["settings"]["codex-micro-lighting-auto-off"],
+     "restoredLightingAutoOff": restored["effectiveSettings"]["codex-micro-lighting-auto-off"],
++    "baselineVoiceMode": baseline["effectiveSettings"]["codex-micro-layout"]["voiceButtonMode"],
++    "modifiedVoiceMode": modified["settings"]["codex-micro-layout"]["voiceButtonMode"],
++    "restoredVoiceMode": restored["effectiveSettings"]["codex-micro-layout"]["voiceButtonMode"],
+     "baselineSourceSha256": baseline["sourceSha256"],
+     "modifiedSourceSha256": modified["sourceSha256"],
+     "restoredSourceSha256": restored["sourceSha256"],
+diff --git a/spec/codex-settings-candidate-v1.json b/spec/codex-settings-candidate-v1.json
+index d7779c6..b0f3355 100644
+--- a/spec/codex-settings-candidate-v1.json
++++ b/spec/codex-settings-candidate-v1.json
+@@ -75,6 +75,17 @@
+     "lightingAutoOffSet": {
+       "command": "codex lighting auto-off set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
+       "changedPath": "/settings/codex-micro-lighting-auto-off"
++    },
++    "voiceGet": {
++      "command": "codex voice get --input SNAPSHOT.json",
++      "values": [
++        "push-to-talk",
++        "realtime"
++      ]
++    },
++    "voiceSet": {
++      "command": "codex voice set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
++      "changedPath": "/settings/codex-micro-layout/voiceButtonMode"
+     }
+   },
+   "commandKeySlots": [
+diff --git a/src/cli.rs b/src/cli.rs
+index e703a99..153f8f1 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -445,6 +445,12 @@ pub enum CodexCommand {
+         #[clap(subcommand)]
+         command: CodexLightingCommand,
+     },
++
++    /// Inspect or edit Codex-native voice-button behavior in an offline snapshot.
++    Voice {
++        #[clap(subcommand)]
++        command: CodexVoiceCommand,
++    },
+ }
+ 
+ #[derive(Clone, Copy, Debug, ValueEnum)]
+@@ -837,6 +843,33 @@ pub enum CodexLightingAutoOffCommand {
+     },
+ }
+ 
++#[derive(Clone, Copy, Debug, ValueEnum)]
++pub enum CodexVoiceMode {
++    PushToTalk,
++    Realtime,
++}
++
++#[derive(Debug, Subcommand)]
++pub enum CodexVoiceCommand {
++    /// Read the effective voice-button behavior.
++    Get {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++    },
++
++    /// Write an offline candidate with a new voice-button behavior.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++
++        #[clap(value_enum)]
++        value: CodexVoiceMode,
++
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++}
++
+ #[derive(Debug, Subcommand)]
+ pub enum ProfileCommand {
+     /// List profiles from a revisioned configuration snapshot.
+diff --git a/src/codex.rs b/src/codex.rs
+index 7fe07e8..03b412c 100644
+--- a/src/codex.rs
++++ b/src/codex.rs
+@@ -125,6 +125,16 @@ pub struct LightingAutoOffView {
+     pub explicit: bool,
+ }
+ 
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct VoiceModeView {
++    pub schema_version: u8,
++    pub kind: &'static str,
++    pub revision: String,
++    pub value: String,
++    pub inherited: bool,
++}
++
+ #[derive(Debug, Serialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct CommandKeyView {
+@@ -571,6 +581,57 @@ pub fn lighting_auto_off_set(input: &Path, value: &str, output: &Path) -> Result
+     )
+ }
+ 
++pub fn voice_mode_get(input: &Path) -> Result<VoiceModeView> {
++    let snapshot = read_snapshot(input)?;
++    let field = "voiceButtonMode";
++    let value = effective_layout(&snapshot)?
++        .get(field)
++        .and_then(Value::as_str)
++        .context("effective layout.voiceButtonMode was missing")?;
++    let inherited = snapshot
++        .settings
++        .get("codex-micro-layout")
++        .and_then(Value::as_object)
++        .map_or(true, |layout| !layout.contains_key(field));
++    Ok(VoiceModeView {
++        schema_version: 1,
++        kind: "worklouderctl-codex-voice-mode",
++        revision: settings_revision(&snapshot.settings)?,
++        value: value.to_owned(),
++        inherited,
++    })
++}
++
++pub fn voice_mode_set(input: &Path, value: &str, output: &Path) -> Result<CandidateReceipt> {
++    let mut snapshot = read_snapshot(input)?;
++    let contract = load_contract()?;
++    let before_revision = settings_revision(&snapshot.settings)?;
++    let mut layout = effective_layout(&snapshot)?.clone();
++    let current = layout
++        .get("voiceButtonMode")
++        .and_then(Value::as_str)
++        .context("effective layout.voiceButtonMode was missing")?;
++    let changed = current != value;
++    if changed {
++        layout.insert("voiceButtonMode".into(), Value::String(value.to_owned()));
++        validate_layout(&Value::Object(layout.clone()), &contract.layout)?;
++        snapshot
++            .settings
++            .insert("codex-micro-layout".into(), Value::Object(layout));
++        refresh_effective_settings(&mut snapshot, &contract)?;
++    }
++    publish_candidate(
++        snapshot,
++        output,
++        "codex-voice-mode-set",
++        before_revision,
++        changed
++            .then(|| "/settings/codex-micro-layout/voiceButtonMode".into())
++            .into_iter()
++            .collect(),
++    )
++}
++
+ pub fn command_key_get(input: &Path, slot: &str) -> Result<CommandKeyView> {
+     let snapshot = read_snapshot(input)?;
+     command_key_view(&snapshot, slot)
+@@ -1452,6 +1513,90 @@ mod tests {
+         fs::remove_dir_all(root).unwrap();
+     }
+ 
++    #[test]
++    fn voice_candidates_are_typed_atomic_and_preserve_unknown_layout_fields() {
++        let root = fixture_root();
++        fs::create_dir_all(&root).unwrap();
++        let config = root.join("config.toml");
++        let snapshot_path = root.join("snapshot.json");
++        let realtime_path = root.join("realtime.json");
++        fs::write(&config, b"[desktop]\ncodex-micro-future = \"preserved\"\n").unwrap();
++        let source_sha = fsutil::sha256(&config).unwrap();
++        let mut snapshot = export(&config, &root.join("missing.app"), &snapshot_path).unwrap();
++        let contract = load_contract().unwrap();
++        let mut layout = contract.definitions["codex-micro-layout"]
++            .default
++            .as_object()
++            .unwrap()
++            .clone();
++        layout.insert(
++            "futureVoiceMetadata".into(),
++            serde_json::json!({"preserved": true}),
++        );
++        snapshot
++            .settings
++            .insert("codex-micro-layout".into(), Value::Object(layout));
++        refresh_effective_settings(&mut snapshot, &contract).unwrap();
++        let mut bytes = serde_json::to_vec_pretty(&snapshot).unwrap();
++        bytes.push(b'\n');
++        fs::write(&snapshot_path, bytes).unwrap();
++        assert_eq!(read_snapshot(&snapshot_path).unwrap(), snapshot);
++
++        let before = voice_mode_get(&snapshot_path).unwrap();
++        assert_eq!(before.value, "push-to-talk");
++        assert!(!before.inherited);
++        let receipt = voice_mode_set(&snapshot_path, "realtime", &realtime_path).unwrap();
++        assert!(receipt.changed);
++        assert_eq!(
++            receipt.changed_paths,
++            vec!["/settings/codex-micro-layout/voiceButtonMode"]
++        );
++        let after = voice_mode_get(&realtime_path).unwrap();
++        assert_eq!(after.value, "realtime");
++        assert!(!after.inherited);
++        let reopened = read_snapshot(&realtime_path).unwrap();
++        assert_eq!(reopened.settings["codex-micro-future"], "preserved");
++        assert_eq!(
++            reopened.settings["codex-micro-layout"]["futureVoiceMetadata"]["preserved"],
++            true
++        );
++        assert_eq!(
++            reopened.settings["codex-micro-layout"]["slots"]["ACT06"]["keycapId"],
++            "FAST"
++        );
++        assert_eq!(reopened.source_sha256, source_sha);
++        assert_eq!(fsutil::sha256(&config).unwrap(), source_sha);
++
++        let invalid_path = root.join("invalid.json");
++        let invalid = voice_mode_set(&realtime_path, "telephone", &invalid_path).unwrap_err();
++        assert!(invalid
++            .to_string()
++            .contains("voiceButtonMode must be one of push-to-talk, realtime"));
++        assert!(!invalid_path.exists());
++
++        let default_config = root.join("default.toml");
++        let default_snapshot = root.join("default-snapshot.json");
++        let default_noop = root.join("default-noop.json");
++        fs::write(&default_config, b"[desktop]\n").unwrap();
++        export(
++            &default_config,
++            &root.join("missing.app"),
++            &default_snapshot,
++        )
++        .unwrap();
++        let default_view = voice_mode_get(&default_snapshot).unwrap();
++        assert_eq!(default_view.value, "push-to-talk");
++        assert!(default_view.inherited);
++        let noop = voice_mode_set(&default_snapshot, "push-to-talk", &default_noop).unwrap();
++        assert!(!noop.changed);
++        assert!(!read_snapshot(&default_noop)
++            .unwrap()
++            .settings
++            .contains_key("codex-micro-layout"));
++
++        fs::remove_dir_all(root).unwrap();
++    }
++
+     #[test]
+     fn export_is_atomic_and_typed_readback_matches() {
+         let root = fixture_root();
+diff --git a/src/lib.rs b/src/lib.rs
+index 7af930d..3ed5226 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -18,12 +18,13 @@ use cli::{
+     AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
+     CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand,
+     CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexLightingAutoOff,
+-    CodexLightingAutoOffCommand, CodexLightingBrightnessCommand, CodexLightingCommand, Command,
+-    CompletionShell, ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand,
+-    DeviceTransport, InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand,
+-    LightingEffect, LightingZone, MultiActionCommand, MultiActionGroupCommand,
+-    MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand, SmartActionGroupCommand,
+-    SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType, TierCommand,
++    CodexLightingAutoOffCommand, CodexLightingBrightnessCommand, CodexLightingCommand,
++    CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand,
++    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand,
++    LayerCommand, LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
++    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
++    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
++    TierCommand,
+ };
+ use serde::Serialize;
+ use std::io::Write;
+@@ -2026,6 +2027,30 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
+                 )?,
+             },
+         },
++        CodexCommand::Voice { command } => match command {
++            CodexVoiceCommand::Get { input } => {
++                let result = codex::voice_mode_get(&input)?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "voice-mode={}\tinherited={}",
++                        result.value, result.inherited
++                    )?;
++                    writeln!(out, "revision={}", result.revision)?;
++                }
++            }
++            CodexVoiceCommand::Set {
++                input,
++                value,
++                output,
++            } => write_codex_candidate_result(
++                codex::voice_mode_set(&input, codex_voice_mode_value(value), &output)?,
++                json,
++                &mut out,
++            )?,
++        },
+     }
+     Ok(())
+ }
+@@ -2177,6 +2202,13 @@ fn codex_lighting_auto_off_value(value: CodexLightingAutoOff) -> &'static str {
+     }
+ }
+ 
++fn codex_voice_mode_value(value: CodexVoiceMode) -> &'static str {
++    match value {
++        CodexVoiceMode::PushToTalk => "push-to-talk",
++        CodexVoiceMode::Realtime => "realtime",
++    }
++}
++
+ fn write_codex_candidate_result(
+     result: codex::CandidateReceipt,
+     json: bool,
+diff --git a/tests/cli.rs b/tests/cli.rs
+index c354782..68fdc5c 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -326,6 +326,7 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
+     assert!(stdout.contains("agent-key"));
+     assert!(stdout.contains("command-key"));
+     assert!(stdout.contains("lighting"));
++    assert!(stdout.contains("voice"));
+ 
+     let config = binary()
+         .args(["codex", "config", "--help"])
+@@ -364,6 +365,15 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
+     assert!(lighting.status.success());
+     assert!(lighting_stdout.contains("brightness"));
+     assert!(lighting_stdout.contains("auto-off"));
++
++    let voice = binary()
++        .args(["codex", "voice", "set", "--help"])
++        .output()
++        .unwrap();
++    let voice_stdout = String::from_utf8(voice.stdout).unwrap();
++    assert!(voice.status.success());
++    assert!(voice_stdout.contains("push-to-talk"));
++    assert!(voice_stdout.contains("realtime"));
+ }
+ 
+ #[test]
+@@ -431,6 +441,7 @@ fn codex_tier1_candidates_run_end_to_end_without_writing_source() {
+     let reset = root.join("reset.json");
+     let brightness = root.join("brightness.json");
+     let auto_off = root.join("auto-off.json");
++    let voice = root.join("voice.json");
+     fs::write(
+         &config,
+         b"model = \"unrelated\"\n[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
+@@ -593,8 +604,36 @@ fn codex_tier1_candidates_run_end_to_end_without_writing_source() {
+     assert_eq!(auto_off_get["value"], "10-minutes");
+     assert_eq!(auto_off_get["explicit"], true);
+ 
+-    let candidate: serde_json::Value =
+-        serde_json::from_slice(&fs::read(&auto_off).unwrap()).unwrap();
++    let set_voice = binary()
++        .args(["--json", "codex", "voice", "set", "--input"])
++        .arg(&auto_off)
++        .arg("realtime")
++        .arg("--output")
++        .arg(&voice)
++        .output()
++        .unwrap();
++    assert!(
++        set_voice.status.success(),
++        "{}",
++        String::from_utf8_lossy(&set_voice.stderr)
++    );
++    let set_voice: serde_json::Value = serde_json::from_slice(&set_voice.stdout).unwrap();
++    assert_eq!(
++        set_voice["changedPaths"],
++        serde_json::json!(["/settings/codex-micro-layout/voiceButtonMode"])
++    );
++
++    let voice_get = binary()
++        .args(["--json", "codex", "voice", "get", "--input"])
++        .arg(&voice)
++        .output()
++        .unwrap();
++    assert!(voice_get.status.success());
++    let voice_get: serde_json::Value = serde_json::from_slice(&voice_get.stdout).unwrap();
++    assert_eq!(voice_get["value"], "realtime");
++    assert_eq!(voice_get["inherited"], false);
++
++    let candidate: serde_json::Value = serde_json::from_slice(&fs::read(&voice).unwrap()).unwrap();
+     assert_eq!(candidate["settings"]["codex-micro-future"], "preserved");
+     assert_eq!(
+         worklouderctl::fsutil::sha256(&config).unwrap(),
