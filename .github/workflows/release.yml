@@ -138,6 +138,8 @@ jobs:
     runs-on: macos-14
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -150,6 +152,7 @@ jobs:
         run: |
           set -euo pipefail
           version=${GITHUB_REF_NAME#v}
+          ./scripts/test-companion-package.py --output dist
           arm=$(awk '{print $1}' "dist/worklouderctl-v$version-aarch64-apple-darwin.tar.gz.sha256")
           intel=$(awk '{print $1}' "dist/worklouderctl-v$version-x86_64-apple-darwin.tar.gz.sha256")
           ./scripts/render-homebrew-formula.py \
@@ -158,8 +161,12 @@ jobs:
             --arm64-sha256 "$arm" --x86-64-sha256 "$intel" \
             --output dist/worklouderctl.rb
           ruby -c dist/worklouderctl.rb
-          cat dist/*.tar.gz.sha256 | sort -k2 > dist/SHA256SUMS
+          cat dist/*.tar.gz.sha256 dist/*.tgz.sha256 | sort -k2 > dist/SHA256SUMS
           (cd dist && shasum -a 256 -c SHA256SUMS)
+      - name: Attest Companion integration package
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*.tgz
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

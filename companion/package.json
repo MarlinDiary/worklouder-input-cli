@@ -2,6 +2,22 @@
   "name": "@worklouder/input-companion-bridge-reference",
   "version": "0.1.0",
   "private": true,
+  "description": "Reference Codex and Work Louder Input Companion Bridge integration kit for WorkLouderCTL",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MarlinDiary/worklouder-input-cli.git",
+    "directory": "companion"
+  },
+  "homepage": "https://github.com/MarlinDiary/worklouder-input-cli#readme",
+  "bugs": "https://github.com/MarlinDiary/worklouder-input-cli/issues",
+  "keywords": [
+    "work-louder",
+    "codex-micro",
+    "companion-bridge",
+    "electron",
+    "configuration"
+  ],
   "type": "module",
   "engines": {
     "node": ">=18"
@@ -9,6 +25,18 @@
   "bin": {
     "input-companion-conformance": "./conformance.mjs"
   },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "index.mjs",
+    "input-main-adapter.mjs",
+    "input-main-bridge.mjs",
+    "input-main-integration.mjs",
+    "codex-main-adapter.mjs",
+    "codex-main-bridge.mjs",
+    "codex-main-integration.mjs",
+    "conformance.mjs"
+  ],
   "exports": {
     ".": "./index.mjs",
     "./adapter": "./input-main-adapter.mjs",

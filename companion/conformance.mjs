@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFile, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { createConnection } from "node:net";
 import { join, resolve } from "node:path";
@@ -258,10 +258,21 @@ function writeStream(stream, value) {
   });
 }
 
-if (
-  process.argv[1] &&
-  resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
-) {
+async function isMainModule() {
+  if (!process.argv[1]) {
+    return false;
+  }
+  try {
+    return (
+      (await realpath(resolve(process.argv[1]))) ===
+      (await realpath(fileURLToPath(import.meta.url)))
+    );
+  } catch {
+    return false;
+  }
+}
+
+if (await isMainModule()) {
   try {
     await main();
   } catch (error) {
