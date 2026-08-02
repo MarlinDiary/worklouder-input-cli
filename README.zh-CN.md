@@ -68,10 +68,13 @@ worklouderctl device --transport bridge config validate --input CONFIG.json
 worklouderctl device --transport bridge config apply --input CONFIG.json --backup BEFORE.json
 worklouderctl device --transport bridge config restore --input BEFORE.json --backup CURRENT.json
 worklouderctl profile list --input CONFIG.json
+worklouderctl profile show --input CONFIG.json --id PROFILE_ID
 worklouderctl profile select --input CONFIG.json --id PROFILE_ID --output CANDIDATE.json
 worklouderctl profile rename --input CONFIG.json --id PROFILE_ID --name NAME --output CANDIDATE.json
 worklouderctl layer list --input CONFIG.json [--profile PROFILE_ID]
+worklouderctl layer show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
 worklouderctl layer rename --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --name NAME --output CANDIDATE.json
+worklouderctl layer color --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --color '#RRGGBB' --output CANDIDATE.json
 worklouderctl device --transport direct --input-mode require-closed status
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
@@ -173,7 +176,7 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 `files`、双哈希 `export`、Companion Bridge v1 contract/client/reference server、
 revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
 Input 自动恢复，以及 profile list/select/rename 与 layer list/rename 的严格离线
-candidate 生成已经实现；Input
+candidate 生成、profile/layer show 和 layer 24-bit RGB color candidate 已经实现；Input
 release 集成、可安装 binary、Homebrew formula、
 Codex live settings bridge 写入与完整写入命令将在对应 transaction 和真实硬件
 readback 验证后发布。

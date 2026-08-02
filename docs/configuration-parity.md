@@ -48,8 +48,8 @@ the runtime reloaded the new value.
 
 | GUI surface | Configuration coverage | Planned command family | Current status |
 | --- | --- | --- | --- |
-| Profiles | create, rename, select, delete | `profile` | candidate-verified for list/rename/select; create/delete pending |
-| Layers | create, rename, select, delete, up to six | `layer` | candidate-verified for list/rename; create/select/delete pending |
+| Profiles | create, rename, select, delete | `profile` | candidate-verified for list/show/rename/select; create/delete pending |
+| Layers | create, rename, select, delete, color, up to six | `layer` | candidate-verified for list/show/rename/color; create/select/delete pending |
 | Basic keys | all device-supported keycodes | `key set` | researched |
 | Layer/profile keys | normal/temp layers and profiles 1–6 | `key set` | researched |
 | Actions | simple/advanced events, delays, groups | `action` | researched |

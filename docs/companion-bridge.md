@@ -119,10 +119,14 @@ candidate without opening a bridge connection:
 
 ```sh
 worklouderctl profile list --input config-snapshot.json
+worklouderctl profile show --input config-snapshot.json --id 0
 worklouderctl profile rename --input config-snapshot.json \
   --id 0 --name Work --output candidate.json
+worklouderctl layer show --input config-snapshot.json --profile 0 --id 1
 worklouderctl layer rename --input config-snapshot.json \
   --profile 0 --id 1 --name Build --output candidate.json
+worklouderctl layer color --input config-snapshot.json \
+  --profile 0 --id 1 --color '#EDF6FF' --output color-candidate.json
 ```
 
 Before publishing, the editor independently verifies every file's canonical
@@ -208,7 +212,7 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
 - `companion/input-main-bridge.test.mjs` — authentication, dispatch, and service
   adapter tests;
 - `scripts/test-bridge-e2e.sh` — Rust CLI handshake, status, file list, exact
-  export, semantic profile/layer candidates, independent candidate rehash,
+  export, semantic profile/layer inspection and color candidates, independent candidate rehash,
   apply/readback, idempotent retry, stale-CAS rejection, restore, and dual-hash
   conformance test.
 

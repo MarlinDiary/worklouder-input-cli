@@ -55,10 +55,10 @@ The roadmap prioritizes evidence and configuration safety over command count.
 ## M3 — Input semantic configuration beta
 
 - [x] Strict offline snapshot validation and deterministic candidate rehash
-- [x] Profile list, rename, and active-profile candidate generation
-- [x] Layer list and rename candidate generation
+- [x] Profile list/show, rename, and active-profile candidate generation
+- [x] Layer list/show, rename, and 24-bit RGB metadata candidate generation
 - [ ] Profile create and delete
-- [ ] Layer create, select, delete, and remaining metadata
+- [ ] Layer create, select, delete, and remaining lighting metadata
 - [ ] Keys and keycodes
 - [ ] Encoder rotation and press
 - [ ] Joystick sectors

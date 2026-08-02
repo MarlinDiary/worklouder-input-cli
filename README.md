@@ -98,10 +98,13 @@ worklouderctl device --transport bridge config validate --input CONFIG.json
 worklouderctl device --transport bridge config apply --input CONFIG.json --backup BEFORE.json
 worklouderctl device --transport bridge config restore --input BEFORE.json --backup CURRENT.json
 worklouderctl profile list --input CONFIG.json
+worklouderctl profile show --input CONFIG.json --id PROFILE_ID
 worklouderctl profile select --input CONFIG.json --id PROFILE_ID --output CANDIDATE.json
 worklouderctl profile rename --input CONFIG.json --id PROFILE_ID --name NAME --output CANDIDATE.json
 worklouderctl layer list --input CONFIG.json [--profile PROFILE_ID]
+worklouderctl layer show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
 worklouderctl layer rename --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --name NAME --output CANDIDATE.json
+worklouderctl layer color --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --color '#RRGGBB' --output CANDIDATE.json
 worklouderctl device --transport direct --input-mode require-closed status
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
@@ -153,10 +156,11 @@ Input or the device. Apply it through the guarded bridge transaction:
 
 ```console
 worklouderctl device --transport bridge config snapshot --output before.json
-worklouderctl profile rename --input before.json --id 0 --name Work --output candidate.json
+worklouderctl layer color --input before.json --profile 0 --id 1 \
+  --color '#EDF6FF' --output candidate.json
 worklouderctl device --transport bridge config apply \
   --input candidate.json --backup pre-apply.json \
-  --expected-revision REVISION --idempotency-key profile-rename-1
+  --expected-revision REVISION --idempotency-key layer-color-1
 ```
 
 The repository includes an executable Input-main reference server, a service
@@ -258,7 +262,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Bridge apply/restore transaction and automatic rollback fixture | Complete |
 | Companion Bridge integration in a released Input build | Upstream integration pending |
 | Codex live settings-bridge write client | Planned |
-| Semantic profile/layer candidates | List/select/rename implemented and fixture-verified |
+| Semantic profile/layer candidates | List/show/select/rename/color implemented and fixture-verified |
 | Semantic control commands | Planned |
 | Real-device mutation and rollback | Planned |
 | Input cache/database and Smart Actions synchronization | Planned |
