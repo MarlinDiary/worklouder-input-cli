@@ -108,6 +108,12 @@ worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled -
 worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
 worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
 worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
+worklouderctl codex dial mode get --input CODEX_SNAPSHOT.json
+worklouderctl codex dial mode set --input CODEX_SNAPSHOT.json custom --output CODEX_DIAL.json
+worklouderctl codex dial gesture set --input CODEX_DIAL.json left --command navigateBack --output CODEX_DIAL_LEFT.json
+worklouderctl codex dial gesture set --input CODEX_DIAL_LEFT.json right --skill-name Review --skill-path /PATH/TO/SKILL.md --output CODEX_DIAL_RIGHT.json
+worklouderctl codex dial gesture get --input CODEX_DIAL_RIGHT.json right
+worklouderctl codex dial gesture clear --input CODEX_DIAL_RIGHT.json left --output CODEX_DIAL_CLEARED.json
 worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
 worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
 worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
@@ -199,7 +205,7 @@ effective view. `codex export` atomically publishes and reopens a typed JSON
 snapshot. Neither command serializes unrelated Codex settings.
 
 `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`,
-`codex lighting`, and `codex voice` are strict offline Tier 1 editors. They
+`codex dial`, `codex lighting`, and `codex voice` are strict offline Tier 1 editors. They
 validate the embedded frozen definitions,
 recompute effective settings and a recursive-key-sorted revision, preserve
 unknown `codex-micro-*` values, publish atomically, and reopen the result. Each
@@ -216,6 +222,13 @@ separate global-state revision CAS, immutable backup, idempotent retry, exact
 six-slot readback, stale-CAS rejection, and automatic rollback. Assignment
 storage and the `codex-micro-agent-source=custom` setting remain independently
 controlled, so applying assignments never changes source ordering implicitly.
+
+`codex dial mode get/set` covers composer navigation, reasoning effort,
+conversation scrolling, and custom mode without rewriting gesture mappings.
+In custom mode, `dial gesture get/set/clear` edits exactly one of `left`,
+`right`, `click`, or `long-press` as a command, Skill, or empty mapping. Gesture
+edits reject inactive non-custom snapshots, preserve the other three gestures
+and unknown layout fields, and leave the source settings bytes unchanged.
 
 `codex config diff BASE.json CANDIDATE.json` validates both frozen-contract
 snapshots and compares only their explicit `settings`. Transport metadata,

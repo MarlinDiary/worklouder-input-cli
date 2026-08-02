@@ -57,6 +57,12 @@ worklouderctl codex command-key set --input SNAPSHOT.json SLOT \
   [--keycap KEYCAP] [--command COMMAND_ID | --skill-name NAME --skill-path PATH | --clear-action] \
   --output CANDIDATE.json
 worklouderctl codex command-key reset --input SNAPSHOT.json SLOT --output CANDIDATE.json
+worklouderctl codex dial mode get --input SNAPSHOT.json
+worklouderctl codex dial mode set --input SNAPSHOT.json composer-navigation|reasoning|conversation-scroll|custom --output CANDIDATE.json
+worklouderctl codex dial gesture get --input SNAPSHOT.json left|right|click|long-press
+worklouderctl codex dial gesture set --input SNAPSHOT.json GESTURE \
+  [--command COMMAND_ID | --skill-name NAME --skill-path PATH] --output CANDIDATE.json
+worklouderctl codex dial gesture clear --input SNAPSHOT.json GESTURE --output CANDIDATE.json
 worklouderctl codex lighting brightness get --input SNAPSHOT.json
 worklouderctl codex lighting brightness set --input SNAPSHOT.json VALUE --output CANDIDATE.json
 worklouderctl codex lighting auto-off get --input SNAPSHOT.json
@@ -136,6 +142,11 @@ signals. The observed default Command Keycaps are `FAST`, `APPR`, `REJ`,
   back.
 - Custom dial and joystick assignments: Codex command, skill, or empty.
 - Long-pressing the dial opens Codex Micro settings.
+
+The gesture editor is active only in `custom` mode. Mode changes retain all
+gesture mappings. In custom mode, each gesture stores a command object, Skill
+object, or `null`; outside custom mode the built-in runtime behavior remains
+authoritative.
 
 ### Codex command/keycap catalog
 

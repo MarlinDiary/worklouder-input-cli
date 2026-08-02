@@ -51,7 +51,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Six Agent Key offline get/set/clear plus bridge apply/restore transaction
 - [x] Six Command Key slots get/set/reset offline candidates
 - [x] voice mode
-- [ ] dial modes and custom gestures
+- [x] dial modes and command/Skill/empty custom gestures
 - [ ] joystick directions and Skills
 - [x] global brightness and auto-off
 - [x] Codex settings backup, apply, readback, restore, and automatic rollback fixture

@@ -28,8 +28,8 @@ parity contract.
 | Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | strict offline candidate verified; generic complete-settings bridge transaction verified |
 | Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; generic complete-settings bridge transaction verified |
 | Voice button | push-to-talk, Voice Chat | `codex voice get/set` | strict offline candidate plus `push-to-talk -> realtime -> push-to-talk` bridge apply/readback/restore fixture verified |
-| Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | researched |
-| Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | researched |
+| Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | strict candidate verified; mode changes preserve custom gesture mappings |
+| Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | command/Skill/empty custom-mode candidates, one-leaf paths, preservation, and source immutability verified |
 | Joystick | up, right, down, left command/Skill/empty | `codex joystick get/set/clear` | researched |
 | Lighting brightness | integer 0–100 | `codex lighting brightness get/set` | strict offline candidate plus `100 -> 37 -> 100` bridge apply/readback/restore fixture verified |
 | Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | strict offline candidate plus `3-minutes -> 10-minutes -> 3-minutes` bridge apply/readback/restore fixture verified |

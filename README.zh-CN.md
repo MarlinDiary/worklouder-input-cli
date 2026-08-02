@@ -77,6 +77,12 @@ worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled -
 worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
 worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
 worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
+worklouderctl codex dial mode get --input CODEX_SNAPSHOT.json
+worklouderctl codex dial mode set --input CODEX_SNAPSHOT.json custom --output CODEX_DIAL.json
+worklouderctl codex dial gesture set --input CODEX_DIAL.json left --command navigateBack --output CODEX_DIAL_LEFT.json
+worklouderctl codex dial gesture set --input CODEX_DIAL_LEFT.json right --skill-name Review --skill-path /PATH/TO/SKILL.md --output CODEX_DIAL_RIGHT.json
+worklouderctl codex dial gesture get --input CODEX_DIAL_RIGHT.json right
+worklouderctl codex dial gesture clear --input CODEX_DIAL_RIGHT.json left --output CODEX_DIAL_CLEARED.json
 worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
 worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
 worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
@@ -163,7 +169,7 @@ view 中递归补齐继承的默认值。`codex export` 原子发布并重新打
 snapshot；两者都不会序列化其他 Codex 设置。
 
 `codex agent-source`、`codex agent-key tap-mode`、`codex command-key`、
-`codex lighting` 与 `codex voice` 是严格的
+`codex dial`、`codex lighting` 与 `codex voice` 是严格的
 Tier 1 离线 editor：核对内嵌 frozen definitions，重算 effective settings 与
 recursive-key-sorted revision，保留未知 `codex-micro-*` 值，原子发布并重新打开。
 receipt 中的 `expectedSourceSha256` 供 Codex `settings-write` CAS transaction
@@ -178,6 +184,12 @@ assignment shape，并保留未修改 slot 的未知字段。`codex agent-key ap
 readback、stale-CAS rejection 与 automatic rollback。assignment storage 和
 `codex-micro-agent-source=custom` 是两个独立 authority，因此 assignment transaction
 不会隐式改变 source ordering。
+
+`codex dial mode get/set` 覆盖 composer navigation、reasoning effort、
+conversation scrolling 与 custom mode，并且不重写 gesture mappings。进入 custom
+mode 后，`dial gesture get/set/clear` 可以把 `left`、`right`、`click` 或
+`long-press` 中的一个设为 command、Skill 或 empty。gesture edit 会拒绝非 custom
+snapshot，同时保留另外三个 gestures、未知 layout fields 与源 settings 原字节。
 
 `codex config diff BASE.json CANDIDATE.json` 会先校验两个 frozen-contract
 snapshot，再只比较 explicit `settings`。transport metadata、warnings、definitions
