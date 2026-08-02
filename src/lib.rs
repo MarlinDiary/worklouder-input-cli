@@ -24,10 +24,11 @@ use cli::{
     CodexLightingBrightnessCommand, CodexLightingCommand, CodexResetCommand, CodexRuntimeCommand,
     CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand,
     DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand,
-    LayerCommand, LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
-    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
-    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
-    TierCommand,
+    LayerCommand, LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand,
+    LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect, LightingZone,
+    MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand,
+    SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+    SmartActionType as CliSmartActionType, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -727,6 +728,76 @@ fn run_layer(command: LayerCommand, json: bool, mut out: impl Write) -> Result<(
                     semantic::layer_lighting_set(&input, profile, id, zone, update, &output)?;
                 write_candidate_result(result, json, &mut out)?;
             }
+        },
+        LayerCommand::Joystick { command } => match command {
+            LayerJoystickCommand::Show { input, profile, id } => {
+                let result = semantic::layer_joystick_show(&input, profile, id)?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "profile={}\tlayer={}\tmode={}",
+                        result.profile_id, result.layer_id, result.mode
+                    )?;
+                    for sector in result.sectors {
+                        writeln!(
+                            out,
+                            "{}\t{}\t{}\ta1={}\ta2={}",
+                            sector.index,
+                            sector.assignment_kind,
+                            sector.assignment,
+                            sector.a1,
+                            sector.a2
+                        )?;
+                    }
+                }
+            }
+            LayerJoystickCommand::Mode { command } => match command {
+                LayerJoystickModeCommand::Set {
+                    input,
+                    profile,
+                    id,
+                    value,
+                    output,
+                } => write_candidate_result(
+                    semantic::layer_joystick_mode_set(
+                        &input,
+                        profile,
+                        id,
+                        match value {
+                            LayerJoystickMode::Radial => "RADIAL",
+                        },
+                        &output,
+                    )?,
+                    json,
+                    &mut out,
+                )?,
+            },
+            LayerJoystickCommand::Sector { command } => match command {
+                LayerJoystickSectorCommand::Add {
+                    input,
+                    profile,
+                    id,
+                    index,
+                    output,
+                } => write_candidate_result(
+                    semantic::layer_joystick_sector_add(&input, profile, id, index, &output)?,
+                    json,
+                    &mut out,
+                )?,
+                LayerJoystickSectorCommand::Delete {
+                    input,
+                    profile,
+                    id,
+                    index,
+                    output,
+                } => write_candidate_result(
+                    semantic::layer_joystick_sector_delete(&input, profile, id, index, &output)?,
+                    json,
+                    &mut out,
+                )?,
+            },
         },
     }
     Ok(())

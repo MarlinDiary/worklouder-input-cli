@@ -30,6 +30,7 @@ const MULTI_ACTION_SPEC_JSON: &str = include_str!("../spec/input-multi-actions-0
 const PROFILE_LAYER_SPEC_JSON: &str = include_str!("../spec/input-profile-layers-0.18.0.json");
 const APPSENSE_SPEC_JSON: &str = include_str!("../spec/input-appsense-0.18.0.json");
 const SMART_ACTION_SPEC_JSON: &str = include_str!("../spec/input-smart-actions-0.18.0.json");
+const JOYSTICK_SECTOR_SPEC_JSON: &str = include_str!("../spec/input-joystick-sectors-0.18.0.json");
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize)]
@@ -104,6 +105,28 @@ pub struct LayoutSummary {
     pub keymap_rows: usize,
     pub encoder_entries: usize,
     pub joystick_fields: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayerJoystickShow {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub profile_id: u64,
+    pub layer_id: u64,
+    pub mode: String,
+    pub sectors: Vec<JoystickSectorEntry>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JoystickSectorEntry {
+    pub index: usize,
+    pub assignment: String,
+    pub assignment_kind: &'static str,
+    pub a1: f64,
+    pub a2: f64,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -698,6 +721,175 @@ pub fn layer_show(input: &Path, profile_id: Option<u64>, layer_id: u64) -> Resul
         layer: layer_entry(layer)?,
         layout: layout_summary(layer),
     })
+}
+
+pub fn layer_joystick_show(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+) -> Result<LayerJoystickShow> {
+    joystick_sector_model_spec()?;
+    let snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let profile = find_profile(&snapshot.keymap, selected_id)?;
+    let (_, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let layer = profile_layers(profile)?
+        .get(layer_index)
+        .context("layer disappeared during lookup")?;
+    let joystick = layer_joystick(layer)?;
+    Ok(LayerJoystickShow {
+        schema_version: 1,
+        kind: "worklouderctl-layer-joystick",
+        revision: snapshot.revision,
+        profile_id: selected_id,
+        layer_id,
+        mode: object_string(joystick, "type", "layer joystick")?.to_owned(),
+        sectors: joystick_sector_entries(joystick)?,
+    })
+}
+
+pub fn layer_joystick_mode_set(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+    mode: &str,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let spec = joystick_sector_model_spec()?;
+    let editable_mode = spec
+        .get("mode")
+        .and_then(|value| value.get("editable"))
+        .and_then(Value::as_str)
+        .context("joystick sector spec editable mode was missing")?;
+    ensure!(
+        mode == editable_mode,
+        "joystick mode must be {editable_mode}; JOYSTICK is disabled in Input 0.18.0"
+    );
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let layer = mutable_layer(&mut snapshot.keymap, profile_index, layer_index)?;
+    ensure!(
+        !is_protected_layer(layer),
+        "the Codex protected layer has no editable Input joystick"
+    );
+    let joystick = layer_joystick_mut(layer)?;
+    let previous = object_string(joystick, "type", "layer joystick")?;
+    let changed = previous != mode;
+    let mut changed_paths = Vec::new();
+    if changed {
+        joystick
+            .as_object_mut()
+            .context("layer joystick was not an object")?
+            .insert("type".into(), Value::String(mode.to_owned()));
+        changed_paths.push(format!(
+            "/keymap.json/profiles/{profile_index}/layers/{layer_index}/layout/joystick/type"
+        ));
+        let seed_below =
+            spec.get("mode")
+                .and_then(|value| value.get("radialSeedWhenSectorCountBelow"))
+                .and_then(Value::as_u64)
+                .context("joystick sector seed threshold was missing")? as usize;
+        let sectors = joystick_sectors_mut(joystick)?;
+        if sectors.len() < seed_below {
+            *sectors = spec
+                .get("mode")
+                .and_then(|value| value.get("seed"))
+                .and_then(Value::as_array)
+                .cloned()
+                .context("joystick sector seed was missing")?;
+            rebalance_joystick_sectors(sectors)?;
+            changed_paths.push(format!(
+                "/keymap.json/profiles/{profile_index}/layers/{layer_index}/layout/joystick/sectors"
+            ));
+        }
+    }
+    sync_profile_usage(&mut snapshot.keymap, profile_index, &mut changed_paths)?;
+    let changed = !changed_paths.is_empty();
+    snapshot.publish(output, "layer-joystick-mode-set", changed, changed_paths)
+}
+
+pub fn layer_joystick_sector_add(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+    index: usize,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let spec = joystick_sector_model_spec()?;
+    let minimum = joystick_sector_limit(&spec, "minimum")?;
+    let maximum = joystick_sector_limit(&spec, "maximum")?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let layer = mutable_layer(&mut snapshot.keymap, profile_index, layer_index)?;
+    ensure!(
+        !is_protected_layer(layer),
+        "the Codex protected layer has no editable Input joystick"
+    );
+    let joystick = layer_joystick_mut(layer)?;
+    ensure_radial_joystick(joystick)?;
+    let sectors = joystick_sectors_mut(joystick)?;
+    ensure!(
+        sectors.len() >= minimum,
+        "radial joystick must contain at least {minimum} sectors before add"
+    );
+    ensure!(
+        sectors.len() < maximum,
+        "radial joystick already has the maximum {maximum} sectors"
+    );
+    ensure!(
+        index <= sectors.len(),
+        "joystick sector insertion index {index} exceeded {}",
+        sectors.len()
+    );
+    sectors.insert(
+        index,
+        serde_json::json!({"k": "KC_NONE", "a1": 0.0, "a2": 0.0}),
+    );
+    rebalance_joystick_sectors(sectors)?;
+    let mut changed_paths = vec![format!(
+        "/keymap.json/profiles/{profile_index}/layers/{layer_index}/layout/joystick/sectors"
+    )];
+    sync_profile_usage(&mut snapshot.keymap, profile_index, &mut changed_paths)?;
+    snapshot.publish(output, "layer-joystick-sector-add", true, changed_paths)
+}
+
+pub fn layer_joystick_sector_delete(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+    index: usize,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let spec = joystick_sector_model_spec()?;
+    let minimum = joystick_sector_limit(&spec, "minimum")?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let layer = mutable_layer(&mut snapshot.keymap, profile_index, layer_index)?;
+    ensure!(
+        !is_protected_layer(layer),
+        "the Codex protected layer has no editable Input joystick"
+    );
+    let joystick = layer_joystick_mut(layer)?;
+    ensure_radial_joystick(joystick)?;
+    let sectors = joystick_sectors_mut(joystick)?;
+    ensure!(
+        sectors.len() > minimum,
+        "radial joystick must retain at least {minimum} sectors"
+    );
+    ensure!(
+        index < sectors.len(),
+        "joystick sector index {index} was not found"
+    );
+    sectors.remove(index);
+    rebalance_joystick_sectors(sectors)?;
+    let mut changed_paths = vec![format!(
+        "/keymap.json/profiles/{profile_index}/layers/{layer_index}/layout/joystick/sectors"
+    )];
+    sync_profile_usage(&mut snapshot.keymap, profile_index, &mut changed_paths)?;
+    snapshot.publish(output, "layer-joystick-sector-delete", true, changed_paths)
 }
 
 pub fn control_list(input: &Path, profile_id: Option<u64>, layer_id: u64) -> Result<ControlList> {
@@ -3425,6 +3617,52 @@ fn validate_profile_layer_model_spec() -> Result<()> {
     profile_layer_model_spec().map(|_| ())
 }
 
+fn joystick_sector_model_spec() -> Result<Value> {
+    let spec: Value = serde_json::from_str(JOYSTICK_SECTOR_SPEC_JSON)
+        .context("embedded Input joystick sector model was invalid")?;
+    ensure!(
+        spec.get("schemaVersion").and_then(Value::as_u64) == Some(1)
+            && spec.get("kind").and_then(Value::as_str)
+                == Some("worklouder-input-joystick-sector-model")
+            && spec.get("inputVersion").and_then(Value::as_str) == Some("0.18.0")
+            && spec
+                .get("source")
+                .and_then(|value| value.get("asarSha256"))
+                .and_then(Value::as_str)
+                == Some("8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8")
+            && spec
+                .get("source")
+                .and_then(|value| value.get("rendererChunkSha256"))
+                .and_then(Value::as_str)
+                == Some("c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e")
+            && spec
+                .get("mode")
+                .and_then(|value| value.get("editable"))
+                .and_then(Value::as_str)
+                == Some("RADIAL")
+            && spec
+                .get("sectorCount")
+                .and_then(|value| value.get("minimum"))
+                .and_then(Value::as_u64)
+                == Some(2)
+            && spec
+                .get("sectorCount")
+                .and_then(|value| value.get("maximum"))
+                .and_then(Value::as_u64)
+                == Some(8),
+        "embedded Input joystick sector model identity was invalid"
+    );
+    Ok(spec)
+}
+
+fn joystick_sector_limit(spec: &Value, field: &str) -> Result<usize> {
+    spec.get("sectorCount")
+        .and_then(|value| value.get(field))
+        .and_then(Value::as_u64)
+        .map(|value| value as usize)
+        .with_context(|| format!("joystick sector {field} limit was missing"))
+}
+
 fn validate_appsense_model_spec() -> Result<()> {
     let spec: Value = serde_json::from_str(APPSENSE_SPEC_JSON)
         .context("embedded Input AppSense model was invalid")?;
@@ -5246,6 +5484,118 @@ fn layer_indices(keymap: &Value, profile_id: u64, layer_id: u64) -> Result<(usiz
     Ok((profile_index, layer_index))
 }
 
+fn mutable_layer(
+    keymap: &mut Value,
+    profile_index: usize,
+    layer_index: usize,
+) -> Result<&mut Value> {
+    keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .and_then(|profiles| profiles.get_mut(profile_index))
+        .and_then(|profile| profile.get_mut("layers"))
+        .and_then(Value::as_array_mut)
+        .and_then(|layers| layers.get_mut(layer_index))
+        .context("layer disappeared during candidate generation")
+}
+
+fn layer_joystick(layer: &Value) -> Result<&Value> {
+    layer
+        .get("layout")
+        .and_then(|layout| layout.get("joystick"))
+        .context("layer joystick was missing")
+}
+
+fn layer_joystick_mut(layer: &mut Value) -> Result<&mut Value> {
+    layer
+        .get_mut("layout")
+        .and_then(|layout| layout.get_mut("joystick"))
+        .context("layer joystick was missing")
+}
+
+fn joystick_sectors(joystick: &Value) -> Result<&Vec<Value>> {
+    joystick
+        .get("sectors")
+        .and_then(Value::as_array)
+        .context("layer joystick sectors were invalid")
+}
+
+fn joystick_sectors_mut(joystick: &mut Value) -> Result<&mut Vec<Value>> {
+    joystick
+        .get_mut("sectors")
+        .and_then(Value::as_array_mut)
+        .context("layer joystick sectors were invalid")
+}
+
+fn joystick_sector_entries(joystick: &Value) -> Result<Vec<JoystickSectorEntry>> {
+    joystick_sectors(joystick)?
+        .iter()
+        .enumerate()
+        .map(|(index, sector)| {
+            let assignment = object_string(sector, "k", "joystick sector")?;
+            Ok(JoystickSectorEntry {
+                index,
+                assignment: assignment.to_owned(),
+                assignment_kind: assignment_kind(assignment)?,
+                a1: sector
+                    .get("a1")
+                    .and_then(Value::as_f64)
+                    .context("joystick sector a1 was invalid")?,
+                a2: sector
+                    .get("a2")
+                    .and_then(Value::as_f64)
+                    .context("joystick sector a2 was invalid")?,
+            })
+        })
+        .collect()
+}
+
+fn ensure_radial_joystick(joystick: &Value) -> Result<()> {
+    ensure!(
+        object_string(joystick, "type", "layer joystick")? == "RADIAL",
+        "joystick sector edits require RADIAL mode"
+    );
+    Ok(())
+}
+
+fn rebalance_joystick_sectors(sectors: &mut [Value]) -> Result<()> {
+    ensure!(!sectors.is_empty(), "joystick sector list was empty");
+    let width = 45.0_f64 / 360.0;
+    let remainder = 1.0 - width;
+    let anchor = (90.0 - 45.0 / 2.0) / 360.0;
+    if sectors.len() == 1 {
+        set_joystick_sector_angles(&mut sectors[0], anchor, (anchor + width) % 1.0)?;
+        return Ok(());
+    }
+    let step = remainder / (sectors.len() - 1) as f64;
+    for (index, sector) in sectors.iter_mut().enumerate() {
+        if index == 0 {
+            set_joystick_sector_angles(sector, anchor, (anchor + width) % 1.0)?;
+        } else {
+            let start = anchor + width + step * (index - 1) as f64;
+            set_joystick_sector_angles(sector, start % 1.0, (start + step) % 1.0)?;
+        }
+    }
+    Ok(())
+}
+
+fn set_joystick_sector_angles(sector: &mut Value, a1: f64, a2: f64) -> Result<()> {
+    let sector = sector
+        .as_object_mut()
+        .context("joystick sector was not an object")?;
+    ensure!(
+        sector
+            .get("k")
+            .and_then(Value::as_str)
+            .map(|value| !value.is_empty())
+            == Some(true),
+        "joystick sector assignment was invalid"
+    );
+    sector.insert("a1".into(), Value::from(a1));
+    sector.insert("a2".into(), Value::from(a2));
+    Ok(())
+}
+
 fn linked_app_bindings(keymap: &Value, app_id: u64) -> Result<Vec<AppSenseBinding>> {
     let mut bindings = Vec::new();
     for profile in profiles(keymap)? {
@@ -6178,6 +6528,119 @@ mod tests {
         assert_eq!(shown.control.a1, Some(0.0));
         assert_eq!(shown.control.a2, Some(1.5));
         fs::remove_file(source).unwrap();
+    }
+
+    #[test]
+    fn joystick_sector_lifecycle_matches_input_angle_rebalancing_and_limits() {
+        let source = root("joystick-sector-source");
+        let added = root("joystick-sector-added");
+        let deleted = root("joystick-sector-deleted");
+        let seeded = root("joystick-sector-seeded");
+        let noop = root("joystick-sector-noop");
+        write_fixture(&source);
+
+        let shown = layer_joystick_show(&source, None, 0).unwrap();
+        assert_eq!(shown.mode, "RADIAL");
+        assert_eq!(shown.sectors.len(), 2);
+        assert_eq!(shown.sectors[0].assignment, "KA_A3");
+
+        let receipt = layer_joystick_sector_add(&source, None, 0, 1, &added).unwrap();
+        assert_eq!(
+            receipt.changed_paths,
+            vec!["/keymap.json/profiles/0/layers/0/layout/joystick/sectors"]
+        );
+        let added_view = layer_joystick_show(&added, None, 0).unwrap();
+        assert_eq!(
+            added_view
+                .sectors
+                .iter()
+                .map(|sector| sector.assignment.as_str())
+                .collect::<Vec<_>>(),
+            vec!["KA_A3", "KC_NONE", "KA_M1"]
+        );
+        assert_eq!(
+            (added_view.sectors[0].a1, added_view.sectors[0].a2),
+            (0.1875, 0.3125)
+        );
+        assert_eq!(
+            (added_view.sectors[1].a1, added_view.sectors[1].a2),
+            (0.3125, 0.75)
+        );
+        assert_eq!(
+            (added_view.sectors[2].a1, added_view.sectors[2].a2),
+            (0.75, 0.1875)
+        );
+
+        layer_joystick_sector_delete(&added, None, 0, 1, &deleted).unwrap();
+        let deleted_view = layer_joystick_show(&deleted, None, 0).unwrap();
+        assert_eq!(deleted_view.sectors.len(), 2);
+        assert_eq!(deleted_view.sectors[0].a1, 0.1875);
+        assert_eq!(deleted_view.sectors[1].a2, 0.1875);
+        let below_minimum = layer_joystick_sector_delete(
+            &deleted,
+            None,
+            0,
+            0,
+            &root("joystick-sector-below-minimum"),
+        )
+        .unwrap_err();
+        assert!(below_minimum
+            .to_string()
+            .contains("retain at least 2 sectors"));
+
+        let mode = layer_joystick_mode_set(&source, None, 1, "RADIAL", &seeded).unwrap();
+        assert_eq!(
+            mode.changed_paths,
+            vec![
+                "/keymap.json/profiles/0/layers/1/layout/joystick/type",
+                "/keymap.json/profiles/0/layers/1/layout/joystick/sectors",
+            ]
+        );
+        let seeded_view = layer_joystick_show(&seeded, None, 1).unwrap();
+        assert_eq!(seeded_view.mode, "RADIAL");
+        assert_eq!(seeded_view.sectors.len(), 2);
+        assert_eq!(seeded_view.sectors[0].assignment, "KI_X");
+        assert_eq!(seeded_view.sectors[1].assignment, "KC_NONE");
+
+        let noop_receipt = layer_joystick_mode_set(&seeded, None, 1, "RADIAL", &noop).unwrap();
+        assert!(!noop_receipt.changed);
+        assert_eq!(noop_receipt.before_revision, noop_receipt.after_revision);
+
+        let disabled = layer_joystick_mode_set(
+            &seeded,
+            None,
+            1,
+            "JOYSTICK",
+            &root("joystick-disabled-mode"),
+        )
+        .unwrap_err();
+        assert!(disabled.to_string().contains("disabled in Input 0.18.0"));
+        let protected =
+            layer_joystick_mode_set(&source, Some(7), 9, "RADIAL", &root("joystick-protected"))
+                .unwrap_err();
+        assert!(protected.to_string().contains("protected layer"));
+
+        let mut current = added.clone();
+        let mut generated = Vec::new();
+        for count in 4..=8 {
+            let output = root(&format!("joystick-sector-count-{count}"));
+            layer_joystick_sector_add(&current, None, 0, count - 1, &output).unwrap();
+            if current != added {
+                generated.push(current);
+            }
+            current = output;
+        }
+        let maximum =
+            layer_joystick_sector_add(&current, None, 0, 8, &root("joystick-sector-over-maximum"))
+                .unwrap_err();
+        assert!(maximum.to_string().contains("maximum 8 sectors"));
+
+        for path in [&source, &added, &deleted, &seeded, &noop, &current] {
+            fs::remove_file(path).unwrap();
+        }
+        for path in generated {
+            fs::remove_file(path).unwrap();
+        }
     }
 
     #[test]

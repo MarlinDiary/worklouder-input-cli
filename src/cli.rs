@@ -1252,6 +1252,12 @@ pub enum LayerCommand {
         #[clap(subcommand)]
         command: LayerLightingCommand,
     },
+
+    /// Inspect or edit Input radial-joystick sectors in one layer.
+    Joystick {
+        #[clap(subcommand)]
+        command: LayerJoystickCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1290,6 +1296,84 @@ pub enum LayerLightingCommand {
         /// Apply this zone to every layer in the selected profile.
         #[clap(long)]
         apply_to_all: bool,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum LayerJoystickCommand {
+    /// Show joystick mode and every ordered radial sector.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        id: u64,
+    },
+
+    /// Inspect or change the released editable joystick mode.
+    Mode {
+        #[clap(subcommand)]
+        command: LayerJoystickModeCommand,
+    },
+
+    /// Add or delete radial sectors using Input's angle rebalancer.
+    Sector {
+        #[clap(subcommand)]
+        command: LayerJoystickSectorCommand,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum LayerJoystickMode {
+    Radial,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum LayerJoystickModeCommand {
+    /// Set RADIAL mode and seed two sectors when the current list is too short.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        id: u64,
+        #[clap(value_enum)]
+        value: LayerJoystickMode,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum LayerJoystickSectorCommand {
+    /// Insert KC_NONE at a zero-based position, then rebalance all angles.
+    Add {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        index: usize,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Delete one sector while retaining at least two, then rebalance angles.
+    Delete {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        index: usize,
         #[clap(long, value_parser)]
         output: PathBuf,
     },

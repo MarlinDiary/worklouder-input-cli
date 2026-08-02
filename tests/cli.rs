@@ -105,6 +105,7 @@ fn semantic_help_exposes_offline_candidate_workflow() {
         "rename",
         "color",
         "lighting",
+        "joystick",
     ] {
         assert!(layer_stdout.contains(command));
     }
@@ -117,6 +118,16 @@ fn semantic_help_exposes_offline_candidate_workflow() {
     assert!(lighting.status.success());
     assert!(lighting_stdout.contains("show"));
     assert!(lighting_stdout.contains("set"));
+
+    let joystick = binary()
+        .args(["layer", "joystick", "--help"])
+        .output()
+        .unwrap();
+    let joystick_stdout = String::from_utf8(joystick.stdout).unwrap();
+    assert!(joystick.status.success());
+    for command in ["show", "mode", "sector"] {
+        assert!(joystick_stdout.contains(command));
+    }
 
     let control = binary().args(["control", "--help"]).output().unwrap();
     let control_stdout = String::from_utf8(control.stdout).unwrap();
@@ -299,6 +310,126 @@ fn input_cache_snapshot_runs_into_semantic_candidates_end_to_end() {
         created["changedPaths"],
         serde_json::json!(["/smart_actions.json/smartActions/SA_1"])
     );
+
+    assert_eq!(
+        worklouderctl::fsutil::sha256(&device.join("keymap.json")).unwrap(),
+        keymap_before
+    );
+    assert_eq!(
+        worklouderctl::fsutil::sha256(&device.join("smart_actions.json")).unwrap(),
+        smart_before
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn input_joystick_sector_lifecycle_runs_end_to_end_without_writing_cache() {
+    let root = fixture_root();
+    let support = root.join("support");
+    let device = support.join("devices/33632");
+    let snapshot = root.join("snapshot.json");
+    let radial = root.join("radial.json");
+    let added = root.join("added.json");
+    let assigned = root.join("assigned.json");
+    let deleted = root.join("deleted.json");
+    fs::create_dir_all(&device).unwrap();
+    let keymap = semantic_keymap_bytes();
+    let smart_actions = b"{\"version\":1,\"smartActions\":{}}";
+    fs::write(device.join("keymap.json"), &keymap).unwrap();
+    fs::write(device.join("smart_actions.json"), smart_actions).unwrap();
+    let keymap_before = worklouderctl::fsutil::sha256_bytes(&keymap).unwrap();
+    let smart_before = worklouderctl::fsutil::sha256_bytes(smart_actions).unwrap();
+
+    let captured = binary()
+        .args(["input", "config", "snapshot", "--support-root"])
+        .arg(&support)
+        .arg("--output")
+        .arg(&snapshot)
+        .output()
+        .unwrap();
+    assert!(captured.status.success());
+
+    let radial_result = binary()
+        .args(["--json", "layer", "joystick", "mode", "set", "--input"])
+        .arg(&snapshot)
+        .args(["--id", "0", "radial", "--output"])
+        .arg(&radial)
+        .output()
+        .unwrap();
+    assert!(radial_result.status.success());
+    let radial_result: serde_json::Value = serde_json::from_slice(&radial_result.stdout).unwrap();
+    assert_eq!(
+        radial_result["changedPaths"],
+        serde_json::json!([
+            "/keymap.json/profiles/0/layers/0/layout/joystick/type",
+            "/keymap.json/profiles/0/layers/0/layout/joystick/sectors"
+        ])
+    );
+
+    let add = binary()
+        .args(["--json", "layer", "joystick", "sector", "add", "--input"])
+        .arg(&radial)
+        .args(["--id", "0", "--index", "1", "--output"])
+        .arg(&added)
+        .output()
+        .unwrap();
+    assert!(add.status.success());
+    let add: serde_json::Value = serde_json::from_slice(&add.stdout).unwrap();
+    assert_eq!(add["operation"], "layer-joystick-sector-add");
+
+    let assign = binary()
+        .args(["control", "set", "--input"])
+        .arg(&added)
+        .args([
+            "--layer",
+            "0",
+            "--control",
+            "joystick:1",
+            "--assignment",
+            "KC_C",
+            "--output",
+        ])
+        .arg(&assigned)
+        .output()
+        .unwrap();
+    assert!(assign.status.success());
+
+    let show = binary()
+        .args(["--json", "layer", "joystick", "show", "--input"])
+        .arg(&assigned)
+        .args(["--id", "0"])
+        .output()
+        .unwrap();
+    assert!(show.status.success());
+    let show: serde_json::Value = serde_json::from_slice(&show.stdout).unwrap();
+    assert_eq!(show["mode"], "RADIAL");
+    assert_eq!(show["sectors"].as_array().unwrap().len(), 3);
+    assert_eq!(show["sectors"][0]["a1"], 0.1875);
+    assert_eq!(show["sectors"][0]["a2"], 0.3125);
+    assert_eq!(show["sectors"][1]["assignment"], "KC_C");
+    assert_eq!(show["sectors"][1]["a2"], 0.75);
+    assert_eq!(show["sectors"][2]["a2"], 0.1875);
+
+    let delete = binary()
+        .args(["--json", "layer", "joystick", "sector", "delete", "--input"])
+        .arg(&assigned)
+        .args(["--id", "0", "--index", "2", "--output"])
+        .arg(&deleted)
+        .output()
+        .unwrap();
+    assert!(delete.status.success());
+    let delete: serde_json::Value = serde_json::from_slice(&delete.stdout).unwrap();
+    assert_eq!(delete["operation"], "layer-joystick-sector-delete");
+
+    let below_minimum = binary()
+        .args(["layer", "joystick", "sector", "delete", "--input"])
+        .arg(&deleted)
+        .args(["--id", "0", "--index", "1", "--output"])
+        .arg(root.join("below-minimum.json"))
+        .output()
+        .unwrap();
+    assert_eq!(below_minimum.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&below_minimum.stderr).contains("retain at least 2 sectors"));
 
     assert_eq!(
         worklouderctl::fsutil::sha256(&device.join("keymap.json")).unwrap(),
