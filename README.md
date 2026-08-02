@@ -735,6 +735,7 @@ Read the complete [FAQ](docs/faq.md).
 - [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
 - [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)
 - [Input live device read contract](docs/research/2026-08-02-input-live-read-contract.md)
+- [Live Codex/Input provider integration validation](docs/research/2026-08-03-live-provider-integration-validation.md)
 - [Input Companion Bridge protocol](docs/companion-bridge.md)
 - [Codex Companion Bridge protocol](docs/codex-companion-bridge.md)
 - [Frequently asked questions](docs/faq.md)

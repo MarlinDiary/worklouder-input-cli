@@ -32,6 +32,26 @@ The bundled-device-kit reader remains a compatibility and recovery path while
 released Input builds do not contain the bridge. It is not the target write
 architecture.
 
+## Installing the exact-release overlays
+
+For the currently frozen Codex and Input releases, the repository contains
+no-restart installers and an explicit device-owner handoff:
+
+```sh
+node scripts/install-codex-live-bridge.mjs
+node scripts/install-input-live-bridge.mjs
+node scripts/provider-handoff.mjs status
+node scripts/provider-handoff.mjs input # Input owns device configuration
+node scripts/provider-handoff.mjs codex # Codex owns hardware actions
+```
+
+The two applications can stay open, but only one provider owns the physical
+HID session at a time. Host-only bridge methods remain available while the
+other provider owns the device. Every attach uses the loopback inspector only,
+checks the exact release identity, and closes the inspector afterward. See the
+[live validation record](research/2026-08-03-live-provider-integration-validation.md)
+for reversible mutation and bidirectional handoff evidence.
+
 ## Input 0.18.0 evidence
 
 Static inspection of the installed Input 0.18.0 main process found existing
