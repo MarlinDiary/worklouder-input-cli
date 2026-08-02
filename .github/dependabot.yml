@@ -4,10 +4,9 @@ updates:
     directory: /
     schedule:
       interval: monthly
-    groups:
-      rust-dependencies:
-        patterns:
-          - "*"
+    # Direct and transitive Rust versions are deliberately pinned to Rust 1.61.
+    # Disable scheduled version PRs while keeping Dependabot security updates.
+    open-pull-requests-limit: 0
 
   - package-ecosystem: npm
     directory: /companion

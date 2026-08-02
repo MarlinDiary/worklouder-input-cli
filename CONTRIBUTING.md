@@ -52,6 +52,14 @@ pre-operation backups, exact readback, exact restore, and a documented final
 ownership state. Keep private machine evidence outside the repository and
 commit only deterministic sanitized fixtures.
 
+## Dependency updates
+
+Rust dependencies are deliberately pinned to preserve the declared Rust 1.61
+minimum supported Rust version (MSRV). Apply Rust security updates individually
+and require both the Rust 1.61 and current-stable CI jobs to pass. Major CLI or
+manifest-format migrations, including Clap and TOML changes, are explicit
+compatibility work rather than grouped automated upgrades.
+
 All participation follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 By contributing, you agree that your contribution is licensed under the MIT
