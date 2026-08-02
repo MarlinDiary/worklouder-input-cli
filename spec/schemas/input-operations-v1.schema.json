@@ -6,6 +6,7 @@
     { "$ref": "#/$defs/permissions" },
     { "$ref": "#/$defs/firmware" },
     { "$ref": "#/$defs/firmwarePlan" },
+    { "$ref": "#/$defs/firmwareUpdateReceipt" },
     { "$ref": "#/$defs/logBundle" }
   ],
   "$defs": {
@@ -135,6 +136,93 @@
             "restore-changed-configuration",
             "verify-firmware-and-configuration"
           ]
+        }
+      }
+    },
+    "firmwarePhase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status"],
+      "properties": {
+        "name": {
+          "enum": [
+            "backup-configuration",
+            "download-input-selected-release",
+            "enter-bootloader",
+            "flash-with-input-device-programmer",
+            "reconnect-original-device",
+            "restore-changed-configuration",
+            "verify-firmware-and-configuration"
+          ]
+        },
+        "status": { "const": "completed" }
+      }
+    },
+    "firmwareUpdateReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "adapter",
+        "inputAppVersion",
+        "deviceKitVersion",
+        "plan",
+        "backup",
+        "receipt",
+        "operation",
+        "idempotencyKey",
+        "idempotentReplay",
+        "changed",
+        "deviceId",
+        "planRevision",
+        "beforeFirmwareVersion",
+        "afterFirmwareVersion",
+        "targetFirmwareVersion",
+        "beforeConfigRevision",
+        "afterConfigRevision",
+        "configurationRestored",
+        "providerOutcome",
+        "recoveryRequired",
+        "phases"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-input-firmware-update-receipt" },
+        "adapter": { "const": "input-companion-bridge-v1" },
+        "inputAppVersion": { "type": "string", "minLength": 1 },
+        "deviceKitVersion": { "type": "string", "minLength": 1 },
+        "plan": { "type": "string", "minLength": 1 },
+        "backup": { "type": "string", "minLength": 1 },
+        "receipt": { "type": "string", "minLength": 1 },
+        "operation": { "const": "update" },
+        "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "idempotentReplay": { "type": "boolean" },
+        "changed": { "type": "boolean" },
+        "deviceId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "planRevision": { "$ref": "#/$defs/sha256" },
+        "beforeFirmwareVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "afterFirmwareVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "targetFirmwareVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "beforeConfigRevision": { "$ref": "#/$defs/sha256" },
+        "afterConfigRevision": { "$ref": "#/$defs/sha256" },
+        "configurationRestored": { "const": true },
+        "providerOutcome": { "enum": ["completed", "postflight-confirmed"] },
+        "recoveryRequired": { "const": false },
+        "phases": {
+          "type": "array",
+          "prefixItems": [
+            { "allOf": [{ "$ref": "#/$defs/firmwarePhase" }, { "properties": { "name": { "const": "backup-configuration" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/firmwarePhase" }, { "properties": { "name": { "const": "download-input-selected-release" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/firmwarePhase" }, { "properties": { "name": { "const": "enter-bootloader" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/firmwarePhase" }, { "properties": { "name": { "const": "flash-with-input-device-programmer" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/firmwarePhase" }, { "properties": { "name": { "const": "reconnect-original-device" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/firmwarePhase" }, { "properties": { "name": { "const": "restore-changed-configuration" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/firmwarePhase" }, { "properties": { "name": { "const": "verify-firmware-and-configuration" } } }] }
+          ],
+          "items": false,
+          "minItems": 7,
+          "maxItems": 7
         }
       }
     },

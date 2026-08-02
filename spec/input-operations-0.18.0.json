@@ -56,6 +56,9 @@
     ],
     "highLevelMainServiceMethodFound": false,
     "planContract": "read-only plan freezes selected release, full configuration revision, USB blocker, and ordered renderer workflow",
+    "bridgeMutationCapability": "input.firmware.update.v1 only when an injected Input-owned high-level authority supplies the complete workflow",
+    "postflight": "target firmware exact, original configuration revision exact, seven ordered phases complete",
+    "rollbackBoundary": "no CLI-driven firmware downgrade; recoveryRequired is surfaced when exact postflight cannot confirm success",
     "cliMutationBoundary": "optional injected Input-owned high-level authority; no duplicated driver or programmer"
   },
   "logs": {
