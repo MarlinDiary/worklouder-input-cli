@@ -36,6 +36,7 @@
     "codex-main-bridge.mjs",
     "codex-main-integration.mjs",
     "codex-live-overlay.mjs",
+    "codex-live-overlay-v2.mjs",
     "input-live-overlay.mjs",
     "conformance.mjs"
   ],

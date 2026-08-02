@@ -52,9 +52,9 @@ try {
     console.log(JSON.stringify({ provider: "codex", action, ...result }, null, 2));
   } else {
     const modulePath = fileURLToPath(
-      new URL("../companion/codex-live-overlay.mjs", import.meta.url),
+      new URL("../companion/codex-live-overlay-v2.mjs", import.meta.url),
     );
-    const expression = `(async()=>{if(globalThis.__worklouderctlCodexBridge)return {installed:true,idempotent:true,socketPath:globalThis.__worklouderctlCodexBridge.socketPath,tokenPath:globalThis.__worklouderctlCodexBridge.tokenPath};const require=process.getBuiltinModule("module").createRequire("/tmp/worklouderctl-codex-live.cjs");const {app,BrowserWindow}=require("electron");const overlay=require(${JSON.stringify(modulePath)});const bridge=await overlay.installCodexLiveOverlay({app,BrowserWindow});globalThis.__worklouderctlCodexBridge=bridge;return {installed:true,idempotent:false,version:app.getVersion(),socketPath:bridge.socketPath,tokenPath:bridge.tokenPath}})()`;
+    const expression = `(async()=>{const require=process.getBuiltinModule("module").createRequire("/tmp/worklouderctl-codex-live.cjs");const {app,BrowserWindow}=require("electron");const overlayPath=${JSON.stringify(modulePath)};const overlay=require(overlayPath);if(!Number.isInteger(overlay.CODEX_LIVE_OVERLAY_REVISION))throw new Error("Codex overlay revision missing");const current=globalThis.__worklouderctlCodexBridge;if(current?.overlayRevision===overlay.CODEX_LIVE_OVERLAY_REVISION)return {installed:true,idempotent:true,overlayRevision:current.overlayRevision,socketPath:current.socketPath,tokenPath:current.tokenPath};if(current){await current.stop();delete globalThis.__worklouderctlCodexBridge}const path=require("node:path");const settingsModule=require(path.join(app.getAppPath(),".vite/build/src-CLstCQVF.js"));const bridge=await overlay.installCodexLiveOverlay({app,BrowserWindow,settingsDefinitions:settingsModule.Li});globalThis.__worklouderctlCodexBridge=bridge;return {installed:true,idempotent:false,overlayRevision:bridge.overlayRevision,version:app.getVersion(),socketPath:bridge.socketPath,tokenPath:bridge.tokenPath}})()`;
     const result = await client.evaluate(expression);
     console.log(JSON.stringify({ provider: "codex", action, ...result }, null, 2));
   }

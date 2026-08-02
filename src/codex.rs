@@ -1560,13 +1560,46 @@ fn compute_effective_settings(
         .collect();
     for (key, explicit) in settings {
         match effective_settings.get_mut(key) {
-            Some(effective) => merge_value(effective, explicit),
+            Some(effective) if key == "codex-micro-layout" => {
+                *effective = normalize_layout_effective(effective, explicit);
+            }
+            Some(effective) => *effective = explicit.clone(),
             None => {
                 effective_settings.insert(key.clone(), explicit.clone());
             }
         }
     }
     effective_settings
+}
+
+fn normalize_layout_effective(default: &Value, explicit: &Value) -> Value {
+    let explicit_object = match explicit.as_object() {
+        Some(value) => value,
+        None => return explicit.clone(),
+    };
+    let mut normalized = explicit_object.clone();
+    let default_object = match default.as_object() {
+        Some(value) => value,
+        None => return explicit.clone(),
+    };
+    for field in ["analogStick", "encoder", "encoderMode", "voiceButtonMode"] {
+        if !normalized.contains_key(field) {
+            if let Some(value) = default_object.get(field) {
+                normalized.insert(field.into(), value.clone());
+            }
+        }
+    }
+    for (field, members) in [
+        ("analogStick", ["up", "right", "down", "left"]),
+        ("encoder", ["left", "right", "click", "longPress"]),
+    ] {
+        if let Some(Value::Object(values)) = normalized.get_mut(field) {
+            for member in members {
+                values.entry(member).or_insert(Value::Null);
+            }
+        }
+    }
+    Value::Object(normalized)
 }
 
 pub fn doctor(config_path: &Path, app_path: &Path) -> DoctorReport {
@@ -1859,22 +1892,6 @@ fn aggregate_status(checks: &[Check]) -> CheckStatus {
         CheckStatus::Warn
     } else {
         CheckStatus::Pass
-    }
-}
-
-fn merge_value(effective: &mut Value, explicit: &Value) {
-    match (effective, explicit) {
-        (Value::Object(effective), Value::Object(explicit)) => {
-            for (key, value) in explicit {
-                match effective.get_mut(key) {
-                    Some(effective_value) => merge_value(effective_value, value),
-                    None => {
-                        effective.insert(key.clone(), value.clone());
-                    }
-                }
-            }
-        }
-        (effective, explicit) => *effective = explicit.clone(),
     }
 }
 
@@ -2553,21 +2570,30 @@ mod tests {
     }
 
     #[test]
-    fn partial_layout_inherits_default_actions() {
+    fn app_schema_defaults_missing_sections_and_nulls_missing_actions() {
         let contract = load_contract().unwrap();
         let mut explicit = contract.definitions["codex-micro-layout"].default.clone();
         explicit["analogStick"] = serde_json::json!({});
         explicit["encoder"] = serde_json::json!({});
 
         validate_layout(&explicit, &contract.layout).unwrap();
-        let mut effective = contract.definitions["codex-micro-layout"].default.clone();
-        merge_value(&mut effective, &explicit);
+        let effective = normalize_layout_effective(
+            &contract.definitions["codex-micro-layout"].default,
+            &explicit,
+        );
 
+        assert!(effective["analogStick"]["up"].is_null());
+        assert!(effective["encoder"]["click"].is_null());
+
+        explicit.as_object_mut().unwrap().remove("analogStick");
+        let effective = normalize_layout_effective(
+            &contract.definitions["codex-micro-layout"].default,
+            &explicit,
+        );
         assert_eq!(
             effective["analogStick"]["up"]["commandId"],
             "composer.togglePlanMode"
         );
-        assert!(effective["encoder"]["click"].is_null());
     }
 
     #[test]

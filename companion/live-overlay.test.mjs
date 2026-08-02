@@ -3,7 +3,9 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import {
   codexRendererRequestExpression,
+  createCodexMicroRequest,
   createCodexNativeRequest,
+  normalizeCodexMicroDefinitions,
 } from "./codex-live-overlay.mjs";
 import { createInputConfigurationWriter } from "./input-live-overlay.mjs";
 import { installInputLiveOverlay } from "./input-live-overlay.mjs";
@@ -45,6 +47,42 @@ test("Codex renderer expression carries only the requested method and params", (
   assert.match(expression, /state-key/);
   assert.match(expression, /fetch-response/);
   assert.doesNotMatch(expression, /ipcRenderer/);
+});
+
+test("Codex live overlay selects hidden Micro settings from released definitions", async () => {
+  const definitions = normalizeCodexMicroDefinitions(codexDefinitions());
+  const calls = [];
+  const request = createCodexMicroRequest({
+    definitions,
+    async nativeRequest(method) {
+      calls.push(method);
+      if (method === "settings-read") {
+        return { filePath: "/fixture/config.toml", settings: { visible: true } };
+      }
+      if (method === "get-settings") {
+        return {
+          configuredValues: {
+            visible: true,
+            "codex-micro-lighting-brightness": 75,
+          },
+          values: Object.fromEntries(
+            Object.entries(definitions).map(([key, definition]) => [
+              key,
+              definition.default,
+            ]),
+          ),
+        };
+      }
+      throw new Error("unexpected method");
+    },
+  });
+  const snapshot = await request("settings-read", {});
+  assert.deepEqual(calls, ["settings-read", "get-settings"]);
+  assert.deepEqual(snapshot.settings, {
+    "codex-micro-lighting-brightness": 75,
+  });
+  assert.equal(Object.keys(snapshot.effectiveSettings).length, 5);
+  assert.equal(Object.keys(snapshot.definitions).length, 5);
 });
 
 test("Input live writer deletes stale files, skips unchanged bytes, writes dependency order, and refreshes cache", async () => {
@@ -167,6 +205,22 @@ function browserWindow({ visible, execute }) {
     isVisible: () => visible,
     webContents: { executeJavaScript: execute },
   };
+}
+
+function codexDefinitions() {
+  const values = [
+    ["codex-micro-agent-source", "recent", { type: "string", enum: ["pinned", "recent", "priority", "custom"] }],
+    ["codex-micro-single-tap-agent-keys", false, { type: "boolean" }],
+    ["codex-micro-layout", { version: 1 }, { type: "object" }],
+    ["codex-micro-lighting-brightness", 100, { type: "integer", minimum: 0, maximum: 100 }],
+    ["codex-micro-lighting-auto-off", "3-minutes", { type: "string", enum: ["off", "3-minutes"] }],
+  ];
+  return values.map(([key, defaultValue, schema]) => ({
+    key,
+    agentAccess: "hidden",
+    default: defaultValue,
+    schema: { toJSONSchema: () => schema },
+  }));
 }
 
 function listing(name, bytes) {

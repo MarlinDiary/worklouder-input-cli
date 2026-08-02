@@ -19,6 +19,7 @@ EXPECTED_FILES = {
     "package/codex-main-bridge.mjs": 0o644,
     "package/codex-main-integration.mjs": 0o644,
     "package/codex-live-overlay.mjs": 0o644,
+    "package/codex-live-overlay-v2.mjs": 0o644,
     "package/conformance.mjs": 0o755,
     "package/index.mjs": 0o644,
     "package/input-main-adapter.mjs": 0o644,
