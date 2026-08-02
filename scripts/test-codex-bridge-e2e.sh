@@ -45,11 +45,15 @@ done
 "$BIN" --json codex lighting brightness set --input "$ROOT/source-candidate.json" 37 \
   --output "$ROOT/brightness-candidate.json" >"$ROOT/brightness-candidate-receipt.json"
 "$BIN" --json codex lighting auto-off set --input "$ROOT/brightness-candidate.json" \
-  10-minutes --output "$ROOT/candidate.json" >"$ROOT/candidate-receipt.json"
+  10-minutes --output "$ROOT/lighting-candidate.json" >"$ROOT/lighting-candidate-receipt.json"
+"$BIN" --json codex voice set --input "$ROOT/lighting-candidate.json" realtime \
+  --output "$ROOT/candidate.json" >"$ROOT/candidate-receipt.json"
 "$BIN" --json codex lighting brightness get --input "$ROOT/candidate.json" \
   >"$ROOT/brightness-get.json"
 "$BIN" --json codex lighting auto-off get --input "$ROOT/candidate.json" \
   >"$ROOT/auto-off-get.json"
+"$BIN" --json codex voice get --input "$ROOT/candidate.json" \
+  >"$ROOT/voice-get.json"
 "$BIN" --json codex config --socket "$SOCKET" --token "$TOKEN" apply \
   --input "$ROOT/candidate.json" --backup "$ROOT/pre-apply.json" \
   --idempotency-key fixture-apply-v1 >"$ROOT/apply.json"
@@ -116,6 +120,7 @@ apply = json.loads((root / "apply.json").read_text())
 restore = json.loads((root / "restore.json").read_text())
 brightness_get = json.loads((root / "brightness-get.json").read_text())
 auto_off_get = json.loads((root / "auto-off-get.json").read_text())
+voice_get = json.loads((root / "voice-get.json").read_text())
 agent_baseline = json.loads((root / "agent-baseline.json").read_text())
 agent_modified = json.loads((root / "agent-modified.json").read_text())
 agent_restored = json.loads((root / "agent-restored.json").read_text())
@@ -129,10 +134,13 @@ assert "codex.agentKeys.restore.v1" in bridge["capabilities"]
 assert modified["settings"]["codex-micro-agent-source"] == "custom"
 assert baseline["effectiveSettings"]["codex-micro-lighting-brightness"] == 100
 assert baseline["effectiveSettings"]["codex-micro-lighting-auto-off"] == "3-minutes"
+assert baseline["effectiveSettings"]["codex-micro-layout"]["voiceButtonMode"] == "push-to-talk"
 assert brightness_get["value"] == 37 and brightness_get["explicit"] is True
 assert auto_off_get["value"] == "10-minutes" and auto_off_get["explicit"] is True
+assert voice_get["value"] == "realtime" and voice_get["inherited"] is False
 assert modified["settings"]["codex-micro-lighting-brightness"] == 37
 assert modified["settings"]["codex-micro-lighting-auto-off"] == "10-minutes"
+assert modified["settings"]["codex-micro-layout"]["voiceButtonMode"] == "realtime"
 assert apply["changed"] is True and apply["rollbackPerformed"] is False
 assert restore["changed"] is True and restore["rollbackPerformed"] is False
 assert restored["settings"] == baseline["settings"]
@@ -164,6 +172,9 @@ print(json.dumps({
     "baselineLightingAutoOff": baseline["effectiveSettings"]["codex-micro-lighting-auto-off"],
     "modifiedLightingAutoOff": modified["settings"]["codex-micro-lighting-auto-off"],
     "restoredLightingAutoOff": restored["effectiveSettings"]["codex-micro-lighting-auto-off"],
+    "baselineVoiceMode": baseline["effectiveSettings"]["codex-micro-layout"]["voiceButtonMode"],
+    "modifiedVoiceMode": modified["settings"]["codex-micro-layout"]["voiceButtonMode"],
+    "restoredVoiceMode": restored["effectiveSettings"]["codex-micro-layout"]["voiceButtonMode"],
     "baselineSourceSha256": baseline["sourceSha256"],
     "modifiedSourceSha256": modified["sourceSha256"],
     "restoredSourceSha256": restored["sourceSha256"],
