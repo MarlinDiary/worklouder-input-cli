@@ -49,6 +49,32 @@
     "commandKeyReset": {
       "command": "codex command-key reset --input SNAPSHOT.json SLOT --output CANDIDATE.json",
       "source": "frozen layout default for the selected slot"
+    },
+    "lightingBrightnessGet": {
+      "command": "codex lighting brightness get --input SNAPSHOT.json",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "lightingBrightnessSet": {
+      "command": "codex lighting brightness set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
+      "changedPath": "/settings/codex-micro-lighting-brightness"
+    },
+    "lightingAutoOffGet": {
+      "command": "codex lighting auto-off get --input SNAPSHOT.json",
+      "values": [
+        "off",
+        "30-seconds",
+        "1-minute",
+        "3-minutes",
+        "10-minutes",
+        "30-minutes",
+        "1-hour"
+      ]
+    },
+    "lightingAutoOffSet": {
+      "command": "codex lighting auto-off set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
+      "changedPath": "/settings/codex-micro-lighting-auto-off"
     }
   },
   "commandKeySlots": [
