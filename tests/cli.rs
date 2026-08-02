@@ -72,6 +72,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("action"));
     assert!(stdout.contains("multi-action"));
     assert!(stdout.contains("smart-action"));
+    assert!(stdout.contains("cheat-sheet"));
     assert!(stdout.contains("completion"));
 }
 
@@ -213,6 +214,13 @@ fn semantic_help_exposes_offline_candidate_workflow() {
     assert!(multi_group.status.success());
     for command in ["list", "show", "create", "set", "member", "delete"] {
         assert!(multi_group_stdout.contains(command));
+    }
+
+    let cheat_sheet = binary().args(["cheat-sheet", "--help"]).output().unwrap();
+    let cheat_sheet_stdout = String::from_utf8(cheat_sheet.stdout).unwrap();
+    assert!(cheat_sheet.status.success());
+    for command in ["catalog", "bindings", "bind"] {
+        assert!(cheat_sheet_stdout.contains(command));
     }
 }
 
@@ -450,6 +458,101 @@ fn input_joystick_sector_lifecycle_runs_end_to_end_without_writing_cache() {
         .unwrap();
     assert_eq!(below_minimum.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&below_minimum.stderr).contains("retain at least 2 sectors"));
+
+    assert_eq!(
+        worklouderctl::fsutil::sha256(&device.join("keymap.json")).unwrap(),
+        keymap_before
+    );
+    assert_eq!(
+        worklouderctl::fsutil::sha256(&device.join("smart_actions.json")).unwrap(),
+        smart_before
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn input_cheat_sheet_bindings_run_end_to_end_without_writing_cache() {
+    let root = fixture_root();
+    let support = root.join("support");
+    let device = support.join("devices/33632");
+    let snapshot = root.join("snapshot.json");
+    fs::create_dir_all(&device).unwrap();
+    let keymap = semantic_keymap_bytes();
+    let smart_actions = b"{\"version\":1,\"smartActions\":{}}";
+    fs::write(device.join("keymap.json"), &keymap).unwrap();
+    fs::write(device.join("smart_actions.json"), smart_actions).unwrap();
+    let keymap_before = worklouderctl::fsutil::sha256_bytes(&keymap).unwrap();
+    let smart_before = worklouderctl::fsutil::sha256_bytes(smart_actions).unwrap();
+
+    let captured = binary()
+        .args(["input", "config", "snapshot", "--support-root"])
+        .arg(&support)
+        .arg("--output")
+        .arg(&snapshot)
+        .output()
+        .unwrap();
+    assert!(captured.status.success());
+
+    let catalog = binary()
+        .args(["--json", "cheat-sheet", "catalog"])
+        .output()
+        .unwrap();
+    assert!(catalog.status.success());
+    let catalog: serde_json::Value = serde_json::from_slice(&catalog.stdout).unwrap();
+    assert_eq!(catalog["inputVersion"], "0.18.0");
+    assert_eq!(catalog["minimumFirmware"], "0.5.0");
+    assert_eq!(
+        catalog["assignments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["token"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec!["KI_CS_SHOW", "KI_CS_SHOW_TMP", "KI_CS_HIDE", "KI_CS_TOGGLE"]
+    );
+
+    let mut input = snapshot;
+    for (index, (behavior, token)) in [
+        ("show", "KI_CS_SHOW"),
+        ("hold", "KI_CS_SHOW_TMP"),
+        ("hide", "KI_CS_HIDE"),
+        ("toggle", "KI_CS_TOGGLE"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let output = root.join(format!("cheat-sheet-{index}.json"));
+        let bound = binary()
+            .args(["--json", "cheat-sheet", "bind", "--input"])
+            .arg(&input)
+            .args(["--layer", "0", "--control", "key:0:0", behavior, "--output"])
+            .arg(&output)
+            .output()
+            .unwrap();
+        assert!(
+            bound.status.success(),
+            "{}",
+            String::from_utf8_lossy(&bound.stderr)
+        );
+        let bound: serde_json::Value = serde_json::from_slice(&bound.stdout).unwrap();
+        assert_eq!(bound["operation"], "cheat-sheet-bind");
+        assert_eq!(
+            bound["changedPaths"],
+            serde_json::json!(["/keymap.json/profiles/0/layers/0/layout/keymap/0/0"])
+        );
+
+        let bindings = binary()
+            .args(["--json", "cheat-sheet", "bindings", "--input"])
+            .arg(&output)
+            .args(["--layer", "0"])
+            .output()
+            .unwrap();
+        assert!(bindings.status.success());
+        let bindings: serde_json::Value = serde_json::from_slice(&bindings.stdout).unwrap();
+        assert_eq!(bindings["bindings"][0]["behavior"], behavior);
+        assert_eq!(bindings["bindings"][0]["control"]["assignment"], token);
+        input = output;
+    }
 
     assert_eq!(
         worklouderctl::fsutil::sha256(&device.join("keymap.json")).unwrap(),
