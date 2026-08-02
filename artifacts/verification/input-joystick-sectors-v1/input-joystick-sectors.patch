@@ -1,0 +1,1137 @@
+diff --git a/README.md b/README.md
+index 4453d78..626f92d 100644
+--- a/README.md
++++ b/README.md
+@@ -156,6 +156,10 @@ worklouderctl layer rename --input CONFIG.json [--profile PROFILE_ID] --id LAYER
+ worklouderctl layer color --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --color '#RRGGBB' --output CANDIDATE.json
+ worklouderctl layer lighting show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
+ worklouderctl layer lighting set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --zone backlight --effect breath --brightness 0.5 --color '#RRGGBB' [--apply-to-all] --output CANDIDATE.json
++worklouderctl layer joystick show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
++worklouderctl layer joystick mode set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID radial --output CANDIDATE.json
++worklouderctl layer joystick sector add --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --index INDEX --output CANDIDATE.json
++worklouderctl layer joystick sector delete --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --index INDEX --output CANDIDATE.json
+ worklouderctl appsense list --input CONFIG.json
+ worklouderctl appsense show --input CONFIG.json --id APP_ID
+ worklouderctl appsense link --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --name NAME [--process BUNDLE_ID] [--path APP_PATH] --output CANDIDATE.json
+@@ -327,6 +331,12 @@ worklouderctl device --transport bridge config apply \
+ The apply-side live CAS compares `REVISION` with a fresh bridge snapshot, so a
+ cache snapshot that became stale is detected before the first device write.
+ 
++`layer joystick show/mode/sector` matches Input 0.18.0's released radial
++editor. It exposes the editable `RADIAL` mode, seeds the observed two-sector
++default, inserts `KC_NONE`, enforces the 2–8 sector range, and recomputes every
++`a1`/`a2` boundary with Input's fixed 45-degree first sector. Assignment changes
++continue through `control set --control joystick:INDEX`.
++
+ Profile and layer lifecycle commands follow the frozen Input 0.18.0 Codex
+ Micro model: at most six profiles and six layers, maximum-ID-plus-one object
+ allocation, and a zero-based persisted `activeProfileId` index even though CLI
+@@ -488,7 +498,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
+ | Companion Bridge integration in a released Input build | Upstream integration pending |
+ | Codex Companion Bridge client/reference integration | Complete; released Codex integration pending |
+ | Semantic profile/layer candidates | Full lifecycle, selection, ordering, color, and lighting candidate-verified; combined profile-create/layer-create/lighting apply/readback/restore fixture-verified |
+-| Semantic physical controls | List/show/set for keys, encoder gestures, and existing joystick sectors; candidate/apply/restore fixture-verified |
++| Semantic physical controls | List/show/set for keys and encoder gestures; joystick mode, 2–8-sector lifecycle, assignments, and exact angle rebalance; candidate-verified with Input cache hashes unchanged |
+ | Semantic Actions | List/show/create/rename/delete and event add/set/delete/move; cascade/apply/restore fixture-verified |
+ | Real-device mutation and rollback | Planned |
+ | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 2dcc3c9..a0fc0fd 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -125,6 +125,10 @@ worklouderctl layer rename --input CONFIG.json [--profile PROFILE_ID] --id LAYER
+ worklouderctl layer color --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --color '#RRGGBB' --output CANDIDATE.json
+ worklouderctl layer lighting show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
+ worklouderctl layer lighting set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --zone backlight --effect breath --brightness 0.5 --color '#RRGGBB' [--apply-to-all] --output CANDIDATE.json
++worklouderctl layer joystick show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
++worklouderctl layer joystick mode set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID radial --output CANDIDATE.json
++worklouderctl layer joystick sector add --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --index INDEX --output CANDIDATE.json
++worklouderctl layer joystick sector delete --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --index INDEX --output CANDIDATE.json
+ worklouderctl appsense list --input CONFIG.json
+ worklouderctl appsense show --input CONFIG.json --id APP_ID
+ worklouderctl appsense link --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --name NAME [--process BUNDLE_ID] [--path APP_PATH] --output CANDIDATE.json
+@@ -283,6 +287,12 @@ move，也不作为直接 lighting target。普通 layer duplicate 会移除 `li
+ `breath`、`gradient`，brightness/speed/magic 范围为 `0..1`，并支持 24-bit color
+ 与按 zone 的 `--apply-to-all`。
+ 
++`layer joystick show/mode/sector` 与 Input 0.18.0 released radial editor
++一致：开放当前可编辑的 `RADIAL` mode，在需要时写入观察到的双 sector 默认值，
++新增 `KC_NONE` sector，严格限制为 2–8 个，并以固定 45 度首 sector 的算法重算
++全部 `a1`/`a2` 边界。assignment 仍通过
++`control set --control joystick:INDEX` 修改。
++
+ `appsense` 管理 Input 0.18.0 的 `linkedApps` 记录与 layer 的 `linkedAppId`。
+ 新 ID 遵循 Input 的 first-missing-nonnegative 规则；macOS 的 `process` 是 bundle
+ identifier，并且 `process`/`path` 至少一个非空。`list/show` 会返回所有
+@@ -390,7 +400,8 @@ lighting brightness/auto-off candidate 与 fixture transaction、Codex voice
+ lifecycle、selection、ordering、24-bit RGB color 与 per-layer lighting、AppSense
+ linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线
+ candidate 生成，keys、
+-encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
++encoder gestures 的 control list/show/set、joystick mode 与 2–8 sector
++lifecycle/assignment/精确 angle rebalance，以及 Action
+ list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
+ release 集成、Codex released-app bridge 集成、可安装 binary 与 Homebrew formula
+ 仍在后续里程碑中。
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index e5a5f40..2e458e7 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -67,7 +67,7 @@ Promises as failures even when the USB interface still enumerates.
+ | Actions | simple/advanced events, delays, groups | `action` | list/show/create/rename/delete, event CRUD/reorder, and group metadata/member/orphan-cascade candidate-verified |
+ | Multi Actions | tap, double tap, hold, tap-hold, timing, groups | `multi-action` | complete field CRUD plus group metadata/member/orphan-cascade candidate-verified; fixture apply/readback/restore verified |
+ | Encoder | counter-clockwise, clockwise, click | `control list/show/set` | candidate/apply/restore fixture-verified |
+-| Joystick sectors | existing radial sectors and targets | `control list/show/set` | candidate-verified; sector CRUD pending |
++| Joystick sectors | RADIAL mode, two-sector seed, 2–8 sector add/delete, exact angle rebalance, and targets | `layer joystick`, `control list/show/set` | candidate-verified against frozen Input 0.18.0 behavior; cache hashes remain unchanged |
+ | Backlight | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
+ | Underglow | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
+ | AppSense links | list/show, application identity, link, update, unlink | `appsense` | candidate and current-cache schema verified; fixture apply/readback/restore verified; live focus transition tracked separately |
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index 04aa0c0..58fba75 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -323,6 +323,13 @@ worklouderctl layer lighting set --input SNAPSHOT.json [--profile ID] \
+   --id ID --zone backlight --effect breath --brightness 0.5 \
+   --speed 0.5 --magic 0.5 --color '#RRGGBB' [--apply-to-all] \
+   --output CANDIDATE.json
++worklouderctl layer joystick show --input SNAPSHOT.json [--profile ID] --id ID
++worklouderctl layer joystick mode set --input SNAPSHOT.json [--profile ID] \
++  --id ID radial --output CANDIDATE.json
++worklouderctl layer joystick sector add --input SNAPSHOT.json [--profile ID] \
++  --id ID --index INDEX --output CANDIDATE.json
++worklouderctl layer joystick sector delete --input SNAPSHOT.json [--profile ID] \
++  --id ID --index INDEX --output CANDIDATE.json
+ worklouderctl appsense list --input SNAPSHOT.json
+ worklouderctl appsense show --input SNAPSHOT.json --id APP_ID
+ worklouderctl appsense link --input SNAPSHOT.json [--profile ID] \
+@@ -376,8 +383,16 @@ metadata; backlight and underglow objects remain separate lighting surfaces.
+ The implemented physical IDs are `key:ROW:COLUMN`,
+ `encoder:INDEX:ccw|cw|press`, and `joystick:SECTOR`. List/show report the exact
+ device token and classify it as `basic`, `internal`, `action`, `multiAction`,
+-or `vendor`. Set modifies only an existing physical slot; joystick sector
+-angles remain byte-for-byte equivalent in the semantic document.
++or `vendor`. Set modifies only an existing physical slot; assignment-only edits
++leave joystick angles unchanged.
++
++`layer joystick show/mode/sector` implements the released Input 0.18.0 radial
++editor contract. `mode set ... radial` installs the observed `KI_X`/`KC_NONE`
++two-sector seed when fewer than two sectors exist. Sector add inserts
++`KC_NONE`; add/delete enforce the inclusive 2–8 count range. Both operations
++recompute every angle: sector zero remains `0.1875..0.3125` turns and the
++remaining `0.875` turns are divided equally among the other sectors, modulo
++one. The GUI's disabled `JOYSTICK` option is not advertised as writable.
+ 
+ `spec/input-assignment-tokens-0.18.0.json` freezes 184 `KC_*` tokens and 43
+ `KI_*` tokens recovered from the Input 0.18.0 ASAR, plus `KA_A<ID>` and
+diff --git a/docs/research/2026-08-02-input-joystick-sector-contract.md b/docs/research/2026-08-02-input-joystick-sector-contract.md
+new file mode 100644
+index 0000000..58f9724
+--- /dev/null
++++ b/docs/research/2026-08-02-input-joystick-sector-contract.md
+@@ -0,0 +1,24 @@
++# Input joystick sector contract (Input 0.18.0)
++
++The exact Input 0.18.0 renderer
++`device_config_data-BMUs-0m4.js` exposes `RADIAL` and `JOYSTICK` modes. In
++radial mode it permits two through eight sectors. Adding inserts a
++`KC_NONE` sector at the requested zero-based insertion index; deleting is
++available only while more than two sectors exist.
++
++After every insert or delete, Input recomputes all angles. Sector zero remains
++the fixed 45-degree slice from `0.1875` to `0.3125` turns. The remaining
++`0.875` turns are divided equally among the remaining sector count, starting at
++`0.3125` and wrapping modulo one. Switching to `RADIAL` with fewer than two
++sectors installs the observed `KI_X`/`KC_NONE` two-sector default; switching to
++`JOYSTICK` preserves the existing sector array.
++
++## CLI contract
++
++`layer joystick show`, `layer joystick mode set`, and
++`layer joystick sector add/delete` operate on strict offline Input snapshots.
++Sector mutation is allowed only for editable radial layers, enforces the exact
++two/eight limits, validates assignment references, applies the observed angle
++algorithm, synchronizes profile Action/Multi Action usage, and atomically
++publishes/reopens a complete candidate. Existing sector assignments continue
++to use `control show/set --control joystick:INDEX`.
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 8d27043..323b85f 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -67,6 +67,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Existing keys and frozen Input 0.18.0 assignment tokens
+ - [x] Encoder rotation and press assignments
+ - [x] Existing joystick sector assignments
++- [x] Input 0.18.0 radial joystick mode, two-sector seed, sector add/delete limits, and exact angle rebalance
+ - [x] Action and Multi Action reference validation plus profile usage synchronization
+ - [x] Layer backlight/underglow inspection, updates, and apply-to-all
+ - [x] Actions/macros list/show/create/rename/delete and event CRUD/reorder
+diff --git a/spec/input-joystick-sectors-0.18.0.json b/spec/input-joystick-sectors-0.18.0.json
+new file mode 100644
+index 0000000..2922afc
+--- /dev/null
++++ b/spec/input-joystick-sectors-0.18.0.json
+@@ -0,0 +1,61 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouder-input-joystick-sector-model",
++  "inputVersion": "0.18.0",
++  "source": {
++    "asarPath": "/Applications/input.app/Contents/Resources/app.asar",
++    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
++    "rendererChunk": "device_config_data-BMUs-0m4.js",
++    "rendererChunkSha256": "c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e"
++  },
++  "mode": {
++    "editable": "RADIAL",
++    "disabledInGui": "JOYSTICK",
++    "radialSeedWhenSectorCountBelow": 2,
++    "seed": [
++      {
++        "k": "KI_X",
++        "a1": 0.1875,
++        "a2": 0.3125
++      },
++      {
++        "k": "KC_NONE",
++        "a1": 0.3125,
++        "a2": 0.1875
++      }
++    ]
++  },
++  "sectorCount": {
++    "minimum": 2,
++    "maximum": 8
++  },
++  "add": {
++    "indexRange": "zero through current sector count inclusive",
++    "newAssignment": "KC_NONE",
++    "rebalanceAllAngles": true
++  },
++  "delete": {
++    "indexRange": "existing zero-based sector index",
++    "requiresCurrentCountAbove": 2,
++    "rebalanceAllAngles": true
++  },
++  "rebalance": {
++    "fixedFirstSectorDegrees": 45.0,
++    "anchorDegrees": 67.5,
++    "algorithm": [
++      "width = 45 / 360",
++      "remainder = 1 - width",
++      "anchor = (90 - 45 / 2) / 360",
++      "one sector uses anchor through anchor plus width",
++      "two or more sectors keep sector zero at anchor through anchor plus width",
++      "remaining step = remainder / (count - 1)",
++      "sector i above zero uses anchor plus width plus step times (i - 1) through that value plus step, modulo 1"
++    ]
++  },
++  "candidateBoundary": {
++    "writesInputCache": false,
++    "contactsInput": false,
++    "contactsDevice": false,
++    "applyAuthority": "Input Companion Bridge"
++  }
++}
+diff --git a/spec/input-profile-layers-0.18.0.json b/spec/input-profile-layers-0.18.0.json
+index 9582f80..d3de5f2 100644
+--- a/spec/input-profile-layers-0.18.0.json
++++ b/spec/input-profile-layers-0.18.0.json
+@@ -62,5 +62,25 @@
+       "underglow": {"effect": "rainbow", "brightness": 1.0, "speed": 0.55, "magic": 1.0, "color": 16777215}
+     },
+     "applyToAllRule": "replace the selected zone on existing lighting and initialize both zones on layers without lighting"
++  },
++  "joystick": {
++    "types": ["RADIAL", "JOYSTICK"],
++    "radialMinimumSectors": 2,
++    "radialMaximumSectors": 8,
++    "newSectorAssignment": "KC_NONE",
++    "insertRule": "insert before the requested zero-based index, then rebalance every sector",
++    "deleteRule": "remove the requested zero-based index only while more than two sectors exist, then rebalance every sector",
++    "rebalance": {
++      "reservedFirstSectorDegrees": 45.0,
++      "firstStartTurns": 0.1875,
++      "firstEndTurns": 0.3125,
++      "remainingArcTurns": 0.875,
++      "remainingSectors": "divide remainingArcTurns equally among sector count minus one, starting at firstEndTurns and modulo one"
++    },
++    "radialInitialization": [
++      {"k": "KI_X", "a1": 0.1875, "a2": 0.3125},
++      {"k": "KC_NONE", "a1": 0.3125, "a2": 0.1875}
++    ],
++    "modeRule": "switching to RADIAL with fewer than two sectors installs radialInitialization; switching to JOYSTICK preserves sectors"
+   }
+ }
+diff --git a/src/cli.rs b/src/cli.rs
+index 772a11d..9498e0a 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -1252,6 +1252,12 @@ pub enum LayerCommand {
+         #[clap(subcommand)]
+         command: LayerLightingCommand,
+     },
++
++    /// Inspect or edit Input radial-joystick sectors in one layer.
++    Joystick {
++        #[clap(subcommand)]
++        command: LayerJoystickCommand,
++    },
+ }
+ 
+ #[derive(Debug, Subcommand)]
+@@ -1295,6 +1301,84 @@ pub enum LayerLightingCommand {
+     },
+ }
+ 
++#[derive(Debug, Subcommand)]
++pub enum LayerJoystickCommand {
++    /// Show joystick mode and every ordered radial sector.
++    Show {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        profile: Option<u64>,
++        #[clap(long)]
++        id: u64,
++    },
++
++    /// Inspect or change the released editable joystick mode.
++    Mode {
++        #[clap(subcommand)]
++        command: LayerJoystickModeCommand,
++    },
++
++    /// Add or delete radial sectors using Input's angle rebalancer.
++    Sector {
++        #[clap(subcommand)]
++        command: LayerJoystickSectorCommand,
++    },
++}
++
++#[derive(Clone, Copy, Debug, ValueEnum)]
++pub enum LayerJoystickMode {
++    Radial,
++}
++
++#[derive(Debug, Subcommand)]
++pub enum LayerJoystickModeCommand {
++    /// Set RADIAL mode and seed two sectors when the current list is too short.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        profile: Option<u64>,
++        #[clap(long)]
++        id: u64,
++        #[clap(value_enum)]
++        value: LayerJoystickMode,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++}
++
++#[derive(Debug, Subcommand)]
++pub enum LayerJoystickSectorCommand {
++    /// Insert KC_NONE at a zero-based position, then rebalance all angles.
++    Add {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        profile: Option<u64>,
++        #[clap(long)]
++        id: u64,
++        #[clap(long)]
++        index: usize,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Delete one sector while retaining at least two, then rebalance angles.
++    Delete {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        profile: Option<u64>,
++        #[clap(long)]
++        id: u64,
++        #[clap(long)]
++        index: usize,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++}
++
+ #[derive(Clone, Copy, Debug, ValueEnum)]
+ pub enum LightingZone {
+     Backlight,
+diff --git a/src/lib.rs b/src/lib.rs
+index 08e5a44..9d25827 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -24,10 +24,11 @@ use cli::{
+     CodexLightingBrightnessCommand, CodexLightingCommand, CodexResetCommand, CodexRuntimeCommand,
+     CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand,
+     DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand,
+-    LayerCommand, LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
+-    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
+-    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
+-    TierCommand,
++    LayerCommand, LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand,
++    LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect, LightingZone,
++    MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand,
++    SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
++    SmartActionType as CliSmartActionType, TierCommand,
+ };
+ use serde::Serialize;
+ use std::io::Write;
+@@ -728,6 +729,76 @@ fn run_layer(command: LayerCommand, json: bool, mut out: impl Write) -> Result<(
+                 write_candidate_result(result, json, &mut out)?;
+             }
+         },
++        LayerCommand::Joystick { command } => match command {
++            LayerJoystickCommand::Show { input, profile, id } => {
++                let result = semantic::layer_joystick_show(&input, profile, id)?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "profile={}\tlayer={}\tmode={}",
++                        result.profile_id, result.layer_id, result.mode
++                    )?;
++                    for sector in result.sectors {
++                        writeln!(
++                            out,
++                            "{}\t{}\t{}\ta1={}\ta2={}",
++                            sector.index,
++                            sector.assignment_kind,
++                            sector.assignment,
++                            sector.a1,
++                            sector.a2
++                        )?;
++                    }
++                }
++            }
++            LayerJoystickCommand::Mode { command } => match command {
++                LayerJoystickModeCommand::Set {
++                    input,
++                    profile,
++                    id,
++                    value,
++                    output,
++                } => write_candidate_result(
++                    semantic::layer_joystick_mode_set(
++                        &input,
++                        profile,
++                        id,
++                        match value {
++                            LayerJoystickMode::Radial => "RADIAL",
++                        },
++                        &output,
++                    )?,
++                    json,
++                    &mut out,
++                )?,
++            },
++            LayerJoystickCommand::Sector { command } => match command {
++                LayerJoystickSectorCommand::Add {
++                    input,
++                    profile,
++                    id,
++                    index,
++                    output,
++                } => write_candidate_result(
++                    semantic::layer_joystick_sector_add(&input, profile, id, index, &output)?,
++                    json,
++                    &mut out,
++                )?,
++                LayerJoystickSectorCommand::Delete {
++                    input,
++                    profile,
++                    id,
++                    index,
++                    output,
++                } => write_candidate_result(
++                    semantic::layer_joystick_sector_delete(&input, profile, id, index, &output)?,
++                    json,
++                    &mut out,
++                )?,
++            },
++        },
+     }
+     Ok(())
+ }
+diff --git a/src/semantic.rs b/src/semantic.rs
+index 8ac6092..60b6d6c 100644
+--- a/src/semantic.rs
++++ b/src/semantic.rs
+@@ -30,6 +30,7 @@ const MULTI_ACTION_SPEC_JSON: &str = include_str!("../spec/input-multi-actions-0
+ const PROFILE_LAYER_SPEC_JSON: &str = include_str!("../spec/input-profile-layers-0.18.0.json");
+ const APPSENSE_SPEC_JSON: &str = include_str!("../spec/input-appsense-0.18.0.json");
+ const SMART_ACTION_SPEC_JSON: &str = include_str!("../spec/input-smart-actions-0.18.0.json");
++const JOYSTICK_SECTOR_SPEC_JSON: &str = include_str!("../spec/input-joystick-sectors-0.18.0.json");
+ static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
+ 
+ #[derive(Debug, Serialize)]
+@@ -106,6 +107,28 @@ pub struct LayoutSummary {
+     pub joystick_fields: usize,
+ }
+ 
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct LayerJoystickShow {
++    pub schema_version: u64,
++    pub kind: &'static str,
++    pub revision: String,
++    pub profile_id: u64,
++    pub layer_id: u64,
++    pub mode: String,
++    pub sectors: Vec<JoystickSectorEntry>,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct JoystickSectorEntry {
++    pub index: usize,
++    pub assignment: String,
++    pub assignment_kind: &'static str,
++    pub a1: f64,
++    pub a2: f64,
++}
++
+ #[derive(Clone, Copy, Debug)]
+ pub enum LightingZone {
+     Backlight,
+@@ -700,6 +723,175 @@ pub fn layer_show(input: &Path, profile_id: Option<u64>, layer_id: u64) -> Resul
+     })
+ }
+ 
++pub fn layer_joystick_show(
++    input: &Path,
++    profile_id: Option<u64>,
++    layer_id: u64,
++) -> Result<LayerJoystickShow> {
++    joystick_sector_model_spec()?;
++    let snapshot = SemanticSnapshot::read(input)?;
++    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
++    let profile = find_profile(&snapshot.keymap, selected_id)?;
++    let (_, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
++    let layer = profile_layers(profile)?
++        .get(layer_index)
++        .context("layer disappeared during lookup")?;
++    let joystick = layer_joystick(layer)?;
++    Ok(LayerJoystickShow {
++        schema_version: 1,
++        kind: "worklouderctl-layer-joystick",
++        revision: snapshot.revision,
++        profile_id: selected_id,
++        layer_id,
++        mode: object_string(joystick, "type", "layer joystick")?.to_owned(),
++        sectors: joystick_sector_entries(joystick)?,
++    })
++}
++
++pub fn layer_joystick_mode_set(
++    input: &Path,
++    profile_id: Option<u64>,
++    layer_id: u64,
++    mode: &str,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    let spec = joystick_sector_model_spec()?;
++    let editable_mode = spec
++        .get("mode")
++        .and_then(|value| value.get("editable"))
++        .and_then(Value::as_str)
++        .context("joystick sector spec editable mode was missing")?;
++    ensure!(
++        mode == editable_mode,
++        "joystick mode must be {editable_mode}; JOYSTICK is disabled in Input 0.18.0"
++    );
++    let mut snapshot = SemanticSnapshot::read(input)?;
++    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
++    let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
++    let layer = mutable_layer(&mut snapshot.keymap, profile_index, layer_index)?;
++    ensure!(
++        !is_protected_layer(layer),
++        "the Codex protected layer has no editable Input joystick"
++    );
++    let joystick = layer_joystick_mut(layer)?;
++    let previous = object_string(joystick, "type", "layer joystick")?;
++    let changed = previous != mode;
++    let mut changed_paths = Vec::new();
++    if changed {
++        joystick
++            .as_object_mut()
++            .context("layer joystick was not an object")?
++            .insert("type".into(), Value::String(mode.to_owned()));
++        changed_paths.push(format!(
++            "/keymap.json/profiles/{profile_index}/layers/{layer_index}/layout/joystick/type"
++        ));
++        let seed_below =
++            spec.get("mode")
++                .and_then(|value| value.get("radialSeedWhenSectorCountBelow"))
++                .and_then(Value::as_u64)
++                .context("joystick sector seed threshold was missing")? as usize;
++        let sectors = joystick_sectors_mut(joystick)?;
++        if sectors.len() < seed_below {
++            *sectors = spec
++                .get("mode")
++                .and_then(|value| value.get("seed"))
++                .and_then(Value::as_array)
++                .cloned()
++                .context("joystick sector seed was missing")?;
++            rebalance_joystick_sectors(sectors)?;
++            changed_paths.push(format!(
++                "/keymap.json/profiles/{profile_index}/layers/{layer_index}/layout/joystick/sectors"
++            ));
++        }
++    }
++    sync_profile_usage(&mut snapshot.keymap, profile_index, &mut changed_paths)?;
++    let changed = !changed_paths.is_empty();
++    snapshot.publish(output, "layer-joystick-mode-set", changed, changed_paths)
++}
++
++pub fn layer_joystick_sector_add(
++    input: &Path,
++    profile_id: Option<u64>,
++    layer_id: u64,
++    index: usize,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    let spec = joystick_sector_model_spec()?;
++    let minimum = joystick_sector_limit(&spec, "minimum")?;
++    let maximum = joystick_sector_limit(&spec, "maximum")?;
++    let mut snapshot = SemanticSnapshot::read(input)?;
++    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
++    let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
++    let layer = mutable_layer(&mut snapshot.keymap, profile_index, layer_index)?;
++    ensure!(
++        !is_protected_layer(layer),
++        "the Codex protected layer has no editable Input joystick"
++    );
++    let joystick = layer_joystick_mut(layer)?;
++    ensure_radial_joystick(joystick)?;
++    let sectors = joystick_sectors_mut(joystick)?;
++    ensure!(
++        sectors.len() >= minimum,
++        "radial joystick must contain at least {minimum} sectors before add"
++    );
++    ensure!(
++        sectors.len() < maximum,
++        "radial joystick already has the maximum {maximum} sectors"
++    );
++    ensure!(
++        index <= sectors.len(),
++        "joystick sector insertion index {index} exceeded {}",
++        sectors.len()
++    );
++    sectors.insert(
++        index,
++        serde_json::json!({"k": "KC_NONE", "a1": 0.0, "a2": 0.0}),
++    );
++    rebalance_joystick_sectors(sectors)?;
++    let mut changed_paths = vec![format!(
++        "/keymap.json/profiles/{profile_index}/layers/{layer_index}/layout/joystick/sectors"
++    )];
++    sync_profile_usage(&mut snapshot.keymap, profile_index, &mut changed_paths)?;
++    snapshot.publish(output, "layer-joystick-sector-add", true, changed_paths)
++}
++
++pub fn layer_joystick_sector_delete(
++    input: &Path,
++    profile_id: Option<u64>,
++    layer_id: u64,
++    index: usize,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    let spec = joystick_sector_model_spec()?;
++    let minimum = joystick_sector_limit(&spec, "minimum")?;
++    let mut snapshot = SemanticSnapshot::read(input)?;
++    let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
++    let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
++    let layer = mutable_layer(&mut snapshot.keymap, profile_index, layer_index)?;
++    ensure!(
++        !is_protected_layer(layer),
++        "the Codex protected layer has no editable Input joystick"
++    );
++    let joystick = layer_joystick_mut(layer)?;
++    ensure_radial_joystick(joystick)?;
++    let sectors = joystick_sectors_mut(joystick)?;
++    ensure!(
++        sectors.len() > minimum,
++        "radial joystick must retain at least {minimum} sectors"
++    );
++    ensure!(
++        index < sectors.len(),
++        "joystick sector index {index} was not found"
++    );
++    sectors.remove(index);
++    rebalance_joystick_sectors(sectors)?;
++    let mut changed_paths = vec![format!(
++        "/keymap.json/profiles/{profile_index}/layers/{layer_index}/layout/joystick/sectors"
++    )];
++    sync_profile_usage(&mut snapshot.keymap, profile_index, &mut changed_paths)?;
++    snapshot.publish(output, "layer-joystick-sector-delete", true, changed_paths)
++}
++
+ pub fn control_list(input: &Path, profile_id: Option<u64>, layer_id: u64) -> Result<ControlList> {
+     let snapshot = SemanticSnapshot::read(input)?;
+     let selected_id = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+@@ -3425,6 +3617,52 @@ fn validate_profile_layer_model_spec() -> Result<()> {
+     profile_layer_model_spec().map(|_| ())
+ }
+ 
++fn joystick_sector_model_spec() -> Result<Value> {
++    let spec: Value = serde_json::from_str(JOYSTICK_SECTOR_SPEC_JSON)
++        .context("embedded Input joystick sector model was invalid")?;
++    ensure!(
++        spec.get("schemaVersion").and_then(Value::as_u64) == Some(1)
++            && spec.get("kind").and_then(Value::as_str)
++                == Some("worklouder-input-joystick-sector-model")
++            && spec.get("inputVersion").and_then(Value::as_str) == Some("0.18.0")
++            && spec
++                .get("source")
++                .and_then(|value| value.get("asarSha256"))
++                .and_then(Value::as_str)
++                == Some("8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8")
++            && spec
++                .get("source")
++                .and_then(|value| value.get("rendererChunkSha256"))
++                .and_then(Value::as_str)
++                == Some("c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e")
++            && spec
++                .get("mode")
++                .and_then(|value| value.get("editable"))
++                .and_then(Value::as_str)
++                == Some("RADIAL")
++            && spec
++                .get("sectorCount")
++                .and_then(|value| value.get("minimum"))
++                .and_then(Value::as_u64)
++                == Some(2)
++            && spec
++                .get("sectorCount")
++                .and_then(|value| value.get("maximum"))
++                .and_then(Value::as_u64)
++                == Some(8),
++        "embedded Input joystick sector model identity was invalid"
++    );
++    Ok(spec)
++}
++
++fn joystick_sector_limit(spec: &Value, field: &str) -> Result<usize> {
++    spec.get("sectorCount")
++        .and_then(|value| value.get(field))
++        .and_then(Value::as_u64)
++        .map(|value| value as usize)
++        .with_context(|| format!("joystick sector {field} limit was missing"))
++}
++
+ fn validate_appsense_model_spec() -> Result<()> {
+     let spec: Value = serde_json::from_str(APPSENSE_SPEC_JSON)
+         .context("embedded Input AppSense model was invalid")?;
+@@ -5246,6 +5484,118 @@ fn layer_indices(keymap: &Value, profile_id: u64, layer_id: u64) -> Result<(usiz
+     Ok((profile_index, layer_index))
+ }
+ 
++fn mutable_layer(
++    keymap: &mut Value,
++    profile_index: usize,
++    layer_index: usize,
++) -> Result<&mut Value> {
++    keymap
++        .get_mut("profiles")
++        .and_then(Value::as_array_mut)
++        .and_then(|profiles| profiles.get_mut(profile_index))
++        .and_then(|profile| profile.get_mut("layers"))
++        .and_then(Value::as_array_mut)
++        .and_then(|layers| layers.get_mut(layer_index))
++        .context("layer disappeared during candidate generation")
++}
++
++fn layer_joystick(layer: &Value) -> Result<&Value> {
++    layer
++        .get("layout")
++        .and_then(|layout| layout.get("joystick"))
++        .context("layer joystick was missing")
++}
++
++fn layer_joystick_mut(layer: &mut Value) -> Result<&mut Value> {
++    layer
++        .get_mut("layout")
++        .and_then(|layout| layout.get_mut("joystick"))
++        .context("layer joystick was missing")
++}
++
++fn joystick_sectors(joystick: &Value) -> Result<&Vec<Value>> {
++    joystick
++        .get("sectors")
++        .and_then(Value::as_array)
++        .context("layer joystick sectors were invalid")
++}
++
++fn joystick_sectors_mut(joystick: &mut Value) -> Result<&mut Vec<Value>> {
++    joystick
++        .get_mut("sectors")
++        .and_then(Value::as_array_mut)
++        .context("layer joystick sectors were invalid")
++}
++
++fn joystick_sector_entries(joystick: &Value) -> Result<Vec<JoystickSectorEntry>> {
++    joystick_sectors(joystick)?
++        .iter()
++        .enumerate()
++        .map(|(index, sector)| {
++            let assignment = object_string(sector, "k", "joystick sector")?;
++            Ok(JoystickSectorEntry {
++                index,
++                assignment: assignment.to_owned(),
++                assignment_kind: assignment_kind(assignment)?,
++                a1: sector
++                    .get("a1")
++                    .and_then(Value::as_f64)
++                    .context("joystick sector a1 was invalid")?,
++                a2: sector
++                    .get("a2")
++                    .and_then(Value::as_f64)
++                    .context("joystick sector a2 was invalid")?,
++            })
++        })
++        .collect()
++}
++
++fn ensure_radial_joystick(joystick: &Value) -> Result<()> {
++    ensure!(
++        object_string(joystick, "type", "layer joystick")? == "RADIAL",
++        "joystick sector edits require RADIAL mode"
++    );
++    Ok(())
++}
++
++fn rebalance_joystick_sectors(sectors: &mut [Value]) -> Result<()> {
++    ensure!(!sectors.is_empty(), "joystick sector list was empty");
++    let width = 45.0_f64 / 360.0;
++    let remainder = 1.0 - width;
++    let anchor = (90.0 - 45.0 / 2.0) / 360.0;
++    if sectors.len() == 1 {
++        set_joystick_sector_angles(&mut sectors[0], anchor, (anchor + width) % 1.0)?;
++        return Ok(());
++    }
++    let step = remainder / (sectors.len() - 1) as f64;
++    for (index, sector) in sectors.iter_mut().enumerate() {
++        if index == 0 {
++            set_joystick_sector_angles(sector, anchor, (anchor + width) % 1.0)?;
++        } else {
++            let start = anchor + width + step * (index - 1) as f64;
++            set_joystick_sector_angles(sector, start % 1.0, (start + step) % 1.0)?;
++        }
++    }
++    Ok(())
++}
++
++fn set_joystick_sector_angles(sector: &mut Value, a1: f64, a2: f64) -> Result<()> {
++    let sector = sector
++        .as_object_mut()
++        .context("joystick sector was not an object")?;
++    ensure!(
++        sector
++            .get("k")
++            .and_then(Value::as_str)
++            .map(|value| !value.is_empty())
++            == Some(true),
++        "joystick sector assignment was invalid"
++    );
++    sector.insert("a1".into(), Value::from(a1));
++    sector.insert("a2".into(), Value::from(a2));
++    Ok(())
++}
++
+ fn linked_app_bindings(keymap: &Value, app_id: u64) -> Result<Vec<AppSenseBinding>> {
+     let mut bindings = Vec::new();
+     for profile in profiles(keymap)? {
+@@ -6180,6 +6530,119 @@ mod tests {
+         fs::remove_file(source).unwrap();
+     }
+ 
++    #[test]
++    fn joystick_sector_lifecycle_matches_input_angle_rebalancing_and_limits() {
++        let source = root("joystick-sector-source");
++        let added = root("joystick-sector-added");
++        let deleted = root("joystick-sector-deleted");
++        let seeded = root("joystick-sector-seeded");
++        let noop = root("joystick-sector-noop");
++        write_fixture(&source);
++
++        let shown = layer_joystick_show(&source, None, 0).unwrap();
++        assert_eq!(shown.mode, "RADIAL");
++        assert_eq!(shown.sectors.len(), 2);
++        assert_eq!(shown.sectors[0].assignment, "KA_A3");
++
++        let receipt = layer_joystick_sector_add(&source, None, 0, 1, &added).unwrap();
++        assert_eq!(
++            receipt.changed_paths,
++            vec!["/keymap.json/profiles/0/layers/0/layout/joystick/sectors"]
++        );
++        let added_view = layer_joystick_show(&added, None, 0).unwrap();
++        assert_eq!(
++            added_view
++                .sectors
++                .iter()
++                .map(|sector| sector.assignment.as_str())
++                .collect::<Vec<_>>(),
++            vec!["KA_A3", "KC_NONE", "KA_M1"]
++        );
++        assert_eq!(
++            (added_view.sectors[0].a1, added_view.sectors[0].a2),
++            (0.1875, 0.3125)
++        );
++        assert_eq!(
++            (added_view.sectors[1].a1, added_view.sectors[1].a2),
++            (0.3125, 0.75)
++        );
++        assert_eq!(
++            (added_view.sectors[2].a1, added_view.sectors[2].a2),
++            (0.75, 0.1875)
++        );
++
++        layer_joystick_sector_delete(&added, None, 0, 1, &deleted).unwrap();
++        let deleted_view = layer_joystick_show(&deleted, None, 0).unwrap();
++        assert_eq!(deleted_view.sectors.len(), 2);
++        assert_eq!(deleted_view.sectors[0].a1, 0.1875);
++        assert_eq!(deleted_view.sectors[1].a2, 0.1875);
++        let below_minimum = layer_joystick_sector_delete(
++            &deleted,
++            None,
++            0,
++            0,
++            &root("joystick-sector-below-minimum"),
++        )
++        .unwrap_err();
++        assert!(below_minimum
++            .to_string()
++            .contains("retain at least 2 sectors"));
++
++        let mode = layer_joystick_mode_set(&source, None, 1, "RADIAL", &seeded).unwrap();
++        assert_eq!(
++            mode.changed_paths,
++            vec![
++                "/keymap.json/profiles/0/layers/1/layout/joystick/type",
++                "/keymap.json/profiles/0/layers/1/layout/joystick/sectors",
++            ]
++        );
++        let seeded_view = layer_joystick_show(&seeded, None, 1).unwrap();
++        assert_eq!(seeded_view.mode, "RADIAL");
++        assert_eq!(seeded_view.sectors.len(), 2);
++        assert_eq!(seeded_view.sectors[0].assignment, "KI_X");
++        assert_eq!(seeded_view.sectors[1].assignment, "KC_NONE");
++
++        let noop_receipt = layer_joystick_mode_set(&seeded, None, 1, "RADIAL", &noop).unwrap();
++        assert!(!noop_receipt.changed);
++        assert_eq!(noop_receipt.before_revision, noop_receipt.after_revision);
++
++        let disabled = layer_joystick_mode_set(
++            &seeded,
++            None,
++            1,
++            "JOYSTICK",
++            &root("joystick-disabled-mode"),
++        )
++        .unwrap_err();
++        assert!(disabled.to_string().contains("disabled in Input 0.18.0"));
++        let protected =
++            layer_joystick_mode_set(&source, Some(7), 9, "RADIAL", &root("joystick-protected"))
++                .unwrap_err();
++        assert!(protected.to_string().contains("protected layer"));
++
++        let mut current = added.clone();
++        let mut generated = Vec::new();
++        for count in 4..=8 {
++            let output = root(&format!("joystick-sector-count-{count}"));
++            layer_joystick_sector_add(&current, None, 0, count - 1, &output).unwrap();
++            if current != added {
++                generated.push(current);
++            }
++            current = output;
++        }
++        let maximum =
++            layer_joystick_sector_add(&current, None, 0, 8, &root("joystick-sector-over-maximum"))
++                .unwrap_err();
++        assert!(maximum.to_string().contains("maximum 8 sectors"));
++
++        for path in [&source, &added, &deleted, &seeded, &noop, &current] {
++            fs::remove_file(path).unwrap();
++        }
++        for path in generated {
++            fs::remove_file(path).unwrap();
++        }
++    }
++
+     #[test]
+     fn control_candidates_change_one_assignment_and_synchronize_action_usage() {
+         let source = root("control-source");
+diff --git a/tests/cli.rs b/tests/cli.rs
+index 283159e..3164bc8 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -105,6 +105,7 @@ fn semantic_help_exposes_offline_candidate_workflow() {
+         "rename",
+         "color",
+         "lighting",
++        "joystick",
+     ] {
+         assert!(layer_stdout.contains(command));
+     }
+@@ -118,6 +119,25 @@ fn semantic_help_exposes_offline_candidate_workflow() {
+     assert!(lighting_stdout.contains("show"));
+     assert!(lighting_stdout.contains("set"));
+ 
++    let joystick = binary()
++        .args(["layer", "joystick", "--help"])
++        .output()
++        .unwrap();
++    let joystick_stdout = String::from_utf8(joystick.stdout).unwrap();
++    assert!(joystick.status.success());
++    for command in ["show", "mode", "sector"] {
++        assert!(joystick_stdout.contains(command));
++    }
++
++    let sectors = binary()
++        .args(["layer", "joystick", "sector", "--help"])
++        .output()
++        .unwrap();
++    let sectors_stdout = String::from_utf8(sectors.stdout).unwrap();
++    assert!(sectors.status.success());
++    assert!(sectors_stdout.contains("add"));
++    assert!(sectors_stdout.contains("delete"));
++
+     let control = binary().args(["control", "--help"]).output().unwrap();
+     let control_stdout = String::from_utf8(control.stdout).unwrap();
+     assert!(control.status.success());
+@@ -311,6 +331,126 @@ fn input_cache_snapshot_runs_into_semantic_candidates_end_to_end() {
+     fs::remove_dir_all(root).unwrap();
+ }
+ 
++#[test]
++fn input_joystick_sector_lifecycle_runs_end_to_end_without_writing_cache() {
++    let root = fixture_root();
++    let support = root.join("support");
++    let device = support.join("devices/33632");
++    let snapshot = root.join("snapshot.json");
++    let radial = root.join("radial.json");
++    let added = root.join("added.json");
++    let assigned = root.join("assigned.json");
++    let deleted = root.join("deleted.json");
++    fs::create_dir_all(&device).unwrap();
++    let keymap = semantic_keymap_bytes();
++    let smart_actions = b"{\"version\":1,\"smartActions\":{}}";
++    fs::write(device.join("keymap.json"), &keymap).unwrap();
++    fs::write(device.join("smart_actions.json"), smart_actions).unwrap();
++    let keymap_before = worklouderctl::fsutil::sha256_bytes(&keymap).unwrap();
++    let smart_before = worklouderctl::fsutil::sha256_bytes(smart_actions).unwrap();
++
++    let captured = binary()
++        .args(["input", "config", "snapshot", "--support-root"])
++        .arg(&support)
++        .arg("--output")
++        .arg(&snapshot)
++        .output()
++        .unwrap();
++    assert!(captured.status.success());
++
++    let radial_result = binary()
++        .args(["--json", "layer", "joystick", "mode", "set", "--input"])
++        .arg(&snapshot)
++        .args(["--id", "0", "radial", "--output"])
++        .arg(&radial)
++        .output()
++        .unwrap();
++    assert!(radial_result.status.success());
++    let radial_result: serde_json::Value = serde_json::from_slice(&radial_result.stdout).unwrap();
++    assert_eq!(
++        radial_result["changedPaths"],
++        serde_json::json!([
++            "/keymap.json/profiles/0/layers/0/layout/joystick/type",
++            "/keymap.json/profiles/0/layers/0/layout/joystick/sectors"
++        ])
++    );
++
++    let add = binary()
++        .args(["--json", "layer", "joystick", "sector", "add", "--input"])
++        .arg(&radial)
++        .args(["--id", "0", "--index", "1", "--output"])
++        .arg(&added)
++        .output()
++        .unwrap();
++    assert!(add.status.success());
++    let add: serde_json::Value = serde_json::from_slice(&add.stdout).unwrap();
++    assert_eq!(add["operation"], "layer-joystick-sector-add");
++
++    let assign = binary()
++        .args(["control", "set", "--input"])
++        .arg(&added)
++        .args([
++            "--layer",
++            "0",
++            "--control",
++            "joystick:1",
++            "--assignment",
++            "KC_C",
++            "--output",
++        ])
++        .arg(&assigned)
++        .output()
++        .unwrap();
++    assert!(assign.status.success());
++
++    let show = binary()
++        .args(["--json", "layer", "joystick", "show", "--input"])
++        .arg(&assigned)
++        .args(["--id", "0"])
++        .output()
++        .unwrap();
++    assert!(show.status.success());
++    let show: serde_json::Value = serde_json::from_slice(&show.stdout).unwrap();
++    assert_eq!(show["mode"], "RADIAL");
++    assert_eq!(show["sectors"].as_array().unwrap().len(), 3);
++    assert_eq!(show["sectors"][0]["a1"], 0.1875);
++    assert_eq!(show["sectors"][0]["a2"], 0.3125);
++    assert_eq!(show["sectors"][1]["assignment"], "KC_C");
++    assert_eq!(show["sectors"][1]["a2"], 0.75);
++    assert_eq!(show["sectors"][2]["a2"], 0.1875);
++
++    let delete = binary()
++        .args(["--json", "layer", "joystick", "sector", "delete", "--input"])
++        .arg(&assigned)
++        .args(["--id", "0", "--index", "2", "--output"])
++        .arg(&deleted)
++        .output()
++        .unwrap();
++    assert!(delete.status.success());
++    let delete: serde_json::Value = serde_json::from_slice(&delete.stdout).unwrap();
++    assert_eq!(delete["operation"], "layer-joystick-sector-delete");
++
++    let below_minimum = binary()
++        .args(["layer", "joystick", "sector", "delete", "--input"])
++        .arg(&deleted)
++        .args(["--id", "0", "--index", "1", "--output"])
++        .arg(root.join("below-minimum.json"))
++        .output()
++        .unwrap();
++    assert_eq!(below_minimum.status.code(), Some(1));
++    assert!(String::from_utf8_lossy(&below_minimum.stderr).contains("retain at least 2 sectors"));
++
++    assert_eq!(
++        worklouderctl::fsutil::sha256(&device.join("keymap.json")).unwrap(),
++        keymap_before
++    );
++    assert_eq!(
++        worklouderctl::fsutil::sha256(&device.join("smart_actions.json")).unwrap(),
++        smart_before
++    );
++    fs::remove_dir_all(root).unwrap();
++}
++
+ #[test]
+ fn codex_help_exposes_snapshot_and_candidate_workflow() {
+     let codex = binary().args(["codex", "--help"]).output().unwrap();
