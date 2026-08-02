@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-sanitized-firmware-fixture",
+  "fixtureClass": "synthetic-status",
+  "firmwareVersion": "v0.6.0",
+  "containsFirmwareBinary": false,
+  "containsDeviceIdentity": false,
+  "files": [
+    {
+      "relativePath": "status.json",
+      "size": 599,
+      "sha256": "8ee07b4d8de355ea30c5fcc4827b9d546a1867accf4ecc7c3432235c9f87185c"
+    }
+  ]
+}

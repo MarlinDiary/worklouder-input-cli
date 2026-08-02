@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "activeProfileId": 0,
+  "linkedApps": [],
+  "macros": [],
+  "macrosGroups": [],
+  "multiActions": [],
+  "multiActionsGroups": [],
+  "profiles": [
+    {
+      "id": 0,
+      "name": "Sanitized Profile",
+      "layers": [
+        {
+          "id": 0,
+          "name": "Sanitized Base",
+          "color": 15595263,
+          "layout": {
+            "keymap": [
+              [
+                "KC_A",
+                "KC_B",
+                "KC_C",
+                "KC_D"
+              ]
+            ],
+            "encoders": [],
+            "joystick": {
+              "type": "VENDOR",
+              "sectors": []
+            }
+          },
+          "lights": {
+            "backlight": {
+              "effect": "solid",
+              "brightness": 1.0,
+              "speed": 0.5,
+              "magic": 0.0,
+              "color": 15595263
+            },
+            "underglow": {
+              "effect": "off",
+              "brightness": 0.0,
+              "speed": 0.5,
+              "magic": 0.0,
+              "color": 15595263
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

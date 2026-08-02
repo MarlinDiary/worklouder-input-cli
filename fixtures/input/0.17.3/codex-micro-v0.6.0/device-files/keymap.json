@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "activeProfileId": 0,
+  "linkedApps": [],
+  "macros": [],
+  "macrosGroups": [],
+  "multiActions": [],
+  "multiActionsGroups": [],
+  "profiles": [
+    {
+      "id": 0,
+      "name": "Sanitized Profile",
+      "layers": [
+        {
+          "id": 0,
+          "name": "Sanitized Base",
+          "color": 15595263,
+          "layout": {
+            "keymap": [
+              [
+                "KC_A",
+                "KC_B",
+                "KC_C",
+                "KC_D"
+              ]
+            ],
+            "encoders": [],
+            "joystick": {
+              "type": "VENDOR",
+              "sectors": []
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

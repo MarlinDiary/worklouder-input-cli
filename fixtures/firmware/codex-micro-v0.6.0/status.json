@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-device-status",
+  "adapter": "sanitized-fixture-v1",
+  "inputAppVersion": "0.18.0",
+  "deviceKitVersion": "0.1.29",
+  "device": {
+    "devicePid": "SANITIZED_PID",
+    "deviceType": "codex_micro",
+    "layoutType": "universal",
+    "connectionType": "hid",
+    "isUsbConnection": false
+  },
+  "status": {
+    "firmwareVersion": "v0.6.0",
+    "selectedProfileIndex": 0,
+    "selectedLayerIndex": 1,
+    "batteryPercentage": 100,
+    "isCharging": false
+  },
+  "warnings": [
+    "synthetic status fixture; no device identity or live power state"
+  ]
+}

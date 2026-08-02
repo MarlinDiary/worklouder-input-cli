@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-sanitized-input-fixture",
+  "fixtureClass": "synthetic-structural",
+  "inputVersion": "0.18.0",
+  "firmwareVersion": "v0.6.0",
+  "deviceType": "codex_micro",
+  "containsUserConfiguration": false,
+  "claim": "deterministic minimum schema fixture; it is not an export of a user device",
+  "files": [
+    {
+      "relativePath": "device-files/keymap.json",
+      "size": 1116,
+      "sha256": "020aef0649e5e5168690677b4370d737e5d38338bb13d881a2cea069af0b81de"
+    },
+    {
+      "relativePath": "device-files/smart_actions.json",
+      "size": 68,
+      "sha256": "799d5a10a89a3aeb1cfd39cf5206b7c5b778b22791aed611a9268cc6e658a155"
+    },
+    {
+      "relativePath": "config-snapshot.json",
+      "size": 2376,
+      "sha256": "16292864f0d8717649e06b5e53c119af472a8a6df63d06d656eebc131c25e829"
+    }
+  ]
+}
