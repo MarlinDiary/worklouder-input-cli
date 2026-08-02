@@ -65,6 +65,7 @@
         "./scripts/verify-sanitized-fixtures.sh",
         "./scripts/verify-compatibility-matrix.sh",
         "./scripts/extract-release-notes.py CHANGELOG.md 0.1.0",
+        "./scripts/verify-github-actions-pins.py",
         "./scripts/verify-cli-assets.sh",
         "./scripts/test-release-packaging.sh",
         "./scripts/test-bridge-e2e.sh",

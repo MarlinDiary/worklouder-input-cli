@@ -37,6 +37,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Disabled Clap 3's optional terminal-color feature, removing the unmaintained
   `atty` dependency affected by `GHSA-g98v-hv3f-hcfr` while preserving the
   declared Rust 1.61 minimum version and deterministic help output.
+- Updated release actions to their Node.js 24 generations and pinned every
+  external GitHub Action to an immutable full commit with a checked version
+  annotation.
 
 ### Verified boundary
 

@@ -13,7 +13,7 @@ jobs:
     name: Rust 1.61 test
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install declared MSRV
         run: rustup toolchain install 1.61.0 --profile minimal
       - name: Vendor locked dependency graph with stable Cargo
@@ -29,7 +29,7 @@ jobs:
     env:
       CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install stable checks
         run: rustup component add rustfmt clippy
       - name: Check formatting
@@ -55,6 +55,8 @@ jobs:
           version=$(sed -nE 's/^version = "([^"]+)"$/\1/p' Cargo.toml | head -1)
           ./scripts/extract-release-notes.py CHANGELOG.md "$version" > /tmp/release-notes.md
           test -s /tmp/release-notes.md
+      - name: Verify immutable GitHub Actions pins
+        run: ./scripts/verify-github-actions-pins.py
       - name: Verify generated completions and command reference
         run: ./scripts/verify-cli-assets.sh
       - name: Verify release archive and Homebrew packaging
