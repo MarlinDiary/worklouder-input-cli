@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouder-input-appsense-model",
+  "inputVersion": "0.18.0",
+  "source": {
+    "asarPath": "/Applications/input.app/Contents/Resources/app.asar",
+    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
+    "rendererChunk": "device_config_data-BMUs-0m4.js",
+    "rendererChunkSha256": "c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e",
+    "mainChunk": "index.js",
+    "mainChunkSha256": "7c16191956acb8d0d89c50eb940dc9b757bf6966b19c56499ca2d60d8743154a"
+  },
+  "storage": {
+    "appsField": "linkedApps",
+    "layerReferenceField": "linkedAppId",
+    "appFields": ["id", "name", "process", "path"],
+    "newIdRule": "first missing non-negative integer, or maximum id plus one when there is no gap",
+    "linkRule": "append one linkedApps record and set the selected layer linkedAppId to the new id",
+    "unlinkRule": "remove the linkedApps record and remove the selected layer linkedAppId",
+    "renameRule": "editing the label changes only linkedApps name",
+    "detectionFieldsEditableInGui": false,
+    "minimumIdentity": "process or path must be a non-empty string"
+  },
+  "runtime": {
+    "authority": "Input focus service and device firmware",
+    "codexMicroFocusedAppFeature": true,
+    "pollIntervalMilliseconds": 1000,
+    "changeFields": ["appName", "process", "path"],
+    "macProcessMeaning": "bundle identifier",
+    "macPathBehavior": "focus payload omits path and the linkedApps record stores an empty path string",
+    "autoDetect": {
+      "waitForApplicationSwitchSeconds": 10,
+      "stabilizationSeconds": 5,
+      "storedNameSuffix": "-mac on macOS and -win on Windows"
+    },
+    "matchRule": "device firmware consumes the focus payload; the matching algorithm is not implemented in the Input renderer or main process"
+  }
+}
