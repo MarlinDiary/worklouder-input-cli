@@ -15,8 +15,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install declared MSRV
         run: rustup toolchain install 1.61.0 --profile minimal
+      - name: Vendor locked dependency graph with stable Cargo
+        run: |
+          mkdir -p .cargo
+          cargo vendor --locked vendor > .cargo/config.toml
       - name: Test locked dependency graph
-        run: cargo +1.61.0 test --locked
+        run: cargo +1.61.0 test --offline --locked
 
   quality:
     name: Format, test, and lint
