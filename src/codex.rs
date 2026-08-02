@@ -127,6 +127,16 @@ pub struct LightingAutoOffView {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct VoiceModeView {
+    pub schema_version: u8,
+    pub kind: &'static str,
+    pub revision: String,
+    pub value: String,
+    pub inherited: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommandKeyView {
     pub schema_version: u8,
     pub kind: &'static str,
@@ -566,6 +576,57 @@ pub fn lighting_auto_off_set(input: &Path, value: &str, output: &Path) -> Result
         before_revision,
         changed
             .then(|| format!("/settings/{key}"))
+            .into_iter()
+            .collect(),
+    )
+}
+
+pub fn voice_mode_get(input: &Path) -> Result<VoiceModeView> {
+    let snapshot = read_snapshot(input)?;
+    let field = "voiceButtonMode";
+    let value = effective_layout(&snapshot)?
+        .get(field)
+        .and_then(Value::as_str)
+        .context("effective layout.voiceButtonMode was missing")?;
+    let inherited = snapshot
+        .settings
+        .get("codex-micro-layout")
+        .and_then(Value::as_object)
+        .map_or(true, |layout| !layout.contains_key(field));
+    Ok(VoiceModeView {
+        schema_version: 1,
+        kind: "worklouderctl-codex-voice-mode",
+        revision: settings_revision(&snapshot.settings)?,
+        value: value.to_owned(),
+        inherited,
+    })
+}
+
+pub fn voice_mode_set(input: &Path, value: &str, output: &Path) -> Result<CandidateReceipt> {
+    let mut snapshot = read_snapshot(input)?;
+    let contract = load_contract()?;
+    let before_revision = settings_revision(&snapshot.settings)?;
+    let mut layout = effective_layout(&snapshot)?.clone();
+    let current = layout
+        .get("voiceButtonMode")
+        .and_then(Value::as_str)
+        .context("effective layout.voiceButtonMode was missing")?;
+    let changed = current != value;
+    if changed {
+        layout.insert("voiceButtonMode".into(), Value::String(value.to_owned()));
+        validate_layout(&Value::Object(layout.clone()), &contract.layout)?;
+        snapshot
+            .settings
+            .insert("codex-micro-layout".into(), Value::Object(layout));
+        refresh_effective_settings(&mut snapshot, &contract)?;
+    }
+    publish_candidate(
+        snapshot,
+        output,
+        "codex-voice-mode-set",
+        before_revision,
+        changed
+            .then(|| "/settings/codex-micro-layout/voiceButtonMode".into())
             .into_iter()
             .collect(),
     )
@@ -1448,6 +1509,90 @@ mod tests {
         assert!(!default_reopened
             .settings
             .contains_key("codex-micro-lighting-auto-off"));
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn voice_candidates_are_typed_atomic_and_preserve_unknown_layout_fields() {
+        let root = fixture_root();
+        fs::create_dir_all(&root).unwrap();
+        let config = root.join("config.toml");
+        let snapshot_path = root.join("snapshot.json");
+        let realtime_path = root.join("realtime.json");
+        fs::write(&config, b"[desktop]\ncodex-micro-future = \"preserved\"\n").unwrap();
+        let source_sha = fsutil::sha256(&config).unwrap();
+        let mut snapshot = export(&config, &root.join("missing.app"), &snapshot_path).unwrap();
+        let contract = load_contract().unwrap();
+        let mut layout = contract.definitions["codex-micro-layout"]
+            .default
+            .as_object()
+            .unwrap()
+            .clone();
+        layout.insert(
+            "futureVoiceMetadata".into(),
+            serde_json::json!({"preserved": true}),
+        );
+        snapshot
+            .settings
+            .insert("codex-micro-layout".into(), Value::Object(layout));
+        refresh_effective_settings(&mut snapshot, &contract).unwrap();
+        let mut bytes = serde_json::to_vec_pretty(&snapshot).unwrap();
+        bytes.push(b'\n');
+        fs::write(&snapshot_path, bytes).unwrap();
+        assert_eq!(read_snapshot(&snapshot_path).unwrap(), snapshot);
+
+        let before = voice_mode_get(&snapshot_path).unwrap();
+        assert_eq!(before.value, "push-to-talk");
+        assert!(!before.inherited);
+        let receipt = voice_mode_set(&snapshot_path, "realtime", &realtime_path).unwrap();
+        assert!(receipt.changed);
+        assert_eq!(
+            receipt.changed_paths,
+            vec!["/settings/codex-micro-layout/voiceButtonMode"]
+        );
+        let after = voice_mode_get(&realtime_path).unwrap();
+        assert_eq!(after.value, "realtime");
+        assert!(!after.inherited);
+        let reopened = read_snapshot(&realtime_path).unwrap();
+        assert_eq!(reopened.settings["codex-micro-future"], "preserved");
+        assert_eq!(
+            reopened.settings["codex-micro-layout"]["futureVoiceMetadata"]["preserved"],
+            true
+        );
+        assert_eq!(
+            reopened.settings["codex-micro-layout"]["slots"]["ACT06"]["keycapId"],
+            "FAST"
+        );
+        assert_eq!(reopened.source_sha256, source_sha);
+        assert_eq!(fsutil::sha256(&config).unwrap(), source_sha);
+
+        let invalid_path = root.join("invalid.json");
+        let invalid = voice_mode_set(&realtime_path, "telephone", &invalid_path).unwrap_err();
+        assert!(invalid
+            .to_string()
+            .contains("voiceButtonMode must be one of push-to-talk, realtime"));
+        assert!(!invalid_path.exists());
+
+        let default_config = root.join("default.toml");
+        let default_snapshot = root.join("default-snapshot.json");
+        let default_noop = root.join("default-noop.json");
+        fs::write(&default_config, b"[desktop]\n").unwrap();
+        export(
+            &default_config,
+            &root.join("missing.app"),
+            &default_snapshot,
+        )
+        .unwrap();
+        let default_view = voice_mode_get(&default_snapshot).unwrap();
+        assert_eq!(default_view.value, "push-to-talk");
+        assert!(default_view.inherited);
+        let noop = voice_mode_set(&default_snapshot, "push-to-talk", &default_noop).unwrap();
+        assert!(!noop.changed);
+        assert!(!read_snapshot(&default_noop)
+            .unwrap()
+            .settings
+            .contains_key("codex-micro-layout"));
 
         fs::remove_dir_all(root).unwrap();
     }
