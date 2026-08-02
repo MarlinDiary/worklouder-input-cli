@@ -235,4 +235,17 @@ Rollback
 --------
 Path: artifacts/verification/codex-lighting-v1/rollback.sh
 SHA-256: 14fb73c5445b021fe06d685c3470990578f42ff60d5a253a766f5d6af9f31633
-The isolated-worktree execution result is appended after the rollback test.
+Isolated worktree command:
+  artifacts/verification/codex-lighting-v1/rollback.sh WORKTREE
+Literal stdout:
+  rollback=verified
+  base=49bbc4dde392779b9639621f662f7b3d4841aea9
+Literal stderr: (empty)
+Exit status: 0
+Postcondition command:
+  git -C WORKTREE diff --quiet 49bbc4dde392779b9639621f662f7b3d4841aea9 -- . ':(exclude)artifacts/verification/codex-lighting-v1'
+Postcondition exit status: 0
+Diff-check command:
+  git -C WORKTREE diff --check
+Diff-check literal output: (empty)
+Diff-check exit status: 0
