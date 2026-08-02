@@ -152,3 +152,29 @@ Path:
 SHA-256:
   334995e19f2e390bbae372bc245c9a275e8522de860d2acbeeeceff03a0b15d9
 The isolated rollback execution is appended after the artifact commit.
+
+Isolated rollback execution
+---------------------------
+Artifact commit:
+  22a8902 test: publish Codex layout reset evidence
+Command:
+  artifacts/verification/codex-layout-reset-v1/rollback.sh \
+    /tmp/worklouderctl-codex-layout-reset-v1.cRYKaS/rollback-worktree
+Literal output:
+  rollback=verified
+  base=d51e54a361d62072e0360727db57a7f7585cc8db
+Exit status: 0
+Postcondition:
+  worktree equals base outside artifacts/verification/codex-layout-reset-v1
+Exit status: 0
+Rolled-back behavior:
+  cargo run --quiet --locked --manifest-path ROLLBACK_WORKTREE/Cargo.toml -- \
+    codex reset --help
+Literal stderr:
+  error: Found argument 'reset' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl codex [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
