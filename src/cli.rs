@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 /// Full-configuration CLI for Codex Micro, Codex, and Work Louder Input.
 #[derive(Debug, Parser)]
@@ -35,6 +36,18 @@ pub enum Command {
         #[clap(long)]
         strict: bool,
     },
+
+    /// Inspect or export Input-owned configuration.
+    Input {
+        #[clap(subcommand)]
+        command: InputCommand,
+    },
+
+    /// Validate or compare exported configuration.
+    Config {
+        #[clap(subcommand)]
+        command: ConfigCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -56,6 +69,53 @@ pub enum CapabilityCommand {
         /// Only show capabilities owned by this tier.
         #[clap(long)]
         tier: Option<u8>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum InputCommand {
+    /// Inspect cached Input configuration without changing it.
+    Inspect {
+        /// Select a cached device ID. Required when multiple devices exist.
+        #[clap(long)]
+        device: Option<String>,
+
+        /// Override Input's application support directory.
+        #[clap(long, value_parser)]
+        support_root: Option<PathBuf>,
+    },
+
+    /// Export exact Input configuration bytes into an atomic bundle.
+    Export {
+        /// Destination directory for the export bundle.
+        #[clap(long, value_parser)]
+        output: PathBuf,
+
+        /// Select a cached device ID. Required when multiple devices exist.
+        #[clap(long)]
+        device: Option<String>,
+
+        /// Override Input's application support directory.
+        #[clap(long, value_parser)]
+        support_root: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ConfigCommand {
+    /// Validate an export bundle or JSON configuration file.
+    Validate {
+        #[clap(value_parser)]
+        path: PathBuf,
+    },
+
+    /// Compare two export bundles or JSON configuration files.
+    Diff {
+        #[clap(value_parser)]
+        base: PathBuf,
+
+        #[clap(value_parser)]
+        candidate: PathBuf,
     },
 }
 

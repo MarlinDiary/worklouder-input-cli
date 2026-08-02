@@ -1,3 +1,4 @@
+use crate::fsutil;
 use serde::Serialize;
 use serde_json::Value;
 use std::env;
@@ -292,7 +293,7 @@ fn inspect_json_file(
         return None;
     }
 
-    let digest = sha256(path);
+    let digest = fsutil::sha256(path).ok();
     checks.push(Check {
         id: id.into(),
         status: if digest.is_some() {
@@ -360,22 +361,6 @@ fn process_uses_app(app_path: &Path) -> bool {
         .map_or(false, |processes| {
             processes.lines().any(|line| line.contains(needle.as_ref()))
         })
-}
-
-fn sha256(path: &Path) -> Option<String> {
-    let output = Command::new("/usr/bin/shasum")
-        .args(["-a", "256"])
-        .arg(path)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    String::from_utf8(output.stdout)
-        .ok()?
-        .split_whitespace()
-        .next()
-        .map(str::to_owned)
 }
 
 fn aggregate_status(checks: &[Check]) -> CheckStatus {

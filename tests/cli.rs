@@ -15,6 +15,23 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("tier"));
     assert!(stdout.contains("capability"));
     assert!(stdout.contains("doctor"));
+    assert!(stdout.contains("input"));
+    assert!(stdout.contains("config"));
+}
+
+#[test]
+fn input_and_config_help_expose_read_only_workflow() {
+    let input = binary().args(["input", "--help"]).output().unwrap();
+    let input_stdout = String::from_utf8(input.stdout).unwrap();
+    assert!(input.status.success());
+    assert!(input_stdout.contains("inspect"));
+    assert!(input_stdout.contains("export"));
+
+    let config = binary().args(["config", "--help"]).output().unwrap();
+    let config_stdout = String::from_utf8(config.stdout).unwrap();
+    assert!(config.status.success());
+    assert!(config_stdout.contains("validate"));
+    assert!(config_stdout.contains("diff"));
 }
 
 #[test]

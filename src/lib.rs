@@ -1,9 +1,12 @@
 pub mod cli;
+pub mod config;
 pub mod contract;
 pub mod doctor;
+pub mod fsutil;
+pub mod input;
 
 use anyhow::Result;
-use cli::{CapabilityCommand, Cli, Command, TierCommand};
+use cli::{CapabilityCommand, Cli, Command, ConfigCommand, InputCommand, TierCommand};
 use serde::Serialize;
 use std::io::Write;
 
@@ -31,8 +34,113 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Tier { command } => run_tier(command, cli.json, &mut out)?,
         Command::Capability { command } => run_capability(command, cli.json, &mut out)?,
         Command::Doctor { strict } => run_doctor(strict, cli.json, &mut out)?,
+        Command::Input { command } => run_input(command, cli.json, &mut out)?,
+        Command::Config { command } => run_config(command, cli.json, &mut out)?,
     }
 
+    Ok(())
+}
+
+fn run_input(command: InputCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        InputCommand::Inspect {
+            device,
+            support_root,
+        } => {
+            let root = input::support_root(support_root);
+            let inspection = input::inspect(&root, device.as_deref())?;
+            if json {
+                write_json(&mut out, &inspection)?;
+            } else {
+                writeln!(
+                    out,
+                    "Input device {} at {}",
+                    inspection.device_id,
+                    inspection.support_root.display()
+                )?;
+                for file in inspection.files {
+                    writeln!(
+                        out,
+                        "{}\t{} bytes\tsha256 {}\tkeys={}",
+                        file.relative_path,
+                        file.size,
+                        file.sha256,
+                        file.top_level_keys.join(",")
+                    )?;
+                }
+            }
+        }
+        InputCommand::Export {
+            output,
+            device,
+            support_root,
+        } => {
+            let root = input::support_root(support_root);
+            let result = input::export(&root, device.as_deref(), &output)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "Exported device {} to {} ({} files)",
+                    result.manifest.device_id,
+                    result.output.display(),
+                    result.manifest.files.len()
+                )?;
+                for file in result.manifest.files {
+                    writeln!(
+                        out,
+                        "{}\t{} bytes\tsha256 {}",
+                        file.relative_path, file.size, file.sha256
+                    )?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn run_config(command: ConfigCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        ConfigCommand::Validate { path } => {
+            let report = config::validate(&path)?;
+            if json {
+                write_json(&mut out, &report)?;
+            } else {
+                writeln!(
+                    out,
+                    "validate: {} ({})",
+                    if report.valid { "PASS" } else { "FAIL" },
+                    report.kind
+                )?;
+                for check in &report.checks {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}",
+                        if check.valid { "PASS" } else { "FAIL" },
+                        check.id,
+                        check.summary
+                    )?;
+                }
+            }
+            if !report.valid {
+                anyhow::bail!("configuration validation failed for {}", path.display());
+            }
+        }
+        ConfigCommand::Diff { base, candidate } => {
+            let report = config::diff(&base, &candidate)?;
+            if json {
+                write_json(&mut out, &report)?;
+            } else if report.identical {
+                writeln!(out, "No configuration differences")?;
+            } else {
+                writeln!(out, "{} configuration difference(s)", report.changes.len())?;
+                for change in report.changes {
+                    writeln!(out, "{:?}\t{}", change.change, change.path)?;
+                }
+            }
+        }
+    }
     Ok(())
 }
 
