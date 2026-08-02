@@ -117,6 +117,23 @@ const files = new Map([
                 id: 1,
                 name: "Tools",
                 color: 0x445566,
+                linkedAppId: 5,
+                lights: {
+                  backlight: {
+                    effect: "solid",
+                    brightness: 1,
+                    speed: 0.5,
+                    magic: 1,
+                    color: 0xffffff,
+                  },
+                  underglow: {
+                    effect: "gradient",
+                    brightness: 0.8,
+                    speed: 0.4,
+                    magic: 0.3,
+                    color: 0xedf6ff,
+                  },
+                },
                 layout: {
                   keymap: [["KI_LM2", "KC_NONE"]],
                   encoders: [],
@@ -128,7 +145,18 @@ const files = new Map([
           {
             id: 7,
             name: "Fixture Alternate",
-            layers: [{ id: 9, name: "Other", color: 0x778899, layout: {} }],
+            layers: [
+              {
+                id: 9,
+                name: "Other",
+                color: 0x778899,
+                layout: {
+                  keymap: [["KV_OAI_AG00"]],
+                  encoders: [],
+                  joystick: { type: "VENDOR", sectors: [] },
+                },
+              },
+            ],
           },
         ],
       }),

@@ -30,7 +30,15 @@ multi_group_updated_snapshot=$root/config-multi-group-updated.json
 multi_group_deleted_snapshot=$root/config-multi-group-deleted.json
 renamed_profile_snapshot=$root/config-profile-renamed.json
 selected_snapshot=$root/config-selected.json
+profile_created_snapshot=$root/config-profile-created.json
+profile_duplicated_snapshot=$root/config-profile-duplicated.json
+profile_deleted_snapshot=$root/config-profile-deleted.json
 layer_snapshot=$root/config-layer.json
+layer_created_snapshot=$root/config-layer-created.json
+layer_duplicated_snapshot=$root/config-layer-duplicated.json
+layer_deleted_snapshot=$root/config-layer-deleted.json
+layer_moved_snapshot=$root/config-layer-moved.json
+layer_lighting_snapshot=$root/config-layer-lighting.json
 server_log=$root/server.log
 server_pid=
 
@@ -92,6 +100,11 @@ revision=$(python3 -c \
   >"$root/profile-list.json"
 "$bin" --json profile show --input "$config_snapshot" --id 0 \
   >"$root/profile-show.json"
+"$bin" --json profile create --input "$config_snapshot" --name 'CLI Profile' \
+  --output "$profile_created_snapshot" >"$root/profile-create.json"
+"$bin" --json profile duplicate --input "$config_snapshot" --id 0 \
+  --name 'Fixture Copy' --output "$profile_duplicated_snapshot" \
+  >"$root/profile-duplicate.json"
 "$bin" --json layer list --input "$config_snapshot" \
   >"$root/layer-list.json"
 "$bin" --json layer show --input "$config_snapshot" --id 0 \
@@ -121,10 +134,28 @@ revision=$(python3 -c \
   >"$root/profile-rename.json"
 "$bin" --json profile select --input "$config_snapshot" --id 7 \
   --output "$selected_snapshot" >"$root/profile-select.json"
+"$bin" --json profile delete --input "$selected_snapshot" --id 7 \
+  --output "$profile_deleted_snapshot" >"$root/profile-delete.json"
+"$bin" --json layer create --input "$config_snapshot" --profile 0 \
+  --name 'CLI Layer' --output "$layer_created_snapshot" \
+  >"$root/layer-create.json"
+"$bin" --json layer duplicate --input "$config_snapshot" --profile 0 --id 1 \
+  --name 'Tools Copy' --output "$layer_duplicated_snapshot" \
+  >"$root/layer-duplicate.json"
+"$bin" --json layer delete --input "$config_snapshot" --profile 0 --id 1 \
+  --output "$layer_deleted_snapshot" >"$root/layer-delete.json"
+"$bin" --json layer move --input "$config_snapshot" --profile 0 --id 1 --to 0 \
+  --output "$layer_moved_snapshot" >"$root/layer-move.json"
 "$bin" --json layer rename --input "$config_snapshot" --profile 0 --id 1 \
   --name Build --output "$layer_snapshot" >"$root/layer-rename.json"
 "$bin" --json layer color --input "$config_snapshot" --profile 0 --id 1 \
   --color '#A1B2C3' --output "$color_snapshot" >"$root/layer-color.json"
+"$bin" --json layer lighting show --input "$config_snapshot" --profile 0 --id 1 \
+  >"$root/layer-lighting-show.json"
+"$bin" --json layer lighting set --input "$config_snapshot" --profile 0 --id 1 \
+  --zone backlight --effect breath --brightness 0.25 --speed 0.75 --magic 0.5 \
+  --color '#102030' --apply-to-all --output "$layer_lighting_snapshot" \
+  >"$root/layer-lighting-set.json"
 "$bin" --json control set --input "$config_snapshot" --profile 0 --layer 0 \
   --control key:0:0 --assignment KA_A4 --output "$control_snapshot" \
   >"$root/control-set.json"
@@ -243,7 +274,15 @@ bridge_validation = json.loads(
 candidate = json.loads((root / "config-candidate.json").read_text())
 renamed_profile = json.loads((root / "config-profile-renamed.json").read_text())
 selected = json.loads((root / "config-selected.json").read_text())
+profile_created_candidate = json.loads((root / "config-profile-created.json").read_text())
+profile_duplicated_candidate = json.loads((root / "config-profile-duplicated.json").read_text())
+profile_deleted_candidate = json.loads((root / "config-profile-deleted.json").read_text())
 layer_candidate = json.loads((root / "config-layer.json").read_text())
+layer_created_candidate = json.loads((root / "config-layer-created.json").read_text())
+layer_duplicated_candidate = json.loads((root / "config-layer-duplicated.json").read_text())
+layer_deleted_candidate = json.loads((root / "config-layer-deleted.json").read_text())
+layer_moved_candidate = json.loads((root / "config-layer-moved.json").read_text())
+layer_lighting_candidate = json.loads((root / "config-layer-lighting.json").read_text())
 profile_list = json.loads((root / "profile-list.json").read_text())
 profile_show = json.loads((root / "profile-show.json").read_text())
 layer_list = json.loads((root / "layer-list.json").read_text())
@@ -260,8 +299,17 @@ multi_group_list = json.loads((root / "multi-group-list.json").read_text())
 multi_group_show = json.loads((root / "multi-group-show.json").read_text())
 profile_rename = json.loads((root / "profile-rename.json").read_text())
 profile_select = json.loads((root / "profile-select.json").read_text())
+profile_create = json.loads((root / "profile-create.json").read_text())
+profile_duplicate = json.loads((root / "profile-duplicate.json").read_text())
+profile_delete = json.loads((root / "profile-delete.json").read_text())
 layer_rename = json.loads((root / "layer-rename.json").read_text())
 layer_color = json.loads((root / "layer-color.json").read_text())
+layer_create = json.loads((root / "layer-create.json").read_text())
+layer_duplicate = json.loads((root / "layer-duplicate.json").read_text())
+layer_delete = json.loads((root / "layer-delete.json").read_text())
+layer_move = json.loads((root / "layer-move.json").read_text())
+layer_lighting_show = json.loads((root / "layer-lighting-show.json").read_text())
+layer_lighting_set = json.loads((root / "layer-lighting-set.json").read_text())
 control_set = json.loads((root / "control-set.json").read_text())
 action_create = json.loads((root / "action-create.json").read_text())
 action_rename = json.loads((root / "action-rename.json").read_text())
@@ -354,12 +402,14 @@ assert bridge_validation["valid"] is True
 assert bridge_validation["revision"] == snapshot["revision"]
 assert bridge_validation["liveRevision"] == snapshot["revision"]
 assert profile_list["activeProfileId"] == 0
+assert profile_list["activeProfileIndex"] == 0
 assert [(item["id"], item["name"], item["active"]) for item in profile_list["profiles"]] == [
     (0, "Fixture Default", True),
     (7, "Fixture Alternate", False),
 ]
 assert profile_show["profile"]["id"] == 0
 assert profile_show["profile"]["active"] is True
+assert profile_show["activeProfileIndex"] == 0
 assert len(profile_show["layers"]) == 2
 assert layer_list["profileId"] == 0
 assert [(item["id"], item["name"]) for item in layer_list["layers"]] == [
@@ -417,8 +467,41 @@ assert multi_group_show["members"][0]["id"] == 1
 assert profile_rename["changed"] is True
 assert profile_rename["changedPaths"] == ["/keymap.json/profiles/1/name"]
 assert profile_select["changedPaths"] == ["/keymap.json/activeProfileId"]
+assert profile_create["resourceId"] == 8
+assert profile_create["changedPaths"] == ["/keymap.json/profiles/2"]
+assert profile_duplicate["resourceId"] == 8
+assert profile_duplicate["changedPaths"] == ["/keymap.json/profiles/2"]
+assert profile_delete["changedPaths"] == [
+    "/keymap.json/profiles/1",
+    "/keymap.json/activeProfileId",
+]
 assert layer_rename["changedPaths"] == ["/keymap.json/profiles/0/layers/1/name"]
 assert layer_color["changedPaths"] == ["/keymap.json/profiles/0/layers/1/color"]
+assert layer_create["resourceId"] == 2
+assert layer_create["changedPaths"] == ["/keymap.json/profiles/0/layers/2"]
+assert layer_duplicate["resourceId"] == 2
+assert layer_duplicate["changedPaths"] == ["/keymap.json/profiles/0/layers/2"]
+assert layer_delete["changedPaths"] == ["/keymap.json/profiles/0/layers/1"]
+assert layer_move["changedPaths"] == ["/keymap.json/profiles/0/layers"]
+assert layer_lighting_show == {
+    "schemaVersion": 1,
+    "kind": "worklouderctl-layer-lighting",
+    "revision": snapshot["revision"],
+    "profileId": 0,
+    "layerId": 1,
+    "backlight": {
+        "effect": "solid", "brightness": 1.0, "speed": 0.5,
+        "magic": 1.0, "color": 0xFFFFFF, "colorHex": "#FFFFFF",
+    },
+    "underglow": {
+        "effect": "gradient", "brightness": 0.8, "speed": 0.4,
+        "magic": 0.3, "color": 0xEDF6FF, "colorHex": "#EDF6FF",
+    },
+}
+assert layer_lighting_set["changedPaths"] == [
+    "/keymap.json/profiles/0/layers/0/lights/backlight",
+    "/keymap.json/profiles/0/layers/1/lights/backlight",
+]
 assert control_set["changedPaths"] == [
     "/keymap.json/profiles/0/layers/0/layout/keymap/0/0",
     "/keymap.json/profiles/0/macrosUsed",
@@ -492,7 +575,10 @@ def verify_snapshot(document):
 
 for document in [
     candidate, color_candidate, control_candidate, renamed_profile, selected,
-    layer_candidate, action_created_candidate, action_renamed_candidate,
+    profile_created_candidate, profile_duplicated_candidate, profile_deleted_candidate,
+    layer_candidate, layer_created_candidate, layer_duplicated_candidate,
+    layer_deleted_candidate, layer_moved_candidate, layer_lighting_candidate,
+    action_created_candidate, action_renamed_candidate,
     action_event_added_candidate, action_event_set_candidate,
     action_event_deleted_candidate, action_event_moved_candidate,
     action_deleted_candidate, multi_created_candidate, multi_deleted_candidate,
@@ -527,7 +613,15 @@ multi_group_updated_keymap = json.loads(payload(multi_group_updated_candidate, "
 multi_group_deleted_keymap = json.loads(payload(multi_group_deleted_candidate, "keymap.json"))
 renamed_profile_keymap = json.loads(payload(renamed_profile, "keymap.json"))
 selected_keymap = json.loads(payload(selected, "keymap.json"))
+profile_created_keymap = json.loads(payload(profile_created_candidate, "keymap.json"))
+profile_duplicated_keymap = json.loads(payload(profile_duplicated_candidate, "keymap.json"))
+profile_deleted_keymap = json.loads(payload(profile_deleted_candidate, "keymap.json"))
 layer_keymap = json.loads(payload(layer_candidate, "keymap.json"))
+layer_created_keymap = json.loads(payload(layer_created_candidate, "keymap.json"))
+layer_duplicated_keymap = json.loads(payload(layer_duplicated_candidate, "keymap.json"))
+layer_deleted_keymap = json.loads(payload(layer_deleted_candidate, "keymap.json"))
+layer_moved_keymap = json.loads(payload(layer_moved_candidate, "keymap.json"))
+layer_lighting_keymap = json.loads(payload(layer_lighting_candidate, "keymap.json"))
 assert renamed_profile_keymap["profiles"][1]["name"] == "Research"
 assert candidate_keymap["fixtureExtension"] == {"preserved": True}
 assert action_event_set_keymap["macros"][0]["actions"][0] == {"act": 2, "delay": 200, "kc": "KC_X"}
@@ -606,8 +700,31 @@ assert multi_group_deleted_keymap["multiActionsGroups"] == [{
     "id": 4, "name": "Shared", "tags": ["fixture"],
     "color": "#ABCDEF", "actionIds": [1],
 }]
-assert selected_keymap["activeProfileId"] == 7
+assert selected_keymap["activeProfileId"] == 1
+assert profile_created_keymap["profiles"][2]["id"] == 8
+assert profile_created_keymap["profiles"][2]["name"] == "CLI Profile"
+assert profile_created_keymap["profiles"][2]["layers"][0]["id"] == 0
+assert profile_created_keymap["profiles"][2]["layers"][0]["layout"]["keymap"] == [["KV_OAI_AG00"]]
+assert "lights" not in profile_created_keymap["profiles"][2]["layers"][0]
+assert profile_duplicated_keymap["profiles"][2]["id"] == 8
+assert profile_duplicated_keymap["profiles"][2]["name"] == "Fixture Copy"
+assert profile_duplicated_keymap["profiles"][2]["layers"] == profile_duplicated_keymap["profiles"][0]["layers"]
+assert [item["id"] for item in profile_deleted_keymap["profiles"]] == [0]
+assert profile_deleted_keymap["activeProfileId"] == 0
 assert layer_keymap["profiles"][0]["layers"][1]["name"] == "Build"
+assert layer_created_keymap["profiles"][0]["layers"][2]["id"] == 2
+assert layer_created_keymap["profiles"][0]["layers"][2]["name"] == "CLI Layer"
+assert layer_created_keymap["profiles"][0]["layers"][2]["layout"]["keymap"][0] == ["KC_NONE", "KC_NONE"]
+assert layer_created_keymap["profiles"][0]["layers"][2]["lights"] == layer_created_keymap["profiles"][0]["layers"][1]["lights"]
+assert layer_duplicated_keymap["profiles"][0]["layers"][2]["name"] == "Tools Copy"
+assert "linkedAppId" not in layer_duplicated_keymap["profiles"][0]["layers"][2]
+assert len(layer_deleted_keymap["profiles"][0]["layers"]) == 1
+assert [item["id"] for item in layer_moved_keymap["profiles"][0]["layers"]] == [1, 0]
+for layer in layer_lighting_keymap["profiles"][0]["layers"]:
+    assert layer["lights"]["backlight"] == {
+        "effect": "breath", "brightness": 0.25, "speed": 0.75,
+        "magic": 0.5, "color": 0x102030,
+    }
 assert candidate["revision"] != snapshot["revision"]
 assert pre_apply["revision"] == snapshot["revision"]
 assert apply["operation"] == "apply"
@@ -641,8 +758,11 @@ print("semantic_layer_list=verified")
 print("semantic_layer_show=verified")
 print("semantic_profile_rename=verified")
 print("semantic_profile_select=verified")
+print("semantic_profile_lifecycle=verified")
 print("semantic_layer_rename=verified")
 print("semantic_layer_color=verified")
+print("semantic_layer_lifecycle=verified")
+print("semantic_layer_lighting=verified")
 print("semantic_control_list=verified")
 print("semantic_control_show=verified")
 print("semantic_control_set=verified")
