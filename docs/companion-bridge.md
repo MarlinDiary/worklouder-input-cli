@@ -62,11 +62,27 @@ matches their stable PID, device type, and layout. This permits verified
 restore after a provider handoff without weakening the physical-model gate.
 Requesting the already-active provider is an idempotent no-op; it does not
 restart HID discovery or tear down a healthy subscription set.
+All status and transition commands share an atomic per-user provider lock.
+Concurrent invocations wait instead of attaching two inspectors or changing
+the provider lease at the same time; a lock left by a dead process is reclaimed.
 If one application is stopped, release the running provider before starting
 the other application so their automatic startup paths never enumerate the
 same HID device concurrently. The `status-*`, `acquire-*`, and `release-*`
 forms address one provider only, so recovery does not depend on the other
 application being healthy.
+Input `0.18.0` must reacquire from a fresh Input process: restarting discovery
+after `SearchDevicesService.dispose()` reuses a disposed node-hid worker and
+can trap inside `IOHIDManager`. The coordinated `input` handoff therefore
+releases Codex first, starts a fresh hidden Input provider process, installs
+the verified bridge, and waits for one connected device. It never reuses the
+disposed worker in the previous process.
+
+Provider release also installs a reversible runtime lease over the released
+service's `start()` entrypoint. This blocks app-internal hot-plug callbacks from
+silently reacquiring HID while the other provider owns it; acquisition restores
+the exact original method before starting. Input acquisition uses a fresh,
+user-scoped `launchctl` job so its lifecycle survives an agent shell, then
+verifies the process PID and overlay revision before accepting a connection.
 
 ## Input 0.18.0 evidence
 

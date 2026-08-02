@@ -2,7 +2,7 @@
 
 This record freezes the first end-to-end validation against the installed
 Codex `26.727.51351`, Work Louder Input `0.18.0`, device kit `0.1.28`, and a
-USB Codex Micro running firmware `v0.6.0`. Both applications stayed running;
+USB Codex Micro initially running firmware `v0.6.0`. Both applications stayed running;
 the installers did not activate, restart, or navigate either GUI.
 
 ## Integration entrypoints
@@ -25,12 +25,13 @@ user-only socket/token modes.
 `provider-handoff.mjs` is required because Codex and Input cannot
 simultaneously own the vendor HID session. It stops discovery and disconnects
 the releasing provider before acquiring the other provider. A failed
-acquisition automatically reacquires the provider that was released. Input's
-discovery cache is cleared during release so reacquisition emits a fresh
-device event without restarting Input. A request for the current owner returns
-an idempotent result without re-enumerating HID, preventing redundant native
-discovery cycles. If the Input 0.18.0 node-hid worker exits during acquisition,
-the transaction waits for and releases any relaunched Input process before it
+acquisition automatically reacquires the provider that was released. A request
+for the current owner returns an idempotent result without re-enumerating HID,
+preventing redundant native discovery cycles. Input `0.18.0` cannot safely
+restart discovery after disposing its node-hid worker on the tested macOS 27
+beta: that path trapped inside `IOHIDManager`. Input acquisition now starts a
+fresh hidden Input process, installs the version- and hash-gated bridge, and
+waits for one connected device. A failed acquisition quiesces Input before it
 reacquires Codex, so an error does not leave two active device owners.
 
 ## Baseline, mutation, readback, restore
@@ -84,8 +85,11 @@ Observed results:
 Input `0.18.0` did not inject the optional preset, reset, firmware-update, or
 recovery authorities. Each command exited `3` with code
 `provider-unavailable`, named its missing negotiated capability, created no
-output artifact, and performed no mutation. Firmware flashing was therefore
-not run.
+output artifact, and performed no mutation. The CLI firmware command therefore
+did not run a flash. A later official Input startup independently applied its
+selected firmware update: Input's log records flash progress through `100%`,
+`Flash ended`, reset completion, and `sys.version` readback `v0.6.1`. That
+startup behavior is separate from the CLI capability result above.
 
 ## Provider handoff verification
 
@@ -93,7 +97,7 @@ Both directions were exercised:
 
 1. Codex released all comm/API/HID/joystick subscriptions; Input restarted
    discovery and connected one device; `worklouderctl device status` returned
-   firmware `v0.6.0`.
+   firmware `v0.6.0` during the first handoff pass.
 2. Input stopped polling, cleared discovery state, and disconnected its device;
    Codex reacquired USB with comm/API plus HID and joystick subscriptions.
 
@@ -101,7 +105,8 @@ Final state is Codex-owned: lifecycle `started`, device `connected` over USB,
 comm/API present, and both input subscriptions present. After the stress pass,
 Input was stopped and its complete official Developer ID bundle was restored
 and signature-verified. `provider-handoff.mjs input` performs the coordinated
-release/start/bridge path when Input authority is next required.
+release/fresh-process/bridge path when Input authority is next required. The
+device firmware at final readback is `v0.6.1` following Input's startup update.
 
 ## Regression and packaging boundary
 
@@ -113,3 +118,25 @@ receipts, pre-apply/pre-restore backups, post-state snapshots, capability-gate
 errors, provider handoff records, and independent checksum results. It is kept
 outside the repository because device configuration and focused-application
 state are user data.
+
+## Subsequent ownership hardening
+
+Repeated handoffs after the first successful matrix exposed two host-runtime
+boundaries on this macOS 27 beta machine: Input 0.18.0 can trap in its native
+`node-hid` worker during re-enumeration, and either app can invoke its own
+`start()` again after a successful release. The follow-up implementation:
+
+- binds every inspector session to the exact PID and executable and waits for
+  the loopback port to be released;
+- retains a local event-loop handle and deadline for every CDP command;
+- runs fresh Input providers under a user-scoped `launchctl` job;
+- installs a reversible `start()` suppression lease on the non-owner; and
+- quiesces a relaunched Input process before reacquiring Codex after a failed
+  Input acquisition.
+
+The final recovery stopped Input, restored the official Input 0.18.0 app bundle
+from its verified release archive, passed strict deep code-signature validation,
+and left Codex as the only owner: USB connected with comm/API, HID, and joystick
+subscriptions present. These stability observations do not change the earlier
+successful apply/readback/restore evidence or imply that the CLI flashed
+firmware.

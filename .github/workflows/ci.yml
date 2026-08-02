@@ -40,6 +40,8 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       - name: Test companion bridge reference servers
         run: npm test --prefix companion
+      - name: Test live bridge control helpers
+        run: node --test scripts/live-bridge-cdp.test.mjs scripts/provider-lock.test.mjs scripts/provider-state.test.mjs
       - name: Verify deterministic Companion integration package
         run: ./scripts/test-companion-package.py
       - name: Verify deterministic sanitized fixtures

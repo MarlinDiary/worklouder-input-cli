@@ -11,6 +11,12 @@ import {
   unwrapRemoteResult,
   waitForInspectorPortRelease,
 } from "./live-bridge-cdp.mjs";
+import {
+  codexOwnsDevice,
+  currentOwnerResult,
+  inputOwnsDevice,
+} from "./provider-state.mjs";
+import { acquireProviderLock } from "./provider-lock.mjs";
 
 const INPUT_EXECUTABLE = "/Applications/input.app/Contents/MacOS/input";
 const CODEX_EXECUTABLE = "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT";
@@ -20,6 +26,7 @@ const INPUT_INSTALLER = fileURLToPath(
   new URL("./install-input-live-bridge.mjs", import.meta.url),
 );
 const INPUT_LAUNCH_LABEL = "dev.worklouderctl.input-provider";
+const PROVIDER_LOCK = `${process.env.HOME}/Library/Application Support/worklouderctl/provider-handoff.lock`;
 const PORT = 9229;
 const INPUT_STARTUP_SETTLE_MS = 2_500;
 const mode = process.argv[2] ?? "status";
@@ -47,7 +54,18 @@ if (!modes.includes(mode)) {
   );
 }
 
-let result;
+const providerLock = await acquireProviderLock({
+  lockPath: PROVIDER_LOCK,
+  mode,
+});
+try {
+  console.log(JSON.stringify(await runProviderHandoff(), null, 2));
+} finally {
+  await providerLock.release();
+}
+
+async function runProviderHandoff() {
+  let result;
 if (mode === "status-input") {
   result = await inputStatus();
 } else if (mode === "status-codex") {
@@ -135,7 +153,8 @@ if (mode === "status-input") {
   }
 }
 
-console.log(JSON.stringify(result, null, 2));
+  return result;
+}
 
 async function inputAction(action) {
   return withInspector(INPUT_EXECUTABLE, async (client) => {
@@ -389,46 +408,4 @@ function execFilePromise(file, args) {
       }
     });
   });
-}
-
-function inputOwnsDevice(state) {
-  const input = state.input.state;
-  const codex = state.codex.state;
-  return (
-    input.discoveryStarted === true &&
-    input.startSuppressed === false &&
-    input.connectedCount > 0 &&
-    codex.lifecycleState === "stopped" &&
-    codex.startSuppressed === true &&
-    codex.hasComm === false &&
-    codex.hasApi === false
-  );
-}
-
-function codexOwnsDevice(state) {
-  const input = state.input.state;
-  const codex = state.codex.state;
-  return (
-    input.discoveryStarted === false &&
-    input.connectedCount === 0 &&
-    codex.lifecycleState === "started" &&
-    codex.startSuppressed === false &&
-    codex.deviceState.status === "connected" &&
-    codex.hasComm === true &&
-    codex.hasApi === true &&
-    codex.hasHidSubscription === true &&
-    codex.hasJoystickSubscription === true
-  );
-}
-
-function currentOwnerResult(provider, before) {
-  const source = provider === "input" ? before.input : before.codex;
-  return {
-    action: "handoff",
-    provider,
-    idempotent: true,
-    before,
-    released: null,
-    acquired: { ...source, action: "acquire", idempotent: true },
-  };
 }
