@@ -74,6 +74,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("smart-action"));
     assert!(stdout.contains("cheat-sheet"));
     assert!(stdout.contains("preset"));
+    assert!(stdout.contains("radial"));
     assert!(stdout.contains("completion"));
 }
 
@@ -230,6 +231,11 @@ fn semantic_help_exposes_offline_candidate_workflow() {
     for command in ["list", "show", "preview", "install"] {
         assert!(preset_stdout.contains(command));
     }
+
+    let radial = binary().args(["radial", "--help"]).output().unwrap();
+    let radial_stdout = String::from_utf8(radial.stdout).unwrap();
+    assert!(radial.status.success());
+    assert!(radial_stdout.contains("show"));
 }
 
 #[test]

@@ -228,6 +228,8 @@ preset_candidate_revision=$(python3 -c \
   >"$root/control-list.json"
 "$bin" --json control show --input "$config_snapshot" --layer 0 \
   --control encoder:0:press >"$root/control-show.json"
+"$bin" --json radial show --input "$config_snapshot" --profile 0 --layer 0 \
+  >"$root/radial-show.json"
 "$bin" --json action list --input "$config_snapshot" \
   >"$root/action-list.json"
 "$bin" --json action show --input "$config_snapshot" --id 3 \
@@ -478,6 +480,7 @@ appsense_list = json.loads((root / "appsense-list.json").read_text())
 appsense_show = json.loads((root / "appsense-show.json").read_text())
 control_list = json.loads((root / "control-list.json").read_text())
 control_show = json.loads((root / "control-show.json").read_text())
+radial_show = json.loads((root / "radial-show.json").read_text())
 action_list = json.loads((root / "action-list.json").read_text())
 action_show = json.loads((root / "action-show.json").read_text())
 action_group_list = json.loads((root / "action-group-list.json").read_text())
@@ -688,6 +691,12 @@ assert control_show["control"] == {
     "assignment": "KC_MUTE",
     "assignmentKind": "basic",
 }
+assert radial_show["profileName"] == "Fixture Default"
+assert radial_show["layerName"] == "Base"
+assert [(item["assignment"], item["label"]) for item in radial_show["sectors"]] == [
+    ("KA_A3", "Fixture Action"),
+    ("KA_M1", "Fixture Multi"),
+]
 assert [item["id"] for item in action_list["actions"]] == [3, 4, 10]
 assert action_list["actions"][0]["referenceCount"] == 5
 assert action_show["action"]["id"] == 3
@@ -1194,6 +1203,7 @@ print("semantic_control_list=verified")
 print("semantic_control_show=verified")
 print("semantic_control_set=verified")
 print("semantic_control_usage_sync=verified")
+print("semantic_radial_menu_resolution=verified")
 print("semantic_action_list_show=verified")
 print("semantic_action_create_rename=verified")
 print("semantic_action_event_crud=verified")
