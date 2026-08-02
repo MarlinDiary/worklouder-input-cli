@@ -38,3 +38,14 @@ export {
   settingsRevision,
 } from "./codex-main-adapter.mjs";
 export { installCodexCompanionBridge } from "./codex-main-integration.mjs";
+export {
+  SUPPORTED_CODEX_VERSION,
+  createCodexNativeRequest,
+  installCodexLiveOverlay,
+} from "./codex-live-overlay.mjs";
+export {
+  SUPPORTED_DEVICE_KIT_VERSION,
+  SUPPORTED_INPUT_VERSION,
+  createInputConfigurationWriter,
+  installInputLiveOverlay,
+} from "./input-live-overlay.mjs";
