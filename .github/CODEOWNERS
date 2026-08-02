@@ -1,0 +1,3 @@
+# Route all changes to the project maintainer. Branch protection does not
+# require a code-owner approval, so emergency maintenance remains possible.
+* @MarlinDiary

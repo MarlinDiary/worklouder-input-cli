@@ -1,0 +1,87 @@
+name: Bug report
+description: Report a reproducible WorkLouderCTL defect without private configuration data.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Remove tokens, device identifiers, application paths,
+        commands, Smart Action text, and unsanitized backups before submitting.
+
+  - type: input
+    id: version
+    attributes:
+      label: WorkLouderCTL version or commit
+      placeholder: v0.1.0 or 91a5eaf
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include macOS, Codex, Input, device, firmware, and USB/Bluetooth versions.
+      placeholder: macOS VERSION; Codex VERSION; Input VERSION; Codex Micro firmware VERSION; USB
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Configuration tier
+      options:
+        - Tier 1 - Codex
+        - Tier 2 - Input device configuration
+        - Tier 3 - Input host configuration
+        - Tier 4 - Input operations
+        - Cross-authority transaction
+        - Packaging or documentation
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the observed and expected behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include exact commands, sanitized inputs, literal outputs, and exit statuses.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: baseline
+    attributes:
+      label: Baseline and rollback result
+      description: State the pre-operation behavior, whether a write occurred, and whether exact restore succeeded.
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Sanitized doctor output
+      description: Paste `worklouderctl --json doctor` output after removing local paths and identifiers.
+      render: json
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I reproduced this against the version or commit named above.
+          required: true
+        - label: I removed credentials, private commands, identifiers, local paths, and unsanitized backups.
+          required: true
+        - label: I searched existing issues for the same behavior.
+          required: true

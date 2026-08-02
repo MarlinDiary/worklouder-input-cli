@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/MarlinDiary/worklouder-input-cli/security/advisories/new
+    about: Report sensitive security issues privately instead of opening a public issue.
+  - name: Documentation and support
+    url: https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/faq.md
+    about: Check the FAQ, compatibility boundary, and command documentation first.

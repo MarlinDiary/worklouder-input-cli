@@ -1,0 +1,52 @@
+name: Feature request
+description: Propose a configuration surface, provider capability, or workflow improvement.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Describe the configuration task that is missing or unnecessarily difficult.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: authority
+    attributes:
+      label: Expected authority
+      options:
+        - Codex - Tier 1
+        - Input device configuration - Tier 2
+        - Input host configuration - Tier 3
+        - Input operations - Tier 4
+        - Cross-authority transaction
+        - Packaging or documentation
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed CLI and JSON contract
+      description: Suggest commands, inputs, outputs, verification, and rollback behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Compatibility evidence
+      description: Name observed app, firmware, device, transport, and OS versions without private data.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: This request keeps drivers, transport, firmware programming, and host runtime behavior delegated to Codex/Input.
+          required: true
+        - label: I searched existing issues and the configuration parity matrix.
+          required: true
