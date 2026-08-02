@@ -1,4 +1,4 @@
-use crate::{device, fsutil};
+use crate::{bridge, device, fsutil};
 use anyhow::{bail, ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -446,6 +446,62 @@ pub struct CheatSheetBindings {
 pub struct CheatSheetBinding {
     pub behavior: String,
     pub control: ControlEntry,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetList {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub presets: Vec<PresetEntry>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetEntry {
+    pub id: u64,
+    pub name: String,
+    pub layer_name: String,
+    pub author: String,
+    pub description: String,
+    pub tags: Vec<String>,
+    pub operating_systems: Vec<u64>,
+    pub keyboard_layout_types: Vec<String>,
+    pub devices: Vec<String>,
+    pub action_count: usize,
+    pub action_group_count: usize,
+    pub multi_action_count: usize,
+    pub multi_action_group_count: usize,
+    pub has_icon: bool,
+    pub has_preview: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetShow {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub preset: PresetEntry,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetPreviewReceipt {
+    pub output: PathBuf,
+    pub preset_id: u64,
+    pub media_type: String,
+    pub size: usize,
+    pub sha256: String,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PresetFilter<'a> {
+    pub device: Option<&'a str>,
+    pub layout: Option<&'a str>,
+    pub operating_system: Option<u64>,
+    pub search: Option<&'a str>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1147,6 +1203,91 @@ pub fn cheat_sheet_bind(
         output,
     )?;
     receipt.operation = "cheat-sheet-bind";
+    Ok(receipt)
+}
+
+pub fn preset_list(catalog: &Path, filter: PresetFilter<'_>) -> Result<PresetList> {
+    let snapshot = bridge::read_preset_catalog_snapshot(catalog)?;
+    let mut presets = Vec::new();
+    for preset in &snapshot.presets {
+        let entry = preset_entry(preset)?;
+        if preset_matches_filter(preset, &filter)? {
+            presets.push(entry);
+        }
+    }
+    Ok(PresetList {
+        schema_version: 1,
+        kind: "worklouderctl-preset-list",
+        revision: snapshot.revision,
+        presets,
+    })
+}
+
+pub fn preset_show(catalog: &Path, id: u64) -> Result<PresetShow> {
+    let snapshot = bridge::read_preset_catalog_snapshot(catalog)?;
+    let preset = preset_by_id(&snapshot.presets, id)?;
+    Ok(PresetShow {
+        schema_version: 1,
+        kind: "worklouderctl-preset",
+        revision: snapshot.revision,
+        preset: preset_entry(preset)?,
+    })
+}
+
+pub fn preset_preview(catalog: &Path, id: u64, output: &Path) -> Result<PresetPreviewReceipt> {
+    let snapshot = bridge::read_preset_catalog_snapshot(catalog)?;
+    let preset = preset_by_id(&snapshot.presets, id)?;
+    let data_url = object_string(preset, "previewImg", "preset")?;
+    let (media_type, encoded) = data_url
+        .strip_prefix("data:")
+        .and_then(|value| value.split_once(";base64,"))
+        .context("preset previewImg was not a base64 data URL")?;
+    ensure!(
+        matches!(media_type, "image/png" | "image/jpeg" | "image/webp"),
+        "preset preview media type was not supported"
+    );
+    let bytes = decode_base64(encoded)?;
+    ensure!(!bytes.is_empty(), "preset preview image was empty");
+    ensure!(
+        bytes.len() <= 16 * 1024 * 1024,
+        "preset preview exceeded 16 MiB"
+    );
+    write_atomic_bytes(output, &bytes)?;
+    let reopened = fs::read(output)
+        .with_context(|| format!("failed to reopen preset preview {}", output.display()))?;
+    ensure!(
+        reopened == bytes,
+        "published preset preview readback differed"
+    );
+    Ok(PresetPreviewReceipt {
+        output: output.to_path_buf(),
+        preset_id: id,
+        media_type: media_type.to_owned(),
+        size: bytes.len(),
+        sha256: fsutil::sha256_bytes(&bytes)?,
+    })
+}
+
+pub fn preset_install(
+    input: &Path,
+    catalog: &Path,
+    id: u64,
+    profile_id: Option<u64>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let catalog = bridge::read_preset_catalog_snapshot(catalog)?;
+    let preset = preset_by_id(&catalog.presets, id)?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let selected_profile = profile_id.unwrap_or(active_profile_object_id(&snapshot.keymap)?);
+    let profile_index = profile_index(&snapshot.keymap, selected_profile)?;
+    ensure!(
+        profile_layers(&profiles(&snapshot.keymap)?[profile_index])?.len() < MAX_LAYERS,
+        "Input supports at most six layers per profile"
+    );
+    let (layer_id, changed_paths) =
+        install_preset_into_keymap(&mut snapshot.keymap, preset, profile_index)?;
+    let mut receipt = snapshot.publish(output, "preset-install", true, changed_paths)?;
+    receipt.resource_id = Some(layer_id);
     Ok(receipt)
 }
 
@@ -3955,6 +4096,718 @@ fn validate_lighting(value: &Value) -> Result<()> {
     Ok(())
 }
 
+fn preset_by_id(presets: &[Value], id: u64) -> Result<&Value> {
+    let matches = presets
+        .iter()
+        .filter(|preset| preset.get("id").and_then(Value::as_u64) == Some(id))
+        .collect::<Vec<_>>();
+    ensure!(!matches.is_empty(), "preset id {id} was not found");
+    ensure!(
+        matches.len() == 1,
+        "preset id {id} was ambiguous in the merged catalog"
+    );
+    Ok(matches[0])
+}
+
+fn preset_entry(preset: &Value) -> Result<PresetEntry> {
+    let id = object_u64(preset, "id", "preset")?;
+    let name = preset_string(preset, "name")?.to_owned();
+    let layer = preset.get("layer").context("preset omitted layer")?;
+    let layer_name = preset_string(layer, "name")?.to_owned();
+    let author = preset_string(preset, "author")?.to_owned();
+    let description = preset_string(preset, "description")?.to_owned();
+    let tags = preset_string_array(preset, "tags")?;
+    let operating_systems = preset_u64_array(preset, "os")?;
+    ensure!(
+        operating_systems.iter().all(|value| matches!(value, 0 | 1)),
+        "preset id {id} contained an unknown operating system"
+    );
+    let keyboard_layout_types = preset_string_array(preset, "keyboardLayoutTypes")?;
+    let devices = preset_string_array(preset, "devices")?;
+    let actions = preset_optional_array(preset, "actions")?;
+    let action_groups = preset_optional_array(preset, "actionGroups")?;
+    let multi_actions = preset_optional_array(preset, "multiactions")?;
+    let multi_action_groups = preset_optional_array(preset, "multiactionGroups")?;
+    for (field, items) in [
+        ("actions", actions),
+        ("actionGroups", action_groups),
+        ("multiactions", multi_actions),
+        ("multiactionGroups", multi_action_groups),
+    ] {
+        ensure!(
+            items.len() <= 4096 && items.iter().all(Value::is_object),
+            "preset id {id} {field} was invalid"
+        );
+    }
+    Ok(PresetEntry {
+        id,
+        name,
+        layer_name,
+        author,
+        description,
+        tags,
+        operating_systems,
+        keyboard_layout_types,
+        devices,
+        action_count: actions.len(),
+        action_group_count: action_groups.len(),
+        multi_action_count: multi_actions.len(),
+        multi_action_group_count: multi_action_groups.len(),
+        has_icon: preset
+            .get("base64Image")
+            .and_then(Value::as_str)
+            .map(|value| !value.is_empty())
+            .unwrap_or(false),
+        has_preview: preset
+            .get("previewImg")
+            .and_then(Value::as_str)
+            .map(|value| !value.is_empty())
+            .unwrap_or(false),
+    })
+}
+
+fn preset_matches_filter(preset: &Value, filter: &PresetFilter<'_>) -> Result<bool> {
+    if let Some(device) = filter.device {
+        if !preset_string_array(preset, "devices")?
+            .iter()
+            .any(|value| value == device)
+        {
+            return Ok(false);
+        }
+    }
+    if let Some(layout) = filter.layout {
+        if !preset_string_array(preset, "keyboardLayoutTypes")?
+            .iter()
+            .any(|value| value == layout)
+        {
+            return Ok(false);
+        }
+    }
+    if let Some(operating_system) = filter.operating_system {
+        ensure!(
+            matches!(operating_system, 0 | 1),
+            "preset operating system filter must be 0 or 1"
+        );
+        if !preset_u64_array(preset, "os")?.contains(&operating_system) {
+            return Ok(false);
+        }
+    }
+    if let Some(search) = filter.search {
+        let needle = search.to_lowercase();
+        let name_matches = preset_string(preset, "name")?
+            .to_lowercase()
+            .contains(&needle);
+        let tag_matches = preset_string_array(preset, "tags")?
+            .iter()
+            .any(|tag| tag.to_lowercase().contains(&needle));
+        if !name_matches && !tag_matches {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn preset_string<'a>(value: &'a Value, field: &str) -> Result<&'a str> {
+    let result = value
+        .get(field)
+        .and_then(Value::as_str)
+        .with_context(|| format!("preset {field} was invalid"))?;
+    ensure!(
+        !result.is_empty() && result.len() <= 4096 && !result.contains('\0'),
+        "preset {field} was outside supported limits"
+    );
+    Ok(result)
+}
+
+fn preset_string_array(value: &Value, field: &str) -> Result<Vec<String>> {
+    value
+        .get(field)
+        .and_then(Value::as_array)
+        .with_context(|| format!("preset {field} was invalid"))?
+        .iter()
+        .map(|item| {
+            let item = item
+                .as_str()
+                .with_context(|| format!("preset {field} contained a non-string"))?;
+            ensure!(
+                item.len() <= 4096 && !item.contains('\0'),
+                "preset {field} item was outside supported limits"
+            );
+            Ok(item.to_owned())
+        })
+        .collect()
+}
+
+fn preset_u64_array(value: &Value, field: &str) -> Result<Vec<u64>> {
+    value
+        .get(field)
+        .and_then(Value::as_array)
+        .with_context(|| format!("preset {field} was invalid"))?
+        .iter()
+        .map(|item| {
+            item.as_u64()
+                .with_context(|| format!("preset {field} contained a non-integer"))
+        })
+        .collect()
+}
+
+fn preset_optional_array<'a>(value: &'a Value, field: &str) -> Result<&'a [Value]> {
+    match value.get(field) {
+        None | Some(Value::Null) => Ok(&[]),
+        Some(Value::Array(items)) => Ok(items),
+        Some(_) => bail!("preset {field} was invalid"),
+    }
+}
+
+fn install_preset_into_keymap(
+    keymap: &mut Value,
+    preset: &Value,
+    profile_index: usize,
+) -> Result<(u64, Vec<String>)> {
+    preset_entry(preset)?;
+    let imported_actions =
+        sorted_preset_resources(preset_optional_array(preset, "actions")?, "Action")?;
+    let existing_actions = actions(keymap)?.clone();
+    let mut action_map = Vec::new();
+    let mut pending_actions = Vec::new();
+    let last_action_id = last_resource_id(&existing_actions, "Action")?;
+    for imported in imported_actions {
+        let imported_id = object_u64(imported, "id", "preset Action")?;
+        if let Some(existing_id) = find_equivalent_preset_action(imported, &existing_actions)? {
+            action_map.push((imported_id, existing_id));
+        } else {
+            let id = last_action_id
+                .checked_add(pending_actions.len() as u64 + 1)
+                .context("Action id overflowed during preset install")?;
+            action_map.push((imported_id, id));
+            pending_actions.push((imported, id));
+        }
+    }
+    let new_actions = pending_actions
+        .into_iter()
+        .map(|(item, id)| preset_action_to_device(item, id, &action_map))
+        .collect::<Result<Vec<_>>>()?;
+
+    let imported_multi_actions = sorted_preset_resources(
+        preset_optional_array(preset, "multiactions")?,
+        "Multi Action",
+    )?;
+    let existing_multi_actions = multi_actions(keymap)?.clone();
+    let mut multi_action_map = Vec::new();
+    let mut pending_multi_actions = Vec::new();
+    let last_multi_action_id = last_resource_id(&existing_multi_actions, "Multi Action")?;
+    for imported in imported_multi_actions {
+        let imported_id = object_u64(imported, "id", "preset Multi Action")?;
+        if let Some(existing_id) =
+            find_equivalent_preset_multi_action(imported, &existing_multi_actions, &action_map)?
+        {
+            multi_action_map.push((imported_id, existing_id));
+        } else {
+            let id = last_multi_action_id
+                .checked_add(pending_multi_actions.len() as u64 + 1)
+                .context("Multi Action id overflowed during preset install")?;
+            multi_action_map.push((imported_id, id));
+            pending_multi_actions.push((imported, id));
+        }
+    }
+    let new_multi_actions = pending_multi_actions
+        .into_iter()
+        .map(|(item, id)| preset_multi_action_to_device(item, id, &action_map))
+        .collect::<Result<Vec<_>>>()?;
+
+    let preset_tags = preset_string_array(preset, "tags")?;
+    let new_action_groups = preset_groups_to_device(
+        preset_optional_array(preset, "actionGroups")?,
+        resource_groups(keymap, ResourceKind::Action)?,
+        &action_map,
+        &preset_tags,
+        "Action group",
+    )?;
+    let new_multi_action_groups = preset_groups_to_device(
+        preset_optional_array(preset, "multiactionGroups")?,
+        resource_groups(keymap, ResourceKind::MultiAction)?,
+        &multi_action_map,
+        &preset_tags,
+        "Multi Action group",
+    )?;
+
+    let profile = &profiles(keymap)?[profile_index];
+    let layer_id = next_object_id(profile_layers(profile)?, "layer")?;
+    let layer = preset_layer_to_device(
+        preset.get("layer").context("preset omitted layer")?,
+        layer_id,
+        &action_map,
+        &multi_action_map,
+    )?;
+    let layer_index = profile_layers(profile)?.len();
+    let mut paths = Vec::new();
+    if !new_actions.is_empty() {
+        keymap
+            .get_mut("macros")
+            .and_then(Value::as_array_mut)
+            .context("keymap.json macros was invalid")?
+            .extend(new_actions);
+        paths.push("/keymap.json/macros".into());
+    }
+    if !new_multi_actions.is_empty() {
+        keymap
+            .get_mut("multiActions")
+            .and_then(Value::as_array_mut)
+            .context("keymap.json multiActions was invalid")?
+            .extend(new_multi_actions);
+        paths.push("/keymap.json/multiActions".into());
+    }
+    if !new_action_groups.is_empty() {
+        keymap
+            .get_mut("macrosGroups")
+            .and_then(Value::as_array_mut)
+            .context("keymap.json macrosGroups was invalid")?
+            .extend(new_action_groups);
+        paths.push("/keymap.json/macrosGroups".into());
+    }
+    if !new_multi_action_groups.is_empty() {
+        keymap
+            .get_mut("multiActionsGroups")
+            .and_then(Value::as_array_mut)
+            .context("keymap.json multiActionsGroups was invalid")?
+            .extend(new_multi_action_groups);
+        paths.push("/keymap.json/multiActionsGroups".into());
+    }
+    keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .and_then(|profiles| profiles.get_mut(profile_index))
+        .and_then(|profile| profile.get_mut("layers"))
+        .and_then(Value::as_array_mut)
+        .context("target profile layers were invalid")?
+        .push(layer);
+    paths.push(format!(
+        "/keymap.json/profiles/{profile_index}/layers/{layer_index}"
+    ));
+    sync_profile_usage(keymap, profile_index, &mut paths)?;
+    Ok((layer_id, paths))
+}
+
+fn sorted_preset_resources<'a>(items: &'a [Value], kind: &str) -> Result<Vec<&'a Value>> {
+    let mut sorted = items.iter().collect::<Vec<_>>();
+    sorted.sort_by_key(|item| item.get("id").and_then(Value::as_u64).unwrap_or(u64::MAX));
+    for item in &sorted {
+        object_u64(item, "id", kind)?;
+    }
+    Ok(sorted)
+}
+
+fn last_resource_id(items: &[Value], kind: &str) -> Result<u64> {
+    items
+        .last()
+        .map(|item| object_u64(item, "id", kind))
+        .transpose()
+        .map(|value| value.unwrap_or(0))
+}
+
+fn find_equivalent_preset_action(imported: &Value, existing: &[Value]) -> Result<Option<u64>> {
+    let imported_name = preset_string(imported, "name")?;
+    let imported_color = preset_color(imported.get("color"))?;
+    let imported_inputs = preset_key_inputs(imported, "keyInputs", &[], false)?;
+    for item in existing {
+        if object_string(item, "name", "Action")? == imported_name
+            && normalized_color_value(item.get("color"))? == imported_color
+            && device_action_key_inputs(item)? == imported_inputs
+        {
+            return Ok(Some(object_u64(item, "id", "Action")?));
+        }
+    }
+    Ok(None)
+}
+
+fn preset_action_to_device(imported: &Value, id: u64, action_map: &[(u64, u64)]) -> Result<Value> {
+    let key_inputs = preset_key_inputs(imported, "keyInputs", action_map, true)?;
+    let mut object = Map::new();
+    object.insert("id".into(), Value::from(id));
+    object.insert(
+        "name".into(),
+        Value::String(preset_string(imported, "name")?.to_owned()),
+    );
+    object.insert("color".into(), preset_device_color(imported.get("color"))?);
+    if let Some(icon) = imported.get("icon") {
+        object.insert("icon".into(), icon.clone());
+    }
+    object.insert(
+        "actions".into(),
+        Value::Array(
+            key_inputs
+                .into_iter()
+                .map(|input| {
+                    serde_json::json!({
+                        "kc": input.keycode,
+                        "delay": input.delay,
+                        "act": input.action_type,
+                    })
+                })
+                .collect(),
+        ),
+    );
+    Ok(Value::Object(object))
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct PresetKeyInput {
+    keycode: String,
+    delay: u64,
+    action_type: u64,
+}
+
+fn preset_key_inputs(
+    value: &Value,
+    field: &str,
+    action_map: &[(u64, u64)],
+    device_tokens: bool,
+) -> Result<Vec<PresetKeyInput>> {
+    let items = value
+        .get(field)
+        .and_then(Value::as_array)
+        .with_context(|| format!("preset {field} was invalid"))?;
+    ensure!(!items.is_empty(), "preset {field} was empty");
+    items
+        .iter()
+        .map(|item| {
+            let token = object_string(item, "keycode", "preset key input")?;
+            let keycode = if device_tokens {
+                preset_assignment_to_device(token, action_map, &[])?
+            } else {
+                token.to_owned()
+            };
+            Ok(PresetKeyInput {
+                keycode,
+                delay: object_u64(item, "delay", "preset key input")?,
+                action_type: object_u64(item, "actionType", "preset key input")?,
+            })
+        })
+        .collect()
+}
+
+fn device_action_key_inputs(action: &Value) -> Result<Vec<PresetKeyInput>> {
+    action_events(action)?
+        .iter()
+        .map(|event| {
+            Ok(PresetKeyInput {
+                keycode: device_assignment_to_preset(object_string(event, "kc", "Action event")?),
+                delay: object_u64(event, "delay", "Action event")?,
+                action_type: object_u64(event, "act", "Action event")?,
+            })
+        })
+        .collect()
+}
+
+fn find_equivalent_preset_multi_action(
+    imported: &Value,
+    existing: &[Value],
+    action_map: &[(u64, u64)],
+) -> Result<Option<u64>> {
+    let imported_name = preset_string(imported, "name")?;
+    let imported_color = preset_color(imported.get("color"))?;
+    for item in existing {
+        if object_string(item, "name", "Multi Action")? != imported_name
+            || normalized_color_value(item.get("color"))? != imported_color
+        {
+            continue;
+        }
+        let mut equal = true;
+        for (preset_field, device_field) in preset_multi_action_fields() {
+            let input = preset_single_key_input(imported, preset_field, action_map, false)?;
+            let existing_input = PresetKeyInput {
+                keycode: device_assignment_to_preset(object_string(
+                    item,
+                    device_field,
+                    "Multi Action",
+                )?),
+                delay: 0,
+                action_type: 1,
+            };
+            equal &= input == existing_input;
+        }
+        if equal {
+            return Ok(Some(object_u64(item, "id", "Multi Action")?));
+        }
+    }
+    Ok(None)
+}
+
+fn preset_multi_action_to_device(
+    imported: &Value,
+    id: u64,
+    action_map: &[(u64, u64)],
+) -> Result<Value> {
+    let mut object = Map::new();
+    object.insert("id".into(), Value::from(id));
+    object.insert(
+        "name".into(),
+        Value::String(preset_string(imported, "name")?.to_owned()),
+    );
+    object.insert("color".into(), preset_device_color(imported.get("color"))?);
+    if let Some(icon) = imported.get("icon") {
+        object.insert("icon".into(), icon.clone());
+    }
+    for (preset_field, device_field) in preset_multi_action_fields() {
+        let input = preset_single_key_input(imported, preset_field, action_map, true)?;
+        object.insert((*device_field).into(), Value::String(input.keycode));
+    }
+    object.insert(
+        "tt".into(),
+        Value::from(object_u64(imported, "tappingTerms", "preset Multi Action")?),
+    );
+    Ok(Value::Object(object))
+}
+
+fn preset_single_key_input(
+    value: &Value,
+    field: &str,
+    action_map: &[(u64, u64)],
+    device_tokens: bool,
+) -> Result<PresetKeyInput> {
+    let input = value
+        .get(field)
+        .with_context(|| format!("preset Multi Action omitted {field}"))?;
+    let token = object_string(input, "keycode", "preset Multi Action key input")?;
+    Ok(PresetKeyInput {
+        keycode: if device_tokens {
+            preset_assignment_to_device(token, action_map, &[])?
+        } else if let Some(id) = preset_reference_id(token, "KA_")? {
+            format!("KA_{}", mapped_resource_id(action_map, id, "Action")?)
+        } else {
+            token.to_owned()
+        },
+        delay: object_u64(input, "delay", "preset Multi Action key input")?,
+        action_type: object_u64(input, "actionType", "preset Multi Action key input")?,
+    })
+}
+
+fn preset_multi_action_fields() -> &'static [(&'static str, &'static str)] {
+    &[
+        ("tap", "kcOnTap"),
+        ("onHold", "kcOnHold"),
+        ("doubleTap", "kcOnDoubleTap"),
+        ("tapHold", "kcOnTapHold"),
+    ]
+}
+
+fn preset_groups_to_device(
+    imported: &[Value],
+    existing: &[Value],
+    id_map: &[(u64, u64)],
+    preset_tags: &[String],
+    kind: &str,
+) -> Result<Vec<Value>> {
+    let mut next_id = existing.iter().try_fold(0_u64, |maximum, item| {
+        Ok::<u64, anyhow::Error>(maximum.max(object_u64(item, "id", kind)?))
+    })?;
+    let mut additions = Vec::new();
+    for group in imported {
+        let name = preset_string(group, "name")?;
+        let color = preset_color(group.get("color"))?;
+        let members = group
+            .get("actionIds")
+            .and_then(Value::as_array)
+            .context("preset group actionIds was invalid")?
+            .iter()
+            .map(|value| {
+                let id = value
+                    .as_u64()
+                    .context("preset group actionIds contained a non-integer")?;
+                mapped_resource_id(id_map, id, kind)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        if existing.iter().any(|item| {
+            object_string(item, "name", kind).ok() == Some(name)
+                && normalized_color_value(item.get("color")).ok() == Some(color.clone())
+                && item.get("actionIds").and_then(Value::as_array)
+                    == Some(&members.iter().copied().map(Value::from).collect::<Vec<_>>())
+        }) {
+            continue;
+        }
+        next_id = next_id
+            .checked_add(1)
+            .context("preset group id overflowed")?;
+        let mut tags = match group.get("tags") {
+            None | Some(Value::Null) => Vec::new(),
+            Some(_) => preset_string_array(group, "tags")?,
+        };
+        tags.extend(preset_tags.iter().cloned());
+        additions.push(serde_json::json!({
+            "id": next_id,
+            "name": name,
+            "tags": tags,
+            "color": preset_device_color(group.get("color"))?,
+            "actionIds": members,
+        }));
+    }
+    Ok(additions)
+}
+
+fn preset_layer_to_device(
+    preset: &Value,
+    id: u64,
+    action_map: &[(u64, u64)],
+    multi_action_map: &[(u64, u64)],
+) -> Result<Value> {
+    let layout = preset
+        .get("layout")
+        .and_then(Value::as_object)
+        .context("preset layer layout was invalid")?;
+    let mut device_layout = Map::new();
+    device_layout.insert(
+        "keymap".into(),
+        preset_layout_matrix(layout.get("base"), action_map, multi_action_map, "base")?,
+    );
+    device_layout.insert(
+        "encoders".into(),
+        preset_layout_matrix(
+            layout.get("encoders"),
+            action_map,
+            multi_action_map,
+            "encoders",
+        )?,
+    );
+    if let Some(buttons) = layout.get("buttons") {
+        device_layout.insert(
+            "buttons".into(),
+            preset_layout_matrix(Some(buttons), action_map, multi_action_map, "buttons")?,
+        );
+    }
+    if let Some(joystick) = layout.get("joystick") {
+        let mut joystick = joystick
+            .as_object()
+            .context("preset layer joystick was invalid")?
+            .clone();
+        if let Some(sectors) = joystick.get_mut("sectors").and_then(Value::as_array_mut) {
+            for sector in sectors {
+                let token = object_string(sector, "k", "preset joystick sector")?.to_owned();
+                sector
+                    .as_object_mut()
+                    .context("preset joystick sector was invalid")?
+                    .insert(
+                        "k".into(),
+                        Value::String(preset_assignment_to_device(
+                            &token,
+                            action_map,
+                            multi_action_map,
+                        )?),
+                    );
+            }
+        }
+        device_layout.insert("joystick".into(), Value::Object(joystick));
+    }
+    let mut layer = Map::new();
+    layer.insert("id".into(), Value::from(id));
+    layer.insert(
+        "name".into(),
+        Value::String(preset_string(preset, "name")?.to_owned()),
+    );
+    layer.insert("color".into(), preset_device_color(preset.get("color"))?);
+    layer.insert("layout".into(), Value::Object(device_layout));
+    if let Some(lights) = preset.get("lights") {
+        layer.insert("lights".into(), lights.clone());
+    }
+    if let Some(linked_app_id) = preset.get("linkedAppId") {
+        layer.insert("linkedAppId".into(), linked_app_id.clone());
+    }
+    Ok(Value::Object(layer))
+}
+
+fn preset_layout_matrix(
+    value: Option<&Value>,
+    action_map: &[(u64, u64)],
+    multi_action_map: &[(u64, u64)],
+    field: &str,
+) -> Result<Value> {
+    let rows = value
+        .and_then(Value::as_array)
+        .with_context(|| format!("preset layer {field} was invalid"))?;
+    Ok(Value::Array(
+        rows.iter()
+            .map(|row| {
+                Ok(Value::Array(
+                    row.as_array()
+                        .with_context(|| format!("preset layer {field} row was invalid"))?
+                        .iter()
+                        .map(|item| {
+                            Ok(Value::String(preset_assignment_to_device(
+                                object_string(item, "keycode", "preset layer key")?,
+                                action_map,
+                                multi_action_map,
+                            )?))
+                        })
+                        .collect::<Result<Vec<_>>>()?,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?,
+    ))
+}
+
+fn preset_assignment_to_device(
+    token: &str,
+    action_map: &[(u64, u64)],
+    multi_action_map: &[(u64, u64)],
+) -> Result<String> {
+    if let Some(id) = preset_reference_id(token, "KA_")? {
+        return Ok(format!(
+            "KA_A{}",
+            mapped_resource_id(action_map, id, "Action")?
+        ));
+    }
+    if let Some(id) = preset_reference_id(token, "KM_")? {
+        return Ok(format!(
+            "KA_M{}",
+            mapped_resource_id(multi_action_map, id, "Multi Action")?
+        ));
+    }
+    Ok(token.to_owned())
+}
+
+fn device_assignment_to_preset(token: &str) -> String {
+    token
+        .strip_prefix("KA_A")
+        .map(|id| format!("KA_{id}"))
+        .or_else(|| token.strip_prefix("KA_M").map(|id| format!("KM_{id}")))
+        .unwrap_or_else(|| token.to_owned())
+}
+
+fn preset_reference_id(token: &str, prefix: &str) -> Result<Option<u64>> {
+    match token.strip_prefix(prefix) {
+        None => Ok(None),
+        Some(value) if !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()) => Ok(
+            Some(value.parse().context("preset reference id overflowed")?),
+        ),
+        Some(_) => bail!("preset assignment {token} had an invalid reference"),
+    }
+}
+
+fn mapped_resource_id(map: &[(u64, u64)], id: u64, kind: &str) -> Result<u64> {
+    map.iter()
+        .find_map(|(source, target)| if *source == id { Some(*target) } else { None })
+        .with_context(|| format!("preset referenced missing {kind} id {id}"))
+}
+
+fn preset_color(value: Option<&Value>) -> Result<Option<String>> {
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(value)) => Ok(Some(normalize_resource_color(value)?)),
+        Some(Value::Number(value)) => {
+            let color = value.as_u64().context("preset color was invalid")?;
+            ensure!(color <= MAX_RGB, "preset color exceeded 24-bit RGB");
+            Ok(Some(format!("#{color:06X}")))
+        }
+        Some(_) => bail!("preset color was invalid"),
+    }
+}
+
+fn preset_device_color(value: Option<&Value>) -> Result<Value> {
+    Ok(match preset_color(value)? {
+        Some(color) => Value::from(parse_color(&color)?),
+        None => Value::Null,
+    })
+}
+
 fn actions(keymap: &Value) -> Result<&Vec<Value>> {
     keymap
         .get("macros")
@@ -6182,6 +7035,49 @@ fn write_atomic_json(output: &Path, value: &Value) -> Result<()> {
     result
 }
 
+fn write_atomic_bytes(output: &Path, bytes: &[u8]) -> Result<()> {
+    ensure!(
+        !output.exists(),
+        "preview destination already exists: {}",
+        output.display()
+    );
+    let parent = output
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(parent)
+        .with_context(|| format!("failed to create preview parent {}", parent.display()))?;
+    let staging = staging_path(output)?;
+    let result = (|| -> Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&staging)
+            .with_context(|| format!("failed to create {}", staging.display()))?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        ensure!(
+            fs::read(&staging)? == bytes,
+            "preset preview staging readback differed"
+        );
+        ensure!(
+            !output.exists(),
+            "preview destination appeared during write"
+        );
+        fs::rename(&staging, output)
+            .with_context(|| format!("failed to publish preview {}", output.display()))?;
+        ensure!(
+            fs::read(output)? == bytes,
+            "published preset preview readback differed"
+        );
+        Ok(())
+    })();
+    if result.is_err() && staging.exists() {
+        let _ = fs::remove_file(staging);
+    }
+    result
+}
+
 fn staging_path(output: &Path) -> Result<PathBuf> {
     let name = output
         .file_name()
@@ -6328,6 +7224,106 @@ mod tests {
 
     fn write_fixture(path: &Path) {
         fs::write(path, serde_json::to_vec_pretty(&fixture()).unwrap()).unwrap();
+    }
+
+    fn preset_fixture() -> Vec<Value> {
+        vec![json!({
+            "id": 9002,
+            "name": "Fixture Figma",
+            "tags": ["fixture", "design"],
+            "description": "Fixture preset",
+            "author": "Work LouderCTL",
+            "base64Image": "data:image/png;base64,UE5H",
+            "os": [0],
+            "keyboardLayoutTypes": ["universal"],
+            "devices": ["codex_micro"],
+            "layer": {
+                "id": 4,
+                "name": "Fixture Preset Layer",
+                "color": "#336699",
+                "os": 0,
+                "layout": {
+                    "base": [[
+                        {"keycode": "KA_7"},
+                        {"keycode": "KA_8"},
+                        {"keycode": "KM_2"},
+                        {"keycode": "KM_3"}
+                    ]],
+                    "encoders": [[
+                        {"keycode": "KC_LEFT"},
+                        {"keycode": "KC_RGHT"},
+                        {"keycode": "KC_MUTE"}
+                    ]],
+                    "buttons": [[{"keycode": "KC_ENT"}]],
+                    "joystick": {
+                        "type": "RADIAL",
+                        "sectors": [
+                            {"a1": 0.0, "a2": 3.0, "k": "KA_7"},
+                            {"a1": 3.0, "a2": 6.0, "k": "KM_3"}
+                        ]
+                    }
+                },
+                "lights": {
+                    "backlight": {"effect": "solid", "brightness": 1.0, "speed": 0.5, "magic": 1.0, "color": 16777215},
+                    "underglow": {"effect": "gradient", "brightness": 0.8, "speed": 0.4, "magic": 0.3, "color": 15595263}
+                }
+            },
+            "actions": [
+                {
+                    "id": 7,
+                    "name": "Preset Action",
+                    "color": null,
+                    "keyInputs": [{"keycode": "KC_P", "delay": 0, "actionType": 1}]
+                },
+                {
+                    "id": 8,
+                    "name": "Fixture Action",
+                    "color": null,
+                    "keyInputs": [{"keycode": "KC_C", "delay": 0, "actionType": 1}]
+                }
+            ],
+            "actionGroups": [
+                {"id": 3, "name": "Preset Actions", "tags": ["preset"], "color": null, "actionIds": [7, 8]}
+            ],
+            "multiactions": [
+                {
+                    "id": 2,
+                    "name": "Preset Multi",
+                    "color": null,
+                    "tap": {"keycode": "KA_7", "delay": 0, "actionType": 1},
+                    "onHold": {"keycode": "KC_NONE", "delay": 0, "actionType": 1},
+                    "doubleTap": {"keycode": "KC_NONE", "delay": 0, "actionType": 1},
+                    "tapHold": {"keycode": "KC_NONE", "delay": 0, "actionType": 1},
+                    "tappingTerms": 250
+                },
+                {
+                    "id": 3,
+                    "name": "Fixture Multi",
+                    "color": null,
+                    "tap": {"keycode": "KA_8", "delay": 0, "actionType": 1},
+                    "onHold": {"keycode": "KC_NONE", "delay": 0, "actionType": 1},
+                    "doubleTap": {"keycode": "KC_NONE", "delay": 0, "actionType": 1},
+                    "tapHold": {"keycode": "KC_NONE", "delay": 0, "actionType": 1},
+                    "tappingTerms": 250
+                }
+            ],
+            "multiactionGroups": [
+                {"id": 4, "name": "Preset Multis", "tags": [], "color": "#010203", "actionIds": [2, 3]}
+            ],
+            "previewImg": "data:image/png;base64,UE5H"
+        })]
+    }
+
+    fn write_preset_fixture(path: &Path, presets: Vec<Value>) {
+        let revision = bridge::preset_catalog_revision(&presets).unwrap();
+        let snapshot = json!({
+            "schemaVersion": 1,
+            "kind": "worklouder-input-preset-catalog",
+            "revisionAlgorithm": "sha256:recursive-key-sorted-presets-json-v1",
+            "revision": revision,
+            "presets": presets
+        });
+        fs::write(path, serde_json::to_vec_pretty(&snapshot).unwrap()).unwrap();
     }
 
     #[test]
@@ -7867,6 +8863,347 @@ mod tests {
         remove_smart_action_from_groups(&mut document, 1, &mut paths).unwrap();
         assert!(document.get("smartActionGroups").is_none());
         assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn presets_are_filtered_previewed_installed_remapped_and_reused() {
+        let source = root("preset-source");
+        let catalog = root("preset-catalog");
+        let preview = root("preset-preview");
+        let installed = root("preset-installed");
+        let installed_again = root("preset-installed-again");
+        let invalid_catalog = root("preset-invalid-catalog");
+        let invalid_output = root("preset-invalid-output");
+        write_fixture(&source);
+        write_preset_fixture(&catalog, preset_fixture());
+        let source_bytes = fs::read(&source).unwrap();
+
+        let listed = preset_list(
+            &catalog,
+            PresetFilter {
+                device: Some("codex_micro"),
+                layout: Some("universal"),
+                operating_system: Some(0),
+                search: Some("DESIGN"),
+            },
+        )
+        .unwrap();
+        assert_eq!(listed.kind, "worklouderctl-preset-list");
+        assert_eq!(listed.presets.len(), 1);
+        assert_eq!(listed.presets[0].id, 9002);
+        assert_eq!(listed.presets[0].action_count, 2);
+        assert_eq!(listed.presets[0].multi_action_count, 2);
+        assert!(listed.presets[0].has_icon);
+        assert!(listed.presets[0].has_preview);
+        assert!(preset_list(
+            &catalog,
+            PresetFilter {
+                device: Some("creator_micro"),
+                ..PresetFilter::default()
+            },
+        )
+        .unwrap()
+        .presets
+        .is_empty());
+        assert!(preset_list(
+            &catalog,
+            PresetFilter {
+                operating_system: Some(2),
+                ..PresetFilter::default()
+            },
+        )
+        .is_err());
+
+        let shown = preset_show(&catalog, 9002).unwrap();
+        assert_eq!(shown.preset.name, "Fixture Figma");
+        assert_eq!(shown.preset.layer_name, "Fixture Preset Layer");
+        assert_eq!(shown.preset.action_group_count, 1);
+
+        let preview_receipt = preset_preview(&catalog, 9002, &preview).unwrap();
+        assert_eq!(preview_receipt.media_type, "image/png");
+        assert_eq!(fs::read(&preview).unwrap(), b"PNG");
+        assert_eq!(
+            preview_receipt.sha256,
+            fsutil::sha256_bytes(b"PNG").unwrap()
+        );
+        assert!(preset_preview(&catalog, 9002, &preview).is_err());
+
+        let receipt = preset_install(&source, &catalog, 9002, None, &installed).unwrap();
+        assert!(receipt.changed);
+        assert_eq!(receipt.resource_id, Some(2));
+        assert_eq!(fs::read(&source).unwrap(), source_bytes);
+        let candidate = SemanticSnapshot::read(&installed).unwrap();
+        let keymap = &candidate.keymap;
+        assert_eq!(keymap["macros"].as_array().unwrap().len(), 4);
+        assert_eq!(keymap["multiActions"].as_array().unwrap().len(), 3);
+        assert_eq!(keymap["macrosGroups"].as_array().unwrap().len(), 3);
+        assert_eq!(keymap["multiActionsGroups"].as_array().unwrap().len(), 3);
+        let layer = &keymap["profiles"][0]["layers"][2];
+        assert_eq!(layer["id"], 2);
+        assert_eq!(layer["name"], "Fixture Preset Layer");
+        assert_eq!(layer["color"], 0x336699);
+        assert_eq!(
+            layer["layout"]["keymap"][0],
+            json!(["KA_A11", "KA_A3", "KA_M3", "KA_M1"])
+        );
+        assert_eq!(layer["layout"]["joystick"]["sectors"][0]["k"], "KA_A11");
+        assert_eq!(layer["layout"]["joystick"]["sectors"][1]["k"], "KA_M1");
+        assert_eq!(keymap["macros"][3]["id"], 11);
+        assert_eq!(keymap["multiActions"][2]["id"], 3);
+        assert_eq!(keymap["multiActions"][2]["kcOnTap"], "KA_A11");
+        assert_eq!(keymap["macrosGroups"][2]["actionIds"], json!([11, 3]));
+        assert_eq!(
+            keymap["macrosGroups"][2]["tags"],
+            json!(["preset", "fixture", "design"])
+        );
+        assert_eq!(keymap["multiActionsGroups"][2]["actionIds"], json!([3, 1]));
+
+        let second = preset_install(&installed, &catalog, 9002, Some(0), &installed_again).unwrap();
+        assert_eq!(second.resource_id, Some(3));
+        let repeated = SemanticSnapshot::read(&installed_again).unwrap();
+        assert_eq!(
+            repeated.keymap["profiles"][0]["layers"]
+                .as_array()
+                .unwrap()
+                .len(),
+            4
+        );
+        assert_eq!(repeated.keymap["macros"].as_array().unwrap().len(), 4);
+        assert_eq!(repeated.keymap["multiActions"].as_array().unwrap().len(), 3);
+        assert_eq!(repeated.keymap["macrosGroups"].as_array().unwrap().len(), 3);
+        assert_eq!(
+            repeated.keymap["multiActionsGroups"]
+                .as_array()
+                .unwrap()
+                .len(),
+            3
+        );
+
+        let mut invalid = preset_fixture();
+        invalid[0]["layer"]["layout"]["base"][0][0]["keycode"] = Value::String("KA_99".into());
+        write_preset_fixture(&invalid_catalog, invalid);
+        let error = preset_install(&source, &invalid_catalog, 9002, None, &invalid_output)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("missing Action id 99"),
+            "unexpected error: {error}"
+        );
+        assert!(!invalid_output.exists());
+        assert_eq!(fs::read(&source).unwrap(), source_bytes);
+
+        for path in [
+            &source,
+            &catalog,
+            &preview,
+            &installed,
+            &installed_again,
+            &invalid_catalog,
+        ] {
+            fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn preset_catalog_preview_and_install_match_input_remapping() {
+        let source = root("preset-source");
+        let catalog = root("preset-catalog");
+        let preview = root("preset-preview");
+        let installed = root("preset-installed");
+        let installed_again = root("preset-installed-again");
+        write_fixture(&source);
+
+        let preset = json!({
+            "id": 9002,
+            "name": "Fixture Design",
+            "tags": ["preset", "design"],
+            "description": "Fixture preset used to verify Input-compatible remapping",
+            "author": "Work LouderCTL",
+            "base64Image": "data:image/png;base64,iVBORw0KGgo=",
+            "os": [0],
+            "keyboardLayoutTypes": ["universal"],
+            "devices": ["codex_micro"],
+            "layer": {
+                "id": 4,
+                "name": "Preset Layer",
+                "color": "#336699",
+                "os": 0,
+                "layout": {
+                    "base": [[{"keycode": "KA_7"}, {"keycode": "KM_2"}]],
+                    "encoders": [[
+                        {"keycode": "KC_LEFT"},
+                        {"keycode": "KC_RGHT"},
+                        {"keycode": "KC_MUTE"}
+                    ]],
+                    "joystick": {"type": "RADIAL", "sectors": [
+                        {"a1": 0.1875, "a2": 0.3125, "k": "KA_7"},
+                        {"a1": 0.3125, "a2": 0.1875, "k": "KM_2"}
+                    ]}
+                }
+            },
+            "actions": [{
+                "id": 7,
+                "name": "Preset Action",
+                "color": null,
+                "keyInputs": [{"keycode": "KC_P", "delay": 0, "actionType": 1}]
+            }],
+            "actionGroups": [{
+                "id": 3,
+                "name": "Preset Actions",
+                "tags": [],
+                "color": null,
+                "actionIds": [7]
+            }],
+            "multiactions": [{
+                "id": 2,
+                "name": "Preset Multi",
+                "color": null,
+                "tap": {"keycode": "KA_7", "delay": 0, "actionType": 1},
+                "onHold": {"keycode": "KC_NONE", "delay": 0, "actionType": 1},
+                "doubleTap": {"keycode": "KC_NONE", "delay": 0, "actionType": 1},
+                "tapHold": {"keycode": "KC_NONE", "delay": 0, "actionType": 1},
+                "tappingTerms": 250
+            }],
+            "multiactionGroups": [{
+                "id": 2,
+                "name": "Preset Multis",
+                "tags": ["from-preset"],
+                "color": null,
+                "actionIds": [2]
+            }],
+            "previewImg": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        });
+        let presets = vec![preset];
+        let revision = bridge::preset_catalog_revision(&presets).unwrap();
+        fs::write(
+            &catalog,
+            serde_json::to_vec_pretty(&json!({
+                "schemaVersion": 1,
+                "kind": "worklouder-input-preset-catalog",
+                "revisionAlgorithm": "sha256:recursive-key-sorted-presets-json-v1",
+                "revision": revision,
+                "presets": presets
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let listed = preset_list(
+            &catalog,
+            PresetFilter {
+                device: Some("codex_micro"),
+                layout: Some("universal"),
+                operating_system: Some(0),
+                search: Some("DESIGN"),
+            },
+        )
+        .unwrap();
+        assert_eq!(listed.presets.len(), 1);
+        assert_eq!(listed.presets[0].id, 9002);
+        assert_eq!(listed.presets[0].action_count, 1);
+        assert!(listed.presets[0].has_icon);
+        assert!(listed.presets[0].has_preview);
+        assert!(preset_list(
+            &catalog,
+            PresetFilter {
+                operating_system: Some(1),
+                ..PresetFilter::default()
+            }
+        )
+        .unwrap()
+        .presets
+        .is_empty());
+        assert_eq!(
+            preset_show(&catalog, 9002).unwrap().preset.layer_name,
+            "Preset Layer"
+        );
+
+        let preview_receipt = preset_preview(&catalog, 9002, &preview).unwrap();
+        assert_eq!(preview_receipt.media_type, "image/png");
+        assert_eq!(preview_receipt.size, fs::read(&preview).unwrap().len());
+        assert_eq!(
+            preview_receipt.sha256,
+            fsutil::sha256_bytes(&fs::read(&preview).unwrap()).unwrap()
+        );
+
+        let original = SemanticSnapshot::read(&source).unwrap();
+        let receipt = preset_install(&source, &catalog, 9002, Some(0), &installed).unwrap();
+        assert_eq!(receipt.operation, "preset-install");
+        assert_eq!(receipt.resource_id, Some(2));
+        assert!(receipt.changed);
+        let candidate = SemanticSnapshot::read(&installed).unwrap();
+        assert_eq!(candidate.file_bytes[1], original.file_bytes[1]);
+        assert_eq!(candidate.keymap["macros"].as_array().unwrap().len(), 4);
+        assert_eq!(candidate.keymap["macros"][3]["id"], 11);
+        assert_eq!(candidate.keymap["macros"][3]["actions"][0]["kc"], "KC_P");
+        assert_eq!(
+            candidate.keymap["multiActions"].as_array().unwrap().len(),
+            3
+        );
+        assert_eq!(candidate.keymap["multiActions"][2]["id"], 3);
+        assert_eq!(candidate.keymap["multiActions"][2]["kcOnTap"], "KA_A11");
+        assert_eq!(candidate.keymap["macrosGroups"][2]["id"], 2);
+        assert_eq!(
+            candidate.keymap["macrosGroups"][2]["actionIds"],
+            json!([11])
+        );
+        assert_eq!(
+            candidate.keymap["macrosGroups"][2]["tags"],
+            json!(["preset", "design"])
+        );
+        assert_eq!(candidate.keymap["multiActionsGroups"][2]["id"], 5);
+        assert_eq!(
+            candidate.keymap["multiActionsGroups"][2]["tags"],
+            json!(["from-preset", "preset", "design"])
+        );
+        let layer = &candidate.keymap["profiles"][0]["layers"][2];
+        assert_eq!(layer["id"], 2);
+        assert_eq!(layer["color"], 0x336699);
+        assert_eq!(layer["layout"]["keymap"][0], json!(["KA_A11", "KA_M3"]));
+        assert_eq!(layer["layout"]["joystick"]["sectors"][0]["k"], "KA_A11");
+        assert_eq!(layer["layout"]["joystick"]["sectors"][1]["k"], "KA_M3");
+        assert_eq!(
+            candidate.keymap["profiles"][0]["macrosUsed"],
+            json!([10, 11, 3])
+        );
+        assert_eq!(
+            candidate.keymap["profiles"][0]["multiActionsUsed"],
+            json!([1, 3])
+        );
+
+        let repeated =
+            preset_install(&installed, &catalog, 9002, Some(0), &installed_again).unwrap();
+        assert_eq!(repeated.resource_id, Some(3));
+        let repeated = SemanticSnapshot::read(&installed_again).unwrap();
+        assert_eq!(repeated.keymap["macros"].as_array().unwrap().len(), 4);
+        assert_eq!(repeated.keymap["multiActions"].as_array().unwrap().len(), 3);
+        assert_eq!(repeated.keymap["macrosGroups"].as_array().unwrap().len(), 3);
+        assert_eq!(
+            repeated.keymap["multiActionsGroups"]
+                .as_array()
+                .unwrap()
+                .len(),
+            3
+        );
+        assert_eq!(
+            repeated.keymap["profiles"][0]["layers"]
+                .as_array()
+                .unwrap()
+                .len(),
+            4
+        );
+
+        let mut tampered: Value = serde_json::from_slice(&fs::read(&catalog).unwrap()).unwrap();
+        tampered["presets"][0]["name"] = Value::String("Tampered".into());
+        fs::write(&catalog, serde_json::to_vec_pretty(&tampered).unwrap()).unwrap();
+        assert!(preset_list(&catalog, PresetFilter::default())
+            .unwrap_err()
+            .to_string()
+            .contains("revision"));
+
+        for path in [source, catalog, preview, installed, installed_again] {
+            fs::remove_file(path).unwrap();
+        }
     }
 
     #[test]

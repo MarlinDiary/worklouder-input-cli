@@ -28,9 +28,9 @@ use cli::{
     InputConfigCommand, InputPermissionCommand, InputPresetCommand, LayerCommand,
     LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand, LayerJoystickSectorCommand,
     LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
-    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
-    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
-    TierCommand,
+    MultiActionGroupCommand, MultiActionGroupMemberCommand, PresetCommand, ProfileCommand,
+    SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+    SmartActionType as CliSmartActionType, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -104,10 +104,92 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::MultiAction { command } => run_multi_action(command, cli.json, &mut out)?,
         Command::SmartAction { command } => run_smart_action(command, cli.json, &mut out)?,
         Command::CheatSheet { command } => run_cheat_sheet(command, cli.json, &mut out)?,
+        Command::Preset { command } => run_preset(command, cli.json, &mut out)?,
         Command::Appsense { command } => run_appsense(command, cli.json, &mut out)?,
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
+    Ok(())
+}
+
+fn run_preset(command: PresetCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        PresetCommand::List {
+            catalog,
+            device,
+            layout,
+            os,
+            search,
+        } => {
+            let result = semantic::preset_list(
+                &catalog,
+                semantic::PresetFilter {
+                    device: device.as_deref(),
+                    layout: layout.as_deref(),
+                    operating_system: os.map(|value| value.input_value()),
+                    search: search.as_deref(),
+                },
+            )?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                for preset in result.presets {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}\tactions={}\tmulti-actions={}",
+                        preset.id,
+                        preset.name,
+                        preset.layer_name,
+                        preset.action_count,
+                        preset.multi_action_count
+                    )?;
+                }
+                writeln!(out, "revision={}", result.revision)?;
+            }
+        }
+        PresetCommand::Show { catalog, id } => {
+            let result = semantic::preset_show(&catalog, id)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(out, "{}\t{}", result.preset.id, result.preset.name)?;
+                writeln!(out, "layer={}", result.preset.layer_name)?;
+                writeln!(out, "author={}", result.preset.author)?;
+                writeln!(out, "description={}", result.preset.description)?;
+                writeln!(out, "revision={}", result.revision)?;
+            }
+        }
+        PresetCommand::Preview {
+            catalog,
+            id,
+            output,
+        } => {
+            let result = semantic::preset_preview(&catalog, id, &output)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "Saved preset {} preview to {} ({} bytes, {})",
+                    result.preset_id,
+                    result.output.display(),
+                    result.size,
+                    result.media_type
+                )?;
+                writeln!(out, "sha256={}", result.sha256)?;
+            }
+        }
+        PresetCommand::Install {
+            input,
+            catalog,
+            id,
+            profile,
+            output,
+        } => {
+            let result = semantic::preset_install(&input, &catalog, id, profile, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+    }
     Ok(())
 }
 

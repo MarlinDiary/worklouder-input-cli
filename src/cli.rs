@@ -145,6 +145,12 @@ pub enum Command {
         command: CheatSheetCommand,
     },
 
+    /// Inspect, preview, or install Input layer presets.
+    Preset {
+        #[clap(subcommand)]
+        command: PresetCommand,
+    },
+
     /// Inspect or edit AppSense linked applications in an offline snapshot.
     Appsense {
         #[clap(subcommand)]
@@ -1599,6 +1605,70 @@ pub enum CheatSheetCommand {
         control: String,
         #[clap(value_enum)]
         behavior: CheatSheetBehavior,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum PresetOperatingSystem {
+    Mac,
+    Windows,
+}
+
+impl PresetOperatingSystem {
+    pub fn input_value(self) -> u64 {
+        match self {
+            Self::Mac => 0,
+            Self::Windows => 1,
+        }
+    }
+}
+
+#[derive(Debug, Subcommand)]
+pub enum PresetCommand {
+    /// List preset metadata with the same device/layout/OS/search filters as Input.
+    List {
+        #[clap(long, value_parser)]
+        catalog: PathBuf,
+        #[clap(long)]
+        device: Option<String>,
+        #[clap(long)]
+        layout: Option<String>,
+        #[clap(long, value_enum)]
+        os: Option<PresetOperatingSystem>,
+        #[clap(long)]
+        search: Option<String>,
+    },
+
+    /// Show one preset without printing its multi-megabyte image payloads.
+    Show {
+        #[clap(long, value_parser)]
+        catalog: PathBuf,
+        #[clap(long)]
+        id: u64,
+    },
+
+    /// Decode one preset preview image into a verified file.
+    Preview {
+        #[clap(long, value_parser)]
+        catalog: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Install one preset into an offline complete configuration candidate.
+    Install {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long, value_parser)]
+        catalog: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        profile: Option<u64>,
         #[clap(long, value_parser)]
         output: PathBuf,
     },

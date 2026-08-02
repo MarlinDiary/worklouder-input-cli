@@ -1021,7 +1021,7 @@ fn validate_preset_catalog_snapshot(snapshot: &PresetCatalogSnapshot) -> Result<
     Ok(())
 }
 
-fn preset_catalog_revision(presets: &[Value]) -> Result<String> {
+pub(crate) fn preset_catalog_revision(presets: &[Value]) -> Result<String> {
     let mut bytes = b"worklouder-input-preset-catalog-revision-v1\0".to_vec();
     bytes.extend(serde_json::to_vec(&canonical_json(&Value::Array(
         presets.to_vec(),
