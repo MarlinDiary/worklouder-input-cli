@@ -122,8 +122,20 @@ fn schemas_are_discoverable_and_machine_readable() {
         .unwrap();
     assert!(list.status.success());
     let summaries: serde_json::Value = serde_json::from_slice(&list.stdout).unwrap();
-    assert_eq!(summaries.as_array().unwrap().len(), 5);
-    assert_eq!(summaries[1]["name"], "configuration-v1");
+    assert_eq!(summaries.as_array().unwrap().len(), 6);
+    assert_eq!(summaries[0]["name"], "backup-inspection-v1");
+    assert_eq!(summaries[2]["name"], "configuration-v1");
+
+    let backup = binary()
+        .args(["--json", "schema", "show", "backup-inspection-v1"])
+        .output()
+        .unwrap();
+    assert!(backup.status.success());
+    let backup: serde_json::Value = serde_json::from_slice(&backup.stdout).unwrap();
+    assert_eq!(
+        backup["properties"]["kind"]["const"],
+        "worklouderctl-backup-inspection"
+    );
 
     let show = binary()
         .args(["--json", "schema", "show", "configuration-v1"])

@@ -6,6 +6,7 @@ artifacts.
 
 ```console
 worklouderctl --json schema list
+worklouderctl --json schema show backup-inspection-v1
 worklouderctl --json schema show command-envelope-v1
 worklouderctl --json schema show configuration-v1
 worklouderctl --json schema show input-operations-v1
@@ -19,6 +20,7 @@ use JSON Schema Draft 2020-12.
 
 | Registry name | Contract |
 | --- | --- |
+| `backup-inspection-v1` | verified artifact kind, restore availability, and migration requirements |
 | `command-envelope-v1` | shell-free `argv`, output mode, and accepted exit statuses |
 | `configuration-v1` | Codex settings, Codex Agent Keys, Input device configuration, and Input host settings snapshots |
 | `transaction-v1` | coordinated plan, transaction receipt, and private backup catalog |

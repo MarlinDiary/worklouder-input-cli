@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worklouderctl.dev/schemas/backup-inspection-v1.schema.json",
+  "title": "WorkLouderCTL backup inspection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "artifactKind",
+    "path",
+    "valid",
+    "artifactSchemaVersion",
+    "itemCount",
+    "restoreAvailable",
+    "migration"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "worklouderctl-backup-inspection" },
+    "artifactKind": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "path": { "type": "string", "minLength": 1 },
+    "valid": { "const": true },
+    "artifactSchemaVersion": { "type": "integer", "minimum": 1 },
+    "revision": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "itemCount": { "type": "integer", "minimum": 0 },
+    "restoreAvailable": { "type": "boolean" },
+    "restoreHint": { "type": "string", "minLength": 1 },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currentSchemaVersion",
+        "targetSchemaVersion",
+        "migrationRequired",
+        "supported",
+        "action"
+      ],
+      "properties": {
+        "currentSchemaVersion": { "type": "integer", "minimum": 1 },
+        "targetSchemaVersion": { "type": "integer", "minimum": 1 },
+        "migrationRequired": { "const": false },
+        "supported": { "const": true },
+        "action": { "const": "none" }
+      }
+    }
+  }
+}
