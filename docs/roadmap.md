@@ -50,7 +50,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Six Agent Key task/command/Skill/keycap assignment snapshot and validation
 - [x] Six Agent Key offline get/set/clear plus bridge apply/restore transaction
 - [x] Six Command Key slots get/set/reset offline candidates
-- [ ] voice mode
+- [x] voice mode
 - [ ] dial modes and custom gestures
 - [ ] joystick directions and Skills
 - [x] global brightness and auto-off

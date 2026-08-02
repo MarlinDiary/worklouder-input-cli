@@ -27,7 +27,7 @@ parity contract.
 | Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key snapshot/get/set/clear/apply/restore` | strict candidate, all assignment types, CAS, idempotency, stale rejection, exact readback, restore, and rollback fixture verified |
 | Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | strict offline candidate verified; generic complete-settings bridge transaction verified |
 | Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; generic complete-settings bridge transaction verified |
-| Voice button | push-to-talk, Voice Chat | `codex voice get/set` | researched |
+| Voice button | push-to-talk, Voice Chat | `codex voice get/set` | strict offline candidate plus `push-to-talk -> realtime -> push-to-talk` bridge apply/readback/restore fixture verified |
 | Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | researched |
 | Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | researched |
 | Joystick | up, right, down, left command/Skill/empty | `codex joystick get/set/clear` | researched |

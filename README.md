@@ -112,6 +112,8 @@ worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
 worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
 worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
 worklouderctl codex lighting auto-off set --input CODEX_BRIGHTNESS.json 10-minutes --output CODEX_LIGHTING.json
+worklouderctl codex voice get --input CODEX_LIGHTING.json
+worklouderctl codex voice set --input CODEX_LIGHTING.json realtime --output CODEX_VOICE.json
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
 worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
@@ -193,9 +195,9 @@ Codex 26.727.51351 contract, and recursively fills inherited defaults in the
 effective view. `codex export` atomically publishes and reopens a typed JSON
 snapshot. Neither command serializes unrelated Codex settings.
 
-`codex agent-source`, `codex agent-key tap-mode`, `codex command-key`, and
-`codex lighting` are strict offline Tier 1 editors. They validate the embedded
-frozen definitions,
+`codex agent-source`, `codex agent-key tap-mode`, `codex command-key`,
+`codex lighting`, and `codex voice` are strict offline Tier 1 editors. They
+validate the embedded frozen definitions,
 recompute effective settings and a recursive-key-sorted revision, preserve
 unknown `codex-micro-*` values, publish atomically, and reopen the result. Each
 receipt carries `expectedSourceSha256` for the Codex `settings-write` CAS

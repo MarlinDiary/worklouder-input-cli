@@ -59,6 +59,10 @@ offline `codex lighting brightness/auto-off get/set` candidates. The isolated
 Codex bridge E2E applies both fields, reads them back exactly, and restores their
 baseline values through the complete settings transaction.
 
+The voice button also has typed `codex voice get/set` candidates for
+`push-to-talk` and `realtime` (Voice Chat). The editor preserves future layout
+fields and the bridge fixture restores the exact baseline mode and source hash.
+
 ## Can an AI agent configure Codex Micro?
 
 Yes, through the deterministic JSON contract. Human and agent clients share

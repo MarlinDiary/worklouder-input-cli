@@ -60,6 +60,8 @@ worklouderctl codex lighting brightness get --input SNAPSHOT.json
 worklouderctl codex lighting brightness set --input SNAPSHOT.json VALUE --output CANDIDATE.json
 worklouderctl codex lighting auto-off get --input SNAPSHOT.json
 worklouderctl codex lighting auto-off set --input SNAPSHOT.json VALUE --output CANDIDATE.json
+worklouderctl codex voice get --input SNAPSHOT.json
+worklouderctl codex voice set --input SNAPSHOT.json push-to-talk|realtime --output CANDIDATE.json
 ```
 
 Candidate input is a complete `codex export` snapshot. The editor verifies the
@@ -77,6 +79,12 @@ exactly `off`, `30-seconds`, `1-minute`, `3-minutes`, `10-minutes`, `30-minutes`
 or `1-hour`. Both editors preserve unknown settings, keep inherited defaults
 implicit for no-op candidates, and use the complete settings bridge transaction
 for CAS apply/readback/restore.
+
+Voice mode reads or replaces `codex-micro-layout.voiceButtonMode`. Its exact
+values are `push-to-talk` and `realtime`; the latter is labeled Voice Chat in
+the GUI. The editor materializes the effective layout only for a real change,
+preserves unknown layout fields, and leaves an inherited default implicit for a
+no-op candidate.
 
 Agent Key snapshots use the separate `codex-agent-keys-revision-v1` global-state
 revision. Offline set/clear changes one `AG00`–`AG05` slot, preserves the other
