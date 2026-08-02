@@ -18,6 +18,12 @@ and runs authenticated Codex/Input apply/readback/restore/rollback transactions
 against isolated reference writers. Packaged releases and released-app writer
 integration are later milestones.
 
+Run `worklouderctl doctor --strict` to test the current machine rather than
+inferring write support from installed/running apps. The JSON field
+`configurationReady` becomes true only after both authenticated bridges
+advertise all required apply and restore capabilities. A plain `doctor` remains
+read-only and reports an unavailable bridge as a warning.
+
 ## What does full-configuration parity mean?
 
 Every setting available in the Codex Micro page or Input's Codex Micro views

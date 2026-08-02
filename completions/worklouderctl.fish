@@ -5,7 +5,7 @@ complete -c worklouderctl -n "__fish_use_subcommand" -f -a "version" -d 'Print C
 complete -c worklouderctl -n "__fish_use_subcommand" -f -a "tier" -d 'Inspect the configuration authority tiers'
 complete -c worklouderctl -n "__fish_use_subcommand" -f -a "capability" -d 'Inspect capabilities covered by the CLI contract'
 complete -c worklouderctl -n "__fish_use_subcommand" -f -a "compatibility" -d 'Inspect the release-gated application, bridge, and firmware matrix'
-complete -c worklouderctl -n "__fish_use_subcommand" -f -a "doctor" -d 'Diagnose Codex, Input, and cached device configuration providers'
+complete -c worklouderctl -n "__fish_use_subcommand" -f -a "doctor" -d 'Diagnose provider health and authenticated configuration readiness'
 complete -c worklouderctl -n "__fish_use_subcommand" -f -a "codex" -d 'Inspect or export Codex-owned Codex Micro settings'
 complete -c worklouderctl -n "__fish_use_subcommand" -f -a "input" -d 'Inspect or export Input-owned configuration'
 complete -c worklouderctl -n "__fish_use_subcommand" -f -a "device" -d 'Read live Codex Micro state through Input or its compatibility provider'

@@ -124,6 +124,13 @@ rollback after a corrupt readback. These are transaction-engine claims; they do
 not extend the Input 0.18.0 hardware boundary until an exact writer adapter and
 real-device restore test pass.
 
+`worklouderctl doctor` therefore reports application health and authenticated
+configuration readiness separately. `configurationReady` requires both bridge
+handshakes and the complete Codex/Input apply-and-restore capability sets.
+Missing endpoints, handshake failures, or incomplete capability negotiation are
+warnings; `--strict` promotes any such warning to a failing exit status. This
+probe is read-only and does not focus, reopen, or mutate either GUI/runtime.
+
 ## Adding support
 
 New compatibility claims require:

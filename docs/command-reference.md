@@ -31,7 +31,7 @@ SUBCOMMANDS:
     config           Validate or compare exported configuration
     control          Inspect or edit physical controls in an offline configuration snapshot
     device           Read live Codex Micro state through Input or its compatibility provider
-    doctor           Diagnose Codex, Input, and cached device configuration providers
+    doctor           Diagnose provider health and authenticated configuration readiness
     help             Print this message or the help of the given subcommand(s)
     input            Inspect or export Input-owned configuration
     layer            Inspect or edit layers in an offline configuration snapshot
@@ -356,7 +356,7 @@ SUBCOMMANDS:
 
 ```text
 worklouderctl-doctor 0.1.0
-Diagnose Codex, Input, and cached device configuration providers
+Diagnose provider health and authenticated configuration readiness
 
 USAGE:
     worklouderctl doctor [OPTIONS]

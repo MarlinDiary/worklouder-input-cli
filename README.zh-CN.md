@@ -56,6 +56,12 @@ cargo build --release --locked
 checksum/signature verification、tagged Developer ID notarization 与生成的
 Homebrew formula。首个 signed tag 发布前，仍以以上 source build 为公开安装方式。
 
+`worklouderctl doctor` 会区分 provider 的可读健康状态和完整配置就绪状态。
+只有 Codex 与 Input runtime 都提供经过认证、且包含全部 apply/restore capability
+的 bridge 时，JSON 才会报告 `configurationReady: true`。bridge 缺失、不可连接或
+capability 不完整时，`doctor --strict` 会以非零状态退出；普通 `doctor` 仍只读输出
+诊断与 warning，不会写入任一 provider。
+
 当前已经实现：
 
 ```console

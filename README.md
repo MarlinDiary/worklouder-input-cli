@@ -88,6 +88,13 @@ archives, checksum/signature verification, tagged Developer ID notarization,
 and the generated Homebrew formula. Until the first signed tag is published,
 the source build above remains the advertised installation path.
 
+`worklouderctl doctor` separates readable provider health from configuration
+readiness. It reports `configurationReady: true` only when both installed
+runtimes expose authenticated bridges with every required apply and restore
+capability. `doctor --strict` exits nonzero for a missing, unreachable, or
+incomplete bridge; plain `doctor` retains the diagnostic report and warning
+exit behavior without writing to either provider.
+
 Currently implemented commands:
 
 ```console
@@ -649,7 +656,7 @@ CLI semantic parser.
 | SEO/AIO and product documentation foundation | Complete |
 | Sanitized research fixtures and schema model | Complete; deterministic regeneration, manifests, parsing, and sensitive-pattern gates verified |
 | Rust CLI foundation, tier/capability contract, and JSON output | Complete |
-| Provider `doctor` and Input `inspect`/exact-byte `export`/semantic cache snapshot | Complete |
+| Provider `doctor` with authenticated configuration readiness and Input `inspect`/exact-byte `export`/semantic cache snapshot | Complete |
 | Bundle `validate` and structural `diff` | Complete |
 | Codex settings contract and TOML `doctor`/`inspect`/`export` | Complete |
 | Codex Agent source/tap mode and Command Key offline candidates | Complete; Codex bridge apply/restore fixture verified |

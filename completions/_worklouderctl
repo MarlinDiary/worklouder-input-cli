@@ -3700,7 +3700,7 @@ _worklouderctl_commands() {
 'tier:Inspect the configuration authority tiers' \
 'capability:Inspect capabilities covered by the CLI contract' \
 'compatibility:Inspect the release-gated application, bridge, and firmware matrix' \
-'doctor:Diagnose Codex, Input, and cached device configuration providers' \
+'doctor:Diagnose provider health and authenticated configuration readiness' \
 'codex:Inspect or export Codex-owned Codex Micro settings' \
 'input:Inspect or export Input-owned configuration' \
 'device:Read live Codex Micro state through Input or its compatibility provider' \
