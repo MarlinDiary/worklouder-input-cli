@@ -1,0 +1,172 @@
+WorkLouderCTL Codex settings diff v1 verification record
+========================================================
+
+Scope
+-----
+Base commit: ae66d32e1157aa5592b09425245dd0af4396f059
+Feature commit: b6d97082c36c5b546923c39b5426938ddee4bc14
+Feature commits:
+  b9c0a71 spec: define Codex settings diff
+  2155eff feat: add Codex settings diff
+  b6d9708 docs: publish Codex settings diff workflow
+Changed CLI branch:
+  codex config diff BASE.json CANDIDATE.json
+Compared field:
+  /settings
+Excluded non-mutation fields:
+  sourcePath, sourceSha256, installedAppVersion, adapter, warnings,
+  definitions, effectiveSettings
+GUI, bridge, device, and runtime access during the diff: none
+
+Semantic contract
+-----------------
+Both inputs are reopened and validated as exact frozen-contract Codex snapshots.
+The diff compares explicit settings only, while validation independently checks
+that effectiveSettings equals the frozen defaults merged with those settings.
+Unknown settings remain visible. Object changes are deterministic, use RFC 6901
+JSON Pointer escaping, and include typed before/after JSON values. Both canonical
+settings revisions are returned for apply/restore preflight.
+
+Preserved original artifact
+---------------------------
+Source commit: ae66d32e1157aa5592b09425245dd0af4396f059
+Build command:
+  cargo build --release --locked --manifest-path BASE_WORKTREE/Cargo.toml
+Preserved path:
+  /tmp/worklouderctl-codex-settings-diff-v1.08HAMg/original/worklouderctl
+SHA-256:
+  d288fed8b17ef3d77e09e83f9ae86e9de48678ddcfec8aeff5112424d17fb56f
+Exit status: 0
+
+Functional baseline-red
+-----------------------
+Command:
+  /tmp/worklouderctl-codex-settings-diff-v1.08HAMg/original/worklouderctl \
+    codex config diff BASE.json CANDIDATE.json
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'diff' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl codex config [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
+
+Modified release E2E input
+--------------------------
+Input file:
+  /tmp/worklouderctl-codex-settings-diff-v1.08HAMg/e2e/config.toml
+Literal content:
+  [desktop]
+  codex-micro-agent-source = "recent"
+  codex-micro-future = "preserved"
+Source SHA-256 before and after all commands:
+  774fd6612a603c9e959f78fcbb6345d80837aecdb72e2d18abbef128d89cda5c
+Result: source bytes unchanged
+
+Modified release E2E commands
+-----------------------------
+Commands:
+  MODIFIED_BIN --json codex export \
+    --config E2E/config.toml --app E2E/missing.app \
+    --output E2E/baseline.json
+  MODIFIED_BIN --json codex lighting brightness set \
+    --input E2E/baseline.json 37 --output E2E/candidate.json
+  MODIFIED_BIN --json codex config --socket E2E/absent.sock diff \
+    E2E/baseline.json E2E/candidate.json
+Exit status: 0 for all commands
+
+The absent socket is intentional evidence that the file-only diff never opens
+the Codex Companion Bridge.
+
+Literal JSON diff output:
+  {"schemaVersion":1,"kind":"worklouderctl-codex-settings-diff","base":"/tmp/worklouderctl-codex-settings-diff-v1.08HAMg/e2e/baseline.json","candidate":"/tmp/worklouderctl-codex-settings-diff-v1.08HAMg/e2e/candidate.json","baseRevision":"b4ada82ceb161b08536cc50532b93c9a70c741d88108c925c8244e3c5c6f95a9","candidateRevision":"9a4613a9fb3bdc81cccaab016ae167594068a3d2edd2ca2000f4a60c2901ad5e","identical":false,"changes":[{"path":"/settings/codex-micro-lighting-brightness","change":"added","after":37}]}
+
+Literal human diff output:
+  1 Codex setting difference(s)
+  Added  /settings/codex-micro-lighting-brightness
+  base-revision=b4ada82ceb161b08536cc50532b93c9a70c741d88108c925c8244e3c5c6f95a9
+  candidate-revision=9a4613a9fb3bdc81cccaab016ae167594068a3d2edd2ca2000f4a60c2901ad5e
+Exit status: 0
+
+Literal assertions:
+  assertions=pass
+  changedPaths=/settings/codex-micro-lighting-brightness
+  metadataOnlyIdentical=true
+
+Metadata-only exclusion
+-----------------------
+A copy of the baseline changed only installedAppVersion, sourcePath, and
+warnings. Command:
+  MODIFIED_BIN --json codex config --socket E2E/absent.sock diff \
+    E2E/baseline.json E2E/metadata.json
+Literal output:
+  {"schemaVersion":1,"kind":"worklouderctl-codex-settings-diff","base":"/tmp/worklouderctl-codex-settings-diff-v1.08HAMg/e2e/baseline.json","candidate":"/tmp/worklouderctl-codex-settings-diff-v1.08HAMg/e2e/metadata.json","baseRevision":"b4ada82ceb161b08536cc50532b93c9a70c741d88108c925c8244e3c5c6f95a9","candidateRevision":"b4ada82ceb161b08536cc50532b93c9a70c741d88108c925c8244e3c5c6f95a9","identical":true,"changes":[]}
+Exit status: 0
+
+Automated quality gates
+-----------------------
+Command: cargo fmt --all -- --check
+Literal output: (empty)
+Exit status: 0
+
+Command: cargo clippy --locked --all-targets -- -D warnings
+Literal result:
+  Finished dev [unoptimized + debuginfo] target(s)
+Exit status: 0
+
+Command: cargo test --locked
+Literal result:
+  61 passed; 0 failed (library)
+  15 passed; 0 failed (CLI integration)
+  0 failed (binary and doc tests)
+Exit status: 0
+
+Diff-specific tested behavior:
+  snapshots are validated before comparison
+  settings changes produce deterministic leaf paths
+  JSON Pointer slash and tilde tokens are escaped
+  transport metadata is excluded
+  identical settings have equal revisions and no changes
+  unknown settings survive the candidate flow
+  CLI succeeds with an intentionally absent bridge socket
+
+Command: cargo build --release --locked
+Literal result:
+  Finished release [optimized] target(s)
+Exit status: 0
+
+Modified artifact
+-----------------
+Build command:
+  cargo build --release --locked
+Repository path:
+  target/release/worklouderctl
+Preserved copy:
+  /tmp/worklouderctl-codex-settings-diff-v1.08HAMg/modified/worklouderctl
+SHA-256 (both paths):
+  6e39c4e25440f065e6a271376e3a3461643b5f2bd1847dde5a81b476f3382e8e
+Reopen/execute command:
+  ./target/release/worklouderctl codex config diff --help
+Exit status: 0
+
+Patch
+-----
+Path:
+  artifacts/verification/codex-settings-diff-v1/codex-settings-diff.patch
+SHA-256:
+  62b74df6366b9cedc5fa51747188ab52bbc6def3f1abc272c9e18d5784b32cca
+Command:
+  git apply --check --reverse \
+    artifacts/verification/codex-settings-diff-v1/codex-settings-diff.patch
+Literal output: (empty)
+Exit status: 0
+
+Rollback
+--------
+Path:
+  artifacts/verification/codex-settings-diff-v1/rollback.sh
+SHA-256:
+  6a5d86095676c24bef814457ca04b8989c8bd81a3983119307005b1f296265e4
+The isolated-worktree execution result is appended after the artifact commit.

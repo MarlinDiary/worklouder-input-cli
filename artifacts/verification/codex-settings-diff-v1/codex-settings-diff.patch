@@ -1,0 +1,416 @@
+diff --git a/README.md b/README.md
+index c6a06f4..5da0bed 100644
+--- a/README.md
++++ b/README.md
+@@ -108,6 +108,7 @@ worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled -
+ worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
+ worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
+ worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
++worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
+ worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
+ worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
+@@ -216,6 +217,13 @@ six-slot readback, stale-CAS rejection, and automatic rollback. Assignment
+ storage and the `codex-micro-agent-source=custom` setting remain independently
+ controlled, so applying assignments never changes source ordering implicitly.
+ 
++`codex config diff BASE.json CANDIDATE.json` validates both frozen-contract
++snapshots and compares only their explicit `settings`. Transport metadata,
++warnings, definitions, and the derived effective view are excluded, while
++unknown settings remain visible. Human output lists deterministic JSON Pointer
++paths; `--json` also includes typed before/after values and both canonical
++settings revisions. The command is file-only and never opens a bridge or app.
++
+ `codex runtime status` is the released-app Tier 1 liveness probe. It requires
+ the exact frozen Codex version and bundle hashes, attaches to the Codex main
+ process on loopback, and reads the one live `CodexMicroService`. Healthy means
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 4f38815..b6336fe 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -77,6 +77,7 @@ worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled -
+ worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
+ worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
+ worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
++worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
+ worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
+ worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
+ worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
+@@ -178,6 +179,12 @@ readback、stale-CAS rejection 与 automatic rollback。assignment storage 和
+ `codex-micro-agent-source=custom` 是两个独立 authority，因此 assignment transaction
+ 不会隐式改变 source ordering。
+ 
++`codex config diff BASE.json CANDIDATE.json` 会先校验两个 frozen-contract
++snapshot，再只比较 explicit `settings`。transport metadata、warnings、definitions
++与派生的 effective view 不进入差异，但未知 settings 仍会完整显示。human output
++按确定顺序列出 JSON Pointer paths；`--json` 还包含 typed before/after values 和
++两侧 canonical settings revisions。该命令只读文件，不打开 bridge 或 app。
++
+ `codex runtime status` 是 released app 的 Tier 1 liveness probe：先核对冻结的 Codex
+ 版本与 bundle hashes，再经 loopback 附加到 Codex main process，读取唯一的
+ `CodexMicroService`。完整健康条件为 `connected`、comm/API 对象存在、connection/
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index 8491adb..31a4e74 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -34,7 +34,7 @@ parity contract.
+ | Lighting brightness | integer 0–100 | `codex lighting brightness get/set` | strict offline candidate plus `100 -> 37 -> 100` bridge apply/readback/restore fixture verified |
+ | Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | strict offline candidate plus `3-minutes -> 10-minutes -> 3-minutes` bridge apply/readback/restore fixture verified |
+ | Layout reset | installed-build default layout | `codex reset layout` | researched |
+-| Full object | export, validate, diff, apply, restore | `codex config snapshot/apply/restore`, future diff | authenticated snapshot/CAS/apply/readback/restore/rollback fixture verified; released Codex integration and diff pending |
++| Full object | export, validate, diff, apply, restore | `codex config snapshot/diff/apply/restore` | settings-only structural diff plus authenticated snapshot/CAS/apply/readback/restore/rollback fixture verified; released Codex integration pending |
+ | Runtime health | connected control plane, settled reconnect, HID/joystick subscriptions | `codex runtime status/recover` | exact 26.727.51351 bundle contract, live failed-state capture and service-only recovery verified; CDP transport and CLI surface regression verified |
+ 
+ ### Tier 1 adapter
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index 5f4d933..9c4eeb9 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -35,6 +35,7 @@ worklouderctl codex inspect [--config PATH] [--app PATH]
+ worklouderctl codex export --output FILE [--config PATH] [--app PATH]
+ worklouderctl codex bridge [--socket PATH] [--token PATH] inspect
+ worklouderctl codex config [--socket PATH] [--token PATH] snapshot --output FILE
++worklouderctl codex config diff BASE.json CANDIDATE.json
+ worklouderctl codex config [--socket PATH] [--token PATH] apply --input CANDIDATE.json --backup BEFORE.json
+ worklouderctl codex config [--socket PATH] [--token PATH] restore --input BEFORE.json --backup CURRENT.json
+ worklouderctl codex agent-key assignments [--socket PATH] [--token PATH]
+diff --git a/docs/research/2026-08-02-codex-settings-diff-contract.md b/docs/research/2026-08-02-codex-settings-diff-contract.md
+new file mode 100644
+index 0000000..2311a88
+--- /dev/null
++++ b/docs/research/2026-08-02-codex-settings-diff-contract.md
+@@ -0,0 +1,35 @@
++# Codex settings diff contract v1
++
++`codex config diff` compares two complete, frozen-contract Codex settings
++snapshots before an apply or restore transaction.
++
++## Compared authority
++
++The command validates both inputs with the existing Codex snapshot contract and
++compares only their explicit `settings` objects. It intentionally excludes
++snapshot transport metadata (`sourcePath`, source hash, installed version,
++adapter, and warnings), frozen definitions, and derived `effectiveSettings`.
++Those fields can differ without representing a requested Codex configuration
++mutation; `effectiveSettings` is independently recomputed and checked while
++each snapshot is validated.
++
++## Output contract
++
++The report contains:
++
++- both input paths;
++- both canonical settings revisions;
++- an `identical` boolean;
++- deterministic leaf changes rooted at `/settings`;
++- each change's `added`, `removed`, or `changed` kind; and
++- typed before/after JSON values when present.
++
++Object keys use RFC 6901 JSON Pointer escaping and deterministic sorted order.
++Arrays use stable numeric indices. Unknown settings fields remain visible
++rather than being filtered through the currently known GUI schema.
++
++## Operation boundary
++
++The command is file-only and read-only. It opens neither bridge, app, device,
++nor GUI, and it performs no settings write. The resulting revisions and paths
++are suitable for human review or an agent-controlled apply preflight.
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index d505584..8e08fd9 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -55,7 +55,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [ ] joystick directions and Skills
+ - [x] global brightness and auto-off
+ - [x] Codex settings backup, apply, readback, restore, and automatic rollback fixture
+-- [ ] Codex settings structural diff command
++- [x] Codex settings-only structural diff with revisions and typed before/after values
+ 
+ ## M3 — Input semantic configuration beta
+ 
+diff --git a/src/cli.rs b/src/cli.rs
+index ac7ef19..e92b662 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -367,7 +367,7 @@ pub enum CodexCommand {
+         command: CodexBridgeCommand,
+     },
+ 
+-    /// Snapshot, apply, or restore settings through the running Codex authority.
++    /// Snapshot, diff, apply, or restore Codex settings.
+     Config {
+         /// Override the Codex Companion Bridge Unix socket path.
+         #[clap(long, value_parser)]
+@@ -660,6 +660,17 @@ pub enum CodexConfigCommand {
+         output: PathBuf,
+     },
+ 
++    /// Compare only the explicit settings in two validated Codex snapshots.
++    Diff {
++        /// Baseline from `codex config snapshot` or an offline Codex editor.
++        #[clap(value_parser)]
++        base: PathBuf,
++
++        /// Candidate from `codex config snapshot` or an offline Codex editor.
++        #[clap(value_parser)]
++        candidate: PathBuf,
++    },
++
+     /// Apply a complete settings candidate with backup, CAS, and exact readback.
+     Apply {
+         /// Candidate from `codex config snapshot` or an offline Codex editor.
+diff --git a/src/codex.rs b/src/codex.rs
+index 03b412c..7c9eff6 100644
+--- a/src/codex.rs
++++ b/src/codex.rs
+@@ -1,5 +1,5 @@
+ use crate::doctor::{self, Check, CheckStatus};
+-use crate::fsutil;
++use crate::{config, fsutil};
+ use anyhow::{bail, ensure, Context, Result};
+ use serde::{Deserialize, Serialize};
+ use serde_json::{Map, Value};
+@@ -85,6 +85,19 @@ pub struct CandidateReceipt {
+     pub after_revision: String,
+ }
+ 
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SettingsDiffReport {
++    pub schema_version: u8,
++    pub kind: &'static str,
++    pub base: PathBuf,
++    pub candidate: PathBuf,
++    pub base_revision: String,
++    pub candidate_revision: String,
++    pub identical: bool,
++    pub changes: Vec<config::Change>,
++}
++
+ #[derive(Debug, Serialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct AgentSourceView {
+@@ -875,6 +888,27 @@ pub fn read_snapshot(path: &Path) -> Result<Snapshot> {
+     Ok(snapshot)
+ }
+ 
++pub fn diff(base_path: &Path, candidate_path: &Path) -> Result<SettingsDiffReport> {
++    let base = read_snapshot(base_path)?;
++    let candidate = read_snapshot(candidate_path)?;
++    let base_revision = settings_revision(&base.settings)?;
++    let candidate_revision = settings_revision(&candidate.settings)?;
++    let base_settings = serde_json::to_value(&base.settings)?;
++    let candidate_settings = serde_json::to_value(&candidate.settings)?;
++    let changes = config::diff_json_values("/settings", &base_settings, &candidate_settings);
++
++    Ok(SettingsDiffReport {
++        schema_version: 1,
++        kind: "worklouderctl-codex-settings-diff",
++        base: base_path.to_path_buf(),
++        candidate: candidate_path.to_path_buf(),
++        identical: changes.is_empty(),
++        base_revision,
++        candidate_revision,
++        changes,
++    })
++}
++
+ pub fn validate_snapshot(snapshot: &Snapshot) -> Result<()> {
+     let contract = load_contract()?;
+     ensure!(
+@@ -1425,6 +1459,53 @@ mod tests {
+         fs::remove_dir_all(root).unwrap();
+     }
+ 
++    #[test]
++    fn settings_diff_validates_snapshots_and_ignores_transport_metadata() {
++        let root = fixture_root();
++        fs::create_dir_all(&root).unwrap();
++        let config = root.join("config.toml");
++        let baseline_path = root.join("baseline.json");
++        let candidate_path = root.join("candidate.json");
++        let metadata_path = root.join("metadata.json");
++        fs::write(
++            &config,
++            b"[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
++        )
++        .unwrap();
++        export(&config, &root.join("missing.app"), &baseline_path).unwrap();
++        lighting_brightness_set(&baseline_path, 37, &candidate_path).unwrap();
++
++        let report = diff(&baseline_path, &candidate_path).unwrap();
++        assert!(!report.identical);
++        assert_ne!(report.base_revision, report.candidate_revision);
++        assert_eq!(report.changes.len(), 1);
++        assert_eq!(
++            report.changes[0].path,
++            "/settings/codex-micro-lighting-brightness"
++        );
++        assert_eq!(report.changes[0].before, None);
++        assert_eq!(report.changes[0].after, Some(serde_json::json!(37)));
++
++        let mut metadata_only = read_snapshot(&baseline_path).unwrap();
++        metadata_only.installed_app_version = Some("metadata-only".into());
++        metadata_only.source_path = root.join("different-source.toml");
++        metadata_only.warnings.push("metadata-only".into());
++        fs::write(
++            &metadata_path,
++            serde_json::to_vec_pretty(&metadata_only).unwrap(),
++        )
++        .unwrap();
++        let metadata_report = diff(&baseline_path, &metadata_path).unwrap();
++        assert!(metadata_report.identical);
++        assert_eq!(
++            metadata_report.base_revision,
++            metadata_report.candidate_revision
++        );
++        assert!(metadata_report.changes.is_empty());
++
++        fs::remove_dir_all(root).unwrap();
++    }
++
+     #[test]
+     fn lighting_candidates_are_typed_bounded_atomic_and_preserve_unknown_settings() {
+         let root = fixture_root();
+diff --git a/src/config.rs b/src/config.rs
+index 1ec0d93..b8e9328 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -449,6 +449,12 @@ fn diff_value(path: &str, before: &Value, after: &Value, changes: &mut Vec<Chang
+     }
+ }
+ 
++pub(crate) fn diff_json_values(path: &str, before: &Value, after: &Value) -> Vec<Change> {
++    let mut changes = Vec::new();
++    diff_value(path, before, after, &mut changes);
++    changes
++}
++
+ fn safe_relative_path(path: &str) -> bool {
+     if path.contains('\\') || path.contains('\0') {
+         return false;
+@@ -483,6 +489,17 @@ mod tests {
+         assert_eq!(changes[1].path, "/keymap.json/layer/keys/1");
+     }
+ 
++    #[test]
++    fn structural_diff_escapes_json_pointer_tokens() {
++        let before = serde_json::json!({"a/b": {"~flag": false}});
++        let after = serde_json::json!({"a/b": {"~flag": true}});
++
++        let changes = diff_json_values("/settings", &before, &after);
++
++        assert_eq!(changes.len(), 1);
++        assert_eq!(changes[0].path, "/settings/a~1b/~0flag");
++    }
++
+     #[test]
+     fn traversal_paths_are_rejected() {
+         assert!(safe_relative_path("devices/1/keymap.json"));
+diff --git a/src/lib.rs b/src/lib.rs
+index d6612ef..64c307f 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1616,6 +1616,23 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
+                         writeln!(out, "source-sha256={}", result.source_sha256)?;
+                     }
+                 }
++                CodexConfigCommand::Diff { base, candidate } => {
++                    let result = codex::diff(&base, &candidate)?;
++                    if json {
++                        write_json(&mut out, &result)?;
++                    } else {
++                        if result.identical {
++                            writeln!(out, "No Codex settings differences")?;
++                        } else {
++                            writeln!(out, "{} Codex setting difference(s)", result.changes.len())?;
++                            for change in &result.changes {
++                                writeln!(out, "{:?}\t{}", change.change, change.path)?;
++                            }
++                        }
++                        writeln!(out, "base-revision={}", result.base_revision)?;
++                        writeln!(out, "candidate-revision={}", result.candidate_revision)?;
++                    }
++                }
+                 CodexConfigCommand::Apply {
+                     input,
+                     backup,
+diff --git a/tests/cli.rs b/tests/cli.rs
+index 3f7ed57..cfcb95d 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -335,6 +335,7 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
+     let config_stdout = String::from_utf8(config.stdout).unwrap();
+     assert!(config.status.success());
+     assert!(config_stdout.contains("snapshot"));
++    assert!(config_stdout.contains("diff"));
+     assert!(config_stdout.contains("apply"));
+     assert!(config_stdout.contains("restore"));
+ 
+@@ -397,6 +398,66 @@ fn codex_runtime_help_exposes_status_and_coordinated_recovery() {
+     assert!(stdout.contains("--timeout-seconds"));
+ }
+ 
++#[test]
++fn codex_settings_diff_runs_end_to_end_without_opening_a_bridge() {
++    let root = fixture_root();
++    fs::create_dir_all(&root).unwrap();
++    let config = root.join("config.toml");
++    let baseline = root.join("baseline.json");
++    let candidate = root.join("candidate.json");
++    fs::write(
++        &config,
++        b"[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
++    )
++    .unwrap();
++
++    let export = binary()
++        .args(["codex", "export", "--config"])
++        .arg(&config)
++        .arg("--app")
++        .arg(root.join("missing.app"))
++        .arg("--output")
++        .arg(&baseline)
++        .output()
++        .unwrap();
++    assert!(export.status.success());
++
++    let edit = binary()
++        .args(["codex", "lighting", "brightness", "set", "--input"])
++        .arg(&baseline)
++        .arg("37")
++        .arg("--output")
++        .arg(&candidate)
++        .output()
++        .unwrap();
++    assert!(edit.status.success());
++
++    let output = binary()
++        .args(["--json", "codex", "config", "diff"])
++        .arg(&baseline)
++        .arg(&candidate)
++        .output()
++        .unwrap();
++    assert!(
++        output.status.success(),
++        "{}",
++        String::from_utf8_lossy(&output.stderr)
++    );
++    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
++    assert_eq!(report["kind"], "worklouderctl-codex-settings-diff");
++    assert_eq!(report["identical"], false);
++    assert_eq!(report["changes"].as_array().unwrap().len(), 1);
++    assert_eq!(
++        report["changes"][0]["path"],
++        "/settings/codex-micro-lighting-brightness"
++    );
++    assert_eq!(report["changes"][0]["change"], "added");
++    assert_eq!(report["changes"][0]["after"], 37);
++    assert_ne!(report["baseRevision"], report["candidateRevision"]);
++
++    fs::remove_dir_all(root).unwrap();
++}
++
+ #[test]
+ fn device_help_exposes_live_read_workflow() {
+     let device = binary().args(["device", "--help"]).output().unwrap();
