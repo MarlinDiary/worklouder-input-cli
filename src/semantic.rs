@@ -733,7 +733,7 @@ mod tests {
         }))
         .unwrap();
         let smart = br#"{"version":1,"future":{"byteExact":true}}"#.to_vec();
-        let mut files = vec![
+        let files = vec![
             file("keymap.json", &keymap),
             file("smart_actions.json", &smart),
         ];
@@ -745,7 +745,7 @@ mod tests {
             "revision": revision,
             "deviceId": "fixture-device",
             "futureEnvelope": [1, 2, 3],
-            "files": files.drain(..).collect::<Vec<_>>()
+            "files": files
         })
     }
 
