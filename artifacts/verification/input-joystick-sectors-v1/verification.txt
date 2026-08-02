@@ -190,3 +190,28 @@ Syntax command:
   sh -n artifacts/verification/input-joystick-sectors-v1/rollback.sh
 Exit status: 0
 The isolated rollback execution is appended after the artifact commit.
+Isolated rollback execution
+---------------------------
+Artifact commit:
+  67c7fa82d3084ad7c10bbf8bbdd8cd345d5c0e1f
+Command:
+  artifacts/verification/input-joystick-sectors-v1/rollback.sh \
+    /tmp/worklouderctl-input-joystick-sectors-v1.K3XqlP/rollback-worktree.lSN35G
+Literal output:
+  rollback=verified
+  base=07898097c64d03c210922623d46f7b0239faf958
+Exit status: 0
+Postcondition:
+  worktree equals base outside artifacts/verification/input-joystick-sectors-v1
+Exit status: 0
+Rolled-back behavior:
+  cargo run --quiet --locked --manifest-path ROLLBACK_WORKTREE/Cargo.toml -- \
+    layer joystick --help
+Literal stderr:
+  error: Found argument 'joystick' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl layer [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
