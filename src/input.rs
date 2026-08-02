@@ -445,16 +445,15 @@ fn inspect_file(relative_path: &str, source: &Path) -> Result<FileSummary> {
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 
     fn fixture_root() -> PathBuf {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
+        let fixture_id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
         env::temp_dir().join(format!(
-            "worklouderctl-input-{}-{nonce}",
-            std::process::id()
+            "worklouderctl-input-{}-{fixture_id}",
+            std::process::id(),
         ))
     }
 
