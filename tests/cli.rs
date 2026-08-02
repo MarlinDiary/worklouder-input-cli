@@ -73,6 +73,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("multi-action"));
     assert!(stdout.contains("smart-action"));
     assert!(stdout.contains("cheat-sheet"));
+    assert!(stdout.contains("preset"));
     assert!(stdout.contains("completion"));
 }
 
@@ -222,6 +223,13 @@ fn semantic_help_exposes_offline_candidate_workflow() {
     for command in ["catalog", "bindings", "bind"] {
         assert!(cheat_sheet_stdout.contains(command));
     }
+
+    let preset = binary().args(["preset", "--help"]).output().unwrap();
+    let preset_stdout = String::from_utf8(preset.stdout).unwrap();
+    assert!(preset.status.success());
+    for command in ["list", "show", "preview", "install"] {
+        assert!(preset_stdout.contains(command));
+    }
 }
 
 #[test]
@@ -276,6 +284,26 @@ fn input_and_config_help_expose_read_only_workflow() {
     assert!(config.status.success());
     assert!(config_stdout.contains("validate"));
     assert!(config_stdout.contains("diff"));
+}
+
+#[test]
+fn preset_help_exposes_catalog_and_offline_install_workflow() {
+    let output = binary().args(["preset", "--help"]).output().unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(output.status.success());
+    for command in ["list", "show", "preview", "install"] {
+        assert!(stdout.contains(command));
+    }
+
+    let install = binary()
+        .args(["preset", "install", "--help"])
+        .output()
+        .unwrap();
+    let install_stdout = String::from_utf8(install.stdout).unwrap();
+    assert!(install.status.success());
+    for option in ["--input", "--catalog", "--id", "--profile", "--output"] {
+        assert!(install_stdout.contains(option));
+    }
 }
 
 #[test]

@@ -284,7 +284,7 @@ const adapter = createInputMainAdapter({
             },
           ],
           multiactionGroups: [],
-          previewImg: "data:image/png;base64,",
+          previewImg: "data:image/png;base64,UE5H",
         },
       ];
     },

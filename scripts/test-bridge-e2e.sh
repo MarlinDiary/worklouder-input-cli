@@ -13,6 +13,8 @@ candidate_snapshot=$root/config-candidate.json
 host_settings_snapshot=$root/host-settings.json
 host_settings_enabled=$root/host-settings-enabled.json
 preset_catalog=$root/preset-catalog.json
+preset_preview=$root/preset-preview.png
+preset_installed_snapshot=$root/config-preset-installed.json
 color_snapshot=$root/config-color.json
 control_snapshot=$root/config-control.json
 action_created_snapshot=$root/config-action-created.json
@@ -119,6 +121,16 @@ node "$repo/companion/conformance.mjs" \
 "$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
   preset snapshot --output "$preset_catalog" \
   >"$root/preset-catalog-receipt.json"
+"$bin" --json preset list --catalog "$preset_catalog" \
+  --device codex_micro --layout universal --os mac --search design \
+  >"$root/preset-list.json"
+"$bin" --json preset show --catalog "$preset_catalog" --id 9002 \
+  >"$root/preset-show.json"
+"$bin" --json preset preview --catalog "$preset_catalog" --id 9002 \
+  --output "$preset_preview" >"$root/preset-preview-receipt.json"
+"$bin" --json preset install --input "$config_snapshot" \
+  --catalog "$preset_catalog" --id 9002 --profile 0 \
+  --output "$preset_installed_snapshot" >"$root/preset-install.json"
 "$bin" --json input permission command get --input "$host_settings_snapshot" \
   >"$root/host-settings-get.json"
 "$bin" --json input permission command set --input "$host_settings_snapshot" \
@@ -169,6 +181,32 @@ printf '%s\n' '{"hostOnly":true}' >"$cache_support/input_storage.json"
 revision=$(python3 -c \
   'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
   "$config_snapshot")
+preset_candidate_revision=$(python3 -c \
+  'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
+  "$preset_installed_snapshot")
+"$bin" --json device --transport bridge \
+  --bridge-socket "$socket" --bridge-token "$token" config validate \
+  --input "$preset_installed_snapshot" --expected-revision "$revision" \
+  >"$root/preset-config-validation.json"
+"$bin" --json device --transport bridge \
+  --bridge-socket "$socket" --bridge-token "$token" config apply \
+  --input "$preset_installed_snapshot" --backup "$root/preset-pre-apply.json" \
+  --expected-revision "$revision" --idempotency-key preset-e2e-apply-1 \
+  >"$root/preset-config-apply.json"
+"$bin" --json device --transport bridge \
+  --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+  --output "$root/preset-post-apply.json" \
+  >"$root/preset-post-apply-receipt.json"
+"$bin" --json device --transport bridge \
+  --bridge-socket "$socket" --bridge-token "$token" config restore \
+  --input "$config_snapshot" --backup "$root/preset-pre-restore.json" \
+  --expected-revision "$preset_candidate_revision" \
+  --idempotency-key preset-e2e-restore-1 \
+  >"$root/preset-config-restore.json"
+"$bin" --json device --transport bridge \
+  --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+  --output "$root/preset-post-restore.json" \
+  >"$root/preset-post-restore-receipt.json"
 "$bin" --json profile list --input "$config_snapshot" \
   >"$root/profile-list.json"
 "$bin" --json profile show --input "$config_snapshot" --id 0 \
@@ -535,6 +573,16 @@ host_settings_restore = json.loads((root / "host-settings-restore.json").read_te
 host_settings_post_restore = json.loads((root / "host-settings-post-restore.json").read_text())
 preset_catalog = json.loads((root / "preset-catalog.json").read_text())
 preset_catalog_receipt = json.loads((root / "preset-catalog-receipt.json").read_text())
+preset_list = json.loads((root / "preset-list.json").read_text())
+preset_show = json.loads((root / "preset-show.json").read_text())
+preset_preview_receipt = json.loads((root / "preset-preview-receipt.json").read_text())
+preset_install = json.loads((root / "preset-install.json").read_text())
+preset_installed = json.loads((root / "config-preset-installed.json").read_text())
+preset_validation = json.loads((root / "preset-config-validation.json").read_text())
+preset_apply = json.loads((root / "preset-config-apply.json").read_text())
+preset_post_apply = json.loads((root / "preset-post-apply.json").read_text())
+preset_restore = json.loads((root / "preset-config-restore.json").read_text())
+preset_post_restore = json.loads((root / "preset-post-restore.json").read_text())
 
 assert conformance["conformant"] is True
 assert conformance["protocolVersion"] == 1
@@ -1084,6 +1132,39 @@ assert preset_catalog_receipt["revision"] == preset_catalog["revision"]
 assert preset_catalog_receipt["presetCount"] == 1
 assert preset_catalog["presets"][0]["id"] == 9002
 assert preset_catalog["presets"][0]["layer"]["name"] == "Fixture Preset Layer"
+assert [item["id"] for item in preset_list["presets"]] == [9002]
+assert preset_show["preset"]["name"] == "Fixture Figma"
+assert preset_show["preset"]["actionCount"] == 1
+assert preset_show["preset"]["multiActionCount"] == 1
+assert preset_preview_receipt["presetId"] == 9002
+assert preset_preview_receipt["mediaType"] == "image/png"
+assert preset_preview_receipt["size"] == 3
+assert (root / "preset-preview.png").read_bytes() == b"PNG"
+assert preset_preview_receipt["sha256"] == hashlib.sha256(b"PNG").hexdigest()
+assert preset_install["operation"] == "preset-install"
+assert preset_install["resourceId"] == 2
+assert preset_install["beforeRevision"] == snapshot["revision"]
+assert preset_install["afterRevision"] == preset_installed["revision"]
+preset_keymap = json.loads(payload(preset_installed, "keymap.json"))
+assert len(preset_keymap["profiles"][0]["layers"]) == 3
+assert preset_keymap["profiles"][0]["layers"][2]["name"] == "Fixture Preset Layer"
+assert preset_keymap["profiles"][0]["layers"][2]["layout"]["keymap"] == [["KA_A11", "KA_M3"]]
+assert preset_keymap["macros"][-1]["id"] == 11
+assert preset_keymap["multiActions"][-1]["id"] == 3
+assert preset_keymap["multiActions"][-1]["kcOnTap"] == "KA_A11"
+assert preset_keymap["macrosGroups"][-1]["actionIds"] == [11]
+assert preset_keymap["macrosGroups"][-1]["tags"] == ["fixture", "design"]
+assert preset_validation["valid"] is True
+assert preset_validation["revision"] == preset_installed["revision"]
+assert preset_validation["liveRevision"] == snapshot["revision"]
+assert preset_apply["beforeRevision"] == snapshot["revision"]
+assert preset_apply["afterRevision"] == preset_installed["revision"]
+assert preset_post_apply["revision"] == preset_installed["revision"]
+assert payload(preset_post_apply, "keymap.json") == payload(preset_installed, "keymap.json")
+assert preset_restore["beforeRevision"] == preset_installed["revision"]
+assert preset_restore["afterRevision"] == snapshot["revision"]
+assert preset_post_restore["revision"] == snapshot["revision"]
+assert payload(preset_post_restore, "keymap.json") == payload(snapshot, "keymap.json")
 
 print("bridge_protocol=1")
 print("node_conformance=verified")
@@ -1141,4 +1222,7 @@ print("host_command_permission_candidate=verified")
 print("host_command_permission_sibling_preservation=verified")
 print("host_settings_apply_replay_restore=verified")
 print("preset_catalog_snapshot_revision=verified")
+print("preset_list_show_preview=verified")
+print("preset_install_remap_dedup=verified")
+print("preset_apply_readback_restore=verified")
 PY
