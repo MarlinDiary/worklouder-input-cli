@@ -326,6 +326,7 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
     assert!(stdout.contains("agent-key"));
     assert!(stdout.contains("command-key"));
     assert!(stdout.contains("lighting"));
+    assert!(stdout.contains("voice"));
 
     let config = binary()
         .args(["codex", "config", "--help"])
@@ -364,6 +365,15 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
     assert!(lighting.status.success());
     assert!(lighting_stdout.contains("brightness"));
     assert!(lighting_stdout.contains("auto-off"));
+
+    let voice = binary()
+        .args(["codex", "voice", "set", "--help"])
+        .output()
+        .unwrap();
+    let voice_stdout = String::from_utf8(voice.stdout).unwrap();
+    assert!(voice.status.success());
+    assert!(voice_stdout.contains("push-to-talk"));
+    assert!(voice_stdout.contains("realtime"));
 }
 
 #[test]
@@ -431,6 +441,7 @@ fn codex_tier1_candidates_run_end_to_end_without_writing_source() {
     let reset = root.join("reset.json");
     let brightness = root.join("brightness.json");
     let auto_off = root.join("auto-off.json");
+    let voice = root.join("voice.json");
     fs::write(
         &config,
         b"model = \"unrelated\"\n[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
@@ -593,8 +604,36 @@ fn codex_tier1_candidates_run_end_to_end_without_writing_source() {
     assert_eq!(auto_off_get["value"], "10-minutes");
     assert_eq!(auto_off_get["explicit"], true);
 
-    let candidate: serde_json::Value =
-        serde_json::from_slice(&fs::read(&auto_off).unwrap()).unwrap();
+    let set_voice = binary()
+        .args(["--json", "codex", "voice", "set", "--input"])
+        .arg(&auto_off)
+        .arg("realtime")
+        .arg("--output")
+        .arg(&voice)
+        .output()
+        .unwrap();
+    assert!(
+        set_voice.status.success(),
+        "{}",
+        String::from_utf8_lossy(&set_voice.stderr)
+    );
+    let set_voice: serde_json::Value = serde_json::from_slice(&set_voice.stdout).unwrap();
+    assert_eq!(
+        set_voice["changedPaths"],
+        serde_json::json!(["/settings/codex-micro-layout/voiceButtonMode"])
+    );
+
+    let voice_get = binary()
+        .args(["--json", "codex", "voice", "get", "--input"])
+        .arg(&voice)
+        .output()
+        .unwrap();
+    assert!(voice_get.status.success());
+    let voice_get: serde_json::Value = serde_json::from_slice(&voice_get.stdout).unwrap();
+    assert_eq!(voice_get["value"], "realtime");
+    assert_eq!(voice_get["inherited"], false);
+
+    let candidate: serde_json::Value = serde_json::from_slice(&fs::read(&voice).unwrap()).unwrap();
     assert_eq!(candidate["settings"]["codex-micro-future"], "preserved");
     assert_eq!(
         worklouderctl::fsutil::sha256(&config).unwrap(),

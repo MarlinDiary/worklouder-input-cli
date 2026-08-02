@@ -18,12 +18,13 @@ use cli::{
     AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
     CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand,
     CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexLightingAutoOff,
-    CodexLightingAutoOffCommand, CodexLightingBrightnessCommand, CodexLightingCommand, Command,
-    CompletionShell, ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand,
-    DeviceTransport, InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand,
-    LightingEffect, LightingZone, MultiActionCommand, MultiActionGroupCommand,
-    MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand, SmartActionGroupCommand,
-    SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType, TierCommand,
+    CodexLightingAutoOffCommand, CodexLightingBrightnessCommand, CodexLightingCommand,
+    CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand,
+    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand,
+    LayerCommand, LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
+    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
+    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
+    TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -2026,6 +2027,30 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
                 )?,
             },
         },
+        CodexCommand::Voice { command } => match command {
+            CodexVoiceCommand::Get { input } => {
+                let result = codex::voice_mode_get(&input)?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "voice-mode={}\tinherited={}",
+                        result.value, result.inherited
+                    )?;
+                    writeln!(out, "revision={}", result.revision)?;
+                }
+            }
+            CodexVoiceCommand::Set {
+                input,
+                value,
+                output,
+            } => write_codex_candidate_result(
+                codex::voice_mode_set(&input, codex_voice_mode_value(value), &output)?,
+                json,
+                &mut out,
+            )?,
+        },
     }
     Ok(())
 }
@@ -2174,6 +2199,13 @@ fn codex_lighting_auto_off_value(value: CodexLightingAutoOff) -> &'static str {
         CodexLightingAutoOff::TenMinutes => "10-minutes",
         CodexLightingAutoOff::ThirtyMinutes => "30-minutes",
         CodexLightingAutoOff::OneHour => "1-hour",
+    }
+}
+
+fn codex_voice_mode_value(value: CodexVoiceMode) -> &'static str {
+    match value {
+        CodexVoiceMode::PushToTalk => "push-to-talk",
+        CodexVoiceMode::Realtime => "realtime",
     }
 }
 

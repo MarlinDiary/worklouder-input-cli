@@ -445,6 +445,12 @@ pub enum CodexCommand {
         #[clap(subcommand)]
         command: CodexLightingCommand,
     },
+
+    /// Inspect or edit Codex-native voice-button behavior in an offline snapshot.
+    Voice {
+        #[clap(subcommand)]
+        command: CodexVoiceCommand,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -831,6 +837,33 @@ pub enum CodexLightingAutoOffCommand {
 
         #[clap(value_enum)]
         value: CodexLightingAutoOff,
+
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CodexVoiceMode {
+    PushToTalk,
+    Realtime,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexVoiceCommand {
+    /// Read the effective voice-button behavior.
+    Get {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Write an offline candidate with a new voice-button behavior.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        #[clap(value_enum)]
+        value: CodexVoiceMode,
 
         #[clap(long, value_parser)]
         output: PathBuf,
