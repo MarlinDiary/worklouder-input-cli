@@ -3370,7 +3370,13 @@ fn remove_smart_action_from_groups(
     id: u64,
     paths: &mut Vec<String>,
 ) -> Result<()> {
-    for (index, group) in smart_action_groups_mut(document)?.iter_mut().enumerate() {
+    let groups = match document.get_mut("smartActionGroups") {
+        None => return Ok(()),
+        Some(value) => value
+            .as_array_mut()
+            .context("smart_actions.json smartActionGroups was not an array")?,
+    };
+    for (index, group) in groups.iter_mut().enumerate() {
         let members = group
             .get_mut("actionIds")
             .and_then(Value::as_array_mut)
@@ -7012,6 +7018,56 @@ mod tests {
         assert!(error.contains("missing Smart Action"));
         assert!(!output.exists());
         fs::remove_file(source).unwrap();
+    }
+
+    #[test]
+    fn smart_action_validation_rejects_noncanonical_ids_payloads_and_stale_groups() {
+        for (document, needle) in [
+            (
+                json!({
+                    "version": 1,
+                    "smartActions": {
+                        "SA_01": {"name": "Bad ID", "type": "TEXT_STEP", "payload": {"text": ""}}
+                    }
+                }),
+                "canonical",
+            ),
+            (
+                json!({
+                    "version": 1,
+                    "smartActions": {
+                        "SA_1": {"name": "Bad Payload", "type": "APP_STEP", "payload": {"name": "App"}}
+                    }
+                }),
+                "payload.path",
+            ),
+            (
+                json!({
+                    "version": 1,
+                    "smartActions": {
+                        "SA_1": {"name": "Text", "type": "TEXT_STEP", "payload": {"text": ""}}
+                    },
+                    "smartActionGroups": [
+                        {"id": 0, "name": "Stale", "tags": [], "color": null, "actionIds": [2]}
+                    ]
+                }),
+                "missing Smart Action",
+            ),
+        ] {
+            let error = validate_smart_actions(&document).unwrap_err().to_string();
+            assert!(error.contains(needle), "unexpected error: {error}");
+        }
+
+        let mut document = json!({
+            "version": 1,
+            "smartActions": {
+                "SA_1": {"name": "Text", "type": "TEXT_STEP", "payload": {"text": ""}}
+            }
+        });
+        let mut paths = Vec::new();
+        remove_smart_action_from_groups(&mut document, 1, &mut paths).unwrap();
+        assert!(document.get("smartActionGroups").is_none());
+        assert!(paths.is_empty());
     }
 
     #[test]
