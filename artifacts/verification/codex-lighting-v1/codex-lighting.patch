@@ -1,0 +1,855 @@
+diff --git a/README.md b/README.md
+index ddba059..c9b91c0 100644
+--- a/README.md
++++ b/README.md
+@@ -108,6 +108,10 @@ worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled -
+ worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
+ worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
+ worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
++worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
++worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
++worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
++worklouderctl codex lighting auto-off set --input CODEX_BRIGHTNESS.json 10-minutes --output CODEX_LIGHTING.json
+ worklouderctl input inspect [--device DEVICE_ID]
+ worklouderctl input export --output BACKUP_DIRECTORY
+ worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
+@@ -189,8 +193,9 @@ Codex 26.727.51351 contract, and recursively fills inherited defaults in the
+ effective view. `codex export` atomically publishes and reopens a typed JSON
+ snapshot. Neither command serializes unrelated Codex settings.
+ 
+-`codex agent-source`, `codex agent-key tap-mode`, and `codex command-key` are
+-strict offline Tier 1 editors. They validate the embedded frozen definitions,
++`codex agent-source`, `codex agent-key tap-mode`, `codex command-key`, and
++`codex lighting` are strict offline Tier 1 editors. They validate the embedded
++frozen definitions,
+ recompute effective settings and a recursive-key-sorted revision, preserve
+ unknown `codex-micro-*` values, publish atomically, and reopen the result. Each
+ receipt carries `expectedSourceSha256` for the Codex `settings-write` CAS
+@@ -346,7 +351,6 @@ worklouderctl codex agent-source set --input codex.json priority --output codex-
+ worklouderctl codex command-key set --input codex-priority.json ACT06 \
+   --command toggleFastMode --output codex-fast.json
+ worklouderctl codex joystick set up --skill SKILL_ID
+-worklouderctl codex lighting set --brightness 80 --auto-off 10-minutes
+ worklouderctl plan layout.yaml
+ worklouderctl apply layout.yaml
+ worklouderctl backup list
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 6ba1f23..1c84f1e 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -77,6 +77,10 @@ worklouderctl codex agent-key tap-mode set --input CODEX_SNAPSHOT.json enabled -
+ worklouderctl codex command-key get --input CODEX_SNAPSHOT.json ACT06
+ worklouderctl codex command-key set --input CODEX_SNAPSHOT.json ACT06 --keycap BUG --command COMMAND_ID --output CODEX_CANDIDATE.json
+ worklouderctl codex command-key reset --input CODEX_CANDIDATE.json ACT06 --output CODEX_RESET.json
++worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
++worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
++worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
++worklouderctl codex lighting auto-off set --input CODEX_BRIGHTNESS.json 10-minutes --output CODEX_LIGHTING.json
+ worklouderctl input inspect [--device DEVICE_ID]
+ worklouderctl input export --output BACKUP_DIRECTORY
+ worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
+@@ -153,7 +157,8 @@ worklouderctl completion bash|zsh|fish
+ view 中递归补齐继承的默认值。`codex export` 原子发布并重新打开 typed JSON
+ snapshot；两者都不会序列化其他 Codex 设置。
+ 
+-`codex agent-source`、`codex agent-key tap-mode` 与 `codex command-key` 是严格的
++`codex agent-source`、`codex agent-key tap-mode`、`codex command-key` 与
++`codex lighting` 是严格的
+ Tier 1 离线 editor：核对内嵌 frozen definitions，重算 effective settings 与
+ recursive-key-sorted revision，保留未知 `codex-micro-*` 值，原子发布并重新打开。
+ receipt 中的 `expectedSourceSha256` 供 Codex `settings-write` CAS transaction
+@@ -331,7 +336,8 @@ WorkLouderCTL 是 **Full-configuration CLI**：
+ contract/client/reference server、
+ revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
+ Input 自动恢复、Codex Companion Bridge settings snapshot/CAS/apply/restore/rollback
+-与六键 Agent assignment snapshot/get/set/clear/apply/restore transaction，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
++与六键 Agent assignment snapshot/get/set/clear/apply/restore transaction、Codex 全局
++lighting brightness/auto-off candidate 与 fixture transaction，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
+ 与 per-layer lighting、AppSense linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线 candidate 生成，keys、
+ encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
+ list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
+diff --git a/docs/architecture.md b/docs/architecture.md
+index 16b1a13..1c50080 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -47,8 +47,9 @@ CAS, immutable backup, exact explicit/effective readback, idempotency, restore,
+ and automatic rollback. A separate injected Agent Key replacer advertises
+ complete six-slot global-state apply/restore with its own revision CAS, backup,
+ idempotency, exact readback, restore, and rollback. The cross-language fixture
+-verifies `recent -> custom -> recent`, every Agent Key assignment type, exact
+-Agent Key revision recovery, and exact source SHA recovery. Codex 26.727.51351
++verifies `recent -> custom -> recent`, global brightness and auto-off
++apply/readback/restore, every Agent Key assignment type, exact Agent Key revision
++recovery, and exact source SHA recovery. Codex 26.727.51351
+ contains the internal handlers but does not yet ship the external listener,
+ leaving released-app integration as the next upstream milestone.
+ 
+diff --git a/docs/codex-companion-bridge.md b/docs/codex-companion-bridge.md
+index cb2b1cf..3e6d0b4 100644
+--- a/docs/codex-companion-bridge.md
++++ b/docs/codex-companion-bridge.md
+@@ -169,7 +169,9 @@ WORKLOUDERCTL_BIN=./target/release/worklouderctl \
+   ./scripts/test-codex-bridge-e2e.sh
+ ```
+ 
+-The E2E test proves `recent -> custom -> recent`, applies command/Skill/task/
+-keycap/empty Agent Key assignments, verifies idempotent replay and stale-CAS
+-rejection, restores the exact six-slot revision, and requires the restored
+-settings source SHA-256 to equal the baseline source SHA-256.
++The E2E test proves `recent -> custom -> recent`, global brightness
++`100 -> 37 -> 100`, and lighting auto-off
++`3-minutes -> 10-minutes -> 3-minutes`; applies command/Skill/task/keycap/empty
++Agent Key assignments; verifies idempotent replay and stale-CAS rejection;
++restores the exact six-slot revision; and requires the restored settings source
++SHA-256 to equal the baseline source SHA-256.
+diff --git a/docs/compatibility.md b/docs/compatibility.md
+index 0e3a0ee..280b8ca 100644
+--- a/docs/compatibility.md
++++ b/docs/compatibility.md
+@@ -41,7 +41,8 @@ apply; and exact explicit/effective readback. It also verifies all six Agent Key
+ slots, command/Skill/task/keycap/empty assignment types, a separate canonical
+ global-state revision, complete-object apply, idempotent replay, stale-CAS
+ rejection, explicit restore, and automatic rollback after corrupt readback. Its
+-E2E path proves `recent -> custom -> recent`, restores the exact Agent Key
++E2E path proves `recent -> custom -> recent`, brightness `100 -> 37 -> 100`,
++auto-off `3-minutes -> 10-minutes -> 3-minutes`, restores the exact Agent Key
+ revision, and recovers the exact baseline settings source SHA-256. This is bridge
+ transaction evidence; released-Codex mutation begins when Codex installs the
+ reference integration and supplies exact settings and Agent Key replacers.
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index 1c0d4e3..dd95b14 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -31,8 +31,8 @@ parity contract.
+ | Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | researched |
+ | Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | researched |
+ | Joystick | up, right, down, left command/Skill/empty | `codex joystick get/set/clear` | researched |
+-| Lighting brightness | integer 0–100 | `codex lighting brightness get/set` | researched |
+-| Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | researched |
++| Lighting brightness | integer 0–100 | `codex lighting brightness get/set` | strict offline candidate plus `100 -> 37 -> 100` bridge apply/readback/restore fixture verified |
++| Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | strict offline candidate plus `3-minutes -> 10-minutes -> 3-minutes` bridge apply/readback/restore fixture verified |
+ | Layout reset | installed-build default layout | `codex reset layout` | researched |
+ | Full object | export, validate, diff, apply, restore | `codex config snapshot/apply/restore`, future diff | authenticated snapshot/CAS/apply/readback/restore/rollback fixture verified; released Codex integration and diff pending |
+ 
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index e1392a1..33daa6a 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -56,6 +56,10 @@ worklouderctl codex command-key set --input SNAPSHOT.json SLOT \
+   [--keycap KEYCAP] [--command COMMAND_ID | --skill-name NAME --skill-path PATH | --clear-action] \
+   --output CANDIDATE.json
+ worklouderctl codex command-key reset --input SNAPSHOT.json SLOT --output CANDIDATE.json
++worklouderctl codex lighting brightness get --input SNAPSHOT.json
++worklouderctl codex lighting brightness set --input SNAPSHOT.json VALUE --output CANDIDATE.json
++worklouderctl codex lighting auto-off get --input SNAPSHOT.json
++worklouderctl codex lighting auto-off set --input SNAPSHOT.json VALUE --output CANDIDATE.json
+ ```
+ 
+ Candidate input is a complete `codex export` snapshot. The editor verifies the
+@@ -68,6 +72,12 @@ retained as the online transaction's source CAS value. The bridge also compares
+ the canonical settings revision, performs complete explicit-setting replacement,
+ and verifies exact explicit/effective readback before reporting success.
+ 
++Lighting brightness is a typed integer from `0` through `100`. Auto-off accepts
++exactly `off`, `30-seconds`, `1-minute`, `3-minutes`, `10-minutes`, `30-minutes`,
++or `1-hour`. Both editors preserve unknown settings, keep inherited defaults
++implicit for no-op candidates, and use the complete settings bridge transaction
++for CAS apply/readback/restore.
++
+ Agent Key snapshots use the separate `codex-agent-keys-revision-v1` global-state
+ revision. Offline set/clear changes one `AG00`–`AG05` slot, preserves the other
+ five values and their unknown fields, atomically publishes, and reopens the
+diff --git a/docs/faq.md b/docs/faq.md
+index 90b670e..15c44d0 100644
+--- a/docs/faq.md
++++ b/docs/faq.md
+@@ -54,6 +54,11 @@ profiles, six layers, the key matrix, encoder, joystick sectors, Actions,
+ Multi Actions, Smart Actions, linked apps, backlight, underglow, and layer
+ metadata. The CLI configures every tier through its corresponding authority.
+ 
++Global Codex lighting brightness and auto-off are already available as strict
++offline `codex lighting brightness/auto-off get/set` candidates. The isolated
++Codex bridge E2E applies both fields, reads them back exactly, and restores their
++baseline values through the complete settings transaction.
++
+ ## Can an AI agent configure Codex Micro?
+ 
+ Yes, through the deterministic JSON contract. Human and agent clients share
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index d9b01b1..0b77204 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -53,7 +53,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [ ] voice mode
+ - [ ] dial modes and custom gestures
+ - [ ] joystick directions and Skills
+-- [ ] global brightness and auto-off
++- [x] global brightness and auto-off
+ - [x] Codex settings backup, apply, readback, restore, and automatic rollback fixture
+ - [ ] Codex settings structural diff command
+ 
+diff --git a/docs/tier-model.md b/docs/tier-model.md
+index 66f4383..149faad 100644
+--- a/docs/tier-model.md
++++ b/docs/tier-model.md
+@@ -64,7 +64,8 @@ worklouderctl codex command-key get|set|reset --input SNAPSHOT ACT06
+ worklouderctl codex dial get|set|reset
+ worklouderctl codex joystick get|set|reset
+ worklouderctl codex voice get|set
+-worklouderctl codex lighting get|set
++worklouderctl codex lighting brightness get|set --input SNAPSHOT
++worklouderctl codex lighting auto-off get|set --input SNAPSHOT
+ worklouderctl codex apply CONFIG
+ worklouderctl codex restore BACKUP_ID
+ ```
+diff --git a/llms.txt b/llms.txt
+index 9439e09..75b201d 100644
+--- a/llms.txt
++++ b/llms.txt
+@@ -32,8 +32,8 @@ Important: the project is currently a source alpha. The repository builds a work
+ - Non-goal: implementing a replacement hardware driver or firmware protocol
+ - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
+ - Current maturity: source alpha; read paths and isolated bridge apply/restore transaction conformance implemented; no packaged release
+-- Current Codex commands: `codex doctor/inspect/export`, `codex bridge inspect`, `codex config snapshot/apply/restore`, and six-slot `codex agent-key assignments/snapshot/get/set/clear/apply/restore`
+-- Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, and `codex command-key` provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; six-slot Agent Key candidates preserve untargeted unknown fields and use a separate global-state revision; the Codex Companion Bridge fixture verifies complete settings and Agent Key apply/readback/restore/rollback while released-Codex integration remains pending
++- Current Codex commands: `codex doctor/inspect/export`, `codex bridge inspect`, `codex config snapshot/apply/restore`, six-slot `codex agent-key assignments/snapshot/get/set/clear/apply/restore`, and `codex lighting brightness/auto-off get/set`
++- Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`, and global lighting provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; six-slot Agent Key candidates preserve untargeted unknown fields and use a separate global-state revision; the Codex Companion Bridge fixture verifies complete settings and Agent Key apply/readback/restore/rollback while released-Codex integration remains pending
+ - Input cache command: `input config snapshot` captures `keymap.json` plus optional `smart_actions.json` byte-for-byte, excludes host-only state, and emits a bridge-revision-equivalent semantic snapshot without controlling the Input GUI or device transport
+ - Primary device transport: authenticated Input Companion Bridge v1 over a private Unix socket; Rust client, one-call Input-main integration, release conformance command, and cross-language tests are implemented
+ - Bridge config commands: deterministic byte-exact snapshot/validate plus capability-gated apply/restore with immutable CLI backup, CAS, session idempotency, full readback, and automatic rollback
+diff --git a/scripts/test-codex-bridge-e2e.sh b/scripts/test-codex-bridge-e2e.sh
+index 0be706d..5b5ba56 100755
+--- a/scripts/test-codex-bridge-e2e.sh
++++ b/scripts/test-codex-bridge-e2e.sh
+@@ -41,7 +41,15 @@ done
+ "$BIN" --json codex agent-key assignments --socket "$SOCKET" --token "$TOKEN" \
+   >"$ROOT/agent-keys.json"
+ "$BIN" --json codex agent-source set --input "$ROOT/baseline.json" custom \
+-  --output "$ROOT/candidate.json" >"$ROOT/candidate-receipt.json"
++  --output "$ROOT/source-candidate.json" >"$ROOT/source-candidate-receipt.json"
++"$BIN" --json codex lighting brightness set --input "$ROOT/source-candidate.json" 37 \
++  --output "$ROOT/brightness-candidate.json" >"$ROOT/brightness-candidate-receipt.json"
++"$BIN" --json codex lighting auto-off set --input "$ROOT/brightness-candidate.json" \
++  10-minutes --output "$ROOT/candidate.json" >"$ROOT/candidate-receipt.json"
++"$BIN" --json codex lighting brightness get --input "$ROOT/candidate.json" \
++  >"$ROOT/brightness-get.json"
++"$BIN" --json codex lighting auto-off get --input "$ROOT/candidate.json" \
++  >"$ROOT/auto-off-get.json"
+ "$BIN" --json codex config --socket "$SOCKET" --token "$TOKEN" apply \
+   --input "$ROOT/candidate.json" --backup "$ROOT/pre-apply.json" \
+   --idempotency-key fixture-apply-v1 >"$ROOT/apply.json"
+@@ -106,6 +114,8 @@ restored = json.loads((root / "restored.json").read_text())
+ keys = json.loads((root / "agent-keys.json").read_text())
+ apply = json.loads((root / "apply.json").read_text())
+ restore = json.loads((root / "restore.json").read_text())
++brightness_get = json.loads((root / "brightness-get.json").read_text())
++auto_off_get = json.loads((root / "auto-off-get.json").read_text())
+ agent_baseline = json.loads((root / "agent-baseline.json").read_text())
+ agent_modified = json.loads((root / "agent-modified.json").read_text())
+ agent_restored = json.loads((root / "agent-restored.json").read_text())
+@@ -117,6 +127,12 @@ assert baseline["settings"]["codex-micro-agent-source"] == "recent"
+ assert "codex.agentKeys.apply.v1" in bridge["capabilities"]
+ assert "codex.agentKeys.restore.v1" in bridge["capabilities"]
+ assert modified["settings"]["codex-micro-agent-source"] == "custom"
++assert baseline["effectiveSettings"]["codex-micro-lighting-brightness"] == 100
++assert baseline["effectiveSettings"]["codex-micro-lighting-auto-off"] == "3-minutes"
++assert brightness_get["value"] == 37 and brightness_get["explicit"] is True
++assert auto_off_get["value"] == "10-minutes" and auto_off_get["explicit"] is True
++assert modified["settings"]["codex-micro-lighting-brightness"] == 37
++assert modified["settings"]["codex-micro-lighting-auto-off"] == "10-minutes"
+ assert apply["changed"] is True and apply["rollbackPerformed"] is False
+ assert restore["changed"] is True and restore["rollbackPerformed"] is False
+ assert restored["settings"] == baseline["settings"]
+@@ -142,6 +158,12 @@ print(json.dumps({
+     "baselineAgentSource": baseline["settings"]["codex-micro-agent-source"],
+     "modifiedAgentSource": modified["settings"]["codex-micro-agent-source"],
+     "restoredAgentSource": restored["settings"]["codex-micro-agent-source"],
++    "baselineLightingBrightness": baseline["effectiveSettings"]["codex-micro-lighting-brightness"],
++    "modifiedLightingBrightness": modified["settings"]["codex-micro-lighting-brightness"],
++    "restoredLightingBrightness": restored["effectiveSettings"]["codex-micro-lighting-brightness"],
++    "baselineLightingAutoOff": baseline["effectiveSettings"]["codex-micro-lighting-auto-off"],
++    "modifiedLightingAutoOff": modified["settings"]["codex-micro-lighting-auto-off"],
++    "restoredLightingAutoOff": restored["effectiveSettings"]["codex-micro-lighting-auto-off"],
+     "baselineSourceSha256": baseline["sourceSha256"],
+     "modifiedSourceSha256": modified["sourceSha256"],
+     "restoredSourceSha256": restored["sourceSha256"],
+diff --git a/spec/codex-settings-candidate-v1.json b/spec/codex-settings-candidate-v1.json
+index 4225251..d7779c6 100644
+--- a/spec/codex-settings-candidate-v1.json
++++ b/spec/codex-settings-candidate-v1.json
+@@ -49,6 +49,32 @@
+     "commandKeyReset": {
+       "command": "codex command-key reset --input SNAPSHOT.json SLOT --output CANDIDATE.json",
+       "source": "frozen layout default for the selected slot"
++    },
++    "lightingBrightnessGet": {
++      "command": "codex lighting brightness get --input SNAPSHOT.json",
++      "type": "integer",
++      "minimum": 0,
++      "maximum": 100
++    },
++    "lightingBrightnessSet": {
++      "command": "codex lighting brightness set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
++      "changedPath": "/settings/codex-micro-lighting-brightness"
++    },
++    "lightingAutoOffGet": {
++      "command": "codex lighting auto-off get --input SNAPSHOT.json",
++      "values": [
++        "off",
++        "30-seconds",
++        "1-minute",
++        "3-minutes",
++        "10-minutes",
++        "30-minutes",
++        "1-hour"
++      ]
++    },
++    "lightingAutoOffSet": {
++      "command": "codex lighting auto-off set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
++      "changedPath": "/settings/codex-micro-lighting-auto-off"
+     }
+   },
+   "commandKeySlots": [
+diff --git a/src/cli.rs b/src/cli.rs
+index b531e9d..e703a99 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -439,6 +439,12 @@ pub enum CodexCommand {
+         #[clap(subcommand)]
+         command: CodexCommandKeyCommand,
+     },
++
++    /// Inspect or edit Codex-native global lighting in an offline snapshot.
++    Lighting {
++        #[clap(subcommand)]
++        command: CodexLightingCommand,
++    },
+ }
+ 
+ #[derive(Clone, Copy, Debug, ValueEnum)]
+@@ -757,6 +763,80 @@ pub enum ConfigCommand {
+     },
+ }
+ 
++#[derive(Debug, Subcommand)]
++pub enum CodexLightingCommand {
++    /// Inspect or edit global lighting intensity.
++    Brightness {
++        #[clap(subcommand)]
++        command: CodexLightingBrightnessCommand,
++    },
++
++    /// Inspect or edit the idle lighting auto-off policy.
++    AutoOff {
++        #[clap(subcommand)]
++        command: CodexLightingAutoOffCommand,
++    },
++}
++
++#[derive(Debug, Subcommand)]
++pub enum CodexLightingBrightnessCommand {
++    /// Read effective global lighting intensity from 0 through 100.
++    Get {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++    },
++
++    /// Write an offline candidate with a new global lighting intensity.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++
++        /// Global intensity from 0 through 100.
++        value: u8,
++
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++}
++
++#[derive(Clone, Copy, Debug, ValueEnum)]
++pub enum CodexLightingAutoOff {
++    Off,
++    #[clap(name = "30-seconds")]
++    ThirtySeconds,
++    #[clap(name = "1-minute")]
++    OneMinute,
++    #[clap(name = "3-minutes")]
++    ThreeMinutes,
++    #[clap(name = "10-minutes")]
++    TenMinutes,
++    #[clap(name = "30-minutes")]
++    ThirtyMinutes,
++    #[clap(name = "1-hour")]
++    OneHour,
++}
++
++#[derive(Debug, Subcommand)]
++pub enum CodexLightingAutoOffCommand {
++    /// Read the effective idle lighting auto-off policy.
++    Get {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++    },
++
++    /// Write an offline candidate with a new idle lighting auto-off policy.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++
++        #[clap(value_enum)]
++        value: CodexLightingAutoOff,
++
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++}
++
+ #[derive(Debug, Subcommand)]
+ pub enum ProfileCommand {
+     /// List profiles from a revisioned configuration snapshot.
+diff --git a/src/codex.rs b/src/codex.rs
+index ad8278b..7fe07e8 100644
+--- a/src/codex.rs
++++ b/src/codex.rs
+@@ -105,6 +105,26 @@ pub struct AgentTapModeView {
+     pub explicit: bool,
+ }
+ 
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct LightingBrightnessView {
++    pub schema_version: u8,
++    pub kind: &'static str,
++    pub revision: String,
++    pub value: i64,
++    pub explicit: bool,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct LightingAutoOffView {
++    pub schema_version: u8,
++    pub kind: &'static str,
++    pub revision: String,
++    pub value: String,
++    pub explicit: bool,
++}
++
+ #[derive(Debug, Serialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct CommandKeyView {
+@@ -457,6 +477,100 @@ pub fn agent_tap_mode_set(input: &Path, enabled: bool, output: &Path) -> Result<
+     )
+ }
+ 
++pub fn lighting_brightness_get(input: &Path) -> Result<LightingBrightnessView> {
++    let snapshot = read_snapshot(input)?;
++    let key = "codex-micro-lighting-brightness";
++    let value = snapshot
++        .effective_settings
++        .get(key)
++        .and_then(Value::as_i64)
++        .context("effective Codex lighting brightness was missing")?;
++    Ok(LightingBrightnessView {
++        schema_version: 1,
++        kind: "worklouderctl-codex-lighting-brightness",
++        revision: settings_revision(&snapshot.settings)?,
++        value,
++        explicit: snapshot.settings.contains_key(key),
++    })
++}
++
++pub fn lighting_brightness_set(
++    input: &Path,
++    value: i64,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    let mut snapshot = read_snapshot(input)?;
++    let contract = load_contract()?;
++    let key = "codex-micro-lighting-brightness";
++    let before_revision = settings_revision(&snapshot.settings)?;
++    let current = snapshot
++        .effective_settings
++        .get(key)
++        .and_then(Value::as_i64)
++        .context("effective Codex lighting brightness was missing")?;
++    let changed = current != value;
++    if changed {
++        snapshot.settings.insert(key.into(), Value::from(value));
++        refresh_effective_settings(&mut snapshot, &contract)?;
++    }
++    publish_candidate(
++        snapshot,
++        output,
++        "codex-lighting-brightness-set",
++        before_revision,
++        changed
++            .then(|| format!("/settings/{key}"))
++            .into_iter()
++            .collect(),
++    )
++}
++
++pub fn lighting_auto_off_get(input: &Path) -> Result<LightingAutoOffView> {
++    let snapshot = read_snapshot(input)?;
++    let key = "codex-micro-lighting-auto-off";
++    let value = snapshot
++        .effective_settings
++        .get(key)
++        .and_then(Value::as_str)
++        .context("effective Codex lighting auto-off policy was missing")?;
++    Ok(LightingAutoOffView {
++        schema_version: 1,
++        kind: "worklouderctl-codex-lighting-auto-off",
++        revision: settings_revision(&snapshot.settings)?,
++        value: value.to_owned(),
++        explicit: snapshot.settings.contains_key(key),
++    })
++}
++
++pub fn lighting_auto_off_set(input: &Path, value: &str, output: &Path) -> Result<CandidateReceipt> {
++    let mut snapshot = read_snapshot(input)?;
++    let contract = load_contract()?;
++    let key = "codex-micro-lighting-auto-off";
++    let before_revision = settings_revision(&snapshot.settings)?;
++    let current = snapshot
++        .effective_settings
++        .get(key)
++        .and_then(Value::as_str)
++        .context("effective Codex lighting auto-off policy was missing")?;
++    let changed = current != value;
++    if changed {
++        snapshot
++            .settings
++            .insert(key.into(), Value::String(value.to_owned()));
++        refresh_effective_settings(&mut snapshot, &contract)?;
++    }
++    publish_candidate(
++        snapshot,
++        output,
++        "codex-lighting-auto-off-set",
++        before_revision,
++        changed
++            .then(|| format!("/settings/{key}"))
++            .into_iter()
++            .collect(),
++    )
++}
++
+ pub fn command_key_get(input: &Path, slot: &str) -> Result<CommandKeyView> {
+     let snapshot = read_snapshot(input)?;
+     command_key_view(&snapshot, slot)
+@@ -1250,6 +1364,94 @@ mod tests {
+         fs::remove_dir_all(root).unwrap();
+     }
+ 
++    #[test]
++    fn lighting_candidates_are_typed_bounded_atomic_and_preserve_unknown_settings() {
++        let root = fixture_root();
++        fs::create_dir_all(&root).unwrap();
++        let config = root.join("config.toml");
++        let snapshot_path = root.join("snapshot.json");
++        let brightness_path = root.join("brightness.json");
++        let auto_off_path = root.join("auto-off.json");
++        fs::write(
++            &config,
++            b"[desktop]\ncodex-micro-lighting-brightness = 42\ncodex-micro-lighting-auto-off = \"1-minute\"\ncodex-micro-future = \"preserved\"\n",
++        )
++        .unwrap();
++        let source_sha = fsutil::sha256(&config).unwrap();
++        export(&config, &root.join("missing.app"), &snapshot_path).unwrap();
++
++        let brightness = lighting_brightness_get(&snapshot_path).unwrap();
++        assert_eq!(brightness.value, 42);
++        assert!(brightness.explicit);
++        let brightness_candidate =
++            lighting_brightness_set(&snapshot_path, 0, &brightness_path).unwrap();
++        assert!(brightness_candidate.changed);
++        assert_eq!(
++            brightness_candidate.changed_paths,
++            vec!["/settings/codex-micro-lighting-brightness"]
++        );
++        assert_eq!(lighting_brightness_get(&brightness_path).unwrap().value, 0);
++
++        let auto_off = lighting_auto_off_get(&brightness_path).unwrap();
++        assert_eq!(auto_off.value, "1-minute");
++        assert!(auto_off.explicit);
++        let auto_off_candidate =
++            lighting_auto_off_set(&brightness_path, "1-hour", &auto_off_path).unwrap();
++        assert!(auto_off_candidate.changed);
++        assert_eq!(
++            auto_off_candidate.changed_paths,
++            vec!["/settings/codex-micro-lighting-auto-off"]
++        );
++        assert_eq!(
++            lighting_auto_off_get(&auto_off_path).unwrap().value,
++            "1-hour"
++        );
++        let reopened = read_snapshot(&auto_off_path).unwrap();
++        assert_eq!(reopened.settings["codex-micro-future"], "preserved");
++        assert_eq!(reopened.source_sha256, source_sha);
++        assert_eq!(fsutil::sha256(&config).unwrap(), source_sha);
++
++        let invalid_brightness_path = root.join("invalid-brightness.json");
++        let invalid_brightness =
++            lighting_brightness_set(&snapshot_path, 101, &invalid_brightness_path).unwrap_err();
++        assert!(invalid_brightness
++            .to_string()
++            .contains("must be between 0 and 100"));
++        assert!(!invalid_brightness_path.exists());
++        let invalid_auto_off_path = root.join("invalid-auto-off.json");
++        let invalid_auto_off =
++            lighting_auto_off_set(&snapshot_path, "2-hours", &invalid_auto_off_path).unwrap_err();
++        assert!(invalid_auto_off.to_string().contains("must be one of"));
++        assert!(!invalid_auto_off_path.exists());
++
++        let default_config = root.join("default.toml");
++        let default_snapshot = root.join("default-snapshot.json");
++        let default_brightness = root.join("default-brightness.json");
++        let default_auto_off = root.join("default-auto-off.json");
++        fs::write(&default_config, b"[desktop]\n").unwrap();
++        export(
++            &default_config,
++            &root.join("missing.app"),
++            &default_snapshot,
++        )
++        .unwrap();
++        let brightness_noop =
++            lighting_brightness_set(&default_snapshot, 100, &default_brightness).unwrap();
++        assert!(!brightness_noop.changed);
++        let auto_off_noop =
++            lighting_auto_off_set(&default_brightness, "3-minutes", &default_auto_off).unwrap();
++        assert!(!auto_off_noop.changed);
++        let default_reopened = read_snapshot(&default_auto_off).unwrap();
++        assert!(!default_reopened
++            .settings
++            .contains_key("codex-micro-lighting-brightness"));
++        assert!(!default_reopened
++            .settings
++            .contains_key("codex-micro-lighting-auto-off"));
++
++        fs::remove_dir_all(root).unwrap();
++    }
++
+     #[test]
+     fn export_is_atomic_and_typed_readback_matches() {
+         let root = fixture_root();
+diff --git a/src/lib.rs b/src/lib.rs
+index cfab341..7af930d 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -17,12 +17,13 @@ use cli::{
+     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
+     AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
+     CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand,
+-    CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, Command, CompletionShell,
+-    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
+-    InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand, LightingEffect,
+-    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
+-    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+-    SmartActionType as CliSmartActionType, TierCommand,
++    CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexLightingAutoOff,
++    CodexLightingAutoOffCommand, CodexLightingBrightnessCommand, CodexLightingCommand, Command,
++    CompletionShell, ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand,
++    DeviceTransport, InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand,
++    LightingEffect, LightingZone, MultiActionCommand, MultiActionGroupCommand,
++    MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand, SmartActionGroupCommand,
++    SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType, TierCommand,
+ };
+ use serde::Serialize;
+ use std::io::Write;
+@@ -1971,6 +1972,60 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
+                 &mut out,
+             )?,
+         },
++        CodexCommand::Lighting { command } => match command {
++            CodexLightingCommand::Brightness { command } => match command {
++                CodexLightingBrightnessCommand::Get { input } => {
++                    let result = codex::lighting_brightness_get(&input)?;
++                    if json {
++                        write_json(&mut out, &result)?;
++                    } else {
++                        writeln!(
++                            out,
++                            "lighting-brightness={}\texplicit={}",
++                            result.value, result.explicit
++                        )?;
++                        writeln!(out, "revision={}", result.revision)?;
++                    }
++                }
++                CodexLightingBrightnessCommand::Set {
++                    input,
++                    value,
++                    output,
++                } => write_codex_candidate_result(
++                    codex::lighting_brightness_set(&input, value.into(), &output)?,
++                    json,
++                    &mut out,
++                )?,
++            },
++            CodexLightingCommand::AutoOff { command } => match command {
++                CodexLightingAutoOffCommand::Get { input } => {
++                    let result = codex::lighting_auto_off_get(&input)?;
++                    if json {
++                        write_json(&mut out, &result)?;
++                    } else {
++                        writeln!(
++                            out,
++                            "lighting-auto-off={}\texplicit={}",
++                            result.value, result.explicit
++                        )?;
++                        writeln!(out, "revision={}", result.revision)?;
++                    }
++                }
++                CodexLightingAutoOffCommand::Set {
++                    input,
++                    value,
++                    output,
++                } => write_codex_candidate_result(
++                    codex::lighting_auto_off_set(
++                        &input,
++                        codex_lighting_auto_off_value(value),
++                        &output,
++                    )?,
++                    json,
++                    &mut out,
++                )?,
++            },
++        },
+     }
+     Ok(())
+ }
+@@ -2110,6 +2165,18 @@ fn codex_agent_source_value(value: CodexAgentSource) -> &'static str {
+     }
+ }
+ 
++fn codex_lighting_auto_off_value(value: CodexLightingAutoOff) -> &'static str {
++    match value {
++        CodexLightingAutoOff::Off => "off",
++        CodexLightingAutoOff::ThirtySeconds => "30-seconds",
++        CodexLightingAutoOff::OneMinute => "1-minute",
++        CodexLightingAutoOff::ThreeMinutes => "3-minutes",
++        CodexLightingAutoOff::TenMinutes => "10-minutes",
++        CodexLightingAutoOff::ThirtyMinutes => "30-minutes",
++        CodexLightingAutoOff::OneHour => "1-hour",
++    }
++}
++
+ fn write_codex_candidate_result(
+     result: codex::CandidateReceipt,
+     json: bool,
+diff --git a/tests/cli.rs b/tests/cli.rs
+index fc28e22..c354782 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -325,6 +325,7 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
+     assert!(stdout.contains("agent-source"));
+     assert!(stdout.contains("agent-key"));
+     assert!(stdout.contains("command-key"));
++    assert!(stdout.contains("lighting"));
+ 
+     let config = binary()
+         .args(["codex", "config", "--help"])
+@@ -354,6 +355,15 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
+     ] {
+         assert!(agent_key_stdout.contains(command));
+     }
++
++    let lighting = binary()
++        .args(["codex", "lighting", "--help"])
++        .output()
++        .unwrap();
++    let lighting_stdout = String::from_utf8(lighting.stdout).unwrap();
++    assert!(lighting.status.success());
++    assert!(lighting_stdout.contains("brightness"));
++    assert!(lighting_stdout.contains("auto-off"));
+ }
+ 
+ #[test]
+@@ -419,6 +429,8 @@ fn codex_tier1_candidates_run_end_to_end_without_writing_source() {
+     let tap = root.join("tap.json");
+     let command = root.join("command.json");
+     let reset = root.join("reset.json");
++    let brightness = root.join("brightness.json");
++    let auto_off = root.join("auto-off.json");
+     fs::write(
+         &config,
+         b"model = \"unrelated\"\n[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
+@@ -514,7 +526,75 @@ fn codex_tier1_candidates_run_end_to_end_without_writing_source() {
+     assert_eq!(reset_show["keycapId"], "FAST");
+     assert_eq!(reset_show["assignmentType"], "keycap");
+ 
+-    let candidate: serde_json::Value = serde_json::from_slice(&fs::read(&reset).unwrap()).unwrap();
++    let set_brightness = binary()
++        .args([
++            "--json",
++            "codex",
++            "lighting",
++            "brightness",
++            "set",
++            "--input",
++        ])
++        .arg(&reset)
++        .arg("37")
++        .arg("--output")
++        .arg(&brightness)
++        .output()
++        .unwrap();
++    assert!(
++        set_brightness.status.success(),
++        "{}",
++        String::from_utf8_lossy(&set_brightness.stderr)
++    );
++    let set_brightness: serde_json::Value = serde_json::from_slice(&set_brightness.stdout).unwrap();
++    assert_eq!(
++        set_brightness["changedPaths"],
++        serde_json::json!(["/settings/codex-micro-lighting-brightness"])
++    );
++
++    let set_auto_off = binary()
++        .args(["--json", "codex", "lighting", "auto-off", "set", "--input"])
++        .arg(&brightness)
++        .arg("10-minutes")
++        .arg("--output")
++        .arg(&auto_off)
++        .output()
++        .unwrap();
++    assert!(
++        set_auto_off.status.success(),
++        "{}",
++        String::from_utf8_lossy(&set_auto_off.stderr)
++    );
++
++    let brightness_get = binary()
++        .args([
++            "--json",
++            "codex",
++            "lighting",
++            "brightness",
++            "get",
++            "--input",
++        ])
++        .arg(&auto_off)
++        .output()
++        .unwrap();
++    assert!(brightness_get.status.success());
++    let brightness_get: serde_json::Value = serde_json::from_slice(&brightness_get.stdout).unwrap();
++    assert_eq!(brightness_get["value"], 37);
++    assert_eq!(brightness_get["explicit"], true);
++
++    let auto_off_get = binary()
++        .args(["--json", "codex", "lighting", "auto-off", "get", "--input"])
++        .arg(&auto_off)
++        .output()
++        .unwrap();
++    assert!(auto_off_get.status.success());
++    let auto_off_get: serde_json::Value = serde_json::from_slice(&auto_off_get.stdout).unwrap();
++    assert_eq!(auto_off_get["value"], "10-minutes");
++    assert_eq!(auto_off_get["explicit"], true);
++
++    let candidate: serde_json::Value =
++        serde_json::from_slice(&fs::read(&auto_off).unwrap()).unwrap();
+     assert_eq!(candidate["settings"]["codex-micro-future"], "preserved");
+     assert_eq!(
+         worklouderctl::fsutil::sha256(&config).unwrap(),

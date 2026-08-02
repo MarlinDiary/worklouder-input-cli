@@ -1,0 +1,238 @@
+WorkLouderCTL Codex lighting v1 verification record
+===================================================
+
+Scope
+-----
+Base commit: 49bbc4dde392779b9639621f662f7b3d4841aea9
+Feature commits:
+  18bf86b spec: freeze Codex lighting candidates
+  8e939b3 feat: add Codex lighting candidates
+  3cd99a9 feat: add Codex lighting CLI
+  ac96892 test: verify Codex lighting transaction
+  07f0049 docs: publish Codex lighting workflow
+Changed authority: Codex settings.
+Changed fields:
+  codex-micro-lighting-brightness (integer 0 through 100)
+  codex-micro-lighting-auto-off (off, 30-seconds, 1-minute, 3-minutes,
+    10-minutes, 30-minutes, or 1-hour)
+Changed branch: `CodexCommand::Lighting`, with typed brightness and auto-off
+  get/set subcommands backed by the existing complete-settings transaction.
+Provider boundary: candidate probes and mutation E2E used local files and the
+  isolated Codex Companion Bridge fixture. Codex/Input GUIs and device transport
+  were not launched or controlled.
+
+Installed Codex boundary (static reads only)
+--------------------------------------------
+Command:
+  /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' /Applications/ChatGPT.app/Contents/Info.plist
+Literal output:
+  26.727.51351
+Exit status: 0
+
+Command:
+  shasum -a 256 /Applications/ChatGPT.app/Contents/Resources/app.asar
+Literal output:
+  a529edd72e10b08931c0d695b5e3e6a0be7f51874610dafc04f578436ab7d74d  /Applications/ChatGPT.app/Contents/Resources/app.asar
+Exit status: 0
+The same hash was read again after verification.
+
+Preserved original and modified release binaries
+-------------------------------------------------
+Base build command:
+  cargo build --release --locked --manifest-path BASE_WORKTREE/Cargo.toml
+Literal result:
+  Finished release [optimized] target(s)
+Exit status: 0
+Preserved original path:
+  /tmp/worklouderctl-codex-lighting-v1.ilwtnW/original/worklouderctl
+Original SHA-256:
+  51f6c499702dfa1d8209d20a9c5a95e41eae1858afd2d302717ea9087de5e500
+
+Modified build command:
+  cargo build --release --locked
+Literal result:
+  Finished release [optimized] target(s)
+Exit status: 0
+Modified artifact path:
+  target/release/worklouderctl
+Preserved modified copy:
+  /tmp/worklouderctl-codex-lighting-v1.ilwtnW/modified/worklouderctl
+Modified SHA-256 for both paths:
+  f123dc077f6192fc13510b3d186e187e3dc3d7810bf794670f95e14031dfc7b2
+
+Functional baseline-red
+-----------------------
+Binary input: /tmp/worklouderctl-codex-lighting-v1.ilwtnW/original/worklouderctl
+Command:
+  ORIGINAL codex lighting --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'lighting' which wasn't expected, or isn't valid in this context
+
+  USAGE:
+      worklouderctl codex [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
+
+Modified command surface
+------------------------
+Binary input: /tmp/worklouderctl-codex-lighting-v1.ilwtnW/modified/worklouderctl
+Commands:
+  MODIFIED codex lighting --help
+  MODIFIED codex lighting brightness set --help
+  MODIFIED codex lighting auto-off set --help
+Exit statuses:
+  lighting_help=0
+  brightness_set_help=0
+  auto_off_set_help=0
+Literal brightness set synopsis:
+  worklouderctl codex lighting brightness set [OPTIONS] --input <INPUT> --output <OUTPUT> <VALUE>
+  <VALUE>    Global intensity from 0 through 100
+Literal auto-off possible values:
+  off, 30-seconds, 1-minute, 3-minutes, 10-minutes, 30-minutes, 1-hour
+
+Offline candidate input and source preservation
+-----------------------------------------------
+Input file: /tmp/worklouderctl-codex-lighting-v1.ilwtnW/source.toml
+Literal input:
+  [desktop]
+  codex-micro-future = "preserved"
+Command:
+  shasum -a 256 /tmp/worklouderctl-codex-lighting-v1.ilwtnW/source.toml
+Baseline and post-candidate literal SHA-256:
+  45b23a033de70cae96c6ebaf3d1692b98549477bc2249f08953bda6fc4fcaa69
+Source byte equality: true
+Export command:
+  MODIFIED --json codex export --config /tmp/worklouderctl-codex-lighting-v1.ilwtnW/source.toml --app /tmp/worklouderctl-codex-lighting-v1.ilwtnW/missing.app --output SNAPSHOT.json
+Exit status: 0
+
+Default read commands:
+  MODIFIED --json codex lighting brightness get --input SNAPSHOT.json
+  MODIFIED --json codex lighting auto-off get --input BRIGHTNESS.json
+Literal outputs:
+  {"schemaVersion":1,"kind":"worklouderctl-codex-lighting-brightness","revision":"e1c81433f9ab80f0fca802a2f472321bea5e10e26dffd276ff686cf2a7ccf356","value":100,"explicit":false}
+  {"schemaVersion":1,"kind":"worklouderctl-codex-lighting-auto-off","revision":"671bff370b1737593906a6e46d9a7c5275338a279c892c968af41c32e85dd6f6","value":"3-minutes","explicit":false}
+Exit statuses: 0, 0
+
+Brightness candidate
+--------------------
+Command:
+  MODIFIED --json codex lighting brightness set --input SNAPSHOT.json 37 --output BRIGHTNESS.json
+Literal output:
+  {"schemaVersion":1,"kind":"worklouderctl-codex-settings-candidate","operation":"codex-lighting-brightness-set","output":"/tmp/worklouderctl-codex-lighting-v1.ilwtnW/modified-results/brightness.json","changed":true,"changedPaths":["/settings/codex-micro-lighting-brightness"],"expectedSourceSha256":"45b23a033de70cae96c6ebaf3d1692b98549477bc2249f08953bda6fc4fcaa69","revisionAlgorithm":"codex-settings-revision-v1","beforeRevision":"e1c81433f9ab80f0fca802a2f472321bea5e10e26dffd276ff686cf2a7ccf356","afterRevision":"671bff370b1737593906a6e46d9a7c5275338a279c892c968af41c32e85dd6f6"}
+Exit status: 0
+
+Auto-off candidate
+------------------
+Command:
+  MODIFIED --json codex lighting auto-off set --input BRIGHTNESS.json 10-minutes --output LIGHTING.json
+Literal output:
+  {"schemaVersion":1,"kind":"worklouderctl-codex-settings-candidate","operation":"codex-lighting-auto-off-set","output":"/tmp/worklouderctl-codex-lighting-v1.ilwtnW/modified-results/lighting.json","changed":true,"changedPaths":["/settings/codex-micro-lighting-auto-off"],"expectedSourceSha256":"45b23a033de70cae96c6ebaf3d1692b98549477bc2249f08953bda6fc4fcaa69","revisionAlgorithm":"codex-settings-revision-v1","beforeRevision":"671bff370b1737593906a6e46d9a7c5275338a279c892c968af41c32e85dd6f6","afterRevision":"9d505f7f04e7001c97a7322a6efe03ba2444150512624b78464449bc8ef3d900"}
+Exit status: 0
+
+Modified exact readback
+-----------------------
+Commands:
+  MODIFIED --json codex lighting brightness get --input LIGHTING.json
+  MODIFIED --json codex lighting auto-off get --input LIGHTING.json
+Literal outputs:
+  {"schemaVersion":1,"kind":"worklouderctl-codex-lighting-brightness","revision":"9d505f7f04e7001c97a7322a6efe03ba2444150512624b78464449bc8ef3d900","value":37,"explicit":true}
+  {"schemaVersion":1,"kind":"worklouderctl-codex-lighting-auto-off","revision":"9d505f7f04e7001c97a7322a6efe03ba2444150512624b78464449bc8ef3d900","value":"10-minutes","explicit":true}
+Exit statuses: 0, 0
+Unknown codex-micro-future field preserved: true
+
+Invalid-value boundaries
+------------------------
+Command:
+  MODIFIED --json codex lighting brightness set --input SNAPSHOT.json 101 --output INVALID.json
+Literal stdout: (empty)
+Literal stderr:
+  error: desktop.codex-micro-lighting-brightness must be between 0 and 100
+Exit status: 1
+Output created: false
+
+Command:
+  MODIFIED --json codex lighting auto-off set --input SNAPSHOT.json 2-hours --output INVALID.json
+Literal stdout: (empty)
+Literal stderr key lines:
+  error: "2-hours" isn't a valid value for '<VALUE>'
+  [possible values: off, 30-seconds, 1-minute, 3-minutes, 10-minutes, 30-minutes, 1-hour]
+Exit status: 2
+Output created: false
+
+Modified release transaction E2E
+--------------------------------
+Command:
+  TMPDIR=/tmp/worklouderctl-codex-lighting-v1.ilwtnW KEEP_CODEX_BRIDGE_E2E=1 WORKLOUDERCTL_BIN=/tmp/worklouderctl-codex-lighting-v1.ilwtnW/modified/worklouderctl ./scripts/test-codex-bridge-e2e.sh
+Literal stdout:
+  {"status":"pass","baselineAgentSource":"recent","modifiedAgentSource":"custom","restoredAgentSource":"recent","baselineLightingBrightness":100,"modifiedLightingBrightness":37,"restoredLightingBrightness":100,"baselineLightingAutoOff":"3-minutes","modifiedLightingAutoOff":"10-minutes","restoredLightingAutoOff":"3-minutes","baselineSourceSha256":"8d47e4f69727e8c5371e5b84d3578857a7255af3fb4e4b72bc171134ab4bcb00","modifiedSourceSha256":"0e2c367b4e3dc50b2ece71e4efaba538611e3f1d189a3dd664b395a1b7abd953","restoredSourceSha256":"8d47e4f69727e8c5371e5b84d3578857a7255af3fb4e4b72bc171134ab4bcb00","agentKeySlots":6,"agentKeysBaselineRevision":"c1a788b94510693884366cebe7ca36c42b097851285b1c6068c925a337310be5","agentKeysModifiedRevision":"75a9d75d0812c9ab7553cff71a69aa13de80415d38a4d5ae8cb18d2dc0759d55","agentKeysRestoredRevision":"c1a788b94510693884366cebe7ca36c42b097851285b1c6068c925a337310be5","agentKeysIdempotentReplay":true,"agentKeysStaleCasRejected":true}
+Literal stderr: (empty)
+Exit status: 0
+Verified settings behavior:
+  brightness 100 -> 37 -> 100
+  auto-off 3-minutes -> 10-minutes -> 3-minutes
+  source SHA-256 restored exactly
+
+Automated quality gates
+-----------------------
+Command: rustc --version
+Literal output: rustc 1.61.0 (fe5b13d68 2022-05-18)
+Exit status: 0
+
+Command: python3 parse every spec/*.json
+Literal output: parsed=14
+Exit status: 0
+
+Command: cargo fmt --check
+Literal output: (empty)
+Exit status: 0
+
+Command: cargo clippy --all-targets -- -D warnings
+Literal result:
+  Finished dev [unoptimized + debuginfo] target(s)
+Exit status: 0
+
+Command: cargo test --all-targets
+Literal result:
+  53 passed; 0 failed (library)
+  13 passed; 0 failed (CLI integration)
+Exit status: 0
+
+Command: npm test --prefix companion
+Literal result:
+  tests 15
+  pass 15
+  fail 0
+Exit status: 0
+
+Command: ./scripts/test-bridge-e2e.sh
+Literal selected result lines:
+  bridge_protocol=1
+  node_conformance=verified
+  semantic_unknown_fields=preserved
+  config_live_cas=verified
+  config_apply_readback=verified
+  config_idempotent_replay=verified
+  config_stale_cas_rejected=verified
+  config_restore_readback=verified
+Exit status: 0
+
+Command: git diff --check
+Literal output: (empty)
+Exit status: 0
+
+Patch
+-----
+Path: artifacts/verification/codex-lighting-v1/codex-lighting.patch
+SHA-256: 7569202d18036136ec7c1de56745fa0127f66f1025a7f22418cd6e2d988e81d2
+Command:
+  git apply --check --reverse artifacts/verification/codex-lighting-v1/codex-lighting.patch
+Literal output: (empty)
+Exit status: 0
+
+Rollback
+--------
+Path: artifacts/verification/codex-lighting-v1/rollback.sh
+SHA-256: 14fb73c5445b021fe06d685c3470990578f42ff60d5a253a766f5d6af9f31633
+The isolated-worktree execution result is appended after the rollback test.
