@@ -139,6 +139,12 @@ pub enum Command {
         command: SmartActionCommand,
     },
 
+    /// Inspect or bind Input Cheat Sheet behaviors in an offline snapshot.
+    CheatSheet {
+        #[clap(subcommand)]
+        command: CheatSheetCommand,
+    },
+
     /// Inspect or edit AppSense linked applications in an offline snapshot.
     Appsense {
         #[clap(subcommand)]
@@ -1537,6 +1543,47 @@ pub enum AppSenseCommand {
         profile: Option<u64>,
         #[clap(long)]
         layer: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CheatSheetBehavior {
+    Show,
+    Hold,
+    Hide,
+    Toggle,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CheatSheetCommand {
+    /// List the four frozen Input 0.18.0 Cheat Sheet behaviors and tokens.
+    Catalog,
+
+    /// List Cheat Sheet assignments currently bound in one layer.
+    Bindings {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        layer: u64,
+    },
+
+    /// Bind one physical control to show, hold, hide, or toggle Cheat Sheet.
+    Bind {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        layer: u64,
+        /// key:ROW:COLUMN, encoder:INDEX:ccw|cw|press, or joystick:SECTOR.
+        #[clap(long)]
+        control: String,
+        #[clap(value_enum)]
+        behavior: CheatSheetBehavior,
         #[clap(long, value_parser)]
         output: PathBuf,
     },

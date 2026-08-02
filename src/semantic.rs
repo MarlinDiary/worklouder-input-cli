@@ -31,6 +31,7 @@ const PROFILE_LAYER_SPEC_JSON: &str = include_str!("../spec/input-profile-layers
 const APPSENSE_SPEC_JSON: &str = include_str!("../spec/input-appsense-0.18.0.json");
 const SMART_ACTION_SPEC_JSON: &str = include_str!("../spec/input-smart-actions-0.18.0.json");
 const JOYSTICK_SECTOR_SPEC_JSON: &str = include_str!("../spec/input-joystick-sectors-0.18.0.json");
+const CHEAT_SHEET_SPEC_JSON: &str = include_str!("../spec/input-cheat-sheet-0.18.0.json");
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize)]
@@ -409,6 +410,46 @@ pub struct ControlEntry {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CheatSheetCatalog {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub input_version: String,
+    pub minimum_firmware: String,
+    pub tested_firmware: String,
+    pub assignments: Vec<CheatSheetAssignment>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheatSheetAssignment {
+    pub behavior: String,
+    pub token: String,
+    pub label: String,
+    pub notification: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheatSheetBindings {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub profile_id: u64,
+    pub profile_name: String,
+    pub layer_id: u64,
+    pub layer_name: String,
+    pub bindings: Vec<CheatSheetBinding>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheatSheetBinding {
+    pub behavior: String,
+    pub control: ControlEntry,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ActionList {
     pub schema_version: u64,
     pub kind: &'static str,
@@ -602,6 +643,41 @@ struct AssignmentSpec {
     basic_tokens: Vec<String>,
     internal_tokens: Vec<String>,
     read_only_prefixes: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CheatSheetSpec {
+    schema_version: u64,
+    kind: String,
+    input_version: String,
+    source: CheatSheetSource,
+    availability: CheatSheetAvailability,
+    assignments: Vec<CheatSheetAssignmentSpec>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CheatSheetSource {
+    asar_sha256: String,
+    main_bundle_sha256: String,
+    renderer_chunk_sha256: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CheatSheetAvailability {
+    device_types: Vec<String>,
+    minimum_firmware: String,
+    tested_firmware: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CheatSheetAssignmentSpec {
+    behavior: String,
+    token: String,
+    label: String,
+    notification: String,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -993,6 +1069,85 @@ pub fn control_set(
     sync_profile_usage(&mut snapshot.keymap, profile_index, &mut changed_paths)?;
     let changed = !changed_paths.is_empty();
     snapshot.publish(output, "control-set", changed, changed_paths)
+}
+
+pub fn cheat_sheet_catalog() -> Result<CheatSheetCatalog> {
+    let spec = cheat_sheet_spec()?;
+    Ok(CheatSheetCatalog {
+        schema_version: 1,
+        kind: "worklouderctl-cheat-sheet-catalog",
+        input_version: spec.input_version,
+        minimum_firmware: spec.availability.minimum_firmware,
+        tested_firmware: spec.availability.tested_firmware,
+        assignments: spec
+            .assignments
+            .into_iter()
+            .map(|item| CheatSheetAssignment {
+                behavior: item.behavior,
+                token: item.token,
+                label: item.label,
+                notification: item.notification,
+            })
+            .collect(),
+    })
+}
+
+pub fn cheat_sheet_bindings(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+) -> Result<CheatSheetBindings> {
+    let spec = cheat_sheet_spec()?;
+    let controls = control_list(input, profile_id, layer_id)?;
+    let bindings = controls
+        .controls
+        .into_iter()
+        .filter_map(|control| {
+            spec.assignments
+                .iter()
+                .find(|item| item.token == control.assignment)
+                .map(|item| CheatSheetBinding {
+                    behavior: item.behavior.clone(),
+                    control,
+                })
+        })
+        .collect();
+    Ok(CheatSheetBindings {
+        schema_version: 1,
+        kind: "worklouderctl-cheat-sheet-bindings",
+        revision: controls.revision,
+        profile_id: controls.profile_id,
+        profile_name: controls.profile_name,
+        layer_id: controls.layer_id,
+        layer_name: controls.layer_name,
+        bindings,
+    })
+}
+
+pub fn cheat_sheet_bind(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+    control_id: &str,
+    behavior: &str,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let spec = cheat_sheet_spec()?;
+    let assignment = spec
+        .assignments
+        .iter()
+        .find(|item| item.behavior == behavior)
+        .with_context(|| format!("Cheat Sheet behavior {behavior} was not supported"))?;
+    let mut receipt = control_set(
+        input,
+        profile_id,
+        layer_id,
+        control_id,
+        &assignment.token,
+        output,
+    )?;
+    receipt.operation = "cheat-sheet-bind";
+    Ok(receipt)
 }
 
 pub fn action_list(input: &Path) -> Result<ActionList> {
@@ -4656,6 +4811,59 @@ fn assignment_spec() -> Result<AssignmentSpec> {
     Ok(spec)
 }
 
+fn cheat_sheet_spec() -> Result<CheatSheetSpec> {
+    let spec: CheatSheetSpec = serde_json::from_str(CHEAT_SHEET_SPEC_JSON)
+        .context("embedded Input Cheat Sheet contract was invalid")?;
+    let expected = [
+        ("show", "KI_CS_SHOW", "Show Cheat-Sheet", "kb.cs.show"),
+        (
+            "hold",
+            "KI_CS_SHOW_TMP",
+            "Show Cheat-Sheet Hold",
+            "firmware-owned show/hide pair",
+        ),
+        ("hide", "KI_CS_HIDE", "Hide Cheat-Sheet", "kb.cs.hide"),
+        (
+            "toggle",
+            "KI_CS_TOGGLE",
+            "Toggle Cheat-Sheet",
+            "kb.cs.toggle",
+        ),
+    ];
+    ensure!(
+        spec.schema_version == 1
+            && spec.kind == "worklouder-input-cheat-sheet-model"
+            && spec.input_version == "0.18.0"
+            && is_digest(&spec.source.asar_sha256, 64)
+            && is_digest(&spec.source.main_bundle_sha256, 64)
+            && is_digest(&spec.source.renderer_chunk_sha256, 64)
+            && spec.availability.device_types == ["CreatorMicroV2", "CodexMicro"]
+            && spec.availability.minimum_firmware == "0.5.0"
+            && spec.availability.tested_firmware == "v0.6.0"
+            && spec.assignments.len() == expected.len()
+            && spec
+                .assignments
+                .iter()
+                .zip(expected)
+                .all(|(actual, expected)| {
+                    actual.behavior == expected.0
+                        && actual.token == expected.1
+                        && actual.label == expected.2
+                        && actual.notification == expected.3
+                }),
+        "embedded Input Cheat Sheet contract identity was invalid"
+    );
+    let assignments = assignment_spec()?;
+    ensure!(
+        spec.assignments.iter().all(|item| assignments
+            .internal_tokens
+            .iter()
+            .any(|token| token == &item.token)),
+        "Cheat Sheet assignment was missing from the Input token catalog"
+    );
+    Ok(spec)
+}
+
 fn parse_control_id(value: &str) -> Result<ControlAddress> {
     let parts = value.split(':').collect::<Vec<_>>();
     let parse_index = |raw: &str, kind: &str| -> Result<usize> {
@@ -6528,6 +6736,92 @@ mod tests {
         assert_eq!(shown.control.a1, Some(0.0));
         assert_eq!(shown.control.a2, Some(1.5));
         fs::remove_file(source).unwrap();
+    }
+
+    #[test]
+    fn cheat_sheet_catalog_bindings_and_candidates_are_strict() {
+        let source = root("cheat-sheet-source");
+        write_fixture(&source);
+        let original = fs::read(&source).unwrap();
+        let smart_before = SemanticSnapshot::read(&source).unwrap().file_bytes[1].clone();
+
+        let catalog = cheat_sheet_catalog().unwrap();
+        assert_eq!(catalog.input_version, "0.18.0");
+        assert_eq!(catalog.minimum_firmware, "0.5.0");
+        assert_eq!(
+            catalog
+                .assignments
+                .iter()
+                .map(|item| (item.behavior.as_str(), item.token.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("show", "KI_CS_SHOW"),
+                ("hold", "KI_CS_SHOW_TMP"),
+                ("hide", "KI_CS_HIDE"),
+                ("toggle", "KI_CS_TOGGLE"),
+            ]
+        );
+        assert!(cheat_sheet_bindings(&source, Some(0), 0)
+            .unwrap()
+            .bindings
+            .is_empty());
+
+        let cases = [
+            ("show", "KI_CS_SHOW"),
+            ("hold", "KI_CS_SHOW_TMP"),
+            ("hide", "KI_CS_HIDE"),
+            ("toggle", "KI_CS_TOGGLE"),
+        ];
+        let mut outputs = Vec::new();
+        for (behavior, token) in cases {
+            let output = root(&format!("cheat-sheet-{behavior}"));
+            let receipt =
+                cheat_sheet_bind(&source, Some(0), 0, "key:0:0", behavior, &output).unwrap();
+            assert_eq!(receipt.operation, "cheat-sheet-bind");
+            assert!(receipt.changed);
+            assert_eq!(
+                receipt.changed_paths,
+                vec!["/keymap.json/profiles/0/layers/0/layout/keymap/0/0"]
+            );
+            let bindings = cheat_sheet_bindings(&output, Some(0), 0).unwrap();
+            assert_eq!(bindings.bindings.len(), 1);
+            assert_eq!(bindings.bindings[0].behavior, behavior);
+            assert_eq!(bindings.bindings[0].control.assignment, token);
+            assert_eq!(bindings.bindings[0].control.id, "key:0:0");
+            assert_eq!(
+                SemanticSnapshot::read(&output).unwrap().file_bytes[1],
+                smart_before
+            );
+            outputs.push(output);
+        }
+
+        let noop = root("cheat-sheet-noop");
+        let receipt = cheat_sheet_bind(
+            outputs.last().unwrap(),
+            Some(0),
+            0,
+            "key:0:0",
+            "toggle",
+            &noop,
+        )
+        .unwrap();
+        assert_eq!(receipt.operation, "cheat-sheet-bind");
+        assert!(!receipt.changed);
+        assert!(receipt.changed_paths.is_empty());
+
+        let invalid = root("cheat-sheet-invalid");
+        let error = cheat_sheet_bind(&source, Some(0), 0, "key:0:0", "invalid", &invalid)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("behavior invalid was not supported"));
+        assert!(!invalid.exists());
+        assert_eq!(fs::read(&source).unwrap(), original);
+
+        fs::remove_file(source).unwrap();
+        fs::remove_file(noop).unwrap();
+        for output in outputs {
+            fs::remove_file(output).unwrap();
+        }
     }
 
     #[test]

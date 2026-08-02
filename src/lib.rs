@@ -16,20 +16,20 @@ use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
-    AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
-    CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand,
-    CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexDialCommand, CodexDialGesture,
-    CodexDialGestureCommand, CodexDialMode, CodexDialModeCommand, CodexJoystickCommand,
-    CodexJoystickDirection, CodexLightingAutoOff, CodexLightingAutoOffCommand,
-    CodexLightingBrightnessCommand, CodexLightingCommand, CodexResetCommand, CodexRuntimeCommand,
-    CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand,
-    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand,
-    InputCommandPermissionCommand, InputCommandPermissionValue, InputConfigCommand,
-    InputPermissionCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
-    LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect,
-    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
-    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
-    SmartActionType as CliSmartActionType, TierCommand,
+    AppSenseCommand, BridgeCommand, CapabilityCommand, CheatSheetBehavior, CheatSheetCommand, Cli,
+    CodexAgentKeyCommand, CodexAgentSource, CodexAgentSourceCommand, CodexAgentTapMode,
+    CodexAgentTapModeCommand, CodexBridgeCommand, CodexCommand, CodexCommandKeyCommand,
+    CodexConfigCommand, CodexDialCommand, CodexDialGesture, CodexDialGestureCommand, CodexDialMode,
+    CodexDialModeCommand, CodexJoystickCommand, CodexJoystickDirection, CodexLightingAutoOff,
+    CodexLightingAutoOffCommand, CodexLightingBrightnessCommand, CodexLightingCommand,
+    CodexResetCommand, CodexRuntimeCommand, CodexVoiceCommand, CodexVoiceMode, Command,
+    CompletionShell, ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand,
+    DeviceTransport, InputCommand, InputCommandPermissionCommand, InputCommandPermissionValue,
+    InputConfigCommand, InputPermissionCommand, LayerCommand, LayerJoystickCommand,
+    LayerJoystickMode, LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand,
+    LightingEffect, LightingZone, MultiActionCommand, MultiActionGroupCommand,
+    MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand, SmartActionGroupCommand,
+    SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -102,10 +102,79 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Action { command } => run_action(command, cli.json, &mut out)?,
         Command::MultiAction { command } => run_multi_action(command, cli.json, &mut out)?,
         Command::SmartAction { command } => run_smart_action(command, cli.json, &mut out)?,
+        Command::CheatSheet { command } => run_cheat_sheet(command, cli.json, &mut out)?,
         Command::Appsense { command } => run_appsense(command, cli.json, &mut out)?,
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
+    Ok(())
+}
+
+fn run_cheat_sheet(command: CheatSheetCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        CheatSheetCommand::Catalog => {
+            let result = semantic::cheat_sheet_catalog()?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "Input {}\tminimum firmware {}\ttested {}",
+                    result.input_version, result.minimum_firmware, result.tested_firmware
+                )?;
+                for item in result.assignments {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}\t{}",
+                        item.behavior, item.token, item.label, item.notification
+                    )?;
+                }
+            }
+        }
+        CheatSheetCommand::Bindings {
+            input,
+            profile,
+            layer,
+        } => {
+            let result = semantic::cheat_sheet_bindings(&input, profile, layer)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "profile={}\t{}\nlayer={}\t{}",
+                    result.profile_id, result.profile_name, result.layer_id, result.layer_name
+                )?;
+                for binding in result.bindings {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}",
+                        binding.control.id, binding.behavior, binding.control.assignment
+                    )?;
+                }
+            }
+        }
+        CheatSheetCommand::Bind {
+            input,
+            profile,
+            layer,
+            control,
+            behavior,
+            output,
+        } => {
+            let behavior = match behavior {
+                CheatSheetBehavior::Show => "show",
+                CheatSheetBehavior::Hold => "hold",
+                CheatSheetBehavior::Hide => "hide",
+                CheatSheetBehavior::Toggle => "toggle",
+            };
+            write_candidate_result(
+                semantic::cheat_sheet_bind(&input, profile, layer, &control, behavior, &output)?,
+                json,
+                &mut out,
+            )?;
+        }
+    }
     Ok(())
 }
 
