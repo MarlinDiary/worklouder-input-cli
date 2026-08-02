@@ -62,6 +62,17 @@ const files = new Map([
             kcOnTapHold: "KC_NONE",
             tt: 250,
           },
+          {
+            id: 2,
+            name: "Dependent Multi",
+            color: "#123456",
+            icon: "icon-fixture",
+            kcOnTap: "KC_NONE",
+            kcOnHold: "KA_M1",
+            kcOnDoubleTap: "KC_NONE",
+            kcOnTapHold: "KC_NONE",
+            tt: 300,
+          },
         ],
         multiActionsGroups: [
           {
@@ -69,6 +80,13 @@ const files = new Map([
             name: "Multi",
             tags: [],
             color: null,
+            actionIds: [1, 2],
+          },
+          {
+            id: 4,
+            name: "Shared",
+            tags: ["fixture"],
+            color: "#ABCDEF",
             actionIds: [1],
           },
         ],

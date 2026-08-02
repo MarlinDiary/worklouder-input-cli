@@ -13,9 +13,21 @@ control_snapshot=$root/config-control.json
 action_created_snapshot=$root/config-action-created.json
 action_renamed_snapshot=$root/config-action-renamed.json
 action_event_added_snapshot=$root/config-action-event-added.json
+action_event_set_snapshot=$root/config-action-event-set.json
 action_event_deleted_snapshot=$root/config-action-event-deleted.json
 action_event_moved_snapshot=$root/config-action-event-moved.json
 action_deleted_snapshot=$root/config-action-deleted.json
+multi_created_snapshot=$root/config-multi-created.json
+multi_deleted_snapshot=$root/config-multi-deleted.json
+action_group_created_snapshot=$root/config-action-group-created.json
+action_group_updated_snapshot=$root/config-action-group-updated.json
+action_group_member_added_snapshot=$root/config-action-group-member-added.json
+action_group_member_moved_snapshot=$root/config-action-group-member-moved.json
+action_group_member_removed_snapshot=$root/config-action-group-member-removed.json
+action_group_deleted_snapshot=$root/config-action-group-deleted.json
+multi_group_created_snapshot=$root/config-multi-group-created.json
+multi_group_updated_snapshot=$root/config-multi-group-updated.json
+multi_group_deleted_snapshot=$root/config-multi-group-deleted.json
 renamed_profile_snapshot=$root/config-profile-renamed.json
 selected_snapshot=$root/config-selected.json
 layer_snapshot=$root/config-layer.json
@@ -92,6 +104,18 @@ revision=$(python3 -c \
   >"$root/action-list.json"
 "$bin" --json action show --input "$config_snapshot" --id 3 \
   >"$root/action-show.json"
+"$bin" --json action group list --input "$config_snapshot" \
+  >"$root/action-group-list.json"
+"$bin" --json action group show --input "$config_snapshot" --id 0 \
+  >"$root/action-group-show.json"
+"$bin" --json multi-action list --input "$config_snapshot" \
+  >"$root/multi-list.json"
+"$bin" --json multi-action show --input "$config_snapshot" --id 2 \
+  >"$root/multi-show.json"
+"$bin" --json multi-action group list --input "$config_snapshot" \
+  >"$root/multi-group-list.json"
+"$bin" --json multi-action group show --input "$config_snapshot" --id 4 \
+  >"$root/multi-group-show.json"
 "$bin" --json profile rename --input "$config_snapshot" --id 7 \
   --name Research --output "$renamed_profile_snapshot" \
   >"$root/profile-rename.json"
@@ -112,7 +136,7 @@ revision=$(python3 -c \
   --assignment KC_F1 --type release --delay 25 \
   --output "$action_event_added_snapshot" >"$root/action-event-add.json"
 "$bin" --json action event set --input "$config_snapshot" --id 3 --index 0 \
-  --assignment KC_X --type click --delay 200 --output "$candidate_snapshot" \
+  --assignment KC_X --type click --delay 200 --output "$action_event_set_snapshot" \
   >"$root/action-event-set.json"
 "$bin" --json action event delete --input "$config_snapshot" --id 3 --index 0 \
   --output "$action_event_deleted_snapshot" >"$root/action-event-delete.json"
@@ -121,6 +145,40 @@ revision=$(python3 -c \
   >"$root/action-event-move.json"
 "$bin" --json action delete --input "$config_snapshot" --id 3 \
   --output "$action_deleted_snapshot" >"$root/action-delete.json"
+"$bin" --json multi-action create --input "$config_snapshot" --name 'New Multi' \
+  --color '#EDF6FF' --icon icon-new --output "$multi_created_snapshot" \
+  >"$root/multi-create.json"
+"$bin" --json multi-action set --input "$config_snapshot" --id 2 \
+  --name 'Updated Multi' --color '#A1B2C3' --icon icon-updated \
+  --tap KC_X --double-tap KA_A4 --hold KC_Y --tap-hold KA_M1 \
+  --tapping-term 999 --output "$candidate_snapshot" >"$root/multi-set.json"
+"$bin" --json multi-action delete --input "$config_snapshot" --id 1 \
+  --output "$multi_deleted_snapshot" >"$root/multi-delete.json"
+"$bin" --json action group create --input "$config_snapshot" --name 'CLI Group' \
+  --action 4 --action 10 --color '#EDF6FF' --tag cli --tag fixture \
+  --output "$action_group_created_snapshot" >"$root/action-group-create.json"
+"$bin" --json action group set --input "$config_snapshot" --id 0 \
+  --name 'Renamed Group' --color '#AABBCC' --tag one --tag two \
+  --output "$action_group_updated_snapshot" >"$root/action-group-set.json"
+"$bin" --json action group member add --input "$config_snapshot" --id 1 \
+  --action 4 --output "$action_group_member_added_snapshot" \
+  >"$root/action-group-member-add.json"
+"$bin" --json action group member move --input "$action_group_member_added_snapshot" --id 1 \
+  --from 1 --to 0 --output "$action_group_member_moved_snapshot" \
+  >"$root/action-group-member-move.json"
+"$bin" --json action group member remove --input "$action_group_member_moved_snapshot" --id 1 \
+  --action 4 --output "$action_group_member_removed_snapshot" \
+  >"$root/action-group-member-remove.json"
+"$bin" --json action group delete --input "$config_snapshot" --id 0 \
+  --output "$action_group_deleted_snapshot" >"$root/action-group-delete.json"
+"$bin" --json multi-action group create --input "$config_snapshot" \
+  --name 'CLI Multi Group' --multi-action 2 --output "$multi_group_created_snapshot" \
+  >"$root/multi-group-create.json"
+"$bin" --json multi-action group set --input "$config_snapshot" --id 4 \
+  --name 'Renamed Multi Group' --color '#102030' --tag cli \
+  --output "$multi_group_updated_snapshot" >"$root/multi-group-set.json"
+"$bin" --json multi-action group delete --input "$config_snapshot" --id 0 \
+  --output "$multi_group_deleted_snapshot" >"$root/multi-group-delete.json"
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config validate \
   --input "$config_snapshot" --expected-revision "$revision" \
@@ -194,6 +252,12 @@ control_list = json.loads((root / "control-list.json").read_text())
 control_show = json.loads((root / "control-show.json").read_text())
 action_list = json.loads((root / "action-list.json").read_text())
 action_show = json.loads((root / "action-show.json").read_text())
+action_group_list = json.loads((root / "action-group-list.json").read_text())
+action_group_show = json.loads((root / "action-group-show.json").read_text())
+multi_list = json.loads((root / "multi-list.json").read_text())
+multi_show = json.loads((root / "multi-show.json").read_text())
+multi_group_list = json.loads((root / "multi-group-list.json").read_text())
+multi_group_show = json.loads((root / "multi-group-show.json").read_text())
 profile_rename = json.loads((root / "profile-rename.json").read_text())
 profile_select = json.loads((root / "profile-select.json").read_text())
 layer_rename = json.loads((root / "layer-rename.json").read_text())
@@ -206,14 +270,38 @@ action_event_set = json.loads((root / "action-event-set.json").read_text())
 action_event_delete = json.loads((root / "action-event-delete.json").read_text())
 action_event_move = json.loads((root / "action-event-move.json").read_text())
 action_delete = json.loads((root / "action-delete.json").read_text())
+multi_create = json.loads((root / "multi-create.json").read_text())
+multi_set = json.loads((root / "multi-set.json").read_text())
+multi_delete = json.loads((root / "multi-delete.json").read_text())
+action_group_create = json.loads((root / "action-group-create.json").read_text())
+action_group_set = json.loads((root / "action-group-set.json").read_text())
+action_group_member_add = json.loads((root / "action-group-member-add.json").read_text())
+action_group_member_move = json.loads((root / "action-group-member-move.json").read_text())
+action_group_member_remove = json.loads((root / "action-group-member-remove.json").read_text())
+action_group_delete = json.loads((root / "action-group-delete.json").read_text())
+multi_group_create = json.loads((root / "multi-group-create.json").read_text())
+multi_group_set = json.loads((root / "multi-group-set.json").read_text())
+multi_group_delete = json.loads((root / "multi-group-delete.json").read_text())
 color_candidate = json.loads((root / "config-color.json").read_text())
 control_candidate = json.loads((root / "config-control.json").read_text())
 action_created_candidate = json.loads((root / "config-action-created.json").read_text())
 action_renamed_candidate = json.loads((root / "config-action-renamed.json").read_text())
 action_event_added_candidate = json.loads((root / "config-action-event-added.json").read_text())
+action_event_set_candidate = json.loads((root / "config-action-event-set.json").read_text())
 action_event_deleted_candidate = json.loads((root / "config-action-event-deleted.json").read_text())
 action_event_moved_candidate = json.loads((root / "config-action-event-moved.json").read_text())
 action_deleted_candidate = json.loads((root / "config-action-deleted.json").read_text())
+multi_created_candidate = json.loads((root / "config-multi-created.json").read_text())
+multi_deleted_candidate = json.loads((root / "config-multi-deleted.json").read_text())
+action_group_created_candidate = json.loads((root / "config-action-group-created.json").read_text())
+action_group_updated_candidate = json.loads((root / "config-action-group-updated.json").read_text())
+action_group_member_added_candidate = json.loads((root / "config-action-group-member-added.json").read_text())
+action_group_member_moved_candidate = json.loads((root / "config-action-group-member-moved.json").read_text())
+action_group_member_removed_candidate = json.loads((root / "config-action-group-member-removed.json").read_text())
+action_group_deleted_candidate = json.loads((root / "config-action-group-deleted.json").read_text())
+multi_group_created_candidate = json.loads((root / "config-multi-group-created.json").read_text())
+multi_group_updated_candidate = json.loads((root / "config-multi-group-updated.json").read_text())
+multi_group_deleted_candidate = json.loads((root / "config-multi-group-deleted.json").read_text())
 apply = json.loads((root / "config-apply.json").read_text())
 replay = json.loads((root / "config-apply-replay.json").read_text())
 pre_apply = json.loads((root / "pre-apply.json").read_text())
@@ -304,6 +392,28 @@ assert action_show["events"] == [{
     "eventTypeValue": 1,
     "delay": 0,
 }]
+assert [(item["id"], item["memberCount"]) for item in action_group_list["groups"]] == [
+    (0, 2), (1, 1),
+]
+assert [(item["index"], item["id"]) for item in action_group_show["members"]] == [
+    (0, 3), (1, 4),
+]
+assert [item["id"] for item in multi_list["multiActions"]] == [1, 2]
+assert multi_list["multiActions"][0]["referenceCount"] == 4
+assert multi_show["multiAction"]["id"] == 2
+assert multi_show["multiAction"]["color"] == "#123456"
+assert multi_show["multiAction"]["icon"] == "icon-fixture"
+assert [(item["gesture"], item["assignment"]) for item in multi_show["assignments"]] == [
+    ("tap", "KC_NONE"),
+    ("double-tap", "KC_NONE"),
+    ("hold", "KA_M1"),
+    ("tap-hold", "KC_NONE"),
+]
+assert [(item["id"], item["memberCount"]) for item in multi_group_list["groups"]] == [
+    (0, 2), (4, 1),
+]
+assert multi_group_show["group"]["id"] == 4
+assert multi_group_show["members"][0]["id"] == 1
 assert profile_rename["changed"] is True
 assert profile_rename["changedPaths"] == ["/keymap.json/profiles/1/name"]
 assert profile_select["changedPaths"] == ["/keymap.json/activeProfileId"]
@@ -325,6 +435,42 @@ assert action_event_set["changedPaths"] == [
 assert action_event_delete["changedPaths"] == ["/keymap.json/macros/0/actions/0"]
 assert action_event_move["changedPaths"] == ["/keymap.json/macros/0/actions"]
 assert "/keymap.json/macros/0" in action_delete["changedPaths"]
+assert multi_create["resourceId"] == 3
+assert multi_create["changedPaths"] == ["/keymap.json/multiActions/2"]
+assert multi_set["changedPaths"] == [
+    "/keymap.json/multiActions/1/name",
+    "/keymap.json/multiActions/1/color",
+    "/keymap.json/multiActions/1/icon",
+    "/keymap.json/multiActions/1/kcOnTap",
+    "/keymap.json/multiActions/1/kcOnDoubleTap",
+    "/keymap.json/multiActions/1/kcOnHold",
+    "/keymap.json/multiActions/1/kcOnTapHold",
+    "/keymap.json/multiActions/1/tt",
+]
+assert "/keymap.json/multiActions/0" in multi_delete["changedPaths"]
+assert action_group_create["resourceId"] == 2
+assert action_group_set["changedPaths"] == [
+    "/keymap.json/macrosGroups/0/name",
+    "/keymap.json/macrosGroups/0/color",
+    "/keymap.json/macrosGroups/0/tags",
+]
+assert action_group_member_add["changedPaths"] == [
+    "/keymap.json/macrosGroups/1/actionIds/1",
+]
+assert action_group_member_move["changedPaths"] == [
+    "/keymap.json/macrosGroups/1/actionIds",
+]
+assert action_group_member_remove["changedPaths"] == [
+    "/keymap.json/macrosGroups/1/actionIds/0",
+]
+assert "/keymap.json/macrosGroups/0" in action_group_delete["changedPaths"]
+assert multi_group_create["resourceId"] == 5
+assert multi_group_set["changedPaths"] == [
+    "/keymap.json/multiActionsGroups/1/name",
+    "/keymap.json/multiActionsGroups/1/color",
+    "/keymap.json/multiActionsGroups/1/tags",
+]
+assert "/keymap.json/multiActionsGroups/0" in multi_group_delete["changedPaths"]
 
 def payload(document, name):
     record = next(item for item in document["files"] if item["relativePath"] == name)
@@ -347,8 +493,14 @@ def verify_snapshot(document):
 for document in [
     candidate, color_candidate, control_candidate, renamed_profile, selected,
     layer_candidate, action_created_candidate, action_renamed_candidate,
-    action_event_added_candidate, action_event_deleted_candidate,
-    action_event_moved_candidate, action_deleted_candidate,
+    action_event_added_candidate, action_event_set_candidate,
+    action_event_deleted_candidate, action_event_moved_candidate,
+    action_deleted_candidate, multi_created_candidate, multi_deleted_candidate,
+    action_group_created_candidate, action_group_updated_candidate,
+    action_group_member_added_candidate, action_group_member_moved_candidate,
+    action_group_member_removed_candidate, action_group_deleted_candidate,
+    multi_group_created_candidate, multi_group_updated_candidate,
+    multi_group_deleted_candidate,
 ]:
     verify_snapshot(document)
     assert payload(document, "smart_actions.json") == payload(snapshot, "smart_actions.json")
@@ -358,15 +510,27 @@ control_keymap = json.loads(payload(control_candidate, "keymap.json"))
 action_created_keymap = json.loads(payload(action_created_candidate, "keymap.json"))
 action_renamed_keymap = json.loads(payload(action_renamed_candidate, "keymap.json"))
 action_event_added_keymap = json.loads(payload(action_event_added_candidate, "keymap.json"))
+action_event_set_keymap = json.loads(payload(action_event_set_candidate, "keymap.json"))
 action_event_deleted_keymap = json.loads(payload(action_event_deleted_candidate, "keymap.json"))
 action_event_moved_keymap = json.loads(payload(action_event_moved_candidate, "keymap.json"))
 action_deleted_keymap = json.loads(payload(action_deleted_candidate, "keymap.json"))
+multi_created_keymap = json.loads(payload(multi_created_candidate, "keymap.json"))
+multi_deleted_keymap = json.loads(payload(multi_deleted_candidate, "keymap.json"))
+action_group_created_keymap = json.loads(payload(action_group_created_candidate, "keymap.json"))
+action_group_updated_keymap = json.loads(payload(action_group_updated_candidate, "keymap.json"))
+action_group_member_added_keymap = json.loads(payload(action_group_member_added_candidate, "keymap.json"))
+action_group_member_moved_keymap = json.loads(payload(action_group_member_moved_candidate, "keymap.json"))
+action_group_member_removed_keymap = json.loads(payload(action_group_member_removed_candidate, "keymap.json"))
+action_group_deleted_keymap = json.loads(payload(action_group_deleted_candidate, "keymap.json"))
+multi_group_created_keymap = json.loads(payload(multi_group_created_candidate, "keymap.json"))
+multi_group_updated_keymap = json.loads(payload(multi_group_updated_candidate, "keymap.json"))
+multi_group_deleted_keymap = json.loads(payload(multi_group_deleted_candidate, "keymap.json"))
 renamed_profile_keymap = json.loads(payload(renamed_profile, "keymap.json"))
 selected_keymap = json.loads(payload(selected, "keymap.json"))
 layer_keymap = json.loads(payload(layer_candidate, "keymap.json"))
 assert renamed_profile_keymap["profiles"][1]["name"] == "Research"
 assert candidate_keymap["fixtureExtension"] == {"preserved": True}
-assert candidate_keymap["macros"][0]["actions"][0] == {"act": 2, "delay": 200, "kc": "KC_X"}
+assert action_event_set_keymap["macros"][0]["actions"][0] == {"act": 2, "delay": 200, "kc": "KC_X"}
 assert control_keymap["profiles"][0]["layers"][0]["layout"]["keymap"][0][0] == "KA_A4"
 assert control_keymap["profiles"][0]["macrosUsed"] == [10, 3, 4]
 assert color_keymap["profiles"][0]["layers"][1]["color"] == 0xA1B2C3
@@ -385,6 +549,62 @@ assert action_deleted_keymap["multiActions"][0]["kcOnTap"] == "KC_NONE"
 assert action_deleted_keymap["profiles"][0]["macrosUsed"] == [10]
 assert action_deleted_keymap["macrosGroups"] == [{
     "id": 0, "name": "Primary", "tags": ["fixture"], "color": None, "actionIds": [4],
+}]
+assert multi_created_keymap["multiActions"][-1] == {
+    "id": 3,
+    "name": "New Multi",
+    "color": "#EDF6FF",
+    "icon": "icon-new",
+    "kcOnTap": "KC_NONE",
+    "kcOnHold": "KC_NONE",
+    "kcOnDoubleTap": "KC_NONE",
+    "kcOnTapHold": "KC_NONE",
+    "tt": 250,
+}
+assert candidate_keymap["multiActions"][1] == {
+    "id": 2,
+    "name": "Updated Multi",
+    "color": "#A1B2C3",
+    "icon": "icon-updated",
+    "kcOnTap": "KC_X",
+    "kcOnHold": "KC_Y",
+    "kcOnDoubleTap": "KA_A4",
+    "kcOnTapHold": "KA_M1",
+    "tt": 999,
+}
+assert [item["id"] for item in multi_deleted_keymap["multiActions"]] == [2]
+assert multi_deleted_keymap["profiles"][0]["layers"][0]["layout"]["joystick"]["sectors"][1]["k"] == "KC_NONE"
+assert multi_deleted_keymap["multiActions"][0]["kcOnHold"] == "KC_NONE"
+assert multi_deleted_keymap["multiActionsGroups"] == [{
+    "id": 0, "name": "Multi", "tags": [], "color": None, "actionIds": [2],
+}]
+assert multi_deleted_keymap["profiles"][0]["multiActionsUsed"] == []
+assert action_group_created_keymap["macrosGroups"][-1] == {
+    "id": 2, "name": "CLI Group", "tags": ["cli", "fixture"],
+    "color": "#EDF6FF", "actionIds": [4, 10],
+}
+assert action_group_updated_keymap["macrosGroups"][0] == {
+    "id": 0, "name": "Renamed Group", "tags": ["one", "two"],
+    "color": "#AABBCC", "actionIds": [3, 4],
+}
+assert action_group_member_added_keymap["macrosGroups"][1]["actionIds"] == [3, 4]
+assert action_group_member_moved_keymap["macrosGroups"][1]["actionIds"] == [4, 3]
+assert action_group_member_removed_keymap["macrosGroups"][1]["actionIds"] == [3]
+assert [item["id"] for item in action_group_deleted_keymap["macros"]] == [3, 10]
+assert action_group_deleted_keymap["macrosGroups"] == [{
+    "id": 1, "name": "Single", "tags": [], "color": None, "actionIds": [3],
+}]
+assert multi_group_created_keymap["multiActionsGroups"][-1] == {
+    "id": 5, "name": "CLI Multi Group", "tags": [], "color": None, "actionIds": [2],
+}
+assert multi_group_updated_keymap["multiActionsGroups"][1] == {
+    "id": 4, "name": "Renamed Multi Group", "tags": ["cli"],
+    "color": "#102030", "actionIds": [1],
+}
+assert [item["id"] for item in multi_group_deleted_keymap["multiActions"]] == [1]
+assert multi_group_deleted_keymap["multiActionsGroups"] == [{
+    "id": 4, "name": "Shared", "tags": ["fixture"],
+    "color": "#ABCDEF", "actionIds": [1],
 }]
 assert selected_keymap["activeProfileId"] == 7
 assert layer_keymap["profiles"][0]["layers"][1]["name"] == "Build"
@@ -431,6 +651,13 @@ print("semantic_action_list_show=verified")
 print("semantic_action_create_rename=verified")
 print("semantic_action_event_crud=verified")
 print("semantic_action_delete_cascade=verified")
+print("semantic_action_group_crud=verified")
+print("semantic_action_group_orphan_cascade=verified")
+print("semantic_multi_action_list_show=verified")
+print("semantic_multi_action_create_set=verified")
+print("semantic_multi_action_delete_cascade=verified")
+print("semantic_multi_action_group_crud=verified")
+print("semantic_multi_action_group_orphan_cascade=verified")
 print("semantic_unknown_fields=preserved")
 print("semantic_unrelated_file_bytes=preserved")
 print("config_live_cas=verified")
