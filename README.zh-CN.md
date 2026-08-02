@@ -9,7 +9,7 @@
 > **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
 > provider 诊断、Codex Micro 设置检查/导出、Input 只读检查/原字节导出、
 > live device status/files、双哈希验证导出、带 revision 的 bridge snapshot、
-> live CAS 校验、离线 profile/layer/control/Action candidate 生成、fixture 验证的
+> live CAS 校验、离线 profile/layer/AppSense/control/Action candidate 生成、fixture 验证的
 > apply/restore transaction、结构化 diff、JSON 输出和 shell completion。
 > 尚未发布打包版本；bridge transaction 已通过隔离 writer fixture
 > 验证，真实设备写入仍以 Input writer adapter 与硬件 rollback 验证为启用条件。
@@ -84,6 +84,11 @@ worklouderctl layer rename --input CONFIG.json [--profile PROFILE_ID] --id LAYER
 worklouderctl layer color --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --color '#RRGGBB' --output CANDIDATE.json
 worklouderctl layer lighting show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
 worklouderctl layer lighting set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --zone backlight --effect breath --brightness 0.5 --color '#RRGGBB' [--apply-to-all] --output CANDIDATE.json
+worklouderctl appsense list --input CONFIG.json
+worklouderctl appsense show --input CONFIG.json --id APP_ID
+worklouderctl appsense link --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --name NAME [--process BUNDLE_ID] [--path APP_PATH] --output CANDIDATE.json
+worklouderctl appsense set --input CONFIG.json --id APP_ID [--name NAME] [--process BUNDLE_ID|--clear-process] [--path APP_PATH|--clear-path] --output CANDIDATE.json
+worklouderctl appsense unlink --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --output CANDIDATE.json
 worklouderctl control list --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID
 worklouderctl control show --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control key:ROW:COLUMN
 worklouderctl control set --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control encoder:INDEX:press --assignment KC_MUTE --output CANDIDATE.json
@@ -143,7 +148,7 @@ CAS、session-scoped idempotency、完整 revision readback 与 automatic rollba
 只有运行中的 Input 注入已验证 writer 时，bridge 才会公布这两个写能力；当前
 跨语言证据来自隔离 reference writer。
 
-`profile`、`layer`、`control`、`action` 与 `multi-action` 是离线 semantic editor：先严格验证 snapshot 内每个
+`profile`、`layer`、`appsense`、`control`、`action` 与 `multi-action` 是离线 semantic editor：先严格验证 snapshot 内每个
 size、SHA-1、SHA-256、canonical base64、safe path、keymap ID 与完整 revision，
 再只修改请求的 semantic field，保留未知 JSON 字段和其他文件的原字节，重算
 受影响的哈希与 revision，原子发布并重新打开 candidate。这个阶段不连接 Input
@@ -157,6 +162,13 @@ move，也不作为直接 lighting target。普通 layer duplicate 会移除 `li
 最后一层的 lights。backlight/underglow 支持 `off`、`solid`、`snake`、`rainbow`、
 `breath`、`gradient`，brightness/speed/magic 范围为 `0..1`，并支持 24-bit color
 与按 zone 的 `--apply-to-all`。
+
+`appsense` 管理 Input 0.18.0 的 `linkedApps` 记录与 layer 的 `linkedAppId`。
+新 ID 遵循 Input 的 first-missing-nonnegative 规则；macOS 的 `process` 是 bundle
+identifier，并且 `process`/`path` 至少一个非空。`list/show` 会返回所有
+profile/layer bindings；link、字段更新和 unlink candidate 使用同一套完整 snapshot
+校验，并已进入 fixture apply/readback/restore transaction。焦点观察与实时 layer
+切换继续由 Input 和 device firmware 执行，其行为验证与配置对等状态分开记录。
 
 物理 control 使用稳定 ID：`key:ROW:COLUMN`、
 `encoder:INDEX:ccw|cw|press`、`joystick:SECTOR`。`control set` 校验冻结的
@@ -242,7 +254,7 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 `files`、双哈希 `export`、Companion Bridge v1 contract/client/reference server、
 revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
 Input 自动恢复，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
-与 per-layer lighting 的严格离线 candidate 生成，keys、
+与 per-layer lighting、AppSense linked-app lifecycle 的严格离线 candidate 生成，keys、
 encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
 list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
 release 集成、可安装 binary、Homebrew formula、

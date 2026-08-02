@@ -66,7 +66,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Actions/macros list/show/create/rename/delete and event CRUD/reorder
 - [x] Action group metadata, ordered member CRUD, and Input orphan cascade
 - [x] Multi Action field CRUD, timing, groups, and reference cascade
-- [ ] Linked apps
+- [x] Linked-app/AppSense list/show/link/update/unlink candidates and fixture transaction
 
 ## M4 — Full cross-authority transaction
 

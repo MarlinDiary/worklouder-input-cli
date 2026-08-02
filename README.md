@@ -23,7 +23,7 @@
 > `worklouderctl` binary with provider diagnostics, Codex Micro settings
 > inspection/export, Input inspection/exact-byte export, validation, structural
 > diff, live device status/file reads, verified device export, revisioned bridge
-> snapshots/CAS validation, offline profile/layer/control/Action candidate generation,
+> snapshots/CAS validation, offline profile/layer/AppSense/control/Action candidate generation,
 > fixture-verified apply/restore transactions, JSON output, and shell completions.
 > There is no packaged release yet.
 > The bridge transaction engine now verifies backup, apply, idempotent retry,
@@ -114,6 +114,11 @@ worklouderctl layer rename --input CONFIG.json [--profile PROFILE_ID] --id LAYER
 worklouderctl layer color --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --color '#RRGGBB' --output CANDIDATE.json
 worklouderctl layer lighting show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
 worklouderctl layer lighting set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --zone backlight --effect breath --brightness 0.5 --color '#RRGGBB' [--apply-to-all] --output CANDIDATE.json
+worklouderctl appsense list --input CONFIG.json
+worklouderctl appsense show --input CONFIG.json --id APP_ID
+worklouderctl appsense link --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --name NAME [--process BUNDLE_ID] [--path APP_PATH] --output CANDIDATE.json
+worklouderctl appsense set --input CONFIG.json --id APP_ID [--name NAME] [--process BUNDLE_ID|--clear-process] [--path APP_PATH|--clear-path] --output CANDIDATE.json
+worklouderctl appsense unlink --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --output CANDIDATE.json
 worklouderctl control list --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID
 worklouderctl control show --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control key:ROW:COLUMN
 worklouderctl control set --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control encoder:INDEX:press --assignment KC_MUTE --output CANDIDATE.json
@@ -182,7 +187,7 @@ full revision readback, and automatic rollback. These commands are advertised
 only when the running Input version supplies a verified configuration writer;
 the current cross-language evidence uses the isolated reference writer.
 
-`profile`, `layer`, `control`, `action`, and `multi-action` commands are offline semantic editors. They strictly
+`profile`, `layer`, `appsense`, `control`, `action`, and `multi-action` commands are offline semantic editors. They strictly
 validate every embedded size, SHA-1, SHA-256, canonical base64 payload, safe
 path, keymap ID, and the full snapshot revision before producing a new complete
 candidate. A candidate preserves unknown JSON fields and unrelated file bytes,
@@ -208,6 +213,15 @@ a direct lighting target. A normal layer duplicate drops `linkedAppId`; a new
 layer copies the last layer's lighting. Backlight and underglow support `off`, `solid`, `snake`,
 `rainbow`, `breath`, and `gradient`, normalized `0..1` brightness/speed/magic,
 24-bit color, and zone-level `--apply-to-all`.
+
+`appsense` manages Input 0.18.0's `linkedApps` records and each layer's
+`linkedAppId`. New IDs use Input's first-missing-nonnegative rule; macOS
+`process` is the bundle identifier, and at least one of `process` or `path`
+must be non-empty. `list/show` include every profile/layer binding. Link, field
+update, and unlink candidates are covered by the same complete-snapshot
+validation and fixture apply/readback/restore transaction. Input and device
+firmware remain responsible for observing focus and switching the live layer;
+that runtime transition is tracked separately from configuration parity.
 
 Physical controls use stable IDs: `key:ROW:COLUMN`,
 `encoder:INDEX:ccw|cw|press`, and `joystick:SECTOR`. `control set` accepts the

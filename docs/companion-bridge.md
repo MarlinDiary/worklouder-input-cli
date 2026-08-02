@@ -140,6 +140,15 @@ worklouderctl layer color --input config-snapshot.json \
 worklouderctl layer lighting set --input config-snapshot.json \
   --profile 0 --id 1 --zone backlight --effect breath --brightness 0.5 \
   --color '#EDF6FF' --apply-to-all --output lighting-candidate.json
+worklouderctl appsense list --input config-snapshot.json
+worklouderctl appsense show --input config-snapshot.json --id 0
+worklouderctl appsense link --input config-snapshot.json \
+  --profile 0 --layer 1 --name 'Codex-mac' --process com.openai.codex \
+  --output appsense-candidate.json
+worklouderctl appsense set --input appsense-candidate.json --id 0 \
+  --name 'Codex Desktop' --output appsense-renamed-candidate.json
+worklouderctl appsense unlink --input appsense-candidate.json \
+  --profile 0 --layer 1 --output appsense-unlinked-candidate.json
 worklouderctl control list --input config-snapshot.json --profile 0 --layer 1
 worklouderctl control show --input config-snapshot.json --profile 0 --layer 1 \
   --control encoder:0:press
@@ -244,7 +253,7 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
 - `companion/input-main-bridge.test.mjs` — authentication, dispatch, and service
   adapter tests;
 - `scripts/test-bridge-e2e.sh` — Rust CLI handshake, status, file list, exact
-  export, semantic profile/layer/lighting/control/Action/Multi Action/group
+  export, semantic profile/layer/lighting/AppSense/control/Action/Multi Action/group
   inspection, lifecycle/CRUD/cascade candidates, independent candidate rehash,
   apply/readback, idempotent retry, stale-CAS rejection, restore, and dual-hash
   conformance test.

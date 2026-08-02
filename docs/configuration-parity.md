@@ -58,7 +58,7 @@ the runtime reloaded the new value.
 | Joystick sectors | existing radial sectors and targets | `control list/show/set` | candidate-verified; sector CRUD pending |
 | Backlight | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
 | Underglow | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
-| AppSense links | application-to-layer mapping | `appsense` | researched |
+| AppSense links | list/show, application identity, link, update, unlink | `appsense` | candidate and current-cache schema verified; fixture apply/readback/restore verified; live focus transition tracked separately |
 | Presets | inspect, preview, install | `preset` | researched |
 | Full object | export, snapshot, validate, diff, apply, restore | `device export`, `device config snapshot/validate/apply/restore` | transaction fixture verified; released writer pending |
 

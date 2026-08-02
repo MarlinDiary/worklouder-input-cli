@@ -216,6 +216,16 @@ worklouderctl layer lighting set --input SNAPSHOT.json [--profile ID] \
   --id ID --zone backlight --effect breath --brightness 0.5 \
   --speed 0.5 --magic 0.5 --color '#RRGGBB' [--apply-to-all] \
   --output CANDIDATE.json
+worklouderctl appsense list --input SNAPSHOT.json
+worklouderctl appsense show --input SNAPSHOT.json --id APP_ID
+worklouderctl appsense link --input SNAPSHOT.json [--profile ID] \
+  --layer ID --name NAME [--process BUNDLE_ID] [--path APP_PATH] \
+  --output CANDIDATE.json
+worklouderctl appsense set --input SNAPSHOT.json --id APP_ID \
+  [--name NAME] [--process BUNDLE_ID|--clear-process] \
+  [--path APP_PATH|--clear-path] --output CANDIDATE.json
+worklouderctl appsense unlink --input SNAPSHOT.json [--profile ID] \
+  --layer ID --output CANDIDATE.json
 worklouderctl control list --input SNAPSHOT.json [--profile ID] --layer ID
 worklouderctl control show --input SNAPSHOT.json [--profile ID] \
   --layer ID --control key:ROW:COLUMN
@@ -405,10 +415,33 @@ layers in the profile and initializes both default zones on a layer that had no
 
 ### Linked applications / AppSense
 
-A linked application associates a desktop application with a layer. Input's
-host process watches the focused application and requests the corresponding
-layer. Verification needs an A/B focus transition plus a device-status read,
-not only the saved link record.
+A linked application is stored in root `linkedApps` as
+`{id,name,process,path}`; the selected layer stores the same ID in
+`linkedAppId`. IDs follow Input 0.18.0's first missing nonnegative integer rule,
+which is intentionally different from the maximum-plus-one profile, layer,
+Action, and group rules. A record needs a non-empty `process` or `path`.
+On macOS, `process` is the application bundle identifier; automatic detection
+normally stores an empty path and derives a `-mac` name.
+
+`appsense list/show` return the stored identity plus all profile/layer
+bindings. `link` creates the root record and layer reference together. `set`
+can rename or deliberately update detected identity fields while preventing an
+empty identity. `unlink` removes the selected layer reference and removes the
+root record when that was its only binding. This shared-reference guard keeps
+the generated candidate referentially valid even though the Input GUI normally
+creates one binding per record.
+
+The frozen Input delete behavior is also preserved: deleting a layer or
+profile does not garbage-collect now-unreferenced `linkedApps`, while
+duplicating a layer omits `linkedAppId`. Snapshot validation permits an
+unreferenced root record but rejects a layer reference to a missing record.
+
+Input's host focus service polls once per second and sends changed
+`appName/process/path` data to the device. The device firmware owns identity
+matching and the actual layer transition; the algorithm is not present in the
+Input renderer or main process. Therefore candidate/apply/readback/restore
+proves configuration parity, while full runtime parity additionally needs an
+A/B focus transition and device-status read.
 
 ## Tier 3: Input host configuration
 
