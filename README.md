@@ -1,7 +1,7 @@
 # WorkLouderCTL — Work Louder Input CLI for Codex Micro
 
 <p align="center">
-  <strong>The open-source companion CLI for Work Louder Input and Codex Micro.</strong>
+  <strong>The open-source full-configuration CLI for Codex Micro, Codex, and Work Louder Input.</strong>
 </p>
 
 <p align="center">
@@ -30,12 +30,13 @@ Looking for a **Work Louder Input CLI**, a **Codex Micro command-line
 configurator**, or a safe way for an **AI agent to configure a Work Louder
 macropad**? WorkLouderCTL is being built for that job.
 
-WorkLouderCTL is an unofficial, open-source companion to the Work Louder Input
-app. Its goal is to inspect, plan, diff, back up, apply, verify, and restore
-device configurations while keeping Input's GUI, cache, database, and the
-device's persisted files synchronized.
+WorkLouderCTL is an unofficial, open-source full-configuration CLI. Its product
+contract is configuration parity with both the Codex Micro settings page in
+Codex and every Codex Micro surface in Work Louder Input. The GUIs become
+optional for configuration; Codex and Input may still provide the live runtime
+for Codex-aware actions, AppSense, Smart Actions, and reactive lighting.
 
-## Why a companion CLI?
+## Why a full-configuration CLI?
 
 The official Input app is useful for visual editing. A CLI adds workflows that
 are difficult to make repeatable in a GUI:
@@ -48,9 +49,10 @@ are difficult to make repeatable in a GUI:
 - roll back a failed or unwanted change;
 - let scripts and AI agents use a stable, machine-readable interface.
 
-WorkLouderCTL is designed to **cooperate with Input**, rather than race it for
-the device. A guarded mutation will coordinate the app, preserve every state
-authority, write only after validation, verify the result, and reopen Input.
+WorkLouderCTL is designed to **replace both configuration GUIs while
+cooperating with their runtimes**. A guarded mutation coordinates Codex and
+Input, preserves every state authority, writes only after validation, verifies
+the result, and refreshes or reopens the affected runtime.
 
 ## Planned command experience
 
@@ -58,6 +60,11 @@ The intended binary name is `worklouderctl`:
 
 ```console
 worklouderctl doctor
+worklouderctl codex export
+worklouderctl codex agent-source set priority
+worklouderctl codex command-key set ACT06 --command toggleFastMode
+worklouderctl codex joystick set up --skill SKILL_ID
+worklouderctl codex lighting set --brightness 80 --auto-off 10-minutes
 worklouderctl input inspect
 worklouderctl device status
 worklouderctl profile list
@@ -75,6 +82,7 @@ yet. Follow the [roadmap](docs/roadmap.md) for implementation status.
 
 | Area | Target scope |
 | --- | --- |
+| Codex-native configuration | Agent Keys, Command Keys, voice mode, dial, joystick, Skills, global lighting, and reset |
 | Device discovery | Codex Micro status, firmware, active profile/layer, USB and Bluetooth transport details |
 | Profiles and layers | List, create, rename, select, diff, import, and export |
 | Controls | Keys, rotary encoder, encoder press, and planar joystick sectors |
@@ -86,8 +94,8 @@ yet. Follow the [roadmap](docs/roadmap.md) for implementation status.
 
 ## Safety model
 
-A mature write path must treat the device and Input as multiple synchronized
-authorities:
+A mature write path must treat Codex, Input, and the device as synchronized
+but distinct authorities:
 
 ```text
 inspect current state
@@ -96,15 +104,15 @@ validate + produce a plan and diff
         ↓
 coordinate and pause Input
         ↓
-back up device files + Input cache + Input database
+back up Codex settings + device files + Input cache/database
         ↓
 write changed files in dependency-safe order
         ↓
 read back bytes/JSON + verify checksums
         ↓
-atomically update Input state
+atomically update the selected Codex/Input authorities
         ↓
-reopen Input or roll everything back
+refresh runtimes or roll everything back
 ```
 
 Unknown Input, firmware, or schema versions will default to inspection until a
@@ -141,15 +149,15 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 
 ### Is there a CLI for Work Louder Input?
 
-WorkLouderCTL is being developed as an open-source companion CLI for Work Louder
-Input. The repository is currently pre-alpha and does not yet publish an
-installable binary.
+WorkLouderCTL is being developed as an open-source full-configuration CLI for
+Codex, Work Louder Input, and Codex Micro. The repository is currently
+pre-alpha and does not yet publish an installable binary.
 
-### Does WorkLouderCTL replace the Input app?
+### Does WorkLouderCTL replace the Codex and Input configuration GUIs?
 
-The first product is a companion: Input remains available as the visual editor,
-while WorkLouderCTL provides repeatable inspection, automation, verification,
-and rollback. A standalone driver is a possible later track.
+Yes. Full configuration parity is the product target. Codex and Input remain
+available as visual editors and as runtime components for features that execute
+inside those apps. A standalone driver/runtime is a separate later track.
 
 ### Does it support Codex Micro?
 
@@ -168,6 +176,7 @@ Read the complete [FAQ](docs/faq.md).
 
 - [Configuration tier model](docs/tier-model.md)
 - [Complete configuration reference](docs/configuration-reference.md)
+- [Configuration parity matrix](docs/configuration-parity.md)
 - [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
 - [Frequently asked questions](docs/faq.md)
 - [Compatibility and support policy](docs/compatibility.md)

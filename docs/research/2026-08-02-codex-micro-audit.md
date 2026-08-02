@@ -121,13 +121,22 @@ checksums against exact app/firmware fixtures.
 
 1. Ship `doctor` and export/diff before semantic mutation.
 2. Make `tier` a first-class field in the capability registry and every plan.
-3. Keep Tier 1 editing in Codex; expose open-settings and diagnostics first.
+3. Provide full Tier 1 configuration parity through the versioned Codex
+   `settings-read`/`settings-write` bridge, with backup, diff, readback, and
+   rollback around the complete settings object.
 4. Build exact Input 0.17.3 and 0.18.0 adapters rather than a nearest-version
    fallback.
 5. Coordinate Input, lock all authorities, recheck hashes, then write.
 6. Treat a timeout as unknown post-state until a fresh device readback.
 7. Verify emitted behavior, not labels or GUI toasts.
 8. Gate firmware and destructive reset under separate operational commands.
+
+## Product requirement update
+
+The product target is full configuration parity with both Codex and Input.
+“Codex authority” and “Input authority” identify schemas and runtimes; they do
+not reserve either GUI as the sole editor. Runtime replacement remains a
+separate track from configuration-GUI replacement.
 
 ## Official sources checked
 

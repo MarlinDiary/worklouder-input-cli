@@ -1,6 +1,6 @@
 # WorkLouderCTL：Work Louder Input 与 Codex Micro 的 CLI
 
-**面向 Work Louder Input 与 Codex Micro 的开源 Companion CLI。**
+**覆盖 Codex App 与 Work Louder Input 全部配置能力的开源 CLI。**
 
 [English](README.md) · [常见问题](docs/faq.md) ·
 [兼容性](docs/compatibility.md) · [架构](docs/architecture.md) ·
@@ -19,7 +19,9 @@
 
 WorkLouderCTL 就是为这些场景设计的。
 
-它不会和 Input 同时争抢设备，而是将 Input 保留为 GUI，并为用户、脚本和 AI 提供可复现的命令行工作流：
+产品目标是让 GUI 对“配置”变为可选：Tier 1 通过 Codex settings adapter
+完整读写，Tier 2 及以上通过 Input/device adapters 完整读写。Codex 和 Input
+仍可作为 Codex-aware actions、AppSense、Smart Actions 与动态灯光的运行时。
 
 ```text
 读取当前状态 → 生成计划与 diff → 备份 → 写入 → readback 验证 → 同步 Input → 恢复或完成
@@ -29,6 +31,10 @@ WorkLouderCTL 就是为这些场景设计的。
 
 ```console
 worklouderctl doctor
+worklouderctl codex export
+worklouderctl codex agent-source set priority
+worklouderctl codex command-key set ACT06 --command toggleFastMode
+worklouderctl codex joystick set up --skill SKILL_ID
 worklouderctl input inspect
 worklouderctl device status
 worklouderctl profile list
@@ -41,6 +47,7 @@ worklouderctl backup restore BACKUP_ID
 ## 目标功能
 
 - profiles 与六层 layouts；
+- Codex Agent Keys、Command Keys、voice、dial、joystick、Skills 与全局灯光；
 - 所有按键、旋钮和摇杆方向；
 - keycodes、Actions、Multi Actions 与 Smart Actions；
 - linked apps 与 AppSense；
@@ -59,24 +66,26 @@ worklouderctl backup restore BACKUP_ID
 
 以上是当前研究基线；正式支持范围会通过版本适配器、fixtures 和真实硬件 readback 明确记录。
 
-## 与 Input 的关系
+## 与 Codex 和 Input 的关系
 
-WorkLouderCTL 第一阶段是 **Input Companion CLI**：
+WorkLouderCTL 是 **Full-configuration CLI**：
 
-- Input 继续作为可视化编辑器；
-- CLI 负责自动化、diff、批量配置、备份、验证和恢复；
-- GUI 修改后，CLI 读取最新状态；
-- CLI 修改后，同步 Input 的 cache/database，再重新打开 Input。
+- CLI 覆盖 Codex 与 Input 针对 Codex Micro 的全部配置项；
+- Codex/Input GUI 可以继续使用，但不是完成配置的必需入口；
+- Tier 1 写入 Codex settings authority，Tier 2+ 同步 device、Input cache/database；
+- 需要宿主语义的动作仍由对应 runtime 执行并接受行为验证。
 
-未来可以继续发展独立 driver，但它不阻塞 Companion CLI 的首个版本。
+未来可以继续发展独立 driver/runtime；它与“完整替代配置 GUI”是两个独立目标。
 
 ## 当前进度
 
 仓库目前处于产品定义与 fixture 准备阶段。可安装 binary、Homebrew formula 和完整命令将在经过硬件验证后发布。
 
-配置边界已经确定：**Tier 1 在 Codex App 内配置；Tier 2 及以上依赖
-Work Louder Input。** 详见 [Tier 模型](docs/tier-model.md)、
+配置边界已经确定：**Tier 1 使用 Codex 的设置模型与运行时；Tier 2 及以上
+使用 Input 的设置模型与运行时；CLI 对两边都提供完整配置能力。** 详见
+[Tier 模型](docs/tier-model.md)、
 [完整配置参考](docs/configuration-reference.md) 与
+[配置能力对等矩阵](docs/configuration-parity.md)、
 [2026-08-02 深度审计](docs/research/2026-08-02-codex-micro-audit.md)。
 
 ## 项目独立性

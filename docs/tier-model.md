@@ -6,15 +6,15 @@ state owned by another.
 
 ## Normative boundary
 
-> **Tier 1 is configured in the Codex app. Every other tier depends on Work
-> Louder Input.**
+> **Tier 1 uses the Codex configuration model and runtime. Every other tier
+> uses Work Louder Input authorities. WorkLouderCTL configures all tiers.**
 
 WorkLouderCTL may inspect and diagnose all tiers. Mutation policy is authority
 aware:
 
 | Tier | Name | Configuration authority | CLI mutation policy |
 | --- | --- | --- | --- |
-| 1 | Codex-native | Codex app | Inspect and diagnose first; preserve Codex as the editor and runtime authority |
+| 1 | Codex-native | Codex settings plus Codex runtime | Full transactional reads and writes through an exact Codex adapter |
 | 2 | Input device configuration | Input plus device files | Transactional companion writes after exact-version validation |
 | 3 | Input host automations | Input host runtime plus Input database | Transactional companion writes with permission and host-runtime checks |
 | 4 | Input operations | Input updater, flasher, transport and recovery services | Diagnose first; explicit, separately gated operational commands |
@@ -37,23 +37,35 @@ generic keyboard shortcut:
 - Codex-aware joystick directions;
 - Codex task-state lighting, global brightness, and auto-off policy.
 
-Codex owns both the saved settings and the live semantics. It consumes vendor
+Codex defines both the saved settings and the live semantics. It consumes vendor
 HID events, resolves task and command state, and sends reactive lighting
 messages. A generic Input keymap cannot reproduce this complete runtime.
 
 ### Tier 1 invariant
 
 The CLI must never route a Tier 1 edit through Input merely because the same
-physical control is visible there. The initial CLI surface is:
+physical control is visible there. It uses a versioned Codex settings adapter:
 
 ```text
 worklouderctl codex inspect
 worklouderctl codex doctor
-worklouderctl codex open-settings
+worklouderctl codex export
+worklouderctl codex diff CONFIG
+worklouderctl codex agent-source get|set
+worklouderctl codex agent-key get|set|clear AG00
+worklouderctl codex command-key get|set|reset ACT06
+worklouderctl codex dial get|set|reset
+worklouderctl codex joystick get|set|reset
+worklouderctl codex voice get|set
+worklouderctl codex lighting get|set
+worklouderctl codex apply CONFIG
+worklouderctl codex restore BACKUP_ID
 ```
 
-A future Codex mutation adapter requires an explicit, versioned Codex settings
-contract. Until that adapter is verified, Codex remains the Tier 1 editor.
+The inspected Codex build exposes `settings-read` and `settings-write` through
+its native settings bridge. The adapter uses that validated bridge when Codex
+is running and a separately verified storage adapter for coordinated offline
+transactions. Direct Chromium LevelDB editing is excluded from the design.
 
 ## Tier 2 — Input device configuration
 
@@ -110,11 +122,11 @@ communication channel. WorkLouderCTL therefore follows these rules:
 1. detect Codex, Input, competing input-monitoring tools, transport, and exact
    versions before any write;
 2. classify every requested field by tier before generating a plan;
-3. reject a mixed-authority plan at the planning stage rather than splitting
-   it silently;
-4. coordinate Input before a Tier 2 or Tier 3 transaction;
-5. preserve the Codex-native vendor layer and unknown fields byte-for-byte;
-6. reopen Input and verify device, cache, database, and runtime behavior;
+3. split a cross-tier plan into explicit ordered transactions with one combined
+   diff and rollback boundary;
+4. coordinate Codex for Tier 1 and Input for Tier 2 or Tier 3 transactions;
+5. preserve unknown fields byte-for-byte in every authority;
+6. refresh/reopen the affected apps and verify settings plus runtime behavior;
 7. leave a runnable rollback record for every mutation.
 
 ## Primary sources

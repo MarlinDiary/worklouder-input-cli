@@ -7,6 +7,19 @@ verified. The tested snapshot is documented in
 
 ## Tier 1: Codex settings
 
+### Settings adapter surface
+
+The inspected Codex build reads settings through `settings-read` and writes a
+partial settings object through `settings-write`. Renderer calls reach the
+native host through the `vscode://codex/<method>` bridge and then invalidate
+the `get-settings` query. The Codex Micro UI uses the same setting definitions
+and setter for agent source, single-tap behavior, layout, brightness, and
+auto-off.
+
+WorkLouderCTL therefore targets the versioned settings bridge for online
+transactions. An offline adapter requires separate round-trip and restart
+fixtures. Raw Chromium LevelDB mutation is not part of the configuration path.
+
 ### Persisted setting keys
 
 The installed Codex app exposes these Codex Micro setting records:

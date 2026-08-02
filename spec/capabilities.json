@@ -1,7 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "researchSnapshot": "2026-08-02",
+  "productGoal": "full-configuration-parity",
+  "targetConfigurationGuisOptional": true,
   "target": {
     "device": "Codex Micro",
     "host": "macOS",
@@ -15,7 +17,9 @@
       "name": "codex-native",
       "authority": ["codex-settings", "codex-runtime"],
       "dependsOnInput": false,
-      "initialCliMode": "inspect",
+      "runtimeDependency": "codex",
+      "initialCliMode": "transactional",
+      "adapter": "codex-settings-bridge",
       "capabilities": [
         "agent-keys",
         "command-keys",
@@ -31,6 +35,7 @@
       "name": "input-device-config",
       "authority": ["device-keymap", "device-smart-actions", "input-cache", "input-database"],
       "dependsOnInput": true,
+      "runtimeDependency": "device-and-input",
       "initialCliMode": "transactional",
       "capabilities": [
         "profiles",
@@ -49,6 +54,7 @@
       "name": "input-host-automation",
       "authority": ["device-smart-actions", "input-database", "input-runtime"],
       "dependsOnInput": true,
+      "runtimeDependency": "input",
       "initialCliMode": "transactional",
       "capabilities": [
         "smart-actions",
@@ -63,6 +69,7 @@
       "name": "input-operations",
       "authority": ["input-runtime", "input-updater", "firmware-flasher"],
       "dependsOnInput": true,
+      "runtimeDependency": "input",
       "initialCliMode": "gated",
       "capabilities": [
         "diagnostics",

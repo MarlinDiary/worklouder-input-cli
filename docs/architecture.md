@@ -4,7 +4,8 @@ WorkLouderCTL is designed as a transaction-safe companion to Work Louder Input.
 The CLI does not treat one cached JSON document as the whole system.
 
 The authority boundary is defined in the [configuration tier model](tier-model.md):
-Tier 1 is configured in Codex, while Tier 2 and above depend on Input.
+Tier 1 uses Codex authorities, while Tier 2 and above use Input authorities.
+The CLI provides full configuration coverage across both sides.
 
 ## State authorities
 
@@ -34,32 +35,32 @@ synchronizes them as one operation.
 ├────────────────────────────────────────────────────────────┤
 │ Transaction: backup, conflict check, apply, verify, restore│
 ├──────────────────────────────┬─────────────────────────────┤
-│ Device transport + file RPC  │ Input cache/database adapter│
+│ Codex settings/IPC adapter   │ Input/device state adapters │
 └──────────────────────────────┴─────────────────────────────┘
 ```
 
 ## Planned write transaction
 
 1. Classify every requested field by tier and authority.
-2. Discover the exact Codex/Input installations and connected device.
+2. Discover the exact Codex/Input installations, runtimes, and connected device.
 3. Read device status, files, sizes, and checksums.
 4. Read Input cache and database state.
 5. Parse with an exact version adapter and preserve unknown fields.
 6. Validate references, limits, permissions, and the target behavior.
 7. Produce a deterministic plan and structural diff.
 8. Recheck hashes to detect a concurrent edit.
-9. Coordinate and pause Input.
+9. Coordinate the Codex and/or Input runtime selected by the plan.
 10. Create private immutable backups.
 11. Write changed device files in dependency-safe order.
 12. Read back and compare bytes, decoded JSON, and checksums.
-13. Atomically synchronize Input cache and database.
-14. Reopen Input and emit one verification record.
+13. Atomically synchronize Codex settings and/or Input cache/database.
+14. Refresh or reopen affected runtimes and emit one verification record.
 15. Restore every authority if a mutation or synchronization step fails.
 
 ## Design rules
 
 - read-only by default;
-- Tier 1 remains Codex-authored unless an exact Codex adapter is verified;
+- Tier 1 writes require an exact Codex settings adapter;
 - every plan names its tier and state authority;
 - no mutation for unknown versions;
 - no hidden AI-only write route;

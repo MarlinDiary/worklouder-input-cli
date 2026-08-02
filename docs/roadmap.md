@@ -11,6 +11,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Codex 26.727.51351 and Input 0.18.0 feature inventory
 - [x] Baseline checksums and reconnect verification record
 - [x] Machine-readable capability registry
+- [x] Full Codex + Input configuration parity contract
 - [ ] Publish sanitized Input 0.17.3/0.18.0 and firmware v0.6.0 fixtures
 - [ ] CLI command and configuration JSON schemas
 
@@ -20,7 +21,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [ ] `worklouderctl doctor`
 - [ ] `worklouderctl input inspect`
 - [ ] `worklouderctl codex inspect`
-- [ ] `worklouderctl codex open-settings`
+- [ ] `worklouderctl codex export`
 - [ ] `worklouderctl tier explain`
 - [ ] `worklouderctl device status`
 - [ ] `worklouderctl device files`
@@ -28,7 +29,19 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [ ] Structural `show`, `validate`, and `diff`
 - [ ] JSON output and typed exit statuses
 
-## M2 — Semantic configuration beta
+## M2 — Codex-native configuration beta
+
+- [ ] Exact Codex version and settings-schema adapter
+- [ ] `settings-read` and `settings-write` bridge client
+- [ ] Agent source and six Agent Key assignments
+- [ ] six Command Key slots and reset
+- [ ] voice mode
+- [ ] dial modes and custom gestures
+- [ ] joystick directions and Skills
+- [ ] global brightness and auto-off
+- [ ] Codex settings backup, diff, apply, readback, and rollback
+
+## M3 — Input semantic configuration beta
 
 - [ ] Profiles and active profile
 - [ ] Layers and layer metadata
@@ -40,18 +53,19 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [ ] Multi Actions and reference validation
 - [ ] Linked apps
 
-## M3 — Full Input companion transaction
+## M4 — Full cross-authority transaction
 
 - [ ] Smart Actions and groups
 - [ ] Input cache adapter
 - [ ] Input database adapter
 - [ ] Input process coordination
+- [ ] Codex process and settings-bridge coordination
 - [ ] Private backup catalog
 - [ ] Plan/apply conflict detection
 - [ ] Exact readback and checksum verification
 - [ ] Automatic and manual rollback
 
-## M4 — Stable distribution
+## M5 — Stable distribution
 
 - [ ] Signed macOS binaries
 - [ ] Homebrew formula

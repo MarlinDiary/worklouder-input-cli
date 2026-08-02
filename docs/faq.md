@@ -5,9 +5,9 @@ Input CLI, Codex Micro configuration, and AI-assisted macropad automation.
 
 ## What is WorkLouderCTL?
 
-WorkLouderCTL is a pre-alpha, open-source companion CLI for Work Louder Input
-and Codex Micro. It is designed to inspect, diff, back up, configure, verify,
-and restore the same device state that Input presents through its GUI.
+WorkLouderCTL is a pre-alpha, open-source full-configuration CLI for Codex,
+Work Louder Input, and Codex Micro. It targets every Codex Micro configuration
+surface exposed by both GUIs.
 
 ## Is there a CLI for Work Louder Input?
 
@@ -15,18 +15,19 @@ WorkLouderCTL is being built for that role. This repository currently contains
 the product contract and research baseline; it does not yet provide an
 installable release.
 
-## What is a companion CLI?
+## What does full-configuration parity mean?
 
-A companion CLI keeps the official Input app available as a visual editor while
-adding a repeatable command-line and machine-readable interface. Before a
-device write, the CLI coordinates Input, preserves the device and local state,
-applies a validated plan, verifies readback, and restores or synchronizes the
-app state.
+Every setting available in the Codex Micro page or Input's Codex Micro views
+gets a typed CLI command and JSON representation. Codex and Input may remain
+running as execution engines, while configuration no longer depends on using
+their GUIs.
 
-## Does WorkLouderCTL replace Work Louder Input?
+## Does WorkLouderCTL replace Codex and Work Louder Input?
 
-The first release track complements Input. A fully standalone daemon/driver is
-a separate future track and is not required for the companion workflow.
+It replaces their Codex Micro configuration workflows. Codex still executes
+Codex-aware commands and task lighting; Input still executes AppSense, Smart
+Actions, Cheat Sheet, and other host behavior. Replacing those runtimes and the
+hardware driver is a separate track.
 
 ## Which device will be supported first?
 
@@ -40,7 +41,7 @@ The complete model includes Codex-native Agent/Command keys, voice, Codex dial,
 Codex joystick, and task-state lighting in Tier 1. Input-backed tiers include
 profiles, six layers, the key matrix, encoder, joystick sectors, Actions,
 Multi Actions, Smart Actions, linked apps, backlight, underglow, and layer
-metadata. Tier 1 remains configured in Codex; the other tiers depend on Input.
+metadata. The CLI configures every tier through its corresponding authority.
 
 ## Can an AI agent configure Codex Micro?
 
@@ -88,4 +89,5 @@ only to identify compatibility targets.
 
 ## Where is the current support matrix?
 
-See [Compatibility and support policy](compatibility.md).
+See [Configuration parity matrix](configuration-parity.md) and
+[Compatibility and support policy](compatibility.md).
