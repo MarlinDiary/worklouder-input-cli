@@ -211,6 +211,27 @@
       "resultKind": "worklouder-input-firmware-mutation"
     },
     {
+      "name": "input.recovery.plan",
+      "capability": "input.recovery.plan.v1",
+      "mutation": false,
+      "requiredParams": [
+        "configuration"
+      ],
+      "resultKind": "worklouder-input-recovery-plan"
+    },
+    {
+      "name": "input.recovery.apply",
+      "capability": "input.recovery.apply.v1",
+      "mutation": true,
+      "requiredParams": [
+        "expectedPlanRevision",
+        "idempotencyKey",
+        "plan",
+        "configuration"
+      ],
+      "resultKind": "worklouder-input-recovery-mutation"
+    },
+    {
       "name": "input.logs.snapshot",
       "capability": "input.logs.snapshot.v1",
       "mutation": false,
@@ -386,6 +407,16 @@
       "applyAuthority": "existing device.config.apply transaction",
       "rollbackAuthority": "existing device.config.restore transaction",
       "capabilityAdvertisement": "advertised only when resetAuthority.buildDefaultConfiguration supplies complete default files"
+    },
+    "recovery": {
+      "authority": "injected Input-owned bootloader detection, release selection, and recovery programmer workflow",
+      "planMutation": false,
+      "configurationBackup": "caller-supplied complete configuration snapshot bound by revision and file count",
+      "applyAuthority": "recoveryAuthority.recoverFirmware owns bootloader programming and normal-device reconnection",
+      "restoreAuthority": "existing configurationWriter/device.config.apply transaction restores the exact backup after reconnect",
+      "postflight": "target firmware exact and original configuration revision exact",
+      "firmwareRollback": false,
+      "capabilityAdvertisement": "plan and apply are advertised only when recoveryAuthority supplies readStatus and recoverFirmware"
     },
     "logs": {
       "authority": "Input WindowService in-memory renderer log ring",

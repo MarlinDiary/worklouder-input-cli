@@ -372,11 +372,17 @@ export function createInputMainAdapter({
   const captureRecoveryPlan = async (suppliedConfiguration) => {
     const configuration = validateConfigSnapshot(suppliedConfiguration);
     const device = normalizeFirmwarePlanDevice(suppliedConfiguration.device);
-    const deviceKitVersion = safeBoundedString(
+    const backupDeviceKitVersion = safeBoundedString(
       suppliedConfiguration.deviceKitVersion,
       "recovery device kit version",
       128,
     );
+    if (backupDeviceKitVersion !== deviceKitVersion) {
+      throw new BridgeError(-32005, "recovery backup device kit version differed", {
+        backupDeviceKitVersion,
+        inputDeviceKitVersion: deviceKitVersion,
+      });
+    }
     const previousFirmwareVersion = safeBoundedString(
       suppliedConfiguration.status?.firmwareVersion,
       "recovery previous firmware version",
@@ -397,7 +403,7 @@ export function createInputMainAdapter({
     const body = {
       inputAppVersion: inputVersion,
       deviceId: configuration.deviceId,
-      deviceKitVersion,
+      deviceKitVersion: backupDeviceKitVersion,
       device,
       previousFirmwareVersion,
       targetRelease: status.targetRelease,

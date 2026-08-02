@@ -45,7 +45,7 @@
           "version": "1",
           "state": "experimental",
           "tiers": [2, 3, 4],
-          "evidence": ["authenticated-cas", "firmware-delegation", "input-default-reset", "transaction-rollback"],
+          "evidence": ["authenticated-cas", "firmware-delegation", "bootloader-recovery", "input-default-reset", "transaction-rollback"],
           "boundary": "Reference adapter and synthetic end-to-end fixtures are verified."
         },
         {
@@ -64,6 +64,7 @@
         "./scripts/verify-cli-assets.sh",
         "./scripts/test-bridge-e2e.sh",
         "./scripts/test-firmware-update-e2e.sh",
+        "./scripts/test-recovery-e2e.sh",
         "./scripts/test-reset-e2e.sh",
         "./scripts/test-codex-bridge-e2e.sh",
         "./scripts/test-transaction-e2e.sh",

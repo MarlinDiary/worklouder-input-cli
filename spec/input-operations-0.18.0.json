@@ -72,10 +72,20 @@
     "rendererResetHookOffset": 10224466,
     "classification": "renderer state/default-layout flow rather than a standalone main-process reset service",
     "highLevelMainServiceMethodFound": false,
-    "offlineTemplate": "input-default-config-0.18.0-codex-micro.json",
+    "cliEmbeddedTemplate": false,
     "planCapability": "input.reset.plan.v1 only when an injected Input-owned default factory is available",
     "candidateBoundary": "complete device/layout/version-specific configuration snapshot",
     "applyBoundary": "device.config.apply.v1 with exact source CAS, complete backup, readback, and automatic rollback",
     "restoreBoundary": "device.config.restore.v1 with the pre-reset backup"
+  },
+  "firmwareRecovery": {
+    "classification": "separate high-level Input-owned bootloader recovery authority",
+    "highLevelMainServiceMethodFound": false,
+    "planCapability": "input.recovery.plan.v1 only when an injected Input-owned recovery authority is available",
+    "applyCapability": "input.recovery.apply.v1 only when the same authority owns bootloader programming and reconnection",
+    "planBoundary": "binds exact Input app/device-kit versions, Input-selected release, detected bootloader identity, and complete pre-recovery configuration revision",
+    "applyBoundary": "Input owns recovery programming; existing configuration transaction restores and reads back the exact supplied backup after reconnect",
+    "rollbackBoundary": "no CLI-driven firmware downgrade; the complete configuration backup remains independently restorable",
+    "cliMutationBoundary": "no duplicated driver, bootloader transport, release parser, or programmer"
   }
 }
