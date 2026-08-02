@@ -235,6 +235,7 @@ pub fn apply_transaction(
                 && receipt.idempotency_key == idempotency_key,
             "existing transaction receipt did not match this apply retry"
         );
+        verify_successful_receipt_state(&receipt, runtime)?;
         return Ok(receipt);
     }
     verify_plan_artifacts(&plan)?;
@@ -289,6 +290,13 @@ pub fn apply_transaction(
                 }
                 break;
             }
+        }
+    }
+    if failure.is_none() {
+        if let Err(error) =
+            verify_live_mutations(&plan, &mutations, runtime, backup_dir, "apply-postflight")
+        {
+            failure = Some(format!("coordinated apply postflight failed: {error:#}"));
         }
     }
 
@@ -388,6 +396,7 @@ pub fn restore_transaction(
                 && receipt.idempotency_key == idempotency_key,
             "existing transaction receipt did not match this restore retry"
         );
+        verify_successful_receipt_state(&receipt, runtime)?;
         return Ok(receipt);
     }
     let original_catalog = read_backup_catalog(&applied.backup_catalog)?;
@@ -401,7 +410,7 @@ pub fn restore_transaction(
         plan.revision == applied.plan_revision,
         "apply receipt and catalog plan differed"
     );
-    validate_applied_receipt(&applied, &original_catalog, &plan)?;
+    validate_success_receipt_catalog(&applied, &original_catalog, &plan)?;
     let restore_catalog =
         prepare_restore_catalog(&plan, &original_catalog, &applied, backup_dir, runtime)?;
 
@@ -419,12 +428,12 @@ pub fn restore_transaction(
             None => continue,
         };
         let original = catalog_entry(&original_catalog, id)?;
+        let current = catalog_entry(&restore_catalog, id)?.baseline.clone();
         let applied_mutation = mutation(&applied, id)?;
         if !applied_mutation.changed {
-            mutations.push(skipped_mutation(item, &original.baseline));
+            mutations.push(skipped_mutation(item, &current));
             continue;
         }
-        let current = catalog_entry(&restore_catalog, id)?.baseline.clone();
         match restore_one(
             item,
             original,
@@ -459,6 +468,13 @@ pub fn restore_transaction(
                 }
                 break;
             }
+        }
+    }
+    if failure.is_none() {
+        if let Err(error) =
+            verify_live_mutations(&plan, &mutations, runtime, backup_dir, "restore-postflight")
+        {
+            failure = Some(format!("coordinated restore postflight failed: {error:#}"));
         }
     }
 
@@ -499,7 +515,7 @@ pub fn restore_transaction(
         operation: "restore".into(),
         status: status.into(),
         plan_revision: plan.revision,
-        plan: original_catalog.plan,
+        plan: restore_catalog.plan.clone(),
         backup_catalog: restore_catalog.plan.parent().unwrap().join("catalog.json"),
         idempotency_key: idempotency_key.into(),
         mutations,
@@ -1285,25 +1301,26 @@ fn validate_transaction_receipt(receipt: &TransactionReceipt) -> Result<()> {
     Ok(())
 }
 
-fn validate_applied_receipt(
+fn validate_success_receipt_catalog(
     receipt: &TransactionReceipt,
     catalog: &BackupCatalog,
     plan: &TransactionPlan,
 ) -> Result<()> {
     ensure!(
-        receipt.operation == "apply"
-            && receipt.status == "applied"
+        ((receipt.operation == "apply" && receipt.status == "applied")
+            || (receipt.operation == "restore" && receipt.status == "restored"))
+            && receipt.operation == catalog.operation
             && receipt.plan_revision == catalog.plan_revision
             && receipt.mutations.len() == plan.authorities.len()
             && receipt.rollback_mutations.is_empty(),
-        "apply receipt did not match its backup catalog"
+        "successful transaction receipt did not match its backup catalog"
     );
     let receipt_plan = regular_file(&receipt.plan, "receipt plan")?;
     let receipt_catalog = regular_file(&receipt.backup_catalog, "receipt backup catalog")?;
     ensure!(
         receipt_plan == catalog.plan
             && receipt_catalog == catalog.plan.parent().unwrap().join("catalog.json"),
-        "apply receipt artifact paths did not match its backup catalog"
+        "transaction receipt artifact paths did not match its backup catalog"
     );
     for item in &plan.authorities {
         let entry = catalog_entry(catalog, &item.id)?;
@@ -1314,9 +1331,78 @@ fn validate_applied_receipt(
                 && applied.after_revision == entry.target_revision
                 && applied.target_revision == entry.target_revision
                 && regular_file(&applied.backup, "provider backup")? == entry.baseline,
-            "apply receipt authority {} did not match its backup catalog",
+            "transaction receipt authority {} did not match its backup catalog",
             item.id
         );
+    }
+    Ok(())
+}
+
+fn verify_successful_receipt_state(
+    receipt: &TransactionReceipt,
+    runtime: &RuntimePaths,
+) -> Result<()> {
+    let catalog = read_backup_catalog(&receipt.backup_catalog)?;
+    let plan = read_plan_metadata(&catalog.plan)?;
+    validate_success_receipt_catalog(receipt, &catalog, &plan)?;
+    let root = std::env::temp_dir().join(format!(
+        "worklouderctl-transaction-retry-{}-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos(),
+        NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed)
+    ));
+    fs::create_dir(&root)?;
+    fs::set_permissions(&root, fs::Permissions::from_mode(0o700))?;
+    let result = verify_live_mutations(&plan, &receipt.mutations, runtime, &root, "retry");
+    let cleanup = fs::remove_dir_all(&root);
+    if let Err(error) = result {
+        return Err(error);
+    }
+    cleanup?;
+    Ok(())
+}
+
+fn verify_live_mutations(
+    plan: &TransactionPlan,
+    mutations: &[AuthorityMutationReceipt],
+    runtime: &RuntimePaths,
+    output_dir: &Path,
+    label: &str,
+) -> Result<()> {
+    ensure!(
+        mutations.len() == plan.authorities.len(),
+        "transaction postflight omitted an authority"
+    );
+    for item in &plan.authorities {
+        let mutation = mutations
+            .iter()
+            .find(|mutation| mutation.id == item.id)
+            .with_context(|| format!("transaction postflight omitted authority {}", item.id))?;
+        let output = output_dir.join(format!("{}-{label}.json", item.id));
+        let live = snapshot_live(item, &output, runtime)?;
+        ensure!(
+            live.revision == mutation.after_revision,
+            "live {} revision differed during transaction postflight",
+            item.id
+        );
+        if item.id == "codex-settings" {
+            let expected_source = if mutation.operation == "skip" {
+                item.expected_source_sha256.as_deref()
+            } else {
+                mutation
+                    .provider_receipt
+                    .get("afterSourceSha256")
+                    .and_then(Value::as_str)
+            }
+            .context("Codex transaction mutation omitted afterSourceSha256")?;
+            ensure!(
+                live.source_sha256.as_deref() == Some(expected_source),
+                "live Codex source SHA-256 differed during transaction postflight"
+            );
+        }
     }
     Ok(())
 }
