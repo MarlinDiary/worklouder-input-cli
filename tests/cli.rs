@@ -37,7 +37,25 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("device"));
     assert!(stdout.contains("input"));
     assert!(stdout.contains("config"));
+    assert!(stdout.contains("profile"));
+    assert!(stdout.contains("layer"));
     assert!(stdout.contains("completion"));
+}
+
+#[test]
+fn semantic_help_exposes_offline_candidate_workflow() {
+    let profile = binary().args(["profile", "--help"]).output().unwrap();
+    let profile_stdout = String::from_utf8(profile.stdout).unwrap();
+    assert!(profile.status.success());
+    assert!(profile_stdout.contains("list"));
+    assert!(profile_stdout.contains("select"));
+    assert!(profile_stdout.contains("rename"));
+
+    let layer = binary().args(["layer", "--help"]).output().unwrap();
+    let layer_stdout = String::from_utf8(layer.stdout).unwrap();
+    assert!(layer.status.success());
+    assert!(layer_stdout.contains("list"));
+    assert!(layer_stdout.contains("rename"));
 }
 
 #[test]

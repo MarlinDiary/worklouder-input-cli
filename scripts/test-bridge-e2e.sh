@@ -8,6 +8,8 @@ token=$root/bridge.token
 export_dir=$root/export
 config_snapshot=$root/config-snapshot.json
 candidate_snapshot=$root/config-candidate.json
+selected_snapshot=$root/config-selected.json
+layer_snapshot=$root/config-layer.json
 server_log=$root/server.log
 server_pid=
 
@@ -65,42 +67,21 @@ node "$repo/companion/conformance.mjs" \
 revision=$(python3 -c \
   'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
   "$config_snapshot")
+"$bin" --json profile list --input "$config_snapshot" \
+  >"$root/profile-list.json"
+"$bin" --json layer list --input "$config_snapshot" \
+  >"$root/layer-list.json"
+"$bin" --json profile rename --input "$config_snapshot" --id 7 \
+  --name Research --output "$candidate_snapshot" \
+  >"$root/profile-rename.json"
+"$bin" --json profile select --input "$config_snapshot" --id 7 \
+  --output "$selected_snapshot" >"$root/profile-select.json"
+"$bin" --json layer rename --input "$config_snapshot" --profile 0 --id 1 \
+  --name Build --output "$layer_snapshot" >"$root/layer-rename.json"
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config validate \
   --input "$config_snapshot" --expected-revision "$revision" \
   >"$root/config-bridge-validation.json"
-python3 - "$config_snapshot" "$candidate_snapshot" <<'PY'
-import base64
-import hashlib
-import json
-import struct
-import sys
-
-source, destination = sys.argv[1:]
-snapshot = json.load(open(source))
-for record in snapshot["files"]:
-    data = base64.b64decode(record["dataBase64"], validate=True)
-    if record["relativePath"] == "keymap.json":
-        value = json.loads(data)
-        value["bridgeMutation"] = "e2e"
-        data = json.dumps(value, separators=(",", ":")).encode()
-    record["size"] = len(data)
-    record["deviceChecksumSha1"] = hashlib.sha1(data).hexdigest()
-    record["sha256"] = hashlib.sha256(data).hexdigest()
-    record["dataBase64"] = base64.b64encode(data).decode()
-h = hashlib.sha256(b"worklouder-input-config-revision-v1\0")
-for record in sorted(snapshot["files"], key=lambda item: item["relativePath"].encode()):
-    path = record["relativePath"].encode()
-    data = base64.b64decode(record["dataBase64"], validate=True)
-    h.update(struct.pack(">I", len(path)))
-    h.update(path)
-    h.update(struct.pack(">Q", len(data)))
-    h.update(data)
-snapshot["revision"] = h.hexdigest()
-with open(destination, "w") as output:
-    json.dump(snapshot, output, separators=(",", ":"))
-    output.write("\n")
-PY
 candidate_revision=$(python3 -c \
   'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
   "$candidate_snapshot")
@@ -159,6 +140,13 @@ bridge_validation = json.loads(
     (root / "config-bridge-validation.json").read_text()
 )
 candidate = json.loads((root / "config-candidate.json").read_text())
+selected = json.loads((root / "config-selected.json").read_text())
+layer_candidate = json.loads((root / "config-layer.json").read_text())
+profile_list = json.loads((root / "profile-list.json").read_text())
+layer_list = json.loads((root / "layer-list.json").read_text())
+profile_rename = json.loads((root / "profile-rename.json").read_text())
+profile_select = json.loads((root / "profile-select.json").read_text())
+layer_rename = json.loads((root / "layer-rename.json").read_text())
 apply = json.loads((root / "config-apply.json").read_text())
 replay = json.loads((root / "config-apply-replay.json").read_text())
 pre_apply = json.loads((root / "pre-apply.json").read_text())
@@ -210,6 +198,49 @@ assert snapshot_receipt["fileCount"] == 2
 assert bridge_validation["valid"] is True
 assert bridge_validation["revision"] == snapshot["revision"]
 assert bridge_validation["liveRevision"] == snapshot["revision"]
+assert profile_list["activeProfileId"] == 0
+assert [(item["id"], item["name"], item["active"]) for item in profile_list["profiles"]] == [
+    (0, "Fixture Default", True),
+    (7, "Fixture Alternate", False),
+]
+assert layer_list["profileId"] == 0
+assert [(item["id"], item["name"]) for item in layer_list["layers"]] == [
+    (0, "Base"),
+    (1, "Tools"),
+]
+assert profile_rename["changed"] is True
+assert profile_rename["changedPaths"] == ["/keymap.json/profiles/1/name"]
+assert profile_select["changedPaths"] == ["/keymap.json/activeProfileId"]
+assert layer_rename["changedPaths"] == ["/keymap.json/profiles/0/layers/1/name"]
+
+def payload(document, name):
+    record = next(item for item in document["files"] if item["relativePath"] == name)
+    return base64.b64decode(record["dataBase64"], validate=True)
+
+def verify_snapshot(document):
+    digest = hashlib.sha256(b"worklouder-input-config-revision-v1\0")
+    for record in sorted(document["files"], key=lambda item: item["relativePath"].encode()):
+        data = base64.b64decode(record["dataBase64"], validate=True)
+        assert len(data) == record["size"]
+        assert hashlib.sha1(data).hexdigest() == record["deviceChecksumSha1"]
+        assert hashlib.sha256(data).hexdigest() == record["sha256"]
+        path = record["relativePath"].encode()
+        digest.update(struct.pack(">I", len(path)))
+        digest.update(path)
+        digest.update(struct.pack(">Q", len(data)))
+        digest.update(data)
+    assert digest.hexdigest() == document["revision"]
+
+for document in [candidate, selected, layer_candidate]:
+    verify_snapshot(document)
+    assert payload(document, "smart_actions.json") == payload(snapshot, "smart_actions.json")
+candidate_keymap = json.loads(payload(candidate, "keymap.json"))
+selected_keymap = json.loads(payload(selected, "keymap.json"))
+layer_keymap = json.loads(payload(layer_candidate, "keymap.json"))
+assert candidate_keymap["profiles"][1]["name"] == "Research"
+assert candidate_keymap["fixtureExtension"] == {"preserved": True}
+assert selected_keymap["activeProfileId"] == 7
+assert layer_keymap["profiles"][0]["layers"][1]["name"] == "Build"
 assert candidate["revision"] != snapshot["revision"]
 assert pre_apply["revision"] == snapshot["revision"]
 assert apply["operation"] == "apply"
@@ -237,6 +268,13 @@ print("exported_files=2")
 print("sha1_sha256_readback=verified")
 print("config_validation=verified")
 print("config_snapshot_revision=verified")
+print("semantic_profile_list=verified")
+print("semantic_layer_list=verified")
+print("semantic_profile_rename=verified")
+print("semantic_profile_select=verified")
+print("semantic_layer_rename=verified")
+print("semantic_unknown_fields=preserved")
+print("semantic_unrelated_file_bytes=preserved")
 print("config_live_cas=verified")
 print("config_apply_readback=verified")
 print("config_idempotent_replay=verified")

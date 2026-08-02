@@ -14,7 +14,22 @@ const files = new Map([
       JSON.stringify({
         version: 1,
         activeProfileId: 0,
-        profiles: [{ id: 0, name: "Bridge Fixture", layers: [] }],
+        fixtureExtension: { preserved: true },
+        profiles: [
+          {
+            id: 0,
+            name: "Fixture Default",
+            layers: [
+              { id: 0, name: "Base", color: "#112233", layout: {} },
+              { id: 1, name: "Tools", color: "#445566", layout: {} },
+            ],
+          },
+          {
+            id: 7,
+            name: "Fixture Alternate",
+            layers: [{ id: 9, name: "Other", color: "#778899", layout: {} }],
+          },
+        ],
       }),
     ),
   ],

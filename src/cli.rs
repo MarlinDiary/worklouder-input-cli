@@ -95,6 +95,18 @@ pub enum Command {
         command: ConfigCommand,
     },
 
+    /// Inspect or edit profiles in an offline configuration snapshot.
+    Profile {
+        #[clap(subcommand)]
+        command: ProfileCommand,
+    },
+
+    /// Inspect or edit layers in an offline configuration snapshot.
+    Layer {
+        #[clap(subcommand)]
+        command: LayerCommand,
+    },
+
     /// Generate a shell completion script on standard output.
     Completion {
         #[clap(value_enum)]
@@ -344,6 +356,62 @@ pub enum ConfigCommand {
 
         #[clap(value_parser)]
         candidate: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ProfileCommand {
+    /// List profiles from a revisioned configuration snapshot.
+    List {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Select the active profile and write a complete candidate snapshot.
+    Select {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Rename one profile and write a complete candidate snapshot.
+    Rename {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        name: String,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum LayerCommand {
+    /// List layers in the active or selected profile.
+    List {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+    },
+
+    /// Rename one layer and write a complete candidate snapshot.
+    Rename {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        name: String,
+        #[clap(long, value_parser)]
+        output: PathBuf,
     },
 }
 

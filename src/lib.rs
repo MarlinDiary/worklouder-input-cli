@@ -7,12 +7,14 @@ pub mod device;
 pub mod doctor;
 pub mod fsutil;
 pub mod input;
+pub mod semantic;
 
 use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
     BridgeCommand, CapabilityCommand, Cli, CodexCommand, Command, CompletionShell, ConfigCommand,
-    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, TierCommand,
+    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, LayerCommand,
+    ProfileCommand, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -68,9 +70,102 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
             command,
         } => run_bridge(command, socket, token, cli.json, &mut out)?,
         Command::Config { command } => run_config(command, cli.json, &mut out)?,
+        Command::Profile { command } => run_profile(command, cli.json, &mut out)?,
+        Command::Layer { command } => run_layer(command, cli.json, &mut out)?,
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
+    Ok(())
+}
+
+fn run_profile(command: ProfileCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        ProfileCommand::List { input } => {
+            let result = semantic::profile_list(&input)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                for profile in result.profiles {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{} layer(s){}",
+                        profile.id,
+                        profile.name,
+                        profile.layer_count,
+                        if profile.active { "\tactive" } else { "" }
+                    )?;
+                }
+            }
+        }
+        ProfileCommand::Select { input, id, output } => {
+            let result = semantic::profile_select(&input, id, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        ProfileCommand::Rename {
+            input,
+            id,
+            name,
+            output,
+        } => {
+            let result = semantic::profile_rename(&input, id, &name, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+    }
+    Ok(())
+}
+
+fn run_layer(command: LayerCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        LayerCommand::List { input, profile } => {
+            let result = semantic::layer_list(&input, profile)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "profile={}\t{}",
+                    result.profile_id, result.profile_name
+                )?;
+                for layer in result.layers {
+                    writeln!(out, "{}\t{}", layer.id, layer.name)?;
+                }
+            }
+        }
+        LayerCommand::Rename {
+            input,
+            profile,
+            id,
+            name,
+            output,
+        } => {
+            let result = semantic::layer_rename(&input, profile, id, &name, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+    }
+    Ok(())
+}
+
+fn write_candidate_result(
+    result: semantic::CandidateReceipt,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    if json {
+        write_json(&mut out, &result)?;
+    } else {
+        writeln!(
+            out,
+            "Candidate {}: changed={} output={}",
+            result.operation,
+            result.changed,
+            result.output.display()
+        )?;
+        writeln!(out, "beforeRevision={}", result.before_revision)?;
+        writeln!(out, "afterRevision={}", result.after_revision)?;
+        for path in result.changed_paths {
+            writeln!(out, "CHANGE\t{path}")?;
+        }
+    }
     Ok(())
 }
 
