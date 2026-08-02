@@ -1,0 +1,99 @@
+WorkLouderCTL authenticated doctor readiness E2E verification record
+===================================================================
+
+Scope
+-----
+Base commit: 00677df4c99c76eb47901da968d3351e82900089
+Feature commit: edd1e4d9636cd7bbba3d2db919fab65b2a5f0705
+Changed branch/field: runnable dual-provider doctor readiness acceptance test,
+CI gate, and compatibility evidence boundary
+Fixture inputs: synthetic healthy Codex/Input app bundles and cached JSON;
+Input Companion Bridge v1 and Codex Companion Bridge v1 reference servers;
+all four required mutation capabilities per provider
+Provider boundary: shell-only process sentinels and isolated Unix sockets; no GUI
+launch/focus/reopen and no physical device or provider configuration mutation
+
+Preserved baseline-red
+----------------------
+Detached source path: /tmp/worklouderctl-doctor-e2e-base-v1.8hGHaA/repo
+Source commit: 00677df4c99c76eb47901da968d3351e82900089
+Exact command:
+test -x /tmp/worklouderctl-doctor-e2e-base-v1.8hGHaA/repo/scripts/test-doctor-readiness-e2e.sh
+Literal stdout (baseline.stdout.txt, SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855):
+```text
+
+```
+Literal stderr (baseline.stderr.txt, SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855):
+```text
+
+```
+Exit status: 1
+Baseline-red behavior: the product logic existed, but the repository and CI had
+no runnable acceptance artifact proving both authenticated providers produce a
+global strict-ready result without changing configuration bytes.
+
+Modified artifact and patch-green
+---------------------------------
+Path: scripts/test-doctor-readiness-e2e.sh
+SHA-256 after reopen and execution: ead01f1473c57d5f1b1a412af779c998c43ab911c93c39ab60f928393f3c8392
+Exact command (working directory: repository root):
+WORKLOUDERCTL_BIN="$PWD/target/release/worklouderctl" \
+  ./scripts/test-doctor-readiness-e2e.sh
+Literal stdout (modified.stdout.txt, SHA-256 f0fddb1f7d96ae431ff31c93a5807adb7554d3069be499181a50347de68b0ba4):
+```text
+doctor_provider_health=verified
+doctor_input_authenticated_capabilities=verified
+doctor_codex_authenticated_capabilities=verified
+doctor_configuration_ready=true
+doctor_strict_exit=0
+doctor_probe_configuration_bytes=preserved
+```
+Literal stderr (modified.stderr.txt, SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855):
+```text
+
+```
+Exit status: 0
+Patch-green behavior: both authenticated handshakes advertise all required
+apply/restore capabilities, every health/readiness check passes,
+configurationReady is true, strict mode exits 0, and SHA-256 readback proves the
+Codex fixture source plus all Input support files remain byte-identical. The
+script and its literal streams were reopened and executed twice identically.
+
+Patch/diff
+----------
+Path: artifacts/verification/doctor-authenticated-readiness-e2e-v1/doctor-authenticated-readiness-e2e.patch
+Command: git diff --binary 00677df..edd1e4d -- .   ':(exclude)artifacts/verification/doctor-authenticated-readiness-e2e-v1'
+SHA-256 after reopen: ba736cd4204efcff662b16d58787abbbff56caece331d0678e6b4e6ed875804f
+Command: git apply --check --reverse artifacts/verification/doctor-authenticated-readiness-e2e-v1/doctor-authenticated-readiness-e2e.patch
+Literal stdout:
+```text
+
+```
+Literal stderr:
+```text
+
+```
+Exit status: 0
+
+Rollback
+--------
+Path: artifacts/verification/doctor-authenticated-readiness-e2e-v1/rollback.sh
+SHA-256 after reopen: 8adf5fb00be88fd67f00ad4b39022b781dda8d7e3df209d9f98c5ddeebeb5d7a
+Exact verification command (working directory: repository root):
+artifact_abs="$PWD/artifacts/verification/doctor-authenticated-readiness-e2e-v1"
+"$artifact_abs/rollback.sh" \
+  /tmp/worklouderctl-doctor-e2e-rollback-v1.HxftrC/repo \
+  "$artifact_abs/doctor-authenticated-readiness-e2e.patch"
+Literal stdout:
+```text
+rollback=verified
+base=00677df4c99c76eb47901da968d3351e82900089
+feature=edd1e4d9636cd7bbba3d2db919fab65b2a5f0705
+```
+Literal stderr:
+```text
+
+```
+Exit status: 0
+Rollback behavior: the detached feature worktree exactly matched the base
+commit after reversing the patch, excluding this evidence directory.

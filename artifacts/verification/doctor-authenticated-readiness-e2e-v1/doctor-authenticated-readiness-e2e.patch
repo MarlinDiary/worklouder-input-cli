@@ -1,0 +1,164 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 33bde7e..6eac268 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -62,6 +62,8 @@ jobs:
+         run: ./scripts/test-recovery-e2e.sh
+       - name: Test Codex bridge CLI end to end
+         run: ./scripts/test-codex-bridge-e2e.sh
++      - name: Test authenticated global doctor readiness
++        run: ./scripts/test-doctor-readiness-e2e.sh
+       - name: Test four-authority transactions and rollback
+         run: ./scripts/test-transaction-e2e.sh
+       - name: Test ambiguous provider-error rollback
+diff --git a/docs/compatibility.md b/docs/compatibility.md
+index 4006e2f..3a81672 100644
+--- a/docs/compatibility.md
++++ b/docs/compatibility.md
+@@ -130,6 +130,10 @@ handshakes and the complete Codex/Input apply-and-restore capability sets.
+ Missing endpoints, handshake failures, or incomplete capability negotiation are
+ warnings; `--strict` promotes any such warning to a failing exit status. This
+ probe is read-only and does not focus, reopen, or mutate either GUI/runtime.
++The isolated dual-provider E2E performs both authenticated protocol handshakes,
++requires all eight Codex/Input apply-and-restore capabilities, obtains
++`configurationReady: true` with strict exit `0`, and verifies the provider
++configuration bytes are unchanged by the probe.
+ 
+ ## Adding support
+ 
+diff --git a/scripts/test-doctor-readiness-e2e.sh b/scripts/test-doctor-readiness-e2e.sh
+new file mode 100755
+index 0000000..39c346b
+--- /dev/null
++++ b/scripts/test-doctor-readiness-e2e.sh
+@@ -0,0 +1,130 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++REPO="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
++# Keep Unix-domain socket paths below macOS's length limit even when TMPDIR is
++# the long per-user /var/folders path.
++ROOT="$(mktemp -d "/tmp/wl-doctor-e2e.XXXXXX")"
++HOME_ROOT="$ROOT/home"
++CODEX_APP="$ROOT/ChatGPT.app"
++INPUT_APP="$ROOT/input.app"
++SUPPORT_ROOT="$ROOT/input-support"
++INPUT_SOCKET="$ROOT/input-bridge.sock"
++INPUT_TOKEN="$ROOT/input-bridge.token"
++CODEX_SOCKET="$ROOT/codex-bridge.sock"
++CODEX_TOKEN="$ROOT/codex-bridge.token"
++INPUT_PID=""
++CODEX_PID=""
++CODEX_GUARD_PID=""
++INPUT_GUARD_PID=""
++
++cleanup() {
++  for pid in "$INPUT_PID" "$CODEX_PID" "$CODEX_GUARD_PID" "$INPUT_GUARD_PID"; do
++    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
++      kill -TERM "$pid" 2>/dev/null || true
++      wait "$pid" 2>/dev/null || true
++    fi
++  done
++  if [[ "${KEEP_DOCTOR_READINESS_E2E:-0}" != 1 ]]; then
++    rm -rf "$ROOT"
++  fi
++}
++trap cleanup EXIT
++
++if [[ -n "${WORKLOUDERCTL_BIN:-}" ]]; then
++  BIN="$WORKLOUDERCTL_BIN"
++else
++  cargo build --locked --manifest-path "$REPO/Cargo.toml"
++  BIN="$REPO/target/debug/worklouderctl"
++fi
++
++mkdir -p "$HOME_ROOT" "$CODEX_APP/Contents" "$INPUT_APP/Contents" \
++  "$SUPPORT_ROOT/devices/fixture-device"
++cat >"$CODEX_APP/Contents/Info.plist" <<'PLIST'
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>fixture-codex-v1</string></dict></plist>
++PLIST
++cat >"$INPUT_APP/Contents/Info.plist" <<'PLIST'
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>fixture-input-v1</string></dict></plist>
++PLIST
++printf '%s\n' '{"layers":[]}' >"$SUPPORT_ROOT/devices/fixture-device/keymap.json"
++printf '%s\n' '{}' >"$SUPPORT_ROOT/devices/fixture-device/smart_actions.json"
++printf '%s\n' '{}' >"$SUPPORT_ROOT/input_storage.json"
++
++node "$REPO/companion/fixture-server.mjs" "$INPUT_SOCKET" "$INPUT_TOKEN" \
++  >"$ROOT/input-server.stdout" 2>"$ROOT/input-server.stderr" &
++INPUT_PID=$!
++node "$REPO/companion/codex-fixture-server.mjs" "$CODEX_SOCKET" "$CODEX_TOKEN" \
++  >"$ROOT/codex-server.stdout" 2>"$ROOT/codex-server.stderr" &
++CODEX_PID=$!
++
++for _ in $(seq 1 100); do
++  if ! kill -0 "$INPUT_PID" 2>/dev/null || ! kill -0 "$CODEX_PID" 2>/dev/null; then
++    cat "$ROOT/input-server.stderr" "$ROOT/codex-server.stderr" >&2
++    exit 1
++  fi
++  if [[ -S "$INPUT_SOCKET" && -f "$INPUT_TOKEN" && \
++        -S "$CODEX_SOCKET" && -f "$CODEX_TOKEN" ]]; then
++    break
++  fi
++  sleep 0.05
++done
++[[ -S "$INPUT_SOCKET" && -f "$INPUT_TOKEN" ]]
++[[ -S "$CODEX_SOCKET" && -f "$CODEX_TOKEN" ]]
++
++# These shell-only sentinels make process-health detection deterministic. They
++# do not launch, focus, reopen, or automate either GUI.
++/bin/sh -c 'sleep 300 & wait' "$CODEX_APP/Contents/MacOS/Codex" &
++CODEX_GUARD_PID=$!
++/bin/sh -c 'sleep 300 & wait' "$INPUT_APP/Contents/MacOS/input" &
++INPUT_GUARD_PID=$!
++sleep 0.1
++
++find "$SUPPORT_ROOT" -type f -print0 | sort -z | xargs -0 shasum -a 256 \
++  >"$ROOT/support-before.sha256"
++shasum -a 256 "$ROOT/codex-fixture-config.toml" >"$ROOT/codex-before.sha256"
++
++HOME="$HOME_ROOT" \
++WORKLOUDERCTL_CODEX_APP="$CODEX_APP" \
++WORKLOUDERCTL_INPUT_APP="$INPUT_APP" \
++WORKLOUDERCTL_INPUT_SUPPORT_ROOT="$SUPPORT_ROOT" \
++WORKLOUDERCTL_BRIDGE_SOCKET="$INPUT_SOCKET" \
++WORKLOUDERCTL_BRIDGE_TOKEN_FILE="$INPUT_TOKEN" \
++WORKLOUDERCTL_CODEX_BRIDGE_SOCKET="$CODEX_SOCKET" \
++WORKLOUDERCTL_CODEX_BRIDGE_TOKEN_FILE="$CODEX_TOKEN" \
++  "$BIN" --json doctor --strict >"$ROOT/doctor.json" 2>"$ROOT/doctor.stderr"
++
++find "$SUPPORT_ROOT" -type f -print0 | sort -z | xargs -0 shasum -a 256 \
++  >"$ROOT/support-after.sha256"
++shasum -a 256 "$ROOT/codex-fixture-config.toml" >"$ROOT/codex-after.sha256"
++cmp "$ROOT/support-before.sha256" "$ROOT/support-after.sha256"
++cmp "$ROOT/codex-before.sha256" "$ROOT/codex-after.sha256"
++[[ ! -s "$ROOT/doctor.stderr" ]]
++
++python3 - "$ROOT/doctor.json" <<'PY'
++import json
++import pathlib
++import sys
++
++report = json.loads(pathlib.Path(sys.argv[1]).read_text())
++assert report["status"] == "pass"
++assert report["configurationReady"] is True
++assert all(provider["installed"] and provider["running"] for provider in report["providers"])
++checks = {check["id"]: check for check in report["checks"]}
++for provider in ("input", "codex"):
++    check = checks[f"provider.{provider}.configuration-bridge"]
++    assert check["status"] == "pass"
++    assert "all 4 required mutation capabilities" in check["summary"]
++assert all(check["status"] == "pass" for check in report["checks"])
++PY
++
++printf '%s\n' \
++  'doctor_provider_health=verified' \
++  'doctor_input_authenticated_capabilities=verified' \
++  'doctor_codex_authenticated_capabilities=verified' \
++  'doctor_configuration_ready=true' \
++  'doctor_strict_exit=0' \
++  'doctor_probe_configuration_bytes=preserved'

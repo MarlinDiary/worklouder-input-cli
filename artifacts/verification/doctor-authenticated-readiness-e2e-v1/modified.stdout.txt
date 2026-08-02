@@ -1,0 +1,6 @@
+doctor_provider_health=verified
+doctor_input_authenticated_capabilities=verified
+doctor_codex_authenticated_capabilities=verified
+doctor_configuration_ready=true
+doctor_strict_exit=0
+doctor_probe_configuration_bytes=preserved
