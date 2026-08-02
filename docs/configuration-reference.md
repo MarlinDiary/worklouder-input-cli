@@ -67,6 +67,7 @@ worklouderctl codex joystick get --input SNAPSHOT.json up|right|down|left
 worklouderctl codex joystick set --input SNAPSHOT.json DIRECTION \
   [--command COMMAND_ID | --skill-name NAME --skill-path PATH] --output CANDIDATE.json
 worklouderctl codex joystick clear --input SNAPSHOT.json DIRECTION --output CANDIDATE.json
+worklouderctl codex reset layout --input SNAPSHOT.json --output CANDIDATE.json
 worklouderctl codex lighting brightness get --input SNAPSHOT.json
 worklouderctl codex lighting brightness set --input SNAPSHOT.json VALUE --output CANDIDATE.json
 worklouderctl codex lighting auto-off get --input SNAPSHOT.json
@@ -156,6 +157,11 @@ Joystick direction editing is independent of dial mode. Each direction stores
 a command object, Skill object, or `null`. An inherited default is reported
 until a candidate materializes the frozen layout; setting a direction to its
 effective default is a no-op and leaves that layout implicit.
+
+Layout reset writes the complete frozen installed-build default, covering
+Command Keys, joystick, dial mode/gestures, and voice-button mode. It preserves
+all sibling settings and does not touch Agent Key assignment storage. An
+inherited default layout is a no-op and remains implicit.
 
 ### Codex command/keycap catalog
 

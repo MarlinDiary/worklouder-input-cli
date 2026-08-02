@@ -33,7 +33,7 @@ parity contract.
 | Joystick | up, right, down, left command/Skill/empty | `codex joystick get/set/clear` | strict candidate verified; one-leaf paths, default inheritance, no-op detection, preservation, and source immutability verified |
 | Lighting brightness | integer 0–100 | `codex lighting brightness get/set` | strict offline candidate plus `100 -> 37 -> 100` bridge apply/readback/restore fixture verified |
 | Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | strict offline candidate plus `3-minutes -> 10-minutes -> 3-minutes` bridge apply/readback/restore fixture verified |
-| Layout reset | installed-build default layout | `codex reset layout` | researched |
+| Layout reset | installed-build default layout | `codex reset layout` | exact whole-layout candidate, inherited no-op, sibling preservation, source immutability, and released call-path evidence verified |
 | Full object | export, validate, diff, apply, restore | `codex config snapshot/diff/apply/restore` | settings-only structural diff plus authenticated snapshot/CAS/apply/readback/restore/rollback fixture verified; released Codex integration pending |
 | Runtime health | connected control plane, settled reconnect, HID/joystick subscriptions | `codex runtime status/recover` | exact 26.727.51351 bundle contract, live failed-state capture and service-only recovery verified; CDP transport and CLI surface regression verified |
 

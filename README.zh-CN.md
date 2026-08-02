@@ -87,6 +87,7 @@ worklouderctl codex joystick get --input CODEX_SNAPSHOT.json up
 worklouderctl codex joystick set --input CODEX_SNAPSHOT.json up --skill-name Plan --skill-path /PATH/TO/SKILL.md --output CODEX_JOYSTICK_UP.json
 worklouderctl codex joystick set --input CODEX_JOYSTICK_UP.json right --command navigateForward --output CODEX_JOYSTICK_RIGHT.json
 worklouderctl codex joystick clear --input CODEX_JOYSTICK_RIGHT.json down --output CODEX_JOYSTICK_CLEARED.json
+worklouderctl codex reset layout --input CODEX_JOYSTICK_CLEARED.json --output CODEX_LAYOUT_DEFAULT.json
 worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
 worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
 worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
@@ -173,7 +174,7 @@ view 中递归补齐继承的默认值。`codex export` 原子发布并重新打
 snapshot；两者都不会序列化其他 Codex 设置。
 
 `codex agent-source`、`codex agent-key tap-mode`、`codex command-key`、
-`codex dial`、`codex joystick`、`codex lighting` 与 `codex voice` 是严格的
+`codex dial`、`codex joystick`、`codex reset`、`codex lighting` 与 `codex voice` 是严格的
 Tier 1 离线 editor：核对内嵌 frozen definitions，重算 effective settings 与
 recursive-key-sorted revision，保留未知 `codex-micro-*` 值，原子发布并重新打开。
 receipt 中的 `expectedSourceSha256` 供 Codex `settings-write` CAS transaction
@@ -199,6 +200,11 @@ snapshot，同时保留另外三个 gestures、未知 layout fields 与源 setti
 direction 都可以保存 Codex command、Skill 或 empty mapping。每次 candidate 只改变
 一个 `analogStick` leaf，并保留另外三个 directions、未知 layout fields 与源
 settings 原字节。
+
+`codex reset layout` 与 released reset call path 一致：把完整
+`codex-micro-layout` 替换为当前 installed-build 的精确默认值。Command Keys、
+joystick、dial 与 voice-button fields 回到 frozen defaults；Agent Key assignments、
+Agent source、lighting、未知 sibling settings 与源 settings 原字节保持不变。
 
 `codex config diff BASE.json CANDIDATE.json` 会先校验两个 frozen-contract
 snapshot，再只比较 explicit `settings`。transport metadata、warnings、definitions

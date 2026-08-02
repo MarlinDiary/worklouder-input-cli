@@ -118,6 +118,7 @@ worklouderctl codex joystick get --input CODEX_SNAPSHOT.json up
 worklouderctl codex joystick set --input CODEX_SNAPSHOT.json up --skill-name Plan --skill-path /PATH/TO/SKILL.md --output CODEX_JOYSTICK_UP.json
 worklouderctl codex joystick set --input CODEX_JOYSTICK_UP.json right --command navigateForward --output CODEX_JOYSTICK_RIGHT.json
 worklouderctl codex joystick clear --input CODEX_JOYSTICK_RIGHT.json down --output CODEX_JOYSTICK_CLEARED.json
+worklouderctl codex reset layout --input CODEX_JOYSTICK_CLEARED.json --output CODEX_LAYOUT_DEFAULT.json
 worklouderctl codex config diff CODEX_SNAPSHOT.json CODEX_CANDIDATE.json
 worklouderctl codex lighting brightness get --input CODEX_SNAPSHOT.json
 worklouderctl codex lighting brightness set --input CODEX_SNAPSHOT.json 80 --output CODEX_BRIGHTNESS.json
@@ -209,7 +210,7 @@ effective view. `codex export` atomically publishes and reopens a typed JSON
 snapshot. Neither command serializes unrelated Codex settings.
 
 `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`,
-`codex dial`, `codex joystick`, `codex lighting`, and `codex voice` are strict offline Tier 1 editors. They
+`codex dial`, `codex joystick`, `codex reset`, `codex lighting`, and `codex voice` are strict offline Tier 1 editors. They
 validate the embedded frozen definitions,
 recompute effective settings and a recursive-key-sorted revision, preserve
 unknown `codex-micro-*` values, publish atomically, and reopen the result. Each
@@ -238,6 +239,12 @@ and unknown layout fields, and leave the source settings bytes unchanged.
 direction can store a Codex command, Skill, or empty mapping. Every candidate
 changes one `analogStick` leaf, preserves the other three directions plus
 unknown layout fields, and keeps the source settings bytes unchanged.
+
+`codex reset layout` matches the released reset call path: it replaces the
+complete `codex-micro-layout` with the exact installed-build default. Command
+Keys, joystick, dial, and voice-button fields return to their frozen defaults;
+Agent Key assignments, Agent source, lighting, unknown sibling settings, and
+the source settings bytes are preserved.
 
 `codex config diff BASE.json CANDIDATE.json` validates both frozen-contract
 snapshots and compares only their explicit `settings`. Transport metadata,
