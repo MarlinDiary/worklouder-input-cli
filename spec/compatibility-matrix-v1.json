@@ -60,8 +60,11 @@
       "requiredGates": [
         "cargo test --locked",
         "npm test --prefix companion",
+        "./scripts/verify-json-contracts.py",
         "./scripts/verify-sanitized-fixtures.sh",
+        "./scripts/verify-compatibility-matrix.sh",
         "./scripts/verify-cli-assets.sh",
+        "./scripts/test-release-packaging.sh",
         "./scripts/test-bridge-e2e.sh",
         "./scripts/test-firmware-update-e2e.sh",
         "./scripts/test-recovery-e2e.sh",
