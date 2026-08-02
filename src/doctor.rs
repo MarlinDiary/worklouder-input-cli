@@ -377,7 +377,10 @@ fn aggregate_status(checks: &[Check]) -> CheckStatus {
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 
     fn fixture_root() -> PathBuf {
         let nonce = SystemTime::now()
@@ -385,8 +388,9 @@ mod tests {
             .unwrap()
             .as_nanos();
         env::temp_dir().join(format!(
-            "worklouderctl-doctor-{}-{nonce}",
-            std::process::id()
+            "worklouderctl-doctor-{}-{nonce}-{}",
+            std::process::id(),
+            NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed)
         ))
     }
 
