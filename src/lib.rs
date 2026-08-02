@@ -17,7 +17,8 @@ use cli::{
     ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
     InputCommand, LayerCommand, LayerLightingCommand, LightingEffect, LightingZone,
     MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand,
-    TierCommand,
+    SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+    SmartActionType as CliSmartActionType, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -78,10 +79,288 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Control { command } => run_control(command, cli.json, &mut out)?,
         Command::Action { command } => run_action(command, cli.json, &mut out)?,
         Command::MultiAction { command } => run_multi_action(command, cli.json, &mut out)?,
+        Command::SmartAction { command } => run_smart_action(command, cli.json, &mut out)?,
         Command::Appsense { command } => run_appsense(command, cli.json, &mut out)?,
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
+    Ok(())
+}
+
+fn semantic_smart_action_type(value: CliSmartActionType) -> semantic::SmartActionType {
+    match value {
+        CliSmartActionType::Text => semantic::SmartActionType::Text,
+        CliSmartActionType::Command => semantic::SmartActionType::Command,
+        CliSmartActionType::Url => semantic::SmartActionType::Url,
+        CliSmartActionType::App => semantic::SmartActionType::App,
+    }
+}
+
+fn run_smart_action(command: SmartActionCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        SmartActionCommand::List { input } => {
+            let result = semantic::smart_action_list(&input)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                for item in result.smart_actions {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}\t{} physical reference(s)\tgroups={}{}",
+                        item.id,
+                        item.name,
+                        item.action_type,
+                        item.physical_reference_count,
+                        item.group_ids
+                            .iter()
+                            .map(u64::to_string)
+                            .collect::<Vec<_>>()
+                            .join(","),
+                        if item.requires_command_permission {
+                            "\trequires command permission"
+                        } else {
+                            ""
+                        }
+                    )?;
+                }
+            }
+        }
+        SmartActionCommand::Show { input, id } => {
+            let result = semantic::smart_action_show(&input, id)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                let item = result.smart_action;
+                writeln!(
+                    out,
+                    "smart-action={}\t{}\t{}\t{} physical reference(s)",
+                    item.id, item.name, item.action_type, item.physical_reference_count
+                )?;
+                writeln!(out, "payload={}", serde_json::to_string(&item.payload)?)?;
+                writeln!(
+                    out,
+                    "groups={}",
+                    item.group_ids
+                        .iter()
+                        .map(u64::to_string)
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )?;
+            }
+        }
+        SmartActionCommand::Create {
+            input,
+            name,
+            action_type,
+            text,
+            command,
+            url,
+            app_name,
+            app_path,
+            color,
+            icon,
+            output,
+        } => write_candidate_result(
+            semantic::smart_action_create(
+                &input,
+                &name,
+                semantic_smart_action_type(action_type),
+                semantic::SmartActionPayload {
+                    text: text.as_deref(),
+                    command: command.as_deref(),
+                    url: url.as_deref(),
+                    app_name: app_name.as_deref(),
+                    app_path: app_path.as_deref(),
+                },
+                color.as_deref(),
+                icon.as_deref(),
+                &output,
+            )?,
+            json,
+            &mut out,
+        )?,
+        SmartActionCommand::Set {
+            input,
+            id,
+            name,
+            action_type,
+            text,
+            command,
+            url,
+            app_name,
+            app_path,
+            color,
+            clear_color,
+            icon,
+            clear_icon,
+            output,
+        } => write_candidate_result(
+            semantic::smart_action_set(
+                &input,
+                id,
+                semantic::SmartActionUpdate {
+                    name: name.as_deref(),
+                    action_type: action_type.map(semantic_smart_action_type),
+                    payload: semantic::SmartActionPayload {
+                        text: text.as_deref(),
+                        command: command.as_deref(),
+                        url: url.as_deref(),
+                        app_name: app_name.as_deref(),
+                        app_path: app_path.as_deref(),
+                    },
+                    color: color.as_deref(),
+                    clear_color,
+                    icon: icon.as_deref(),
+                    clear_icon,
+                },
+                &output,
+            )?,
+            json,
+            &mut out,
+        )?,
+        SmartActionCommand::Delete { input, id, output } => write_candidate_result(
+            semantic::smart_action_delete(&input, id, &output)?,
+            json,
+            &mut out,
+        )?,
+        SmartActionCommand::Group { command } => run_smart_action_group(command, json, &mut out)?,
+    }
+    Ok(())
+}
+
+fn run_smart_action_group(
+    command: SmartActionGroupCommand,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    match command {
+        SmartActionGroupCommand::List { input } => {
+            let result = semantic::smart_action_group_list(&input)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                for group in result.groups {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{} member(s)\t{}",
+                        group.id,
+                        group.name,
+                        group.member_count,
+                        group.tags.join(",")
+                    )?;
+                }
+            }
+        }
+        SmartActionGroupCommand::Show { input, id } => {
+            let result = semantic::smart_action_group_show(&input, id)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "group={}\t{}\t{} member(s)",
+                    result.group.id, result.group.name, result.group.member_count
+                )?;
+                for member in result.members {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}\t{}",
+                        member.index, member.id, member.name, member.action_type
+                    )?;
+                }
+            }
+        }
+        SmartActionGroupCommand::Create {
+            input,
+            name,
+            smart_action,
+            color,
+            tag,
+            output,
+        } => write_candidate_result(
+            semantic::smart_action_group_create(
+                &input,
+                &name,
+                &smart_action,
+                color.as_deref(),
+                &tag,
+                &output,
+            )?,
+            json,
+            &mut out,
+        )?,
+        SmartActionGroupCommand::Set {
+            input,
+            id,
+            name,
+            color,
+            clear_color,
+            tag,
+            clear_tags,
+            output,
+        } => {
+            let tags = if clear_tags {
+                Some(Vec::new())
+            } else if tag.is_empty() {
+                None
+            } else {
+                Some(tag)
+            };
+            write_candidate_result(
+                semantic::smart_action_group_set(
+                    &input,
+                    id,
+                    semantic::GroupUpdate {
+                        name: name.as_deref(),
+                        color: color.as_deref(),
+                        clear_color,
+                        tags: tags.as_deref(),
+                    },
+                    &output,
+                )?,
+                json,
+                &mut out,
+            )?;
+        }
+        SmartActionGroupCommand::Member { command } => match command {
+            SmartActionGroupMemberCommand::Add {
+                input,
+                id,
+                smart_action,
+                output,
+            } => write_candidate_result(
+                semantic::smart_action_group_member_add(&input, id, smart_action, &output)?,
+                json,
+                &mut out,
+            )?,
+            SmartActionGroupMemberCommand::Remove {
+                input,
+                id,
+                smart_action,
+                output,
+            } => write_candidate_result(
+                semantic::smart_action_group_member_remove(&input, id, smart_action, &output)?,
+                json,
+                &mut out,
+            )?,
+            SmartActionGroupMemberCommand::Move {
+                input,
+                id,
+                from,
+                to,
+                output,
+            } => write_candidate_result(
+                semantic::smart_action_group_member_move(&input, id, from, to, &output)?,
+                json,
+                &mut out,
+            )?,
+        },
+        SmartActionGroupCommand::Delete { input, id, output } => write_candidate_result(
+            semantic::smart_action_group_delete(&input, id, &output)?,
+            json,
+            &mut out,
+        )?,
+    }
     Ok(())
 }
 

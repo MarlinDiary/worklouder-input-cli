@@ -42,6 +42,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("control"));
     assert!(stdout.contains("action"));
     assert!(stdout.contains("multi-action"));
+    assert!(stdout.contains("smart-action"));
     assert!(stdout.contains("completion"));
 }
 
@@ -136,6 +137,23 @@ fn semantic_help_exposes_offline_candidate_workflow() {
     assert!(appsense.status.success());
     for command in ["list", "show", "link", "set", "unlink"] {
         assert!(appsense_stdout.contains(command));
+    }
+
+    let smart = binary().args(["smart-action", "--help"]).output().unwrap();
+    let smart_stdout = String::from_utf8(smart.stdout).unwrap();
+    assert!(smart.status.success());
+    for command in ["list", "show", "create", "set", "delete", "group"] {
+        assert!(smart_stdout.contains(command));
+    }
+
+    let smart_group = binary()
+        .args(["smart-action", "group", "--help"])
+        .output()
+        .unwrap();
+    let smart_group_stdout = String::from_utf8(smart_group.stdout).unwrap();
+    assert!(smart_group.status.success());
+    for command in ["list", "show", "create", "set", "member", "delete"] {
+        assert!(smart_group_stdout.contains(command));
     }
 
     let multi_group = binary()

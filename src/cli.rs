@@ -125,6 +125,12 @@ pub enum Command {
         command: MultiActionCommand,
     },
 
+    /// Inspect or edit Input-hosted Smart Actions in an offline snapshot.
+    SmartAction {
+        #[clap(subcommand)]
+        command: SmartActionCommand,
+    },
+
     /// Inspect or edit AppSense linked applications in an offline snapshot.
     Appsense {
         #[clap(subcommand)]
@@ -686,6 +692,215 @@ pub enum AppSenseCommand {
         #[clap(long, value_parser)]
         output: PathBuf,
     },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SmartActionCommand {
+    /// List Smart Actions, types, groups, and physical reference counts.
+    List {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Show one Smart Action and its typed payload.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+    },
+
+    /// Create a typed Smart Action in smart_actions.json.
+    Create {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long, default_value = "My Smart action")]
+        name: String,
+        #[clap(long = "type", value_enum, default_value = "text")]
+        action_type: SmartActionType,
+        #[clap(long)]
+        text: Option<String>,
+        #[clap(long)]
+        command: Option<String>,
+        #[clap(long)]
+        url: Option<String>,
+        #[clap(long)]
+        app_name: Option<String>,
+        #[clap(long)]
+        app_path: Option<String>,
+        #[clap(long)]
+        color: Option<String>,
+        #[clap(long)]
+        icon: Option<String>,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Update Smart Action metadata, type, or typed payload.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        name: Option<String>,
+        #[clap(long = "type", value_enum)]
+        action_type: Option<SmartActionType>,
+        #[clap(long)]
+        text: Option<String>,
+        #[clap(long)]
+        command: Option<String>,
+        #[clap(long)]
+        url: Option<String>,
+        #[clap(long)]
+        app_name: Option<String>,
+        #[clap(long)]
+        app_path: Option<String>,
+        #[clap(long, conflicts_with = "clear-color")]
+        color: Option<String>,
+        #[clap(long)]
+        clear_color: bool,
+        #[clap(long, conflicts_with = "clear-icon")]
+        icon: Option<String>,
+        #[clap(long)]
+        clear_icon: bool,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Delete a Smart Action and clear physical/group references.
+    Delete {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Inspect or edit stored Smart Action groups.
+    Group {
+        #[clap(subcommand)]
+        command: SmartActionGroupCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SmartActionGroupCommand {
+    /// List stored Smart Action groups.
+    List {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Show one Smart Action group and its ordered members.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+    },
+
+    /// Create a Smart Action group; an empty group is valid in Input.
+    Create {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        name: String,
+        #[clap(long)]
+        smart_action: Vec<u64>,
+        #[clap(long)]
+        color: Option<String>,
+        #[clap(long)]
+        tag: Vec<String>,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Update Smart Action group name, color, or tags.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        name: Option<String>,
+        #[clap(long, conflicts_with = "clear-color")]
+        color: Option<String>,
+        #[clap(long)]
+        clear_color: bool,
+        #[clap(long, conflicts_with = "clear-tags")]
+        tag: Vec<String>,
+        #[clap(long)]
+        clear_tags: bool,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Add, remove, or reorder Smart Action group members.
+    Member {
+        #[clap(subcommand)]
+        command: SmartActionGroupMemberCommand,
+    },
+
+    /// Delete only the group container, matching Input's Smart Action UI.
+    Delete {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SmartActionGroupMemberCommand {
+    /// Append an existing Smart Action to a group.
+    Add {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        smart_action: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Remove a member while keeping the Smart Action itself.
+    Remove {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        smart_action: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Move one member by zero-based index.
+    Move {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        from: usize,
+        #[clap(long)]
+        to: usize,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum SmartActionType {
+    Text,
+    Command,
+    Url,
+    App,
 }
 
 #[derive(Debug, Subcommand)]
