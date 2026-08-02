@@ -17,12 +17,13 @@ use cli::{
     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
     AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
     CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand,
-    CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, Command, CompletionShell,
-    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
-    InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand, LightingEffect,
-    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
-    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
-    SmartActionType as CliSmartActionType, TierCommand,
+    CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexLightingAutoOff,
+    CodexLightingAutoOffCommand, CodexLightingBrightnessCommand, CodexLightingCommand, Command,
+    CompletionShell, ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand,
+    DeviceTransport, InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand,
+    LightingEffect, LightingZone, MultiActionCommand, MultiActionGroupCommand,
+    MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand, SmartActionGroupCommand,
+    SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -1971,6 +1972,60 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
                 &mut out,
             )?,
         },
+        CodexCommand::Lighting { command } => match command {
+            CodexLightingCommand::Brightness { command } => match command {
+                CodexLightingBrightnessCommand::Get { input } => {
+                    let result = codex::lighting_brightness_get(&input)?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "lighting-brightness={}\texplicit={}",
+                            result.value, result.explicit
+                        )?;
+                        writeln!(out, "revision={}", result.revision)?;
+                    }
+                }
+                CodexLightingBrightnessCommand::Set {
+                    input,
+                    value,
+                    output,
+                } => write_codex_candidate_result(
+                    codex::lighting_brightness_set(&input, value.into(), &output)?,
+                    json,
+                    &mut out,
+                )?,
+            },
+            CodexLightingCommand::AutoOff { command } => match command {
+                CodexLightingAutoOffCommand::Get { input } => {
+                    let result = codex::lighting_auto_off_get(&input)?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "lighting-auto-off={}\texplicit={}",
+                            result.value, result.explicit
+                        )?;
+                        writeln!(out, "revision={}", result.revision)?;
+                    }
+                }
+                CodexLightingAutoOffCommand::Set {
+                    input,
+                    value,
+                    output,
+                } => write_codex_candidate_result(
+                    codex::lighting_auto_off_set(
+                        &input,
+                        codex_lighting_auto_off_value(value),
+                        &output,
+                    )?,
+                    json,
+                    &mut out,
+                )?,
+            },
+        },
     }
     Ok(())
 }
@@ -2107,6 +2162,18 @@ fn codex_agent_source_value(value: CodexAgentSource) -> &'static str {
         CodexAgentSource::Recent => "recent",
         CodexAgentSource::Priority => "priority",
         CodexAgentSource::Custom => "custom",
+    }
+}
+
+fn codex_lighting_auto_off_value(value: CodexLightingAutoOff) -> &'static str {
+    match value {
+        CodexLightingAutoOff::Off => "off",
+        CodexLightingAutoOff::ThirtySeconds => "30-seconds",
+        CodexLightingAutoOff::OneMinute => "1-minute",
+        CodexLightingAutoOff::ThreeMinutes => "3-minutes",
+        CodexLightingAutoOff::TenMinutes => "10-minutes",
+        CodexLightingAutoOff::ThirtyMinutes => "30-minutes",
+        CodexLightingAutoOff::OneHour => "1-hour",
     }
 }
 

@@ -325,6 +325,7 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
     assert!(stdout.contains("agent-source"));
     assert!(stdout.contains("agent-key"));
     assert!(stdout.contains("command-key"));
+    assert!(stdout.contains("lighting"));
 
     let config = binary()
         .args(["codex", "config", "--help"])
@@ -354,6 +355,15 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
     ] {
         assert!(agent_key_stdout.contains(command));
     }
+
+    let lighting = binary()
+        .args(["codex", "lighting", "--help"])
+        .output()
+        .unwrap();
+    let lighting_stdout = String::from_utf8(lighting.stdout).unwrap();
+    assert!(lighting.status.success());
+    assert!(lighting_stdout.contains("brightness"));
+    assert!(lighting_stdout.contains("auto-off"));
 }
 
 #[test]
@@ -419,6 +429,8 @@ fn codex_tier1_candidates_run_end_to_end_without_writing_source() {
     let tap = root.join("tap.json");
     let command = root.join("command.json");
     let reset = root.join("reset.json");
+    let brightness = root.join("brightness.json");
+    let auto_off = root.join("auto-off.json");
     fs::write(
         &config,
         b"model = \"unrelated\"\n[desktop]\ncodex-micro-agent-source = \"recent\"\ncodex-micro-future = \"preserved\"\n",
@@ -514,7 +526,75 @@ fn codex_tier1_candidates_run_end_to_end_without_writing_source() {
     assert_eq!(reset_show["keycapId"], "FAST");
     assert_eq!(reset_show["assignmentType"], "keycap");
 
-    let candidate: serde_json::Value = serde_json::from_slice(&fs::read(&reset).unwrap()).unwrap();
+    let set_brightness = binary()
+        .args([
+            "--json",
+            "codex",
+            "lighting",
+            "brightness",
+            "set",
+            "--input",
+        ])
+        .arg(&reset)
+        .arg("37")
+        .arg("--output")
+        .arg(&brightness)
+        .output()
+        .unwrap();
+    assert!(
+        set_brightness.status.success(),
+        "{}",
+        String::from_utf8_lossy(&set_brightness.stderr)
+    );
+    let set_brightness: serde_json::Value = serde_json::from_slice(&set_brightness.stdout).unwrap();
+    assert_eq!(
+        set_brightness["changedPaths"],
+        serde_json::json!(["/settings/codex-micro-lighting-brightness"])
+    );
+
+    let set_auto_off = binary()
+        .args(["--json", "codex", "lighting", "auto-off", "set", "--input"])
+        .arg(&brightness)
+        .arg("10-minutes")
+        .arg("--output")
+        .arg(&auto_off)
+        .output()
+        .unwrap();
+    assert!(
+        set_auto_off.status.success(),
+        "{}",
+        String::from_utf8_lossy(&set_auto_off.stderr)
+    );
+
+    let brightness_get = binary()
+        .args([
+            "--json",
+            "codex",
+            "lighting",
+            "brightness",
+            "get",
+            "--input",
+        ])
+        .arg(&auto_off)
+        .output()
+        .unwrap();
+    assert!(brightness_get.status.success());
+    let brightness_get: serde_json::Value = serde_json::from_slice(&brightness_get.stdout).unwrap();
+    assert_eq!(brightness_get["value"], 37);
+    assert_eq!(brightness_get["explicit"], true);
+
+    let auto_off_get = binary()
+        .args(["--json", "codex", "lighting", "auto-off", "get", "--input"])
+        .arg(&auto_off)
+        .output()
+        .unwrap();
+    assert!(auto_off_get.status.success());
+    let auto_off_get: serde_json::Value = serde_json::from_slice(&auto_off_get.stdout).unwrap();
+    assert_eq!(auto_off_get["value"], "10-minutes");
+    assert_eq!(auto_off_get["explicit"], true);
+
+    let candidate: serde_json::Value =
+        serde_json::from_slice(&fs::read(&auto_off).unwrap()).unwrap();
     assert_eq!(candidate["settings"]["codex-micro-future"], "preserved");
     assert_eq!(
         worklouderctl::fsutil::sha256(&config).unwrap(),

@@ -439,6 +439,12 @@ pub enum CodexCommand {
         #[clap(subcommand)]
         command: CodexCommandKeyCommand,
     },
+
+    /// Inspect or edit Codex-native global lighting in an offline snapshot.
+    Lighting {
+        #[clap(subcommand)]
+        command: CodexLightingCommand,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -754,6 +760,80 @@ pub enum ConfigCommand {
 
         #[clap(value_parser)]
         candidate: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexLightingCommand {
+    /// Inspect or edit global lighting intensity.
+    Brightness {
+        #[clap(subcommand)]
+        command: CodexLightingBrightnessCommand,
+    },
+
+    /// Inspect or edit the idle lighting auto-off policy.
+    AutoOff {
+        #[clap(subcommand)]
+        command: CodexLightingAutoOffCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexLightingBrightnessCommand {
+    /// Read effective global lighting intensity from 0 through 100.
+    Get {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Write an offline candidate with a new global lighting intensity.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        /// Global intensity from 0 through 100.
+        value: u8,
+
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CodexLightingAutoOff {
+    Off,
+    #[clap(name = "30-seconds")]
+    ThirtySeconds,
+    #[clap(name = "1-minute")]
+    OneMinute,
+    #[clap(name = "3-minutes")]
+    ThreeMinutes,
+    #[clap(name = "10-minutes")]
+    TenMinutes,
+    #[clap(name = "30-minutes")]
+    ThirtyMinutes,
+    #[clap(name = "1-hour")]
+    OneHour,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexLightingAutoOffCommand {
+    /// Read the effective idle lighting auto-off policy.
+    Get {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Write an offline candidate with a new idle lighting auto-off policy.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        #[clap(value_enum)]
+        value: CodexLightingAutoOff,
+
+        #[clap(long, value_parser)]
+        output: PathBuf,
     },
 }
 
