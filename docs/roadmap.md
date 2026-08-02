@@ -114,20 +114,21 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Input-owned complete default/reset candidate per device/layout/version through the existing configuration transaction, with immutable plan, idempotent apply, readback, and exact rollback
 - [x] Bootloader recovery authority and exact post-recovery configuration restore, with immutable backup-bound plan, Input programmer delegation, receipt inspection, and idempotent replay
 
-## External release gates
+## External distribution and upstream gates
 
 These gates change vendor or credential-owned state rather than this
 repository. They are intentionally tracked separately from implementation:
 
-- an official Input release adopts the packaged Input Companion Bridge and
-  supplies its complete configuration writer;
-- a released Codex build adopts the packaged Codex Companion Bridge and
-  supplies exact settings and Agent Key replacers;
+- optional: an official Input release adopts the packaged Input Companion
+  Bridge so exact-release overlay installation is no longer required;
+- optional: a released Codex build adopts the packaged Codex Companion Bridge
+  so exact-release overlay installation is no longer required;
 - the project owner provisions Developer ID/notarization credentials, creates
   the first version tag, verifies the published binaries, and promotes the
   generated formula to a stable Homebrew tap;
-- official-provider USB mutation and physical-device rollback evidence is
-  frozen after those released integrations exist.
+- [x] official-provider USB mutation, physical-device rollback, reconnect
+  portability, bidirectional handoff, and final single-owner recovery evidence
+  is frozen for the exact-release overlays.
 
 ## Later tracks
 

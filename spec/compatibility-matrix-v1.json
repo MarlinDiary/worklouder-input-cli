@@ -13,8 +13,8 @@
           "version": "26.727.51351",
           "state": "experimental",
           "tiers": [1],
-          "evidence": ["codex-bridge-fixture", "tier1-offline-candidates"],
-          "boundary": "Exact read/offline candidates and isolated bridge mutations are verified; released Codex integration is pending."
+          "evidence": ["codex-bridge-fixture", "tier1-offline-candidates", "exact-release-live-overlay", "live-apply-readback-restore"],
+          "boundary": "Exact-release overlay integration is live-validated for settings and Agent Keys; an upstream-native bridge is not present."
         },
         {
           "id": "codex-companion-bridge",
@@ -37,8 +37,8 @@
           "version": "0.18.0",
           "state": "experimental",
           "tiers": [2, 3, 4],
-          "evidence": ["deterministic-sanitized-fixture", "live-read", "bridge-transactions"],
-          "boundary": "Live reads and isolated bridge transactions are verified; official released bridge integration is pending."
+          "evidence": ["deterministic-sanitized-fixture", "live-read", "bridge-transactions", "exact-release-live-overlay", "live-apply-readback-restore", "provider-handoff"],
+          "boundary": "Exact-release overlay integration is live-validated for device configuration and host settings; optional preset, reset, firmware-update, and recovery authorities are absent from the released writer."
         },
         {
           "id": "input-companion-bridge",
@@ -46,7 +46,7 @@
           "state": "experimental",
           "tiers": [2, 3, 4],
           "evidence": ["authenticated-cas", "firmware-delegation", "bootloader-recovery", "input-default-reset", "transaction-rollback"],
-          "boundary": "Reference adapter and synthetic end-to-end fixtures are verified."
+          "boundary": "Reference adapter and synthetic end-to-end fixtures are verified; the released Input overlay is live-validated for every negotiated capability."
         },
         {
           "id": "codex-micro-firmware",
@@ -64,6 +64,7 @@
         "./scripts/verify-json-contracts.py",
         "./scripts/verify-sanitized-fixtures.sh",
         "./scripts/verify-compatibility-matrix.sh",
+        "./scripts/extract-release-notes.py CHANGELOG.md 0.1.0",
         "./scripts/verify-cli-assets.sh",
         "./scripts/test-release-packaging.sh",
         "./scripts/test-bridge-e2e.sh",

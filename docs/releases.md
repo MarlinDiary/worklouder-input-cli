@@ -133,11 +133,17 @@ there is no stable `brew install` command to advertise yet.
 
 ## Release checklist
 
-1. Keep the working tree clean and run every required gate in
+1. Run `./scripts/release-preflight.sh vVERSION`. It verifies the clean/pushed
+   commit, exact Cargo/tag match, tag availability, Apple secret names, main
+   branch protection, and successful CI for the exact commit without printing
+   secret values.
+2. Keep the working tree clean and run every required gate in
    `spec/compatibility-matrix-v1.json`.
-2. Confirm `Cargo.toml` and the intended `vVERSION` tag match exactly.
-3. Confirm the six Apple secrets exist without printing them.
-4. Push the commit and annotated version tag.
+3. Before creating the tag, run the `Release` workflow manually on `main`. This
+   exercises both native architecture package jobs with unsigned artifacts but
+   intentionally skips publication.
+4. Push an annotated version tag only after the preflight and manual package
+   rehearsal pass.
 5. Require both architecture jobs, notarization, archive verification, and
    provenance attestation to pass.
 6. Download and independently verify both published archives and checksums.

@@ -4,7 +4,7 @@
 
 [English](README.md) · [常见问题](docs/faq.md) ·
 [兼容性](docs/compatibility.md) · [架构](docs/architecture.md) ·
-[发行](docs/releases.md) ·
+[发行](docs/releases.md) · [变更记录](CHANGELOG.md) ·
 [路线图](docs/roadmap.md)
 
 > **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
@@ -17,8 +17,10 @@
 > 双架构 deterministic archive、明确的 signature-state verification、
 > fail-closed Developer ID/notarization workflow 与 Homebrew formula generation
 > 已实现并完成本地验证，但尚未发布正式打包版本；详见
-> [macOS 发行指南](docs/releases.md)。bridge transaction 已通过隔离 writer fixture
-> 验证，真实设备写入仍以 Input writer adapter 与硬件 rollback 验证为启用条件。
+> [macOS 发行指南](docs/releases.md)。除隔离 writer fixture 外，exact-release
+> Codex/Input overlay 已在真实 Codex Micro 上完成四 authority 的
+> apply/readback/exact-restore 和双向 provider handoff 验证；Input `0.18.0` 未协商的
+> optional authority 继续 fail-closed。
 
 ## 简单来说，它是什么？
 
@@ -545,7 +547,8 @@ encoder gestures 的 control list/show/set、joystick mode 与 2–8 sector
 lifecycle/assignment/精确 angle rebalance，以及 Action
 list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
 permission status、firmware check 与 sanitized diagnostic log bundle 也已通过 bridge/CLI
-fixture；Input release 集成与 Codex released-app bridge 集成仍在后续里程碑中。
+fixture。exact-release Codex/Input overlay 已完成真实 provider mutation、readback、
+restore 与 ownership handoff 验证；由上游 app 原生内置 bridge 仍是可选后续里程碑。
 deterministic macOS packaging、signature-state verification、Developer ID/
 notarization workflow 与 Homebrew formula generation 已完成；首个正式 signed
 binary 与 stable Homebrew tap 尚未发布。

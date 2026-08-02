@@ -21,14 +21,14 @@ claim-boundary, and required-gate inventory is added.
 | --- | ---: | --- |
 | Device | Work Louder Codex Micro | Initial target |
 | Host OS | macOS | Initial target |
-| Codex app | 26.727.51351 | Exact Tier 1 settings read/offline candidate adapter and service-only runtime recovery contract verified; external settings bridge integration pending |
-| Codex Companion Bridge | Protocol v1 | Settings and six-slot Agent Key snapshot/CAS/apply/restore/rollback fixture verified |
+| Codex app | 26.727.51351 | Exact-release overlay live-validated for settings and six-slot Agent Key apply/readback/exact restore; upstream-native listener absent |
+| Codex Companion Bridge | Protocol v1 | Fixture conformance plus exact-release overlay and real-provider transaction verified |
 | Work Louder Input | 0.17.3 | Deterministic sanitized structural fixture; original installed bundle was superseded |
-| Work Louder Input | 0.18.0 | Deterministic sanitized fixture plus exact bundled-kit live read adapter verified |
-| Input Companion Bridge | Protocol v1 | Snapshot/CAS/apply/replay/restore/rollback fixture conformance verified; released Input writer pending |
+| Work Louder Input | 0.18.0 | Exact-release overlay live-validated for device configuration, host settings, live reads, and bidirectional provider handoff |
+| Input Companion Bridge | Protocol v1 | Fixture conformance plus every capability negotiated by the released Input overlay live-validated |
 | Companion integration bundle | 0.1.0 | Deterministic exact-inventory tgz, installed exports, and conformance executable verified; attached by the tagged release workflow |
 | Codex Micro firmware | v0.6.0 | Live status/files/export read boundary verified |
-| USB | Observed | Official-provider writer and physical rollback evidence pending external integration |
+| USB | Observed | Provider writes, exact readback, reconnect portability, rollback, and final single-owner recovery verified |
 | Bluetooth | Observed | Live read boundary verified; configuration mutation uses the same external provider gate |
 
 The 2026-08-02 audit recorded Input updating from 0.17.3 to 0.18.0 during a
@@ -83,7 +83,30 @@ quit and reopened for each read. Cached `keymap.json` and `smart_actions.json`
 remained byte-identical. Input may rewrite its own `input_storage.json` startup
 metadata (`options.started` and Loki `meta.revision`/`meta.updated`) after a
 reopen; a recursive comparison found no semantic configuration difference.
-This boundary does not cover device, cache, or database mutation.
+This original read-only boundary did not cover device, cache, or database
+mutation. The later exact-release overlay validation below adds a separate
+mutation claim without broadening the historical audit.
+
+## Exact-release live integration
+
+On 2026-08-03, version- and hash-gated overlays were installed into the released
+Codex `26.727.51351` and Input `0.18.0` providers without activating, restarting,
+or navigating either GUI. Four independent authorities completed
+compare-and-swap apply, exact readback, and exact restore: Codex settings, Codex
+Agent Keys, Input device configuration, and Input host settings. Input snapshots
+also remained portable across session-local device identifiers after reconnect.
+
+Provider ownership was exercised in both directions. The final recovery left
+Codex as the only owner with USB, comm/API, HID, and joystick subscriptions
+present, stopped Input, and restored the official Input app bundle with strict
+deep signature verification. See the
+[frozen live validation record](research/2026-08-03-live-provider-integration-validation.md).
+
+The released Input writer did not negotiate optional preset, reset,
+firmware-update, or bootloader-recovery authorities. Those operations therefore
+remain synthetic-provider claims and fail closed against Input `0.18.0`. Input
+later applied its own selected v0.6.1 firmware during official startup; that is
+not a CLI flash claim.
 
 ## Compatibility states
 
@@ -111,18 +134,20 @@ Before a mutation, WorkLouderCTL will detect and record:
 An Input update alone will not silently select the nearest adapter. Exact
 matching or a verified compatibility range is required for writes.
 
-The Companion Bridge uses capability negotiation instead of matching Input's
-internal bundle hash. Once a released Input build includes protocol v1, internal
-device-kit and GUI updates remain behind Input's stable bridge adapter.
+The Companion Bridge uses capability negotiation rather than assuming
+capabilities from an application version. The current live overlay is
+additionally gated by exact app and main-script hashes; a future upstream-native
+protocol v1 listener can place internal device-kit and GUI updates behind
+Input's stable bridge adapter.
 The current isolated cross-language fixture additionally verifies exact base64
 snapshot bytes, device SHA-1, host SHA-256, an independently recomputed
 deterministic revision, and a live compare-and-swap preflight. This is bridge
 contract evidence rather than a released Input 0.18.0 capability claim.
 The fixture writer also verifies complete apply readback, idempotent replay
 without a second write, stale-CAS rejection, explicit restore, and automatic
-rollback after a corrupt readback. These are transaction-engine claims; they do
-not extend the Input 0.18.0 hardware boundary until an exact writer adapter and
-real-device restore test pass.
+rollback after a corrupt readback. These are transaction-engine claims; they
+extend only as listed in the separate exact-release live integration boundary
+above. Optional unnegotiated authorities remain fixture-only.
 
 `worklouderctl doctor` therefore reports application health and authenticated
 configuration readiness separately. `configurationReady` requires both bridge

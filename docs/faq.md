@@ -15,8 +15,10 @@ WorkLouderCTL is being built for that role. The source-built CLI already reads
 Codex settings, Input cache state, and live Codex Micro status/files through
 Input 0.18.0's bundled provider. It also generates strict offline candidates
 and runs authenticated Codex/Input apply/readback/restore/rollback transactions
-against isolated reference writers. Packaged releases and released-app writer
-integration are later milestones.
+against isolated reference writers. The exact-release overlays for Codex
+`26.727.51351` and Input `0.18.0` have also completed live provider
+apply/readback/exact-restore transactions. A signed packaged release is the
+remaining distribution milestone.
 
 Run `worklouderctl doctor --strict` to test the current machine rather than
 inferring write support from installed/running apps. The JSON field
@@ -110,9 +112,12 @@ verified complete-configuration writer. The CLI then takes an immutable backup
 and Input performs CAS, idempotent apply, full readback, and automatic rollback
 inside the same serialized bridge session.
 
-Until a released Input build includes that bridge, the direct compatibility
-transport keeps `require-closed` as its default. Its explicit `restart` mode
-performs the older graceful quit/read/reopen cycle.
+Input `0.18.0` does not ship the listener itself. The version- and hash-gated
+live overlay attaches to its main process without activating or navigating the
+GUI. On the tested macOS 27 beta, provider handoff uses a fresh hidden Input
+process because restarting the released `node-hid` worker in place is unstable.
+The direct compatibility transport retains `require-closed` and explicit
+`restart` modes as read-only fallbacks.
 
 ## How can the CLI coexist with Codex while it is open?
 
@@ -122,15 +127,17 @@ capability only when Codex injects the corresponding exact complete-object
 replacer. Settings use source-SHA plus settings-revision CAS; Agent Keys use a
 separate global-state revision CAS. Both paths provide immutable backup, exact
 readback, restore, and rollback over a private authenticated Unix socket. The
-current Codex release contains the internal handlers but has not yet installed
-this external listener; the repository includes the reference integration and
-complete fixture E2E.
+current Codex release contains the internal handlers but does not ship the
+external listener. The version- and hash-gated live overlay installs the same
+contract without focusing the GUI; settings and Agent Keys have completed live
+apply/readback/exact-restore transactions on Codex `26.727.51351`.
 
 ## Will it support Smart Actions?
 
 Smart Action text, command, URL, and app definitions, groups, references,
 bindings, and delete cascades are implemented as strict offline candidates.
-Released Input writer and database synchronization remain separate milestones.
+The released Input `0.18.0` overlay has live-validated its complete negotiated
+configuration transaction, including the provider-owned database writer.
 
 ## Will it support Linux and Windows?
 

@@ -34,7 +34,7 @@ parity contract.
 | Lighting brightness | integer 0–100 | `codex lighting brightness get/set` | strict offline candidate plus `100 -> 37 -> 100` bridge apply/readback/restore fixture verified |
 | Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | strict offline candidate plus `3-minutes -> 10-minutes -> 3-minutes` bridge apply/readback/restore fixture verified |
 | Layout reset | installed-build default layout | `codex reset layout` | exact whole-layout candidate, inherited no-op, sibling preservation, source immutability, and released call-path evidence verified |
-| Full object | export, validate, diff, apply, restore | `codex config snapshot/diff/apply/restore` | settings-only structural diff plus authenticated snapshot/CAS/apply/readback/restore/rollback fixture verified; released Codex integration pending |
+| Full object | export, validate, diff, apply, restore | `codex config snapshot/diff/apply/restore` | fixture plus exact-release overlay snapshot/CAS/apply/readback/exact-restore live-validated |
 | Runtime health | connected control plane, settled reconnect, HID/joystick subscriptions | `codex runtime status/recover` | exact 26.727.51351 bundle contract, live failed-state capture and service-only recovery verified; CDP transport and CLI surface regression verified |
 
 ### Tier 1 adapter
@@ -46,8 +46,10 @@ and advertises writes only with injected complete explicit-setting replacement.
 Its transaction preserves every unmodified setting, compares source and
 canonical settings revisions, verifies exact explicit/effective readback, and
 restores the pre-mutation snapshot after any failure. The inspected released
-Codex build does not publish the external Unix socket, so released integration
-remains separate from fixture transaction evidence.
+Codex build does not publish the external Unix socket. The version- and
+hash-gated live overlay installs the same contract without focusing the GUI;
+settings and Agent Keys completed real-provider apply/readback/exact-restore
+transactions.
 
 The separate `codex-node-inspector-runtime-v1` adapter covers runtime health,
 not configuration mutation. It is pinned to the exact app version plus
@@ -71,8 +73,8 @@ Promises as failures even when the USB interface still enumerates.
 | Backlight | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
 | Underglow | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
 | AppSense links | list/show, application identity, link, update, unlink | `appsense` | candidate and current-cache schema verified; fixture apply/readback/restore verified; live focus transition tracked separately |
-| Presets | merged catalog snapshot, Input-equivalent filters, metadata, preview, Action/Multi Action/group remap and layer install | `input preset snapshot`, `preset list/show/preview/install` | all 17 hash-pinned bundled defaults candidate-verified; fixture validate/apply/readback/restore verified; released Input provider integration pending |
-| Full object | cache capture, export, snapshot, validate, diff, apply, restore | `input config snapshot`, `device export`, `device config snapshot/validate/apply/restore` | cache adapter is byte-exact and revision-equivalent to the bridge core; transaction fixture verified; released writer pending |
+| Presets | merged catalog snapshot, Input-equivalent filters, metadata, preview, Action/Multi Action/group remap and layer install | `input preset snapshot`, `preset list/show/preview/install` | all 17 hash-pinned bundled defaults candidate-verified; fixture transaction verified; optional preset authority is absent from the Input 0.18.0 overlay |
+| Full object | cache capture, export, snapshot, validate, diff, apply, restore | `input config snapshot`, `device export`, `device config snapshot/validate/apply/restore` | byte-exact/revision-equivalent cache adapter plus exact-release overlay apply/readback/exact-restore and reconnect portability live-validated |
 
 ## Tier 3 — Input host configuration
 
@@ -80,10 +82,10 @@ Promises as failures even when the USB interface still enumerates.
 | --- | --- | --- | --- |
 | Smart Actions | text, command, URL, application | `smart-action` | typed list/show/create/set/delete, `SA_<ID>` control binding, and reference cascade candidate-verified against current Input 0.18.0 cache bytes |
 | Smart Action groups | create, rename, move, delete | `smart-action group` | metadata and ordered member CRUD, empty groups, and container-only delete candidate-verified |
-| Command permission | explicit host command toggle | `input permission command` | snapshot/get/offline set plus bridge CAS/apply/replay/restore/automatic-rollback fixture-verified; released Input integration pending |
+| Command permission | explicit host command toggle | `input permission command` | fixture plus Input 0.18.0 overlay CAS/apply/readback/exact-restore live-validated |
 | Cheat Sheet | show, hold, hide, toggle assignments | `cheat-sheet` | exact four-token catalog, binding inventory, strict offline bind candidate, and fixture apply/readback/restore verified |
 | Radial menu | ordered sectors, angles, assignment kinds, and resolved Action/Multi Action/Smart Action labels | `radial show`, `layer joystick`, `control set` | no separate persisted settings exist; inspection plus sector/assignment mutation and fixture apply/readback/restore verified; overlay runtime remains Input-owned |
-| AppSense runtime | focus collector, last-forwarded identity, registered device, and raw selected profile/layer transition | `appsense test` | exact Input 0.18.0 service/RPC path hash-pinned; authenticated bridge and positive/negative CLI fixture verified; released Input A/B focus transition pending |
+| AppSense runtime | focus collector, last-forwarded identity, registered device, and raw selected profile/layer transition | `appsense test` | exact Input 0.18.0 service/RPC path hash-pinned; fixtures verified and one matching released-overlay sample observed without changing focus |
 
 ## Tier 4 — Input operations
 

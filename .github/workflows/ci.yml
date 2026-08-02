@@ -50,6 +50,11 @@ jobs:
         run: ./scripts/verify-json-contracts.py
       - name: Verify per-release compatibility matrix
         run: ./scripts/verify-compatibility-matrix.sh
+      - name: Verify curated release notes
+        run: |
+          version=$(sed -nE 's/^version = "([^"]+)"$/\1/p' Cargo.toml | head -1)
+          ./scripts/extract-release-notes.py CHANGELOG.md "$version" > /tmp/release-notes.md
+          test -s /tmp/release-notes.md
       - name: Verify generated completions and command reference
         run: ./scripts/verify-cli-assets.sh
       - name: Verify release archive and Homebrew packaging

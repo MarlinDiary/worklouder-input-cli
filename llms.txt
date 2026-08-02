@@ -2,7 +2,7 @@
 
 > WorkLouderCTL is an unofficial, open-source full-configuration CLI being built for Codex, Work Louder Input, and Codex Micro. It targets complete configuration-GUI parity with safe inspection, diff, backup, verified apply, synchronization, and rollback for humans, scripts, and AI agents.
 
-Important: the project is currently a source alpha. The repository builds a working `worklouderctl` binary with Codex/Input inspection, offline semantic candidate editors, authenticated Codex/Input bridge clients, fixture-verified apply/readback/restore/rollback, live Codex Micro status/files, and verified exports. Deterministic dual-architecture packaging, explicit signature-state verification, fail-closed Developer ID notarization, and release-specific Homebrew formula generation are implemented, but no packaged release has been published yet.
+Important: the project is currently a source alpha. The repository builds a working `worklouderctl` binary with Codex/Input inspection, offline semantic candidate editors, authenticated Codex/Input bridge clients, fixture-verified apply/readback/restore/rollback, live Codex Micro status/files, verified exports, and exact-release Codex/Input overlay transactions with live apply/readback/exact-restore evidence. Deterministic dual-architecture packaging, explicit signature-state verification, fail-closed Developer ID notarization, and release-specific Homebrew formula generation are implemented, but no packaged release has been published yet.
 
 ## Core documentation
 
@@ -23,6 +23,8 @@ Important: the project is currently a source alpha. The repository builds a work
 - [Input-owned default reset](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/input-default-reset.md): version/device/layout-owned default candidate with immutable plan, CAS apply, exact readback, and rollback
 - [Input-owned bootloader recovery](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/input-bootloader-recovery.md): complete-backup-bound bootloader/release plan with Input programmer delegation, exact configuration restore, postflight, and idempotent receipt
 - [macOS releases and Homebrew packaging](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/releases.md): archive manifest, signature states, checksum verification, notarized tag workflow, Homebrew formula, and release checklist
+- [Changelog](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/CHANGELOG.md): release features, verified boundaries, and known limitations
+- [Live provider integration validation](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/research/2026-08-03-live-provider-integration-validation.md): exact-release overlays, four-authority transactions, provider handoff, and final recovery evidence
 - [Companion integration kit](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/companion/README.md): deterministic private release asset for the Input/Codex reference adapters, one-call integrations, and conformance executable
 - [Roadmap](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/roadmap.md): implementation milestones
 - [Sanitized fixtures](https://github.com/MarlinDiary/worklouder-input-cli/tree/main/fixtures): deterministic Input 0.17.3/0.18.0 and Codex Micro firmware v0.6.0 schema fixtures
@@ -41,15 +43,15 @@ Important: the project is currently a source alpha. The repository builds a work
 - Non-goal: implementing a replacement hardware driver or firmware protocol
 - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
 - Public fixture boundary: deterministic synthetic Input 0.17.3/0.18.0 configuration snapshots and a firmware v0.6.0 status DTO, with regenerated SHA-256 manifests and sensitive-pattern checks
-- Current maturity: source alpha; read paths, isolated bridge transactions, deterministic macOS package verification, and fail-closed signed release automation implemented; no packaged release published
+- Current maturity: source alpha; read paths, isolated and exact-release live bridge transactions, deterministic macOS package verification, and fail-closed signed release automation implemented; no packaged release published
 - Current Codex commands: `codex doctor/inspect/export`, `codex bridge inspect`, `codex config snapshot/apply/restore`, six-slot `codex agent-key assignments/snapshot/get/set/clear/apply/restore`, `codex lighting brightness/auto-off get/set`, and `codex voice get/set`
-- Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`, global lighting, and voice mode provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; six-slot Agent Key candidates preserve untargeted unknown fields and use a separate global-state revision; the Codex Companion Bridge fixture verifies complete settings and Agent Key apply/readback/restore/rollback while released-Codex integration remains pending
+- Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`, global lighting, and voice mode provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; six-slot Agent Key candidates preserve untargeted unknown fields and use a separate global-state revision; both the fixture and Codex `26.727.51351` exact-release overlay verify settings and Agent Key apply/readback/restore
 - Input cache command: `input config snapshot` captures `keymap.json` plus optional `smart_actions.json` byte-for-byte, excludes host-only state, and emits a bridge-revision-equivalent semantic snapshot without controlling the Input GUI or device transport
 - Primary device transport: authenticated Input Companion Bridge v1 over a private Unix socket; Rust client, one-call Input-main integration, release conformance command, and cross-language tests are implemented
 - Bridge config commands: deterministic byte-exact snapshot/validate plus capability-gated apply/restore with immutable CLI backup, CAS, session idempotency, full readback, and automatic rollback
 - Input recovery commands: `input recovery plan/apply` bind a complete pre-recovery snapshot to Input/device-kit versions, bootloader identity, and Input-selected release; Input owns programming/reconnect, while the CLI enforces exact firmware/config postflight, receipt inspection, and idempotent replay
-- Released Input integration: pending; Input 0.18.0 has no external bridge transport
-- Released Codex integration: pending; Codex 26.727.51351 has internal settings/global-state handlers but no external bridge listener
+- Released Input integration: Input 0.18.0 has no built-in external listener, but its exact-release overlay is live-validated for every negotiated capability; optional preset/reset/update/recovery authorities are absent and fail closed
+- Released Codex integration: Codex 26.727.51351 has no built-in external listener, but its exact-release overlay is live-validated for settings and Agent Key transactions
 - Direct compatibility transport: `device status`, `device files`, and dual-hash atomic `device export` through Input 0.18.0's bundled device kit with `require-closed` or explicit `restart`
 - Safety model: inspect, plan, diff, backup, conflict check, apply, readback, checksum verification, synchronize, rollback
 - Agent model: deterministic JSON over the same transaction engine as the human CLI

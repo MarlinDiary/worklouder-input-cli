@@ -10,6 +10,7 @@
   <a href="docs/compatibility.md">Compatibility</a> ·
   <a href="docs/architecture.md">Architecture</a> ·
   <a href="docs/releases.md">Releases</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
   <a href="docs/roadmap.md">Roadmap</a>
 </p>
 
@@ -26,17 +27,17 @@
 > diff, live device status/file reads, verified device export, revisioned bridge
 > snapshots/CAS validation, offline profile/layer/AppSense/control/Action/Smart
 > Action candidate generation, fixture-verified Input and Codex apply/restore
-> transactions, six-slot Codex Agent Key candidates and transactions, JSON output, and
-> shell completions.
+> transactions, exact-release live overlays, six-slot Codex Agent Key candidates
+> and transactions, JSON output, and shell completions.
 > Deterministic dual-architecture archives, explicit signature-state
 > verification, a fail-closed Developer ID/notarization workflow, and Homebrew
 > formula generation are implemented and locally verified. There is no
 > published packaged release yet; see the [release guide](docs/releases.md).
-> The bridge transaction engine now verifies backup, apply, idempotent retry,
-> readback, restore, and automatic rollback against an isolated writer fixture.
-> Released-app mutation remains gated on Codex/Input integrations that supply
-> verified complete-set writers; hardware mutation additionally requires exact
-> device rollback evidence.
+> The transaction engine verifies backup, apply, idempotent retry, readback,
+> restore, and automatic rollback against isolated writers. Exact-release Codex
+> `26.727.51351` and Input `0.18.0` overlays additionally completed live
+> apply/readback/exact-restore and bidirectional provider-handoff validation.
+> Optional authorities not negotiated by a provider remain fail-closed.
 
 ## The short answer
 
@@ -665,8 +666,9 @@ CLI semantic parser.
 | Companion Bridge v1 contract, CLI client, and reference server | Complete |
 | Bridge config snapshot, deterministic revision, and live CAS preflight | Complete |
 | Bridge apply/restore transaction and automatic rollback fixture | Complete |
-| Four-authority plan/apply/postflight/manual restore transaction | Complete in isolated Codex + Input fixtures; released bridges pending |
-| Companion Bridge integration in a released Input build | Upstream integration pending |
+| Four-authority plan/apply/postflight/manual restore transaction | Complete in isolated fixtures and live-validated through exact-release Codex/Input overlays |
+| Exact-release Codex/Input overlay integration | Complete; version/hash-gated installation and live provider transactions verified without GUI activation |
+| Companion Bridge integration shipped natively by Codex/Input | Optional upstream integration pending |
 | Codex Companion Bridge client/reference integration | Complete; exact-release Codex overlay installed and live-validated |
 | Semantic profile/layer candidates | Full lifecycle, selection, ordering, color, and lighting candidate-verified; combined profile-create/layer-create/lighting apply/readback/restore fixture-verified |
 | Semantic physical controls | List/show/set for keys and encoder gestures; joystick mode, 2–8-sector lifecycle, assignments, and exact angle rebalance; candidate-verified with Input cache hashes unchanged |
@@ -692,10 +694,11 @@ CLI semantic parser.
 WorkLouderCTL is an open-source full-configuration CLI project for Codex, Work
 Louder Input, and Codex Micro. The source alpha can inspect both apps,
 read/export live Codex Micro state, generate validated profile/layer/lighting/control/Action/Multi Action/Smart Action/group candidates,
-and exercise apply/restore against the isolated bridge writer. Deterministic
+and run verified apply/readback/restore transactions through exact-release
+Codex/Input overlays. Deterministic
 release packaging and the signed/notarized Homebrew pipeline are implemented;
-the first published signed binaries and released-Input writer integration are
-upcoming.
+the first published signed binaries are upcoming. Optional Input authorities
+that are not negotiated by Input `0.18.0` stay fail-closed.
 
 ### Does WorkLouderCTL replace the Codex and Input configuration GUIs?
 
@@ -706,9 +709,11 @@ replacement driver/runtime is outside the project contract.
 ### Does it support Codex Micro?
 
 Codex Micro on macOS is the first target. Input 0.18.0 and firmware v0.6.0 have
-live read-only evidence for status, file listing, exact file export, Input
-restart, and unchanged cached configuration. Mutation claims remain tied to
-separate write/readback/rollback evidence.
+live evidence for status, file listing, exact file export, Input restart, and
+unchanged cached configuration. Codex settings, Agent Keys, Input device
+configuration, and Input host settings also have separate live
+apply/readback/exact-restore evidence. The final observed firmware was v0.6.1
+after an Input-owned startup update; the CLI did not perform that flash.
 
 ### Can an AI agent configure Codex Micro?
 
@@ -740,6 +745,7 @@ Read the complete [FAQ](docs/faq.md).
 - [Codex Companion Bridge protocol](docs/codex-companion-bridge.md)
 - [Frequently asked questions](docs/faq.md)
 - [Compatibility and support policy](docs/compatibility.md)
+- [Changelog](CHANGELOG.md)
 - [Companion architecture](docs/architecture.md)
 - [Product roadmap](docs/roadmap.md)
 - [AI-readable project index](llms.txt)

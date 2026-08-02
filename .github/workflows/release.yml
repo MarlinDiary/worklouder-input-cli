@@ -152,6 +152,9 @@ jobs:
         run: |
           set -euo pipefail
           version=${GITHUB_REF_NAME#v}
+          ./scripts/extract-release-notes.py CHANGELOG.md "$version" \
+            > "$RUNNER_TEMP/release-notes.md"
+          test -s "$RUNNER_TEMP/release-notes.md"
           ./scripts/test-companion-package.py --output dist
           arm=$(awk '{print $1}' "dist/worklouderctl-v$version-aarch64-apple-darwin.tar.gz.sha256")
           intel=$(awk '{print $1}' "dist/worklouderctl-v$version-x86_64-apple-darwin.tar.gz.sha256")
@@ -172,5 +175,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
-            --verify-tag --generate-notes \
+            --verify-tag --notes-file "$RUNNER_TEMP/release-notes.md" \
             --title "WorkLouderCTL $GITHUB_REF_NAME"
