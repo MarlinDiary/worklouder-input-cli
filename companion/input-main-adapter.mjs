@@ -21,6 +21,10 @@ export const RESET_PLAN_SCHEMA_VERSION = 1;
 export const RESET_PLAN_KIND = "worklouder-input-reset-plan";
 export const RESET_PLAN_REVISION_ALGORITHM =
   "sha256:recursive-key-sorted-reset-plan-body-v1";
+export const RECOVERY_PLAN_SCHEMA_VERSION = 1;
+export const RECOVERY_PLAN_KIND = "worklouder-input-recovery-plan";
+export const RECOVERY_PLAN_REVISION_ALGORITHM =
+  "sha256:recursive-key-sorted-recovery-plan-body-v1";
 
 const MAX_CONFIG_FILES = 4096;
 const MAX_CONFIG_FILE_BYTES = 16 * 1024 * 1024;
@@ -38,6 +42,15 @@ const FIRMWARE_PHASES = [
   "restore-changed-configuration",
   "verify-firmware-and-configuration",
 ];
+const RECOVERY_PHASES = [
+  "detect-input-bootloader",
+  "validate-input-selected-release",
+  "recover-with-input-device-programmer",
+  "reconnect-original-device",
+  "restore-exact-configuration",
+  "verify-firmware-and-configuration",
+];
+const RECOVERY_PROVIDER_PHASES = RECOVERY_PHASES.slice(0, 4);
 
 export function createInputMainAdapter({
   devicesCommManager,
@@ -51,6 +64,7 @@ export function createInputMainAdapter({
   firmwareAuthority,
   firmwareOperationsAuthority,
   resetAuthority,
+  recoveryAuthority,
   logsAuthority,
 }) {
   if (
@@ -138,6 +152,22 @@ export function createInputMainAdapter({
     throw new TypeError("inputVersion is required with resetAuthority");
   }
   if (
+    recoveryAuthority !== undefined &&
+    (!recoveryAuthority ||
+      typeof recoveryAuthority.readStatus !== "function" ||
+      typeof recoveryAuthority.recoverFirmware !== "function")
+  ) {
+    throw new TypeError(
+      "recoveryAuthority must provide readStatus and recoverFirmware",
+    );
+  }
+  if (
+    recoveryAuthority &&
+    (typeof inputVersion !== "string" || inputVersion.length === 0)
+  ) {
+    throw new TypeError("inputVersion is required with recoveryAuthority");
+  }
+  if (
     logsAuthority !== undefined &&
     (!logsAuthority || typeof logsAuthority.readLogs !== "function")
   ) {
@@ -146,6 +176,7 @@ export function createInputMainAdapter({
   const idempotencyCache = new Map();
   const hostSettingsIdempotencyCache = new Map();
   const firmwareIdempotencyCache = new Map();
+  const recoveryIdempotencyCache = new Map();
 
   const selectDevice = (deviceId) => {
     const devices = devicesCommManager
@@ -335,6 +366,54 @@ export function createInputMainAdapter({
       kind: "worklouder-input-reset-plan-bundle",
       plan,
       candidate,
+    };
+  };
+
+  const captureRecoveryPlan = async (suppliedConfiguration) => {
+    const configuration = validateConfigSnapshot(suppliedConfiguration);
+    const device = normalizeFirmwarePlanDevice(suppliedConfiguration.device);
+    const deviceKitVersion = safeBoundedString(
+      suppliedConfiguration.deviceKitVersion,
+      "recovery device kit version",
+      128,
+    );
+    const previousFirmwareVersion = safeBoundedString(
+      suppliedConfiguration.status?.firmwareVersion,
+      "recovery previous firmware version",
+      128,
+    );
+    const status = normalizeRecoveryStatus(
+      await recoveryAuthority.readStatus({
+        configurationSnapshot: suppliedConfiguration,
+      }),
+    );
+    const blockers = [];
+    if (!status.bootloaderDetected) {
+      blockers.push("input-bootloader-not-detected");
+    }
+    if (!status.targetRelease) {
+      blockers.push("input-selected-release-unavailable");
+    }
+    const body = {
+      inputAppVersion: inputVersion,
+      deviceId: configuration.deviceId,
+      deviceKitVersion,
+      device,
+      previousFirmwareVersion,
+      targetRelease: status.targetRelease,
+      bootloader: status.bootloader,
+      configurationRevision: configuration.revision,
+      configurationFileCount: configuration.files.length,
+      phases: [...RECOVERY_PHASES],
+      blockers,
+      ready: blockers.length === 0,
+    };
+    return {
+      schemaVersion: RECOVERY_PLAN_SCHEMA_VERSION,
+      kind: RECOVERY_PLAN_KIND,
+      revisionAlgorithm: RECOVERY_PLAN_REVISION_ALGORITHM,
+      revision: recoveryPlanRevision(body),
+      ...body,
     };
   };
 
@@ -697,6 +776,151 @@ export function createInputMainAdapter({
     return result;
   };
 
+  const runFirmwareRecovery = async ({
+    expectedPlanRevision,
+    idempotencyKey,
+    plan: suppliedPlan,
+    configuration: suppliedConfiguration,
+  }) => {
+    const plan = normalizeRecoveryPlan(suppliedPlan);
+    const configuration = validateConfigSnapshot(suppliedConfiguration);
+    const expectedPlan = safeSha256(
+      expectedPlanRevision,
+      "expected recovery plan revision",
+    );
+    if (
+      plan.revision !== expectedPlan ||
+      plan.inputAppVersion !== inputVersion ||
+      plan.configurationRevision !== configuration.revision ||
+      plan.deviceId !== configuration.deviceId
+    ) {
+      throw new BridgeError(-32602, "recovery plan expectations differed");
+    }
+    const targetVersion = plan.targetRelease?.version ?? "";
+    const requestDigest = mutationRequestDigest({
+      operation: "firmware-recovery",
+      deviceId: plan.deviceId,
+        expectedRevision: configuration.revision,
+      targetRevision: plan.revision,
+    });
+    const cached = recoveryIdempotencyCache.get(idempotencyKey);
+    if (cached) {
+      if (cached.requestDigest !== requestDigest) {
+        throw new BridgeError(
+          -32602,
+          "idempotency key was reused with a different firmware recovery",
+        );
+      }
+      return { ...cached.result, idempotentReplay: true };
+    }
+
+    const livePlan = await captureRecoveryPlan(suppliedConfiguration);
+    if (livePlan.revision !== expectedPlan) {
+      throw new BridgeError(-32005, "recovery plan revision conflict", {
+        expectedPlanRevision: expectedPlan,
+        livePlanRevision: livePlan.revision,
+      });
+    }
+    if (!livePlan.ready || targetVersion.length === 0) {
+      throw new BridgeError(-32007, "firmware recovery was not ready", {
+        blockers: livePlan.blockers,
+      });
+    }
+
+    let providerOutcome = "completed";
+    try {
+      const providerResult = await recoveryAuthority.recoverFirmware({
+        operation: "recover",
+        plan: livePlan,
+        release: livePlan.targetRelease,
+        bootloader: livePlan.bootloader,
+      });
+      validateRecoveryOperationResult(providerResult, targetVersion);
+    } catch (providerError) {
+      providerOutcome = "postflight-confirmed";
+      try {
+        const observed = await captureConfigSnapshot(selectDevice(plan.deviceId));
+        if (observed.status.firmwareVersion !== targetVersion) {
+          throw new Error("postflight did not find recovered target firmware");
+        }
+      } catch (postflightError) {
+        throw new BridgeError(-32008, "firmware recovery required intervention", {
+          recoveryRequired: true,
+          deviceId: plan.deviceId,
+          planRevision: plan.revision,
+          targetFirmwareVersion: targetVersion,
+          configurationRevision: configuration.revision,
+          providerError: errorMessage(providerError),
+          postflightError: errorMessage(postflightError),
+        });
+      }
+    }
+
+    const recovered = await captureConfigSnapshot(selectDevice(plan.deviceId));
+    if (recovered.status.firmwareVersion !== targetVersion) {
+      throw new BridgeError(-32008, "firmware recovery postflight failed", {
+        recoveryRequired: true,
+        targetFirmwareVersion: targetVersion,
+        afterFirmwareVersion: recovered.status.firmwareVersion ?? null,
+      });
+    }
+    let restore;
+    try {
+      restore = await runMutation({
+        operation: "recovery-restore",
+        deviceId: plan.deviceId,
+        expectedRevision: recovered.revision,
+        idempotencyKey: idempotencyKey + ":configuration",
+        candidate: suppliedConfiguration,
+      });
+    } catch (restoreError) {
+      throw new BridgeError(-32008, "firmware recovered but configuration restore failed", {
+        recoveryRequired: true,
+        deviceId: plan.deviceId,
+        planRevision: plan.revision,
+        targetFirmwareVersion: targetVersion,
+        recoveredConfigRevision: recovered.revision,
+        targetConfigRevision: configuration.revision,
+        restoreError: errorMessage(restoreError),
+      });
+    }
+    const after = await captureConfigSnapshot(selectDevice(plan.deviceId));
+    if (
+      after.status.firmwareVersion !== targetVersion ||
+      after.revision !== configuration.revision
+    ) {
+      throw new BridgeError(-32008, "recovery configuration postflight failed", {
+        recoveryRequired: true,
+        targetFirmwareVersion: targetVersion,
+        afterFirmwareVersion: after.status.firmwareVersion ?? null,
+        targetConfigRevision: configuration.revision,
+        afterConfigRevision: after.revision,
+      });
+    }
+    const result = {
+      schemaVersion: 1,
+      kind: "worklouder-input-recovery-mutation",
+      operation: "recover",
+      idempotencyKey,
+      idempotentReplay: false,
+      changed: true,
+      providerOutcome,
+      recoveryRequired: false,
+      planRevision: plan.revision,
+      deviceId: plan.deviceId,
+      beforeFirmwareVersion: plan.previousFirmwareVersion,
+      afterFirmwareVersion: after.status.firmwareVersion,
+      targetFirmwareVersion: targetVersion,
+      beforeConfigRevision: configuration.revision,
+      recoveredConfigRevision: recovered.revision,
+      afterConfigRevision: after.revision,
+      configurationRestored: restore.afterRevision === configuration.revision,
+      phases: RECOVERY_PHASES.map((name) => ({ name, status: "completed" })),
+    };
+    cacheMutation(recoveryIdempotencyCache, idempotencyKey, requestDigest, result);
+    return result;
+  };
+
   const adapter = {
     async listDevices() {
       return {
@@ -912,6 +1136,11 @@ export function createInputMainAdapter({
     adapter.getResetPlan = async ({ deviceId = null }) =>
       captureResetPlan(selectDevice(deviceId));
   }
+  if (recoveryAuthority) {
+    adapter.getRecoveryPlan = async ({ configuration }) =>
+      captureRecoveryPlan(configuration);
+    adapter.recoverFirmware = runFirmwareRecovery;
+  }
   if (logsAuthority) {
     adapter.snapshotLogs = async ({ maxEntries = MAX_LOG_ENTRIES }) => {
       const limit = safeInteger(maxEntries, "maxEntries", 1, MAX_LOG_ENTRIES);
@@ -981,6 +1210,195 @@ export function resetPlanRevision(body) {
     .update("worklouder-input-reset-plan-revision-v1\0", "utf8")
     .update(canonicalJson(body), "utf8")
     .digest("hex");
+}
+
+function normalizeRecoveryStatus(status) {
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new BridgeError(-32008, "Input recovery status was invalid");
+  }
+  exactKeys(
+    status,
+    ["bootloaderDetected", "bootloader", "targetRelease"],
+    "recovery status",
+  );
+  if (typeof status.bootloaderDetected !== "boolean") {
+    throw new BridgeError(-32008, "Input bootloader detection was invalid");
+  }
+  let bootloader = null;
+  if (status.bootloader !== null && status.bootloader !== undefined) {
+    if (typeof status.bootloader !== "object" || Array.isArray(status.bootloader)) {
+      throw new BridgeError(-32008, "Input bootloader identity was invalid");
+    }
+    exactKeys(
+      status.bootloader,
+      ["transport", "identifier", "deviceType"],
+      "bootloader identity",
+    );
+    bootloader = {
+      transport: safeBoundedString(
+        status.bootloader.transport,
+        "bootloader transport",
+        64,
+      ),
+      identifier: safeBoundedString(
+        status.bootloader.identifier,
+        "bootloader identifier",
+        512,
+      ),
+      deviceType: safeBoundedString(
+        status.bootloader.deviceType,
+        "bootloader device type",
+        128,
+      ),
+    };
+  }
+  if (status.bootloaderDetected !== (bootloader !== null)) {
+    throw new BridgeError(-32008, "Input bootloader identity was inconsistent");
+  }
+  const targetRelease = normalizeFirmwareStatus({
+    updateAvailable: status.targetRelease === null ? false : true,
+    release: status.targetRelease,
+  }).release;
+  return {
+    bootloaderDetected: status.bootloaderDetected,
+    bootloader,
+    targetRelease,
+  };
+}
+
+export function recoveryPlanRevision(body) {
+  return createHash("sha256")
+    .update("worklouder-input-recovery-plan-revision-v1\0", "utf8")
+    .update(canonicalJson(body), "utf8")
+    .digest("hex");
+}
+
+function normalizeRecoveryPlan(plan) {
+  if (!plan || typeof plan !== "object" || Array.isArray(plan)) {
+    throw new BridgeError(-32602, "recovery plan must be an object");
+  }
+  exactKeys(
+    plan,
+    [
+      "schemaVersion",
+      "kind",
+      "revisionAlgorithm",
+      "revision",
+      "inputAppVersion",
+      "deviceId",
+      "deviceKitVersion",
+      "device",
+      "previousFirmwareVersion",
+      "targetRelease",
+      "bootloader",
+      "configurationRevision",
+      "configurationFileCount",
+      "phases",
+      "blockers",
+      "ready",
+    ],
+    "recovery plan",
+  );
+  if (
+    plan.schemaVersion !== RECOVERY_PLAN_SCHEMA_VERSION ||
+    plan.kind !== RECOVERY_PLAN_KIND ||
+    plan.revisionAlgorithm !== RECOVERY_PLAN_REVISION_ALGORITHM
+  ) {
+    throw new BridgeError(-32602, "recovery plan header was invalid");
+  }
+  const status = normalizeRecoveryStatus({
+    bootloaderDetected: plan.bootloader !== null,
+    bootloader: plan.bootloader,
+    targetRelease: plan.targetRelease,
+  });
+  const blockers = normalizeRecoveryBlockers(plan.blockers);
+  if (
+    typeof plan.ready !== "boolean" ||
+    plan.ready !== (blockers.length === 0) ||
+    (status.bootloader === null) !==
+      blockers.includes("input-bootloader-not-detected") ||
+    (status.targetRelease === null) !==
+      blockers.includes("input-selected-release-unavailable") ||
+    !Array.isArray(plan.phases) ||
+    canonicalJson(plan.phases) !== canonicalJson(RECOVERY_PHASES)
+  ) {
+    throw new BridgeError(-32602, "recovery plan readiness was inconsistent");
+  }
+  const body = {
+    inputAppVersion: safeBoundedString(
+      plan.inputAppVersion,
+      "recovery Input version",
+      128,
+    ),
+    deviceId: safeBoundedString(plan.deviceId, "recovery deviceId", 512),
+    deviceKitVersion: safeBoundedString(
+      plan.deviceKitVersion,
+      "recovery device kit version",
+      128,
+    ),
+    device: normalizeFirmwarePlanDevice(plan.device),
+    previousFirmwareVersion: safeBoundedString(
+      plan.previousFirmwareVersion,
+      "recovery previous firmware version",
+      128,
+    ),
+    targetRelease: status.targetRelease,
+    bootloader: status.bootloader,
+    configurationRevision: safeSha256(
+      plan.configurationRevision,
+      "recovery configuration revision",
+    ),
+    configurationFileCount: safeInteger(
+      plan.configurationFileCount,
+      "recovery configuration file count",
+      1,
+      MAX_CONFIG_FILES,
+    ),
+    phases: [...RECOVERY_PHASES],
+    blockers,
+    ready: plan.ready,
+  };
+  const revision = safeSha256(plan.revision, "recovery plan revision");
+  if (revision !== recoveryPlanRevision(body)) {
+    throw new BridgeError(-32602, "recovery plan revision did not match content");
+  }
+  return {
+    schemaVersion: RECOVERY_PLAN_SCHEMA_VERSION,
+    kind: RECOVERY_PLAN_KIND,
+    revisionAlgorithm: RECOVERY_PLAN_REVISION_ALGORITHM,
+    revision,
+    ...body,
+  };
+}
+
+function normalizeRecoveryBlockers(blockers) {
+  const known = new Set([
+    "input-bootloader-not-detected",
+    "input-selected-release-unavailable",
+  ]);
+  if (
+    !Array.isArray(blockers) ||
+    blockers.length > known.size ||
+    new Set(blockers).size !== blockers.length ||
+    blockers.some((blocker) => !known.has(blocker))
+  ) {
+    throw new BridgeError(-32602, "recovery blockers were invalid");
+  }
+  return [...blockers];
+}
+
+function validateRecoveryOperationResult(result, targetVersion) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    throw new Error("firmware recovery authority returned no result");
+  }
+  if (
+    result.targetVersion !== targetVersion ||
+    !Array.isArray(result.completedPhases) ||
+    canonicalJson(result.completedPhases) !==
+      canonicalJson(RECOVERY_PROVIDER_PHASES)
+  ) {
+    throw new Error("firmware recovery authority returned an invalid result");
+  }
 }
 
 function normalizePermissionsStatus(status) {

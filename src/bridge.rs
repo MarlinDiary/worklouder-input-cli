@@ -30,6 +30,8 @@ const PRESET_CATALOG_KIND: &str = "worklouder-input-preset-catalog";
 const PRESET_CATALOG_REVISION_ALGORITHM: &str = "sha256:recursive-key-sorted-presets-json-v1";
 const RESET_PLAN_KIND: &str = "worklouder-input-reset-plan";
 const RESET_PLAN_REVISION_ALGORITHM: &str = "sha256:recursive-key-sorted-reset-plan-body-v1";
+const RECOVERY_PLAN_KIND: &str = "worklouder-input-recovery-plan";
+const RECOVERY_PLAN_REVISION_ALGORITHM: &str = "sha256:recursive-key-sorted-recovery-plan-body-v1";
 const MAX_PRESET_CATALOG_BYTES: usize = 32 * 1024 * 1024;
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -157,6 +159,79 @@ pub struct ResetApplyReceipt {
     pub rollback_performed: bool,
     pub file_count: usize,
     pub total_bytes: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct RecoveryBootloader {
+    pub transport: String,
+    pub identifier: String,
+    pub device_type: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct RecoveryPlan {
+    pub schema_version: u64,
+    pub kind: String,
+    pub revision_algorithm: String,
+    pub revision: String,
+    pub input_app_version: String,
+    pub device_id: String,
+    pub device_kit_version: String,
+    pub device: DeviceInfo,
+    pub previous_firmware_version: String,
+    pub target_release: Option<FirmwareRelease>,
+    pub bootloader: Option<RecoveryBootloader>,
+    pub configuration_revision: String,
+    pub configuration_file_count: usize,
+    pub phases: Vec<String>,
+    pub blockers: Vec<String>,
+    pub ready: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryPlanReceipt {
+    pub plan: PathBuf,
+    pub backup: PathBuf,
+    pub revision: String,
+    pub input_app_version: String,
+    pub device_id: String,
+    pub device_type: String,
+    pub configuration_revision: String,
+    pub target_firmware_version: Option<String>,
+    pub ready: bool,
+    pub blockers: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct RecoveryApplyReceipt {
+    pub schema_version: u64,
+    pub kind: String,
+    pub adapter: String,
+    pub input_app_version: String,
+    pub device_kit_version: String,
+    pub plan: PathBuf,
+    pub backup: PathBuf,
+    pub receipt: PathBuf,
+    pub operation: String,
+    pub idempotency_key: String,
+    pub idempotent_replay: bool,
+    pub changed: bool,
+    pub device_id: String,
+    pub plan_revision: String,
+    pub before_firmware_version: String,
+    pub after_firmware_version: String,
+    pub target_firmware_version: String,
+    pub before_config_revision: String,
+    pub recovered_config_revision: String,
+    pub after_config_revision: String,
+    pub configuration_restored: bool,
+    pub provider_outcome: String,
+    pub recovery_required: bool,
+    pub phases: Vec<FirmwarePhaseReceipt>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -544,6 +619,29 @@ struct BridgeFirmwareMutationResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct BridgeRecoveryMutationResponse {
+    schema_version: u64,
+    kind: String,
+    operation: String,
+    idempotency_key: String,
+    idempotent_replay: bool,
+    changed: bool,
+    provider_outcome: String,
+    recovery_required: bool,
+    plan_revision: String,
+    device_id: String,
+    before_firmware_version: String,
+    after_firmware_version: String,
+    target_firmware_version: String,
+    before_config_revision: String,
+    recovered_config_revision: String,
+    after_config_revision: String,
+    configuration_restored: bool,
+    phases: Vec<FirmwarePhaseReceipt>,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BridgeFileList {
     device_kit_version: String,
@@ -820,7 +918,7 @@ pub fn firmware_update(
         kind: "worklouderctl-input-firmware-update-receipt".into(),
         adapter: ADAPTER.into(),
         input_app_version: client.handshake.input_version.clone(),
-        device_kit_version: plan.device_kit_version.clone(),
+        device_kit_version: plan.device_kit_version,
         plan: plan_path.to_path_buf(),
         backup: backup.to_path_buf(),
         receipt: receipt_path.to_path_buf(),
@@ -845,6 +943,146 @@ pub fn firmware_update(
     ensure!(
         reopened == receipt,
         "published firmware receipt readback differed"
+    );
+    Ok(receipt)
+}
+
+pub fn recovery_plan(
+    paths: &BridgePaths,
+    backup_path: &Path,
+    plan_path: &Path,
+) -> Result<RecoveryPlanReceipt> {
+    ensure!(
+        backup_path != plan_path,
+        "recovery backup and plan paths must differ"
+    );
+    ensure!(
+        !plan_path.exists(),
+        "recovery plan destination already exists: {}",
+        plan_path.display()
+    );
+    let (configuration, metadata) = read_config_snapshot(backup_path)?;
+    let mut client = BridgeClient::connect(paths)?;
+    let plan: RecoveryPlan = client.call(
+        "input.recovery.plan",
+        "input.recovery.plan.v1",
+        json!({ "configuration": configuration }),
+    )?;
+    validate_recovery_plan(&plan)?;
+    ensure!(
+        plan.input_app_version == client.handshake.input_version,
+        "Input recovery plan version differed from the bridge handshake"
+    );
+    ensure!(
+        plan.device_id == metadata.device_id
+            && plan.configuration_revision == metadata.revision
+            && plan.configuration_file_count == metadata.file_count,
+        "Input recovery plan did not match the complete backup"
+    );
+    write_atomic_json(plan_path, &serde_json::to_value(&plan)?)?;
+    let reopened = read_recovery_plan(plan_path)?;
+    ensure!(
+        reopened == plan,
+        "published recovery plan readback differed"
+    );
+    Ok(RecoveryPlanReceipt {
+        plan: plan_path.to_path_buf(),
+        backup: backup_path.to_path_buf(),
+        revision: plan.revision,
+        input_app_version: plan.input_app_version,
+        device_id: plan.device_id,
+        device_type: plan.device.device_type,
+        configuration_revision: plan.configuration_revision,
+        target_firmware_version: plan.target_release.map(|release| release.version),
+        ready: plan.ready,
+        blockers: plan.blockers,
+    })
+}
+
+pub fn recovery_apply(
+    paths: &BridgePaths,
+    plan_path: &Path,
+    backup_path: &Path,
+    receipt_path: &Path,
+    idempotency_key: Option<&str>,
+) -> Result<RecoveryApplyReceipt> {
+    ensure!(
+        plan_path != backup_path && plan_path != receipt_path && backup_path != receipt_path,
+        "recovery plan, backup, and receipt paths must differ"
+    );
+    ensure!(
+        !receipt_path.exists(),
+        "recovery receipt destination already exists: {}",
+        receipt_path.display()
+    );
+    let plan = read_recovery_plan(plan_path)?;
+    ensure!(plan.ready, "firmware recovery plan was not ready");
+    ensure!(
+        plan.target_release.is_some() && plan.bootloader.is_some(),
+        "firmware recovery plan omitted its target or bootloader"
+    );
+    let (configuration, metadata) = read_config_snapshot(backup_path)?;
+    ensure!(
+        metadata.device_id == plan.device_id
+            && metadata.revision == plan.configuration_revision
+            && metadata.file_count == plan.configuration_file_count,
+        "recovery backup did not match the frozen plan"
+    );
+    let key = idempotency_key
+        .map(str::to_owned)
+        .unwrap_or_else(|| generated_idempotency_key("firmware-recovery", &plan.revision));
+    ensure!(
+        !key.is_empty() && key.len() <= 256 && !key.contains('\0'),
+        "idempotency key was invalid"
+    );
+    let mut client = BridgeClient::connect(paths)?;
+    ensure!(
+        client.handshake.input_version == plan.input_app_version,
+        "Input version changed after the recovery plan was captured"
+    );
+    client.set_timeout(FIRMWARE_UPDATE_TIMEOUT)?;
+    let response: BridgeRecoveryMutationResponse = client.call(
+        "input.recovery.apply",
+        "input.recovery.apply.v1",
+        json!({
+            "expectedPlanRevision": plan.revision,
+            "idempotencyKey": key,
+            "plan": plan,
+            "configuration": configuration,
+        }),
+    )?;
+    validate_recovery_mutation_response(&response, &plan, &key)?;
+    let receipt = RecoveryApplyReceipt {
+        schema_version: 1,
+        kind: "worklouderctl-input-recovery-receipt".into(),
+        adapter: ADAPTER.into(),
+        input_app_version: plan.input_app_version,
+        device_kit_version: plan.device_kit_version,
+        plan: plan_path.to_path_buf(),
+        backup: backup_path.to_path_buf(),
+        receipt: receipt_path.to_path_buf(),
+        operation: response.operation,
+        idempotency_key: response.idempotency_key,
+        idempotent_replay: response.idempotent_replay,
+        changed: response.changed,
+        device_id: response.device_id,
+        plan_revision: response.plan_revision,
+        before_firmware_version: response.before_firmware_version,
+        after_firmware_version: response.after_firmware_version,
+        target_firmware_version: response.target_firmware_version,
+        before_config_revision: response.before_config_revision,
+        recovered_config_revision: response.recovered_config_revision,
+        after_config_revision: response.after_config_revision,
+        configuration_restored: response.configuration_restored,
+        provider_outcome: response.provider_outcome,
+        recovery_required: response.recovery_required,
+        phases: response.phases,
+    };
+    write_atomic_json(receipt_path, &serde_json::to_value(&receipt)?)?;
+    let reopened = read_recovery_apply_receipt(receipt_path)?;
+    ensure!(
+        reopened == receipt,
+        "published recovery receipt readback differed"
     );
     Ok(receipt)
 }
@@ -1091,6 +1329,84 @@ pub fn read_reset_apply_receipt(input: &Path) -> Result<ResetApplyReceipt> {
             && receipt.total_bytes == candidate_metadata.total_bytes,
         "reset receipt did not match its plan, candidate, or backup"
     );
+    Ok(receipt)
+}
+
+pub fn read_recovery_plan(input: &Path) -> Result<RecoveryPlan> {
+    let metadata = fs::symlink_metadata(input)
+        .with_context(|| format!("failed to inspect recovery plan {}", input.display()))?;
+    ensure!(
+        metadata.file_type().is_file() && !metadata.file_type().is_symlink(),
+        "recovery plan must be a regular file"
+    );
+    ensure!(
+        metadata.len() <= 2 * 1024 * 1024,
+        "recovery plan exceeded 2 MiB"
+    );
+    let plan: RecoveryPlan = serde_json::from_slice(
+        &fs::read(input)
+            .with_context(|| format!("failed to read recovery plan {}", input.display()))?,
+    )
+    .with_context(|| format!("recovery plan was invalid JSON: {}", input.display()))?;
+    validate_recovery_plan(&plan)?;
+    Ok(plan)
+}
+
+pub fn read_recovery_apply_receipt(input: &Path) -> Result<RecoveryApplyReceipt> {
+    let metadata = fs::symlink_metadata(input)
+        .with_context(|| format!("failed to inspect recovery receipt {}", input.display()))?;
+    ensure!(
+        metadata.file_type().is_file() && !metadata.file_type().is_symlink(),
+        "recovery receipt must be a regular file"
+    );
+    ensure!(
+        metadata.len() <= 2 * 1024 * 1024,
+        "recovery receipt exceeded 2 MiB"
+    );
+    let receipt: RecoveryApplyReceipt = serde_json::from_slice(
+        &fs::read(input)
+            .with_context(|| format!("failed to read recovery receipt {}", input.display()))?,
+    )
+    .with_context(|| format!("recovery receipt was invalid JSON: {}", input.display()))?;
+    ensure!(
+        receipt.schema_version == 1
+            && receipt.kind == "worklouderctl-input-recovery-receipt"
+            && receipt.adapter == ADAPTER
+            && receipt.operation == "recover"
+            && receipt.receipt == input
+            && receipt.configuration_restored
+            && !receipt.recovery_required
+            && !receipt.idempotency_key.is_empty()
+            && receipt.idempotency_key.len() <= 256
+            && !receipt.idempotency_key.contains('\0'),
+        "recovery receipt header was invalid"
+    );
+    let plan = read_recovery_plan(&receipt.plan)?;
+    let (_, backup) = read_config_snapshot(&receipt.backup)?;
+    ensure!(
+        receipt.input_app_version == plan.input_app_version
+            && receipt.device_kit_version == plan.device_kit_version
+            && receipt.device_id == plan.device_id
+            && receipt.plan_revision == plan.revision
+            && receipt.before_firmware_version == plan.previous_firmware_version
+            && plan
+                .target_release
+                .as_ref()
+                .map(|release| release.version.as_str())
+                == Some(receipt.target_firmware_version.as_str())
+            && receipt.after_firmware_version == receipt.target_firmware_version
+            && receipt.before_config_revision == plan.configuration_revision
+            && receipt.after_config_revision == plan.configuration_revision
+            && backup.device_id == plan.device_id
+            && backup.revision == plan.configuration_revision
+            && receipt.changed
+            && matches!(
+                receipt.provider_outcome.as_str(),
+                "completed" | "postflight-confirmed"
+            ),
+        "recovery receipt did not match its plan, backup, or postflight"
+    );
+    validate_recovery_phase_receipts(&receipt.phases)?;
     Ok(receipt)
 }
 
@@ -1504,6 +1820,156 @@ fn firmware_plan_revision(plan: &FirmwarePlan) -> Result<String> {
         object.remove(field);
     }
     let mut bytes = b"worklouder-input-firmware-plan-revision-v1\0".to_vec();
+    bytes.extend(serde_json::to_vec(&canonical_json(&body))?);
+    fsutil::sha256_bytes(&bytes)
+}
+
+fn validate_recovery_plan(plan: &RecoveryPlan) -> Result<()> {
+    ensure!(
+        plan.schema_version == 1
+            && plan.kind == RECOVERY_PLAN_KIND
+            && plan.revision_algorithm == RECOVERY_PLAN_REVISION_ALGORITHM,
+        "Input recovery plan header was invalid"
+    );
+    ensure!(
+        !plan.input_app_version.is_empty()
+            && plan.input_app_version.len() <= 128
+            && !plan.input_app_version.contains('\0')
+            && !plan.device_id.is_empty()
+            && plan.device_id.len() <= 512
+            && !plan.device_id.contains('\0')
+            && !plan.device_kit_version.is_empty()
+            && plan.device_kit_version.len() <= 128
+            && !plan.device_kit_version.contains('\0')
+            && !plan.previous_firmware_version.is_empty()
+            && plan.previous_firmware_version.len() <= 128
+            && !plan.previous_firmware_version.contains('\0')
+            && is_sha256(&plan.configuration_revision)
+            && (1..=4096).contains(&plan.configuration_file_count),
+        "Input recovery plan identity or configuration metadata was invalid"
+    );
+    validate_firmware_update(&FirmwareUpdateState {
+        update_available: plan.target_release.as_ref().map(|_| true),
+        release: plan.target_release.clone(),
+    })?;
+    if let Some(bootloader) = &plan.bootloader {
+        ensure!(
+            !bootloader.transport.is_empty()
+                && bootloader.transport.len() <= 64
+                && !bootloader.transport.contains('\0')
+                && !bootloader.identifier.is_empty()
+                && bootloader.identifier.len() <= 512
+                && !bootloader.identifier.contains('\0')
+                && !bootloader.device_type.is_empty()
+                && bootloader.device_type.len() <= 128
+                && !bootloader.device_type.contains('\0')
+                && bootloader.device_type == plan.device.device_type,
+            "Input recovery bootloader identity was invalid"
+        );
+    }
+    let expected_blockers = [
+        ("input-bootloader-not-detected", plan.bootloader.is_none()),
+        (
+            "input-selected-release-unavailable",
+            plan.target_release.is_none(),
+        ),
+    ];
+    ensure!(
+        plan.blockers.len() <= expected_blockers.len()
+            && plan.blockers.iter().enumerate().all(|(index, blocker)| {
+                expected_blockers
+                    .iter()
+                    .any(|(known, expected)| blocker == known && *expected)
+                    && !plan.blockers[..index].contains(blocker)
+            })
+            && expected_blockers.iter().all(|(blocker, expected)| {
+                plan.blockers.iter().any(|value| value == blocker) == *expected
+            })
+            && plan.ready == plan.blockers.is_empty(),
+        "Input recovery plan blockers were inconsistent"
+    );
+    let expected_phases = recovery_phase_names();
+    ensure!(
+        plan.phases == expected_phases,
+        "Input recovery plan phases differed from the delegated workflow"
+    );
+    ensure!(
+        plan.revision == recovery_plan_revision(plan)?,
+        "Input recovery plan revision did not match content"
+    );
+    Ok(())
+}
+
+fn validate_recovery_mutation_response(
+    response: &BridgeRecoveryMutationResponse,
+    plan: &RecoveryPlan,
+    idempotency_key: &str,
+) -> Result<()> {
+    let target = plan
+        .target_release
+        .as_ref()
+        .context("recovery plan omitted target release")?;
+    ensure!(
+        response.schema_version == 1
+            && response.kind == "worklouder-input-recovery-mutation"
+            && response.operation == "recover"
+            && response.idempotency_key == idempotency_key
+            && response.device_id == plan.device_id
+            && response.plan_revision == plan.revision
+            && response.before_firmware_version == plan.previous_firmware_version
+            && response.after_firmware_version == target.version
+            && response.target_firmware_version == target.version
+            && response.before_config_revision == plan.configuration_revision
+            && response.after_config_revision == plan.configuration_revision
+            && is_sha256(&response.recovered_config_revision)
+            && response.configuration_restored
+            && !response.recovery_required
+            && response.changed
+            && matches!(
+                response.provider_outcome.as_str(),
+                "completed" | "postflight-confirmed"
+            ),
+        "Input firmware recovery response did not match the plan or postflight"
+    );
+    validate_recovery_phase_receipts(&response.phases)
+}
+
+fn validate_recovery_phase_receipts(phases: &[FirmwarePhaseReceipt]) -> Result<()> {
+    let expected = recovery_phase_names();
+    ensure!(
+        phases.len() == expected.len()
+            && phases
+                .iter()
+                .zip(expected)
+                .all(|(phase, name)| phase.name == name && phase.status == "completed"),
+        "Input firmware recovery phases were incomplete or reordered"
+    );
+    Ok(())
+}
+
+fn recovery_phase_names() -> Vec<String> {
+    [
+        "detect-input-bootloader",
+        "validate-input-selected-release",
+        "recover-with-input-device-programmer",
+        "reconnect-original-device",
+        "restore-exact-configuration",
+        "verify-firmware-and-configuration",
+    ]
+    .iter()
+    .map(|phase| (*phase).to_owned())
+    .collect()
+}
+
+fn recovery_plan_revision(plan: &RecoveryPlan) -> Result<String> {
+    let mut body = serde_json::to_value(plan)?;
+    let object = body
+        .as_object_mut()
+        .context("recovery plan body was not an object")?;
+    for field in ["schemaVersion", "kind", "revisionAlgorithm", "revision"] {
+        object.remove(field);
+    }
+    let mut bytes = b"worklouder-input-recovery-plan-revision-v1\0".to_vec();
     bytes.extend(serde_json::to_vec(&canonical_json(&body))?);
     fsutil::sha256_bytes(&bytes)
 }

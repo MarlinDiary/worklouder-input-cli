@@ -748,6 +748,99 @@ test("Input adapter builds a versioned default candidate without mutating config
   assert.equal(files.get("keymap.json").toString(), '{"layout":"custom"}');
 });
 
+test("Input adapter delegates bootloader recovery and restores the exact configuration", async () => {
+  const files = new Map([
+    ["keymap.json", Buffer.from('{"layout":"custom"}')],
+    ["smart_actions.json", Buffer.from('{"smartActions":{"1":{}}}')],
+  ]);
+  const original = new Map(
+    [...files].map(([path, bytes]) => [path, Buffer.from(bytes)]),
+  );
+  const device = configDevice("recovery-device", files);
+  let firmwareVersion = "v0.5.0-broken";
+  let bootloaderDetected = true;
+  device.rpcService.getFirmwareVersion = async () => firmwareVersion;
+  const adapter = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [device] },
+    deviceKitVersion: "0.1.29",
+    inputVersion: "0.18.0",
+    configurationWriter: {
+      async replaceConfiguration({ files: replacement }) {
+        files.clear();
+        for (const file of replacement) {
+          files.set(file.relativePath, Buffer.from(file.bytes));
+        }
+      },
+    },
+    recoveryAuthority: {
+      async readStatus({ configurationSnapshot }) {
+        assert.equal(configurationSnapshot.deviceId, "recovery-device");
+        return {
+          bootloaderDetected,
+          bootloader: bootloaderDetected
+            ? {
+                transport: "usb-bootloader",
+                identifier: "recovery-fixture",
+                deviceType: "codex_micro",
+              }
+            : null,
+          targetRelease: bootloaderDetected
+            ? {
+                version: "v0.7.0",
+                fetchedAt: 1234,
+                changeLog: "Recovery fixture",
+                downloadUrl: "https://example.test/recovery.bin",
+              }
+            : null,
+        };
+      },
+      async recoverFirmware({ release, bootloader }) {
+        assert.equal(bootloader.identifier, "recovery-fixture");
+        firmwareVersion = release.version;
+        files.clear();
+        files.set("keymap.json", Buffer.from('{"layout":"factory"}'));
+        bootloaderDetected = false;
+        return {
+          targetVersion: release.version,
+          completedPhases: [
+            "detect-input-bootloader",
+            "validate-input-selected-release",
+            "recover-with-input-device-programmer",
+            "reconnect-original-device",
+          ],
+        };
+      },
+    },
+  });
+
+  const configuration = await adapter.snapshotConfig({
+    deviceId: "recovery-device",
+  });
+  const plan = await adapter.getRecoveryPlan({ configuration });
+  assert.equal(plan.ready, true);
+  assert.equal(plan.configurationRevision, configuration.revision);
+  assert.equal(plan.bootloader.identifier, "recovery-fixture");
+  const request = {
+    expectedPlanRevision: plan.revision,
+    idempotencyKey: "recovery-1",
+    plan,
+    configuration,
+  };
+  const recovered = await adapter.recoverFirmware(request);
+  assert.equal(recovered.afterFirmwareVersion, "v0.7.0");
+  assert.equal(recovered.afterConfigRevision, configuration.revision);
+  assert.notEqual(recovered.recoveredConfigRevision, configuration.revision);
+  assert.equal(recovered.configurationRestored, true);
+  assert.equal(recovered.recoveryRequired, false);
+  assert.deepEqual(
+    [...files].map(([path, bytes]) => [path, bytes.toString()]),
+    [...original].map(([path, bytes]) => [path, bytes.toString()]),
+  );
+  const replay = await adapter.recoverFirmware(request);
+  assert.equal(replay.idempotentReplay, true);
+  assert.equal(replay.afterConfigRevision, configuration.revision);
+});
+
 test("one-call Input integration owns discovery and lifecycle paths", async () => {
   const root = await mkdtemp("/tmp/wlb-integration-");
   class FixtureApp extends EventEmitter {

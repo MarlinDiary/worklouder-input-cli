@@ -64,6 +64,7 @@ export async function installInputCompanionBridge({
     firmwareAuthority,
     firmwareOperationsAuthority: services.firmwareOperationsAuthority,
     resetAuthority: services.resetAuthority,
+    recoveryAuthority: services.recoveryAuthority,
     logsAuthority,
   });
   const bridge = await startInputCompanionBridge({

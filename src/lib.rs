@@ -33,7 +33,7 @@ use cli::{
     ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
     InputCommand, InputCommandPermissionCommand, InputCommandPermissionValue, InputConfigCommand,
     InputFirmwareCommand, InputLogsCommand, InputPermissionCommand, InputPresetCommand,
-    InputResetCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
+    InputRecoveryCommand, InputResetCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
     LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect,
     LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
     PresetCommand, ProfileCommand, RadialCommand, SchemaCommand, SmartActionCommand,
@@ -3475,6 +3475,62 @@ fn run_input(
                     )?;
                     writeln!(out, "backup={}", result.backup.display())?;
                     writeln!(out, "receipt={}", result.receipt.display())?;
+                }
+            }
+        },
+        InputCommand::Recovery { command } => match command {
+            InputRecoveryCommand::Plan { backup, plan } => {
+                let result = bridge::recovery_plan(&bridge_paths, &backup, &plan)?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "Recovery plan {}: ready={} device={}",
+                        result.revision, result.ready, result.device_type
+                    )?;
+                    writeln!(out, "backup={}", result.backup.display())?;
+                    writeln!(out, "plan={}", result.plan.display())?;
+                    writeln!(
+                        out,
+                        "targetFirmware={}",
+                        result
+                            .target_firmware_version
+                            .as_deref()
+                            .unwrap_or("unavailable")
+                    )?;
+                    for blocker in result.blockers {
+                        writeln!(out, "BLOCKER\t{blocker}")?;
+                    }
+                }
+            }
+            InputRecoveryCommand::Apply {
+                plan,
+                backup,
+                receipt,
+                idempotency_key,
+            } => {
+                let result = bridge::recovery_apply(
+                    &bridge_paths,
+                    &plan,
+                    &backup,
+                    &receipt,
+                    idempotency_key.as_deref(),
+                )?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "Recovered firmware {} -> {}: configRestored={} replay={}",
+                        result.before_firmware_version,
+                        result.after_firmware_version,
+                        result.configuration_restored,
+                        result.idempotent_replay
+                    )?;
+                    writeln!(out, "backup={}", result.backup.display())?;
+                    writeln!(out, "receipt={}", result.receipt.display())?;
+                    writeln!(out, "providerOutcome={}", result.provider_outcome)?;
                 }
             }
         },

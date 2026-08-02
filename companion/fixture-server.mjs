@@ -227,6 +227,8 @@ let hostSettings = {
   smartActionCmdEnabled: false,
 };
 let firmwareVersion = "v0.6.0-fixture";
+let recoveryBootloaderDetected =
+  process.env.WORKLOUDERCTL_FIXTURE_RECOVERY === "1";
 const configurationWriteFailure =
   process.env.WORKLOUDERCTL_FIXTURE_CONFIG_WRITE_FAILURE ?? "";
 let configurationWriteFailureUsed = false;
@@ -426,6 +428,57 @@ const adapter = createInputMainAdapter({
           relativePath,
           bytes: Buffer.from(bytes),
         })),
+      };
+    },
+  },
+  recoveryAuthority: {
+    async readStatus({ configurationSnapshot }) {
+      if (
+        configurationSnapshot.deviceId !== "fixture-device" ||
+        configurationSnapshot.files.length !== files.size
+      ) {
+        throw new Error("fixture recovery backup was incomplete");
+      }
+      return {
+        bootloaderDetected: recoveryBootloaderDetected,
+        bootloader: recoveryBootloaderDetected
+          ? {
+              transport: "usb-bootloader",
+              identifier: "fixture-bootloader",
+              deviceType: "codex_micro",
+            }
+          : null,
+        targetRelease: recoveryBootloaderDetected
+          ? {
+              version: "v0.8.0-recovery-fixture",
+              fetchedAt: 1785681000000,
+              changeLog: "Fixture recovery release",
+              downloadUrl: "https://example.test/codex-micro-v0.8.0-recovery.bin",
+            }
+          : null,
+      };
+    },
+    async recoverFirmware({ release, bootloader }) {
+      if (
+        !recoveryBootloaderDetected ||
+        bootloader.identifier !== "fixture-bootloader"
+      ) {
+        throw new Error("fixture bootloader disappeared");
+      }
+      firmwareVersion = release.version;
+      files.clear();
+      for (const [relativePath, bytes] of defaultFiles) {
+        files.set(relativePath, Buffer.from(bytes));
+      }
+      recoveryBootloaderDetected = false;
+      return {
+        targetVersion: release.version,
+        completedPhases: [
+          "detect-input-bootloader",
+          "validate-input-selected-release",
+          "recover-with-input-device-programmer",
+          "reconnect-original-device",
+        ],
       };
     },
   },

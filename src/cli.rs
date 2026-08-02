@@ -297,6 +297,12 @@ pub enum InputCommand {
         command: InputResetCommand,
     },
 
+    /// Recover firmware through Input and restore an exact complete configuration.
+    Recovery {
+        #[clap(subcommand)]
+        command: InputRecoveryCommand,
+    },
+
     /// Collect a bounded, sanitized diagnostic log bundle from Input.
     Logs {
         #[clap(subcommand)]
@@ -394,6 +400,39 @@ pub enum InputResetCommand {
         expected_revision: Option<String>,
 
         /// Stable retry key; reuse it only with the same plan and candidate.
+        #[clap(long)]
+        idempotency_key: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum InputRecoveryCommand {
+    /// Freeze Input's bootloader identity, selected release, and backup revision.
+    Plan {
+        /// Complete configuration snapshot captured before entering recovery.
+        #[clap(long, value_parser)]
+        backup: PathBuf,
+
+        /// Destination for the immutable recovery plan.
+        #[clap(long, value_parser)]
+        plan: PathBuf,
+    },
+
+    /// Delegate recovery to Input, reconnect, and restore the exact backup.
+    Apply {
+        /// Immutable plan produced by `input recovery plan`.
+        #[clap(long, value_parser)]
+        plan: PathBuf,
+
+        /// Exact complete pre-recovery configuration snapshot.
+        #[clap(long, value_parser)]
+        backup: PathBuf,
+
+        /// Destination for the verified recovery receipt.
+        #[clap(long, value_parser)]
+        receipt: PathBuf,
+
+        /// Stable retry key; reuse it only with the same plan and backup.
         #[clap(long)]
         idempotency_key: Option<String>,
     },

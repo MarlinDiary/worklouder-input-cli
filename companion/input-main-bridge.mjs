@@ -50,6 +50,11 @@ const METHOD_DEFINITIONS = new Map([
   ],
   ["input.firmware.plan", ["input.firmware.plan.v1", "getFirmwarePlan"]],
   ["input.reset.plan", ["input.reset.plan.v1", "getResetPlan"]],
+  ["input.recovery.plan", ["input.recovery.plan.v1", "getRecoveryPlan"]],
+  [
+    "input.recovery.apply",
+    ["input.recovery.apply.v1", "recoverFirmware"],
+  ],
   [
     "input.firmware.update",
     ["input.firmware.update.v1", "updateFirmware"],
@@ -63,6 +68,7 @@ const MUTATION_METHODS = new Set([
   "input.host-settings.apply",
   "input.host-settings.restore",
   "input.firmware.update",
+  "input.recovery.apply",
 ]);
 
 export class BridgeError extends Error {
@@ -378,6 +384,32 @@ function validateMutationParams(method, params) {
     }
     if (!params.plan || typeof params.plan !== "object" || Array.isArray(params.plan)) {
       throw new BridgeError(-32602, "firmware plan is required");
+    }
+    return;
+  }
+  if (method === "input.recovery.apply") {
+    if (
+      typeof params.expectedPlanRevision !== "string" ||
+      !/^[0-9a-f]{64}$/i.test(params.expectedPlanRevision)
+    ) {
+      throw new BridgeError(-32602, "expectedPlanRevision is invalid");
+    }
+    if (
+      typeof params.idempotencyKey !== "string" ||
+      params.idempotencyKey.length === 0 ||
+      Buffer.byteLength(params.idempotencyKey, "utf8") > 256 ||
+      params.idempotencyKey.includes("\0")
+    ) {
+      throw new BridgeError(-32602, "idempotencyKey is invalid");
+    }
+    for (const payload of ["plan", "configuration"]) {
+      if (
+        !params[payload] ||
+        typeof params[payload] !== "object" ||
+        Array.isArray(params[payload])
+      ) {
+        throw new BridgeError(-32602, payload + " is required");
+      }
     }
     return;
   }

@@ -575,6 +575,38 @@ fn reset_help_exposes_plan_and_transactional_apply() {
 }
 
 #[test]
+fn recovery_help_requires_backup_bound_plan_and_receipt() {
+    let output = binary()
+        .args(["input", "recovery", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(output.status.success());
+    assert!(stdout.contains("plan"));
+    assert!(stdout.contains("apply"));
+
+    let plan = binary()
+        .args(["input", "recovery", "plan", "--help"])
+        .output()
+        .unwrap();
+    let plan_stdout = String::from_utf8(plan.stdout).unwrap();
+    assert!(plan.status.success());
+    for option in ["--backup", "--plan"] {
+        assert!(plan_stdout.contains(option));
+    }
+
+    let apply = binary()
+        .args(["input", "recovery", "apply", "--help"])
+        .output()
+        .unwrap();
+    let apply_stdout = String::from_utf8(apply.stdout).unwrap();
+    assert!(apply.status.success());
+    for option in ["--plan", "--backup", "--receipt", "--idempotency-key"] {
+        assert!(apply_stdout.contains(option));
+    }
+}
+
+#[test]
 fn preset_help_exposes_catalog_and_offline_install_workflow() {
     let output = binary().args(["preset", "--help"]).output().unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
