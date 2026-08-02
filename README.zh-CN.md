@@ -8,7 +8,8 @@
 
 > **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
 > provider 诊断、Codex Micro 设置检查/导出、Input 只读检查/原字节导出、
-> 校验、结构化 diff、JSON 输出和 shell completion。尚未发布打包版本；配置
+> live device status/files、双哈希验证导出、结构化 diff、JSON 输出和 shell
+> completion。尚未发布打包版本；配置
 > 写入会等 provider transaction 与 rollback 完整验证后再开放。
 
 ## 简单来说，它是什么？
@@ -56,6 +57,9 @@ worklouderctl codex inspect
 worklouderctl codex export --output CODEX_SNAPSHOT.json
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
+worklouderctl device --input-mode restart status
+worklouderctl device --input-mode restart files --recursive
+worklouderctl device --input-mode restart export --output DEVICE_BACKUP
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
 worklouderctl --json input inspect
@@ -71,13 +75,19 @@ snapshot；两者都不会序列化其他 Codex 设置。
 目录，并在 `manifest.json` 记录 size 与 SHA-256。它不会暂停 Input，也不会
 写入设备。
 
+`device` 命令复用已安装 Input 内置的 device kit，不附带第二套 driver。默认
+`--input-mode require-closed` 会在 Input 正在运行时停止；选择
+`--input-mode restart` 后，CLI 会请求 Input 优雅退出，只调用 `sys.version`、
+`device.status`、`fs.list`、`fs.readbin`，完成后即使读取报错也会重新打开
+Input。`device export` 对每个文件核对 device SHA-1 与 host SHA-256，重新读取
+typed manifest 和文件后，再原子发布目录。
+
 ## 计划中的写入命令
 
 ```console
 worklouderctl codex agent-source set priority
 worklouderctl codex command-key set ACT06 --command toggleFastMode
 worklouderctl codex joystick set up --skill SKILL_ID
-worklouderctl device status
 worklouderctl profile list
 worklouderctl layer show 2
 worklouderctl plan layout.yaml
@@ -121,7 +131,8 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 ## 当前进度
 
 仓库目前处于只读 source-alpha 阶段。Codex TOML read adapter 的
-`doctor`、`inspect`、`export` 已经实现；可安装 binary、Homebrew formula、
+`doctor`、`inspect`、`export`，以及 Input 0.18.0 live device 的 `status`、
+`files`、双哈希 `export` 和 Input 自动恢复已经实现；可安装 binary、Homebrew formula、
 Codex live settings bridge 写入与完整写入命令将在对应 transaction 和真实硬件
 readback 验证后发布。
 

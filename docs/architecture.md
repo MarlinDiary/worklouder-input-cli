@@ -26,6 +26,21 @@ This keeps firmware, transport fixes, new device support, and runtime behavior
 with the upstream applications while the CLI owns planning, validation, diff,
 automation, verification, and rollback.
 
+## Implemented live read path
+
+The `input-bundled-device-kit-read-v1` adapter is the first implemented live
+device provider. It launches the installed Input Electron binary with
+`ELECTRON_RUN_AS_NODE=1` and loads that same bundle's
+`@worklouder/wl-device-kit`. No transport package is copied into WorkLouderCTL.
+
+Input and the headless reader share one JSON-RPC stream. The default
+`require-closed` mode reports contention without changing process state. The
+explicit `restart` mode asks Input to quit gracefully, waits for the main
+process to stop, performs the read, and reopens the exact app path afterward.
+It never force-terminates Input. Status and list operations expose typed JSON;
+export additionally validates safe relative paths, device SHA-1, host SHA-256,
+exact size, typed manifest readback, file readback, and atomic publication.
+
 ## State authorities
 
 The initial Codex Micro model has multiple authorities:

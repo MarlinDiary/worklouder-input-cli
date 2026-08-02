@@ -25,9 +25,10 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] `worklouderctl codex inspect`
 - [x] `worklouderctl codex export`
 - [x] `worklouderctl tier explain`
-- [ ] `worklouderctl device status`
-- [ ] `worklouderctl device files`
-- [ ] `worklouderctl device export`
+- [x] `worklouderctl device status`
+- [x] `worklouderctl device files`
+- [x] `worklouderctl device export`
+- [x] Read-only Input process coordination and automatic reopen
 - [x] Structural `validate` and `diff`
 - [x] JSON output
 - [ ] Typed exit statuses

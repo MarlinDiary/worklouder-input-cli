@@ -15,10 +15,10 @@ not a public support guarantee.
 | Host OS | macOS | Initial target |
 | Codex app | 26.727.51351 | Exact Tier 1 settings read adapter verified |
 | Work Louder Input | 0.17.3 | Earlier schema fixture |
-| Work Louder Input | 0.18.0 | Current read-only research baseline |
-| Codex Micro firmware | v0.6.0 | Device read/write fixture baseline |
+| Work Louder Input | 0.18.0 | Exact bundled-kit live read adapter verified |
+| Codex Micro firmware | v0.6.0 | Live status/files/export read boundary verified |
 | USB | Observed | Release verification pending |
-| Bluetooth | Observed | Release verification pending |
+| Bluetooth | Observed | Live read boundary verified; mutation pending |
 
 The 2026-08-02 audit recorded Input updating from 0.17.3 to 0.18.0 during a
 live session. Adapter selection therefore re-reads the installed and running
@@ -29,6 +29,16 @@ the five explicit Codex Micro settings validated, inherited layout defaults
 were reconstructed, an atomic typed snapshot was reopened, and the source
 `config.toml` SHA-256 was identical before and after. This claim does not cover
 Codex settings mutation.
+
+For Input 0.18.0 and Codex Micro firmware v0.6.0,
+`input-bundled-device-kit-read-v1` has live read-only evidence over HID: the CLI
+read status, listed `keymap.json` and `smart_actions.json`, exported their exact
+bytes, matched device SHA-1 and host SHA-256, reopened the typed manifest and
+files, and atomically published the bundle. The tested session used the
+Bluetooth-reported connection (`isUsbConnection=false`). Input was gracefully
+quit and reopened for each read, and the three cached configuration-file
+SHA-256 values were identical before and after. This boundary does not cover
+device, cache, or database mutation.
 
 ## Compatibility states
 

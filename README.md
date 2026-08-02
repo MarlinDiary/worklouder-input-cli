@@ -22,7 +22,8 @@
 > **Project status: source alpha.** The repository now builds a working
 > `worklouderctl` binary with provider diagnostics, Codex Micro settings
 > inspection/export, Input inspection/exact-byte export, validation, structural
-> diff, JSON output, and shell completions. There is no packaged release yet.
+> diff, live device status/file reads, verified device export, JSON output, and
+> shell completions. There is no packaged release yet.
 > Configuration mutation remains gated until its provider transactions and
 > rollback are verified.
 
@@ -84,6 +85,9 @@ worklouderctl codex inspect
 worklouderctl codex export --output CODEX_SNAPSHOT.json
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
+worklouderctl device --input-mode restart status
+worklouderctl device --input-mode restart files --recursive
+worklouderctl device --input-mode restart export --output DEVICE_BACKUP
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
 worklouderctl --json input inspect
@@ -100,6 +104,14 @@ snapshot. Neither command serializes unrelated Codex settings.
 into an atomically published directory and records each file's size and SHA-256
 in `manifest.json`. It does not pause Input or write the device.
 
+The `device` commands use the exact device kit bundled with the installed Input
+app; WorkLouderCTL does not ship a second driver. The default
+`--input-mode require-closed` stops when Input is open. `--input-mode restart`
+requests a graceful quit, performs only `sys.version`, `device.status`,
+`fs.list`, and `fs.readbin` calls, and reopens Input even when the read fails.
+`device export` verifies the device SHA-1 and host SHA-256 for every file,
+reopens the typed manifest and files, and atomically publishes the directory.
+
 ## Planned mutation command experience
 
 The intended binary name is `worklouderctl`:
@@ -109,7 +121,6 @@ worklouderctl codex agent-source set priority
 worklouderctl codex command-key set ACT06 --command toggleFastMode
 worklouderctl codex joystick set up --skill SKILL_ID
 worklouderctl codex lighting set --brightness 80 --auto-off 10-minutes
-worklouderctl device status
 worklouderctl profile list
 worklouderctl layer show 2
 worklouderctl plan layout.yaml
@@ -186,6 +197,8 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Provider `doctor` and Input `inspect`/exact-byte `export` | Complete |
 | Bundle `validate` and structural `diff` | Complete |
 | Codex settings contract and TOML `doctor`/`inspect`/`export` | Complete |
+| Input 0.18.0 live `device status`/`files`/verified `export` | Complete |
+| Read-only Input process coordination and automatic reopen | Complete |
 | Codex live settings-bridge write client | Planned |
 | Semantic profile/layer/control commands | Planned |
 | Verified device mutation and rollback | Planned |
@@ -197,8 +210,9 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 ### Is there a CLI for Work Louder Input?
 
 WorkLouderCTL is an open-source full-configuration CLI project for Codex, Work
-Louder Input, and Codex Micro. A source-built read-only alpha is available in
-this repository; packaged binaries and configuration mutation are upcoming.
+Louder Input, and Codex Micro. A source-built read-only alpha can inspect both
+apps and read/export live Codex Micro state; packaged binaries and
+configuration mutation are upcoming.
 
 ### Does WorkLouderCTL replace the Codex and Input configuration GUIs?
 
@@ -208,8 +222,10 @@ replacement driver/runtime is outside the project contract.
 
 ### Does it support Codex Micro?
 
-Codex Micro on macOS is the first planned and researched target. Support claims
-will be tied to exact Input and firmware versions with hardware readback.
+Codex Micro on macOS is the first target. Input 0.18.0 and firmware v0.6.0 have
+live read-only evidence for status, file listing, exact file export, Input
+restart, and unchanged cached configuration. Mutation claims remain tied to
+separate write/readback/rollback evidence.
 
 ### Can an AI agent configure Codex Micro?
 
@@ -226,6 +242,7 @@ Read the complete [FAQ](docs/faq.md).
 - [Configuration parity matrix](docs/configuration-parity.md)
 - [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
 - [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)
+- [Input live device read contract](docs/research/2026-08-02-input-live-read-contract.md)
 - [Frequently asked questions](docs/faq.md)
 - [Compatibility and support policy](docs/compatibility.md)
 - [Companion architecture](docs/architecture.md)

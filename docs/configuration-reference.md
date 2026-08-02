@@ -107,6 +107,22 @@ and 1 hour.
 
 ## Tier 2: Input device configuration
 
+### Implemented live read surface
+
+The current read-only adapter uses Input 0.18.0's bundled device kit and exposes:
+
+```console
+worklouderctl device [--input-mode require-closed|restart] status
+worklouderctl device [--input-mode require-closed|restart] files [--path PATH] [--recursive]
+worklouderctl device [--input-mode require-closed|restart] export --output DIRECTORY
+```
+
+It reports the firmware, active profile/layer, battery/charging state, device
+identity, transport, file names, sizes, and device checksums. Export reads raw
+file bytes through `fs.readbin`, verifies device SHA-1 plus host SHA-256, and
+atomically publishes a typed bundle accepted by `config validate` and
+`config diff`. These commands issue no device/config mutation calls.
+
 ### Root model
 
 The observed `keymap.json` shape contains:

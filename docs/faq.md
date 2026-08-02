@@ -5,15 +5,16 @@ Input CLI, Codex Micro configuration, and AI-assisted macropad automation.
 
 ## What is WorkLouderCTL?
 
-WorkLouderCTL is a pre-alpha, open-source full-configuration CLI for Codex,
+WorkLouderCTL is a source-alpha, open-source full-configuration CLI for Codex,
 Work Louder Input, and Codex Micro. It targets every Codex Micro configuration
 surface exposed by both GUIs.
 
 ## Is there a CLI for Work Louder Input?
 
-WorkLouderCTL is being built for that role. This repository currently contains
-the product contract and research baseline; it does not yet provide an
-installable release.
+WorkLouderCTL is being built for that role. The source-built CLI already reads
+Codex settings, Input cache state, and live Codex Micro status/files through
+Input 0.18.0's bundled provider. Packaged releases and mutation commands are
+later milestones.
 
 ## What does full-configuration parity mean?
 
@@ -77,6 +78,10 @@ Input and another process can share the same vendor HID stream. Multi-report
 JSON-RPC operations may interleave, and Input may later restore cached state.
 The companion workflow pauses Input for the short transaction, synchronizes its
 state, and then reopens it.
+
+The current read-only implementation makes this explicit: it stops by default
+when Input is open, while `--input-mode restart` performs a graceful quit/read/
+reopen sequence. It does not force-terminate the app.
 
 ## Will it support Smart Actions?
 

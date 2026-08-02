@@ -12,6 +12,7 @@ parity contract.
 
 - **researched** — schema and call path are inventoried;
 - **adapter-pending** — typed implementation and fixtures are next;
+- **read-verified** — exact-version read and readback passed; writes remain pending;
 - **verified** — exact-version read/write/readback/rollback passed;
 - **parity** — the CLI covers every observed control in that GUI surface.
 
@@ -56,7 +57,7 @@ the runtime reloaded the new value.
 | Underglow | effect, brightness, speed, magic, color | `lighting underglow` | researched |
 | AppSense links | application-to-layer mapping | `appsense` | researched |
 | Presets | inspect, preview, install | `preset` | researched |
-| Full object | export, validate, diff, apply, restore | `device export/diff/apply/restore` | adapter-pending |
+| Full object | export, validate, diff, apply, restore | `device export/diff/apply/restore` | read-verified |
 
 ## Tier 3 — Input host configuration
 
@@ -73,7 +74,7 @@ the runtime reloaded the new value.
 
 | GUI surface | Configuration coverage | Planned command family | Current status |
 | --- | --- | --- | --- |
-| Device setup | identity, transport, battery, firmware | `doctor`, `device status` | researched |
+| Device setup | identity, transport, battery, firmware | `doctor`, `device status` | read-verified |
 | Input permissions | Input Monitoring and Accessibility | `input permissions` | researched |
 | Firmware check | compatible release and requirements | `firmware check` | researched |
 | Firmware update | delegate download/USB flash to Input, then verify readback | `input firmware update` | adapter-pending |

@@ -2,7 +2,7 @@
 
 > WorkLouderCTL is an unofficial, open-source full-configuration CLI being built for Codex, Work Louder Input, and Codex Micro. It targets complete configuration-GUI parity with safe inspection, diff, backup, verified apply, synchronization, and rollback for humans, scripts, and AI agents.
 
-Important: the project is currently a source alpha. The repository builds a working `worklouderctl` binary with read-only Codex/Input inspection and exports, but there is no packaged release yet. Mutation examples describe the target interface.
+Important: the project is currently a source alpha. The repository builds a working `worklouderctl` binary with read-only Codex/Input inspection, live Codex Micro status/files, and verified exports, but there is no packaged release yet. Mutation examples describe the target interface.
 
 ## Core documentation
 
@@ -32,6 +32,8 @@ Important: the project is currently a source alpha. The repository builds a work
 - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
 - Current maturity: source alpha; Codex/Input read-only commands implemented; no packaged release
 - Current Codex commands: `codex doctor`, `codex inspect`, and atomic typed `codex export`
+- Current live device commands: `device status`, `device files`, and dual-hash atomic `device export` through Input 0.18.0's bundled device kit
+- Current coordination: `require-closed` by default; `restart` gracefully quits and reopens Input around a live read
 - Safety model: inspect, plan, diff, backup, conflict check, apply, readback, checksum verification, synchronize, rollback
 - Agent model: deterministic JSON over the same transaction engine as the human CLI
 - Affiliation: independent community project; not affiliated with Work Louder or OpenAI
