@@ -138,6 +138,14 @@ worklouderctl action event set --input config-snapshot.json --id 3 --index 0 \
   --assignment KC_X --type click --delay 200 --output action-candidate.json
 worklouderctl action delete --input config-snapshot.json --id 3 \
   --output action-delete-candidate.json
+worklouderctl action group create --input config-snapshot.json --name Shortcuts \
+  --action 3 --action 4 --output action-group-candidate.json
+worklouderctl multi-action show --input config-snapshot.json --id 1
+worklouderctl multi-action set --input config-snapshot.json --id 1 \
+  --tap KC_A --double-tap KC_B --hold KC_C --tap-hold KC_D \
+  --output multi-action-candidate.json
+worklouderctl multi-action group create --input config-snapshot.json --name Gestures \
+  --multi-action 1 --output multi-action-group-candidate.json
 ```
 
 Before publishing, the editor independently verifies every file's canonical
@@ -223,7 +231,8 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
 - `companion/input-main-bridge.test.mjs` — authentication, dispatch, and service
   adapter tests;
 - `scripts/test-bridge-e2e.sh` — Rust CLI handshake, status, file list, exact
-  export, semantic profile/layer/control/Action inspection and candidates, independent candidate rehash,
+  export, semantic profile/layer/control/Action/Multi Action/group inspection,
+  CRUD and cascade candidates, independent candidate rehash,
   apply/readback, idempotent retry, stale-CAS rejection, restore, and dual-hash
   conformance test.
 

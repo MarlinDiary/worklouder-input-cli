@@ -87,6 +87,17 @@ worklouderctl action event set --input CONFIG.json --id ACTION_ID --index 0 --as
 worklouderctl action event delete --input CONFIG.json --id ACTION_ID --index 0 --output CANDIDATE.json
 worklouderctl action event move --input CONFIG.json --id ACTION_ID --from 1 --to 0 --output CANDIDATE.json
 worklouderctl action delete --input CONFIG.json --id ACTION_ID --output CANDIDATE.json
+worklouderctl action group list --input CONFIG.json
+worklouderctl action group create --input CONFIG.json --name NAME --action ACTION_ID --output CANDIDATE.json
+worklouderctl action group member move --input CONFIG.json --id GROUP_ID --from 1 --to 0 --output CANDIDATE.json
+worklouderctl action group delete --input CONFIG.json --id GROUP_ID [--keep-members] --output CANDIDATE.json
+worklouderctl multi-action list --input CONFIG.json
+worklouderctl multi-action show --input CONFIG.json --id MULTI_ACTION_ID
+worklouderctl multi-action create --input CONFIG.json --name NAME --output CANDIDATE.json
+worklouderctl multi-action set --input CONFIG.json --id MULTI_ACTION_ID --tap KC_A --double-tap KC_B --hold KC_C --tap-hold KC_D --tapping-term 250 --output CANDIDATE.json
+worklouderctl multi-action delete --input CONFIG.json --id MULTI_ACTION_ID --output CANDIDATE.json
+worklouderctl multi-action group create --input CONFIG.json --name NAME --multi-action MULTI_ACTION_ID --output CANDIDATE.json
+worklouderctl multi-action group delete --input CONFIG.json --id GROUP_ID [--keep-members] --output CANDIDATE.json
 worklouderctl device --transport direct --input-mode require-closed status
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
@@ -123,7 +134,7 @@ CAS、session-scoped idempotency、完整 revision readback 与 automatic rollba
 只有运行中的 Input 注入已验证 writer 时，bridge 才会公布这两个写能力；当前
 跨语言证据来自隔离 reference writer。
 
-`profile`、`layer`、`control` 与 `action` 是离线 semantic editor：先严格验证 snapshot 内每个
+`profile`、`layer`、`control`、`action` 与 `multi-action` 是离线 semantic editor：先严格验证 snapshot 内每个
 size、SHA-1、SHA-256、canonical base64、safe path、keymap ID 与完整 revision，
 再只修改请求的 semantic field，保留未知 JSON 字段和其他文件的原字节，重算
 受影响的哈希与 revision，原子发布并重新打开 candidate。这个阶段不连接 Input
@@ -142,6 +153,17 @@ rehash、原子发布和 reopen readback。
 `0..9999 ms` delay；新 Action 使用 Input 默认的 `KC_NONE` press event。
 删除采用完整 cascade，同步处理 layer controls、其他 Action events、Multi Action
 branches、groups 与 profile `macrosUsed`，每个被移除的引用落为 `KC_NONE`。
+
+`action group` 与 `multi-action group` 已覆盖 list/show/create、name/color/tags
+更新、有序 member add/remove/move 和 delete。默认 group delete 与 Input 0.18.0
+一致：只属于该 stored group 的 member 会连同完整引用 cascade 一起删除；共享 member
+保留。`--keep-members` 只移除 group container。Group ID 按实际观察到的
+maximum-ID-plus-one 规则分配。
+
+`multi-action` 已覆盖 `tap`、`double-tap`、`hold`、`tap-hold` 四个 assignment，
+以及 name、color、icon、tapping term。新 Multi Action 使用四个 `KC_NONE` 与
+`250 ms` 默认值；删除时同步清理 physical controls、Action events、嵌套 Multi
+Action、groups 和 profile usage 引用。
 
 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
 adapter、认证测试，以及 Rust CLI 跨语言 conformance test：

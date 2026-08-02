@@ -117,6 +117,21 @@ worklouderctl action event set --input CONFIG.json --id ACTION_ID --index 0 --as
 worklouderctl action event delete --input CONFIG.json --id ACTION_ID --index 0 --output CANDIDATE.json
 worklouderctl action event move --input CONFIG.json --id ACTION_ID --from 1 --to 0 --output CANDIDATE.json
 worklouderctl action delete --input CONFIG.json --id ACTION_ID --output CANDIDATE.json
+worklouderctl action group list --input CONFIG.json
+worklouderctl action group create --input CONFIG.json --name NAME --action ACTION_ID --output CANDIDATE.json
+worklouderctl action group set --input CONFIG.json --id GROUP_ID --name NAME --color '#RRGGBB' --tag TAG --output CANDIDATE.json
+worklouderctl action group member add --input CONFIG.json --id GROUP_ID --action ACTION_ID --output CANDIDATE.json
+worklouderctl action group member remove --input CONFIG.json --id GROUP_ID --action ACTION_ID --output CANDIDATE.json
+worklouderctl action group member move --input CONFIG.json --id GROUP_ID --from 1 --to 0 --output CANDIDATE.json
+worklouderctl action group delete --input CONFIG.json --id GROUP_ID [--keep-members] --output CANDIDATE.json
+worklouderctl multi-action list --input CONFIG.json
+worklouderctl multi-action show --input CONFIG.json --id MULTI_ACTION_ID
+worklouderctl multi-action create --input CONFIG.json --name NAME --output CANDIDATE.json
+worklouderctl multi-action set --input CONFIG.json --id MULTI_ACTION_ID --tap KC_A --double-tap KC_B --hold KC_C --tap-hold KC_D --tapping-term 250 --output CANDIDATE.json
+worklouderctl multi-action delete --input CONFIG.json --id MULTI_ACTION_ID --output CANDIDATE.json
+worklouderctl multi-action group create --input CONFIG.json --name NAME --multi-action MULTI_ACTION_ID --output CANDIDATE.json
+worklouderctl multi-action group member move --input CONFIG.json --id GROUP_ID --from 1 --to 0 --output CANDIDATE.json
+worklouderctl multi-action group delete --input CONFIG.json --id GROUP_ID [--keep-members] --output CANDIDATE.json
 worklouderctl device --transport direct --input-mode require-closed status
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
@@ -158,7 +173,7 @@ full revision readback, and automatic rollback. These commands are advertised
 only when the running Input version supplies a verified configuration writer;
 the current cross-language evidence uses the isolated reference writer.
 
-`profile`, `layer`, `control`, and `action` commands are offline semantic editors. They strictly
+`profile`, `layer`, `control`, `action`, and `multi-action` commands are offline semantic editors. They strictly
 validate every embedded size, SHA-1, SHA-256, canonical base64 payload, safe
 path, keymap ID, and the full snapshot revision before producing a new complete
 candidate. A candidate preserves unknown JSON fields and unrelated file bytes,
@@ -190,8 +205,20 @@ allocation, events retain ordered `release(0)`, `press(1)`, or `click(2)`
 semantics and `0..9999 ms` delays, and a new Action starts with Input's
 `KC_NONE` press event. Delete is a complete cascade: layer controls, other
 Action events, Multi Action branches, groups, and profile `macrosUsed` are
-updated together, with each removed reference becoming `KC_NONE`. Group CRUD
-remains a separate upcoming slice.
+updated together, with each removed reference becoming `KC_NONE`.
+
+`action group` and `multi-action group` cover list/show/create, metadata and
+tag updates, ordered member add/remove/move, and delete. The default group
+delete matches Input 0.18.0: a member used only by that stored group is deleted
+with the same full reference cascade, while shared members remain. Pass
+`--keep-members` to remove only the group container. Group IDs use the observed
+maximum-ID-plus-one import rule.
+
+`multi-action` covers all four gesture assignments (`tap`, `double-tap`,
+`hold`, and `tap-hold`), name, color, icon, and tapping term. New Multi Actions
+use Input's four `KC_NONE` assignments and `250 ms` default. Deletion clears
+every physical, Action-event, nested Multi Action, group, and profile-usage
+reference before removing the resource.
 
 The repository includes an executable Input-main reference server, a service
 adapter for the Input 0.18.0 service shape, authentication tests, and a
@@ -305,7 +332,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 
 WorkLouderCTL is an open-source full-configuration CLI project for Codex, Work
 Louder Input, and Codex Micro. The source alpha can inspect both apps,
-read/export live Codex Micro state, generate validated profile/layer/control/Action candidates,
+read/export live Codex Micro state, generate validated profile/layer/control/Action/Multi Action/group candidates,
 and exercise apply/restore against the isolated bridge writer; packaged
 binaries and released-Input writer integration are upcoming.
 

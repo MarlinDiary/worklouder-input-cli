@@ -279,6 +279,22 @@ worklouderctl action event delete --input SNAPSHOT.json --id ID \
 worklouderctl action event move --input SNAPSHOT.json --id ID \
   --from INDEX --to INDEX --output CANDIDATE.json
 worklouderctl action delete --input SNAPSHOT.json --id ID --output CANDIDATE.json
+worklouderctl action group list --input SNAPSHOT.json
+worklouderctl action group show --input SNAPSHOT.json --id GROUP_ID
+worklouderctl action group create --input SNAPSHOT.json --name NAME \
+  --action ACTION_ID [--action ACTION_ID] [--color '#RRGGBB'] [--tag TAG] \
+  --output CANDIDATE.json
+worklouderctl action group set --input SNAPSHOT.json --id GROUP_ID \
+  [--name NAME] [--color '#RRGGBB'|--clear-color] \
+  [--tag TAG|--clear-tags] --output CANDIDATE.json
+worklouderctl action group member add --input SNAPSHOT.json --id GROUP_ID \
+  --action ACTION_ID --output CANDIDATE.json
+worklouderctl action group member remove --input SNAPSHOT.json --id GROUP_ID \
+  --action ACTION_ID --output CANDIDATE.json
+worklouderctl action group member move --input SNAPSHOT.json --id GROUP_ID \
+  --from INDEX --to INDEX --output CANDIDATE.json
+worklouderctl action group delete --input SNAPSHOT.json --id GROUP_ID \
+  [--keep-members] --output CANDIDATE.json
 ```
 
 `spec/input-actions-0.18.0.json` freezes the ASAR-derived model. Action IDs use
@@ -293,12 +309,57 @@ Action groups, and profile usage arrays. References become `KC_NONE`; empty
 Action groups are removed; `macrosUsed` is recomputed in Input string order.
 The candidate still preserves unrelated file bytes and unknown JSON fields.
 
+Stored groups keep ordered, unique `actionIds`, optional tags, and optional
+color. New group IDs use the maximum existing group ID plus one, matching
+Input's import path rather than assuming the array is sorted. Default group
+deletion matches the Input 0.18.0 GUI: members that occur in no other stored
+group are deleted with the normal Action cascade; shared members survive.
+`--keep-members` removes only the group object. Member removal rejects a
+resulting empty group so the snapshot remains valid.
+
 ### Multi Actions
 
-The UI offers tap, double tap, hold, and tap-then-hold branches. Timing includes
-a tapping term and hold duration. Every branch references a basic key, Action,
-Multi Action-compatible target, or Smart Action accepted by the exact device
-adapter.
+The UI offers tap, double tap, hold, and tap-then-hold branches. The device
+fields are `kcOnTap`, `kcOnDoubleTap`, `kcOnHold`, and `kcOnTapHold`, with `tt`
+for the tapping term. Input 0.18.0 creates a Multi Action with four `KC_NONE`
+assignments and a `250 ms` tapping term; its GUI displays that term as fixed.
+
+```sh
+worklouderctl multi-action list --input SNAPSHOT.json
+worklouderctl multi-action show --input SNAPSHOT.json --id ID
+worklouderctl multi-action create --input SNAPSHOT.json [--name NAME] \
+  [--color '#RRGGBB'] [--icon ICON] --output CANDIDATE.json
+worklouderctl multi-action set --input SNAPSHOT.json --id ID \
+  [--name NAME] [--color '#RRGGBB'|--clear-color] \
+  [--icon ICON|--clear-icon] [--tap TOKEN] [--double-tap TOKEN] \
+  [--hold TOKEN] [--tap-hold TOKEN] [--tapping-term MILLISECONDS] \
+  --output CANDIDATE.json
+worklouderctl multi-action delete --input SNAPSHOT.json --id ID \
+  --output CANDIDATE.json
+worklouderctl multi-action group list --input SNAPSHOT.json
+worklouderctl multi-action group show --input SNAPSHOT.json --id GROUP_ID
+worklouderctl multi-action group create --input SNAPSHOT.json --name NAME \
+  --multi-action ID [--multi-action ID] --output CANDIDATE.json
+worklouderctl multi-action group set --input SNAPSHOT.json --id GROUP_ID \
+  [--name NAME] [--color '#RRGGBB'|--clear-color] \
+  [--tag TAG|--clear-tags] --output CANDIDATE.json
+worklouderctl multi-action group member add --input SNAPSHOT.json --id GROUP_ID \
+  --multi-action ID --output CANDIDATE.json
+worklouderctl multi-action group member remove --input SNAPSHOT.json --id GROUP_ID \
+  --multi-action ID --output CANDIDATE.json
+worklouderctl multi-action group member move --input SNAPSHOT.json --id GROUP_ID \
+  --from INDEX --to INDEX --output CANDIDATE.json
+worklouderctl multi-action group delete --input SNAPSHOT.json --id GROUP_ID \
+  [--keep-members] --output CANDIDATE.json
+```
+
+`spec/input-multi-actions-0.18.0.json` freezes the model and source ASAR hash.
+Multi Action IDs use Input's last-resource-ID-plus-one allocation; group IDs
+use maximum-ID-plus-one. New branch assignments must exist in the frozen token
+catalog and self-reference is rejected. Delete replaces matching physical,
+Action-event, and nested Multi Action tokens with `KC_NONE`, removes group
+membership, drops empty groups, and recomputes `multiActionsUsed`. Multi Action
+group delete applies the same orphan/shared-member rule as Action groups.
 
 ### Per-layer lighting
 

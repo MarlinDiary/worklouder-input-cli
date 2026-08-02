@@ -91,7 +91,7 @@ synchronizes them as one operation.
 ┌────────────────────────────────────────────────────────────┐
 │ CLI / JSON / future agent protocol                         │
 ├────────────────────────────────────────────────────────────┤
-│ Semantic model: profile, layer, control, action, lighting  │
+│ Semantic model: profile, layer, control, action/multi/group│
 ├────────────────────────────────────────────────────────────┤
 │ Plan + diff + validation + compatibility policy            │
 ├────────────────────────────────────────────────────────────┤
