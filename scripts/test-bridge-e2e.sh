@@ -28,6 +28,13 @@ action_group_deleted_snapshot=$root/config-action-group-deleted.json
 multi_group_created_snapshot=$root/config-multi-group-created.json
 multi_group_updated_snapshot=$root/config-multi-group-updated.json
 multi_group_deleted_snapshot=$root/config-multi-group-deleted.json
+smart_text_snapshot=$root/config-smart-text.json
+smart_command_snapshot=$root/config-smart-command.json
+smart_url_snapshot=$root/config-smart-url.json
+smart_app_snapshot=$root/config-smart-app.json
+smart_group_snapshot=$root/config-smart-group.json
+smart_bound_snapshot=$root/config-smart-bound.json
+smart_deleted_snapshot=$root/config-smart-deleted.json
 renamed_profile_snapshot=$root/config-profile-renamed.json
 selected_snapshot=$root/config-selected.json
 profile_created_snapshot=$root/config-profile-created.json
@@ -225,27 +232,57 @@ revision=$(python3 -c \
   --output "$multi_group_updated_snapshot" >"$root/multi-group-set.json"
 "$bin" --json multi-action group delete --input "$config_snapshot" --id 0 \
   --output "$multi_group_deleted_snapshot" >"$root/multi-group-delete.json"
+"$bin" --json smart-action list --input "$config_snapshot" \
+  >"$root/smart-list-empty.json"
+"$bin" --json smart-action create --input "$candidate_snapshot" \
+  --name 'Fixture Text' --type text --text 'hello fixture' --color '#EDF6FF' \
+  --output "$smart_text_snapshot" >"$root/smart-create-text.json"
+"$bin" --json smart-action create --input "$smart_text_snapshot" \
+  --name 'Fixture Command' --type command --command 'printf fixture' \
+  --output "$smart_command_snapshot" >"$root/smart-create-command.json"
+"$bin" --json smart-action create --input "$smart_command_snapshot" \
+  --name 'Fixture URL' --type url --url 'https://example.invalid/fixture' \
+  --output "$smart_url_snapshot" >"$root/smart-create-url.json"
+"$bin" --json smart-action create --input "$smart_url_snapshot" \
+  --name 'Fixture App' --type app --app-name 'Fixture App' \
+  --app-path '/Applications/Fixture.app' --icon fixture-app \
+  --output "$smart_app_snapshot" >"$root/smart-create-app.json"
+"$bin" --json smart-action group create --input "$smart_app_snapshot" \
+  --name 'Fixture Smart Group' --smart-action 1 --smart-action 2 \
+  --color '#010203' --tag fixture --output "$smart_group_snapshot" \
+  >"$root/smart-group-create.json"
+"$bin" --json control set --input "$smart_group_snapshot" --profile 0 --layer 1 \
+  --control key:0:0 --assignment SA_1 --output "$smart_bound_snapshot" \
+  >"$root/smart-bind.json"
+"$bin" --json smart-action list --input "$smart_bound_snapshot" \
+  >"$root/smart-list.json"
+"$bin" --json smart-action show --input "$smart_bound_snapshot" --id 1 \
+  >"$root/smart-show.json"
+"$bin" --json smart-action group show --input "$smart_bound_snapshot" --id 0 \
+  >"$root/smart-group-show.json"
+"$bin" --json smart-action delete --input "$smart_bound_snapshot" --id 1 \
+  --output "$smart_deleted_snapshot" >"$root/smart-delete.json"
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config validate \
   --input "$config_snapshot" --expected-revision "$revision" \
   >"$root/config-bridge-validation.json"
 candidate_revision=$(python3 -c \
   'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
-  "$candidate_snapshot")
+  "$smart_bound_snapshot")
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config apply \
-  --input "$candidate_snapshot" --backup "$root/pre-apply.json" \
+  --input "$smart_bound_snapshot" --backup "$root/pre-apply.json" \
   --expected-revision "$revision" --idempotency-key e2e-apply-1 \
   >"$root/config-apply.json"
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config apply \
-  --input "$candidate_snapshot" --backup "$root/pre-apply.json" \
+  --input "$smart_bound_snapshot" --backup "$root/pre-apply.json" \
   --expected-revision "$revision" --idempotency-key e2e-apply-1 \
   >"$root/config-apply-replay.json"
 set +e
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config apply \
-  --input "$candidate_snapshot" --backup "$root/stale-attempt-backup.json" \
+  --input "$smart_bound_snapshot" --backup "$root/stale-attempt-backup.json" \
   --expected-revision "$revision" --idempotency-key e2e-apply-stale \
   >"$root/config-apply-stale.json" 2>"$root/config-apply-stale.err"
 stale_status=$?
@@ -287,6 +324,13 @@ bridge_validation = json.loads(
     (root / "config-bridge-validation.json").read_text()
 )
 candidate = json.loads((root / "config-candidate.json").read_text())
+apply_candidate = json.loads((root / "config-smart-bound.json").read_text())
+smart_text_candidate = json.loads((root / "config-smart-text.json").read_text())
+smart_command_candidate = json.loads((root / "config-smart-command.json").read_text())
+smart_url_candidate = json.loads((root / "config-smart-url.json").read_text())
+smart_app_candidate = json.loads((root / "config-smart-app.json").read_text())
+smart_group_candidate = json.loads((root / "config-smart-group.json").read_text())
+smart_deleted_candidate = json.loads((root / "config-smart-deleted.json").read_text())
 renamed_profile = json.loads((root / "config-profile-renamed.json").read_text())
 selected = json.loads((root / "config-selected.json").read_text())
 profile_created_candidate = json.loads((root / "config-profile-created.json").read_text())
@@ -353,6 +397,17 @@ action_group_delete = json.loads((root / "action-group-delete.json").read_text()
 multi_group_create = json.loads((root / "multi-group-create.json").read_text())
 multi_group_set = json.loads((root / "multi-group-set.json").read_text())
 multi_group_delete = json.loads((root / "multi-group-delete.json").read_text())
+smart_list_empty = json.loads((root / "smart-list-empty.json").read_text())
+smart_create_text = json.loads((root / "smart-create-text.json").read_text())
+smart_create_command = json.loads((root / "smart-create-command.json").read_text())
+smart_create_url = json.loads((root / "smart-create-url.json").read_text())
+smart_create_app = json.loads((root / "smart-create-app.json").read_text())
+smart_group_create = json.loads((root / "smart-group-create.json").read_text())
+smart_bind = json.loads((root / "smart-bind.json").read_text())
+smart_list = json.loads((root / "smart-list.json").read_text())
+smart_show = json.loads((root / "smart-show.json").read_text())
+smart_group_show = json.loads((root / "smart-group-show.json").read_text())
+smart_delete = json.loads((root / "smart-delete.json").read_text())
 color_candidate = json.loads((root / "config-color.json").read_text())
 control_candidate = json.loads((root / "config-control.json").read_text())
 action_created_candidate = json.loads((root / "config-action-created.json").read_text())
@@ -604,6 +659,25 @@ assert multi_group_set["changedPaths"] == [
     "/keymap.json/multiActionsGroups/1/tags",
 ]
 assert "/keymap.json/multiActionsGroups/0" in multi_group_delete["changedPaths"]
+assert smart_list_empty["smartActions"] == []
+assert [smart_create_text["resourceId"], smart_create_command["resourceId"],
+        smart_create_url["resourceId"], smart_create_app["resourceId"]] == [1, 2, 3, 4]
+assert smart_group_create["resourceId"] == 0
+assert smart_bind["changedPaths"] == [
+    "/keymap.json/profiles/0/layers/1/layout/keymap/0/0",
+]
+assert [item["actionType"] for item in smart_list["smartActions"]] == [
+    "TEXT_STEP", "CMD_STEP", "URL_STEP", "APP_STEP",
+]
+assert smart_list["smartActions"][1]["requiresCommandPermission"] is True
+assert smart_show["smartAction"]["physicalReferenceCount"] == 1
+assert smart_show["smartAction"]["groupIds"] == [0]
+assert [item["id"] for item in smart_group_show["members"]] == [1, 2]
+assert smart_delete["changedPaths"] == [
+    "/keymap.json/profiles/0/layers/1/layout/keymap/0/0",
+    "/smart_actions.json/smartActionGroups/0/actionIds",
+    "/smart_actions.json/smartActions/SA_1",
+]
 
 def payload(document, name):
     record = next(item for item in document["files"] if item["relativePath"] == name)
@@ -641,6 +715,30 @@ for document in [
 ]:
     verify_snapshot(document)
     assert payload(document, "smart_actions.json") == payload(snapshot, "smart_actions.json")
+for document in [
+    smart_text_candidate, smart_command_candidate, smart_url_candidate,
+    smart_app_candidate, smart_group_candidate, apply_candidate,
+    smart_deleted_candidate,
+]:
+    verify_snapshot(document)
+
+assert payload(smart_app_candidate, "keymap.json") == payload(candidate, "keymap.json")
+smart_document = json.loads(payload(apply_candidate, "smart_actions.json"))
+assert set(smart_document["smartActions"]) == {"SA_1", "SA_2", "SA_3", "SA_4"}
+assert smart_document["smartActions"]["SA_1"]["payload"] == {"text": "hello fixture"}
+assert smart_document["smartActions"]["SA_2"]["payload"] == {"cmd": "printf fixture"}
+assert smart_document["smartActions"]["SA_3"]["payload"] == {
+    "url": "https://example.invalid/fixture",
+}
+assert smart_document["smartActions"]["SA_4"]["payload"] == {
+    "name": "Fixture App", "path": "/Applications/Fixture.app",
+}
+assert smart_document["smartActionGroups"][0]["actionIds"] == [1, 2]
+smart_deleted_document = json.loads(payload(smart_deleted_candidate, "smart_actions.json"))
+assert "SA_1" not in smart_deleted_document["smartActions"]
+assert smart_deleted_document["smartActionGroups"][0]["actionIds"] == [2]
+smart_deleted_keymap = json.loads(payload(smart_deleted_candidate, "keymap.json"))
+assert smart_deleted_keymap["profiles"][0]["layers"][1]["layout"]["keymap"][0][0] == "KC_NONE"
 candidate_keymap = json.loads(payload(candidate, "keymap.json"))
 color_keymap = json.loads(payload(color_candidate, "keymap.json"))
 control_keymap = json.loads(payload(control_candidate, "keymap.json"))
@@ -789,16 +887,16 @@ assert appsense_updated_keymap["linkedApps"][0] == {
 }
 assert appsense_unlinked_keymap["linkedApps"] == []
 assert "linkedAppId" not in appsense_unlinked_keymap["profiles"][0]["layers"][1]
-assert candidate["revision"] != snapshot["revision"]
+assert apply_candidate["revision"] != snapshot["revision"]
 assert pre_apply["revision"] == snapshot["revision"]
 assert apply["operation"] == "apply"
 assert apply["changed"] is True
 assert apply["idempotentReplay"] is False
 assert apply["beforeRevision"] == snapshot["revision"]
-assert apply["afterRevision"] == candidate["revision"]
+assert apply["afterRevision"] == apply_candidate["revision"]
 assert replay["idempotentReplay"] is True
-assert replay["afterRevision"] == candidate["revision"]
-assert post_apply["revision"] == candidate["revision"]
+assert replay["afterRevision"] == apply_candidate["revision"]
+assert post_apply["revision"] == apply_candidate["revision"]
 post_apply_keymap = json.loads(payload(post_apply, "keymap.json"))
 assert post_apply_keymap["profiles"][2]["name"] == "CLI Profile"
 assert post_apply_keymap["profiles"][0]["layers"][2]["name"] == "CLI Layer"
@@ -807,12 +905,15 @@ assert post_apply_keymap["profiles"][0]["layers"][0]["linkedAppId"] == 0
 for layer in post_apply_keymap["profiles"][0]["layers"]:
     assert layer["lights"]["backlight"]["effect"] == "breath"
     assert layer["lights"]["backlight"]["color"] == 0x102030
+assert payload(post_apply, "smart_actions.json") == payload(apply_candidate, "smart_actions.json")
+post_apply_smart = json.loads(payload(post_apply, "smart_actions.json"))
+assert post_apply_smart["smartActions"]["SA_1"]["payload"] == {"text": "hello fixture"}
 assert (root / "config-apply-stale.status").read_text().strip() != "0"
 assert "revision conflict" in (root / "config-apply-stale.err").read_text()
-assert pre_restore["revision"] == candidate["revision"]
+assert pre_restore["revision"] == apply_candidate["revision"]
 assert restore["operation"] == "restore"
 assert restore["changed"] is True
-assert restore["beforeRevision"] == candidate["revision"]
+assert restore["beforeRevision"] == apply_candidate["revision"]
 assert restore["afterRevision"] == snapshot["revision"]
 assert post_restore["revision"] == snapshot["revision"]
 assert payload(post_restore, "keymap.json") == payload(snapshot, "keymap.json")
@@ -855,6 +956,10 @@ print("semantic_multi_action_create_set=verified")
 print("semantic_multi_action_delete_cascade=verified")
 print("semantic_multi_action_group_crud=verified")
 print("semantic_multi_action_group_orphan_cascade=verified")
+print("semantic_smart_action_typed_crud=verified")
+print("semantic_smart_action_group_crud=verified")
+print("semantic_smart_action_binding_cascade=verified")
+print("semantic_smart_action_apply_readback_restore=verified")
 print("semantic_unknown_fields=preserved")
 print("semantic_unrelated_file_bytes=preserved")
 print("config_live_cas=verified")
