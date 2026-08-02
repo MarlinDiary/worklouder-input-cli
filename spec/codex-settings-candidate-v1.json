@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-codex-settings-candidate-contract",
+  "contractAppVersion": "26.727.51351",
+  "authority": "codex-settings",
+  "inputKind": "worklouderctl-codex-settings-snapshot",
+  "outputKind": "worklouderctl-codex-settings-snapshot",
+  "receiptKind": "worklouderctl-codex-settings-candidate",
+  "revisionAlgorithm": {
+    "id": "codex-settings-revision-v1",
+    "prefixUtf8": "worklouder-codex-settings-revision-v1\\u0000",
+    "payload": "recursive-key-sorted compact JSON of explicit settings"
+  },
+  "validation": {
+    "requireExactSchemaVersion": true,
+    "requireExactKind": true,
+    "requireExactAdapter": "codex-config-toml-read-v1",
+    "requireExactContractAppVersion": true,
+    "requireLowercaseSourceSha256": true,
+    "requireEmbeddedDefinitionsEqualContract": true,
+    "recomputeEffectiveSettings": true,
+    "preserveUnknownPrefixedSettings": true,
+    "rejectExistingOutput": true,
+    "atomicPublishAndReopen": true
+  },
+  "operations": {
+    "agentSourceGet": {
+      "command": "codex agent-source get --input SNAPSHOT.json",
+      "values": ["pinned", "recent", "priority", "custom"]
+    },
+    "agentSourceSet": {
+      "command": "codex agent-source set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
+      "changedPath": "/settings/codex-micro-agent-source"
+    },
+    "agentTapModeGet": {
+      "command": "codex agent-key tap-mode get --input SNAPSHOT.json"
+    },
+    "agentTapModeSet": {
+      "command": "codex agent-key tap-mode set --input SNAPSHOT.json ENABLED --output CANDIDATE.json",
+      "changedPath": "/settings/codex-micro-single-tap-agent-keys"
+    },
+    "commandKeyGet": {
+      "command": "codex command-key get --input SNAPSHOT.json SLOT"
+    },
+    "commandKeySet": {
+      "command": "codex command-key set --input SNAPSHOT.json SLOT [--keycap KEYCAP] [--command COMMAND_ID | --skill-name NAME --skill-path PATH | --clear-action] --output CANDIDATE.json",
+      "changedPathTemplate": "/settings/codex-micro-layout/slots/{slot}"
+    },
+    "commandKeyReset": {
+      "command": "codex command-key reset --input SNAPSHOT.json SLOT --output CANDIDATE.json",
+      "source": "frozen layout default for the selected slot"
+    }
+  },
+  "commandKeySlots": [
+    "ACT06",
+    "ACT07",
+    "ACT08",
+    "ACT09",
+    "ACT10_ACT11",
+    "ACT12"
+  ],
+  "commandKeyRules": {
+    "preserveCurrentKeycapWhenOmitted": true,
+    "commandRepresentation": {
+      "keycapId": "KEYCAP",
+      "commandId": "COMMAND_ID"
+    },
+    "skillRepresentation": {
+      "keycapId": "KEYCAP",
+      "action": {
+        "type": "skill",
+        "skillName": "NAME",
+        "skillPath": "PATH"
+      }
+    },
+    "clearActionPreservesKeycap": true,
+    "commandAndActionAreMutuallyExclusive": true
+  },
+  "candidateBoundary": {
+    "contactsCodex": false,
+    "contactsInput": false,
+    "contactsDevice": false,
+    "writesSourceConfig": false,
+    "futureApplyAuthority": "Codex settings-write bridge",
+    "futureApplyCasField": "expectedSourceSha256"
+  }
+}
