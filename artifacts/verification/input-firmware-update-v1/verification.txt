@@ -1,0 +1,237 @@
+WorkLouderCTL delegated Input firmware update v1 verification record
+====================================================================
+
+Scope
+-----
+Base commit: 3662f3ff4d1f048ae974b41e891d9ff146fd2cb9
+Feature commit: 698bad5b158874d5aa4785c1cf0bbcfd2db05c37
+Feature commits:
+  6ab14c7 feat: delegate complete Input firmware updates
+  10dc8ca docs: publish delegated firmware contract
+  b319c5e docs: generate CLI completions and command reference
+  698bad5 docs: document Input firmware update integration
+Changed authority:
+  Input-owned firmware update operation exposed through the authenticated bridge
+CLI-owned driver, flasher, USB transport, Input GUI control, physical-device mutation: none
+
+Changed branch and field
+------------------------
+Bridge capability/method:
+  input.firmware.update.v1 / input.firmware.update
+New CLI branch:
+  worklouderctl input firmware update
+Immutable operation fields:
+  planRevision, expectedRevision, idempotencyKey, complete backup, seven update phases
+Verified invariant fields:
+  beforeConfigRevision == afterConfigRevision
+  targetFirmwareVersion == afterFirmwareVersion
+  configurationRestored == true
+  recoveryRequired == false
+
+Preserved original artifact and baseline-red
+--------------------------------------------
+Source commit: 3662f3ff4d1f048ae974b41e891d9ff146fd2cb9
+Build command:
+  CARGO_TARGET_DIR=/tmp/worklouderctl-input-firmware-update-v1.a9nLzM/base-target cargo build --release --locked --manifest-path /tmp/worklouderctl-input-firmware-update-v1.a9nLzM/base-worktree/Cargo.toml
+Preserved path:
+  /tmp/worklouderctl-input-firmware-update-v1.a9nLzM/original/worklouderctl
+SHA-256 after reopen/execute:
+  c775892688997e1202e1053bb4ee859a5af521860a2644fc8a94b3d7820bffc6
+Command:
+  ORIGINAL_BIN input firmware update --help
+Literal stdout:
+
+Literal stderr:
+  error: Found argument 'update' which wasn't expected, or isn't valid in this context
+  
+  USAGE:
+      worklouderctl input firmware [OPTIONS] <SUBCOMMAND>
+  
+  For more information try --help
+Exit status: 2
+Baseline behavior:
+  firmware plan exists, but firmware update is not a recognized subcommand.
+
+Modified artifact
+-----------------
+Source commit: 698bad5b158874d5aa4785c1cf0bbcfd2db05c37
+Build command:
+  CARGO_TARGET_DIR=/tmp/worklouderctl-input-firmware-update-v1.a9nLzM/feature-target cargo build --release --locked --manifest-path /tmp/worklouderctl-input-firmware-update-v1.a9nLzM/feature-worktree/Cargo.toml
+Preserved path:
+  /tmp/worklouderctl-input-firmware-update-v1.a9nLzM/modified/worklouderctl
+SHA-256 after reopen/execute:
+  382123f4b44e9988e9785676c40c3a7be2fc9f393e480d80987558c73c540914
+Command:
+  MODIFIED_BIN input firmware update --help
+Literal stdout:
+  worklouderctl-input-firmware-update 0.1.0
+  Delegate the complete update workflow to Input and verify firmware/config postflight
+  
+  USAGE:
+      worklouderctl input firmware update [OPTIONS] --plan <PLAN> --backup <BACKUP> --receipt <RECEIPT>
+  
+  OPTIONS:
+          --backup <BACKUP>
+              Immutable complete pre-update configuration snapshot
+  
+          --expected-revision <EXPECTED_REVISION>
+              Require the live configuration to have this exact revision
+  
+      -h, --help
+              Print help information
+  
+          --idempotency-key <IDEMPOTENCY_KEY>
+              Stable retry key; reuse it only with the exact same plan
+  
+          --json
+              Emit machine-readable JSON when the command supports it
+  
+          --plan <PLAN>
+              Immutable plan produced by `input firmware plan`
+  
+          --receipt <RECEIPT>
+              Destination for the verified update receipt
+  
+      -V, --version
+              Print version information
+Literal stderr:
+
+Exit status: 0
+
+Modified isolated bridge E2E
+----------------------------
+Command:
+  /tmp/worklouderctl-input-firmware-update-v1.a9nLzM/feature-worktree/scripts/test-firmware-update-e2e.sh
+Transport:
+  authenticated temporary Unix socket/token; fixture Input firmware authority; USB fixture only
+Literal stdout:
+  firmware_plan_cas=verified
+  firmware_complete_backup=verified
+  firmware_input_delegation=verified
+  firmware_config_postflight=verified
+  firmware_idempotent_replay=verified
+  firmware_receipt_readback=verified
+Literal stderr:
+     Compiling proc-macro2 v1.0.47
+     Compiling unicode-ident v1.0.5
+     Compiling quote v1.0.21
+     Compiling syn v1.0.109
+     Compiling version_check v0.9.5
+     Compiling autocfg v1.5.1
+     Compiling serde_derive v1.0.145
+     Compiling libc v0.2.137
+     Compiling hashbrown v0.12.3
+     Compiling serde v1.0.145
+     Compiling heck v0.4.1
+     Compiling unicode-width v0.1.10
+     Compiling unicode-linebreak v0.1.5
+     Compiling os_str_bytes v6.6.1
+     Compiling smawk v0.3.1
+     Compiling once_cell v1.17.1
+     Compiling anyhow v1.0.75
+     Compiling strsim v0.10.0
+     Compiling termcolor v1.4.1
+     Compiling serde_json v1.0.85
+     Compiling bitflags v1.3.2
+     Compiling ryu v1.0.11
+     Compiling itoa v1.0.4
+     Compiling clap_lex v0.2.4
+     Compiling textwrap v0.16.0
+     Compiling proc-macro-error-attr v1.0.4
+     Compiling proc-macro-error v1.0.4
+     Compiling indexmap v1.9.3
+     Compiling atty v0.2.14
+     Compiling clap_derive v3.2.25
+     Compiling clap v3.2.25
+     Compiling clap_complete v3.2.5
+     Compiling toml v0.5.9
+     Compiling worklouderctl v0.1.0 (/tmp/worklouderctl-input-firmware-update-v1.a9nLzM/feature-worktree)
+      Finished dev [unoptimized + debuginfo] target(s) in 28.23s
+Exit status: 0
+Verified behaviors:
+  strict firmware plan/config compare-and-swap
+  complete pre-update configuration backup
+  high-level update delegation to injected Input authority
+  all seven phases completed
+  exact firmware/config postflight
+  idempotent replay
+  atomic receipt write and strict backup-inspection reopen
+
+Current full regression
+-----------------------
+Command: cargo fmt --all -- --check
+Exit status: 0
+Command: cargo clippy --locked --all-targets --all-features -- -D warnings
+Literal result: Finished dev
+Exit status: 0
+Command: cargo test --all-targets --locked
+Literal result:
+  76 passed; 0 failed (library)
+  29 passed; 0 failed (CLI integration)
+  0 failed (binary)
+Exit status: 0
+Command: npm test --prefix companion
+Literal result: 21 passed; 0 failed
+Exit status: 0
+Command: ./scripts/test-bridge-e2e.sh
+Literal result: all Input semantic/read/write/restore gates verified
+Exit status: 0
+Command: ./scripts/test-firmware-update-e2e.sh
+Literal result:
+  firmware_plan_cas=verified
+  firmware_complete_backup=verified
+  firmware_input_delegation=verified
+  firmware_config_postflight=verified
+  firmware_idempotent_replay=verified
+  firmware_receipt_readback=verified
+Exit status: 0
+Command: ./scripts/test-codex-bridge-e2e.sh
+Literal result: status=pass; exact baseline/modified/restored revisions verified
+Exit status: 0
+Command: ./scripts/test-transaction-e2e.sh
+Literal result: four-authority apply/readback/restore/idempotency verified
+Exit status: 0
+Command: ./scripts/test-transaction-rollback-e2e.sh
+Literal result: provider-local and automatic rollback verified
+Exit status: 0
+Command: ./scripts/verify-sanitized-fixtures.sh
+Exit status: 0
+Command: ./scripts/verify-cli-assets.sh
+Literal result: command_reference_paths=216; cli_assets=deterministic
+Exit status: 0
+Command: find spec -type f -name '*.json' -print0 | sort -z | xargs -0 -n1 jq -e .
+Exit status: 0
+Command: git diff --check
+Exit status: 0
+
+Tested boundaries
+-----------------
+  no live Input app, GUI, LokiJS database, physical device, or firmware was mutated
+  CLI delegates to Input-selected release/update authority and never implements a flasher
+  USB/readiness blockers prevent mutation before delegation
+  exact plan revision and config revision are checked immediately before update
+  Input authority must report all seven phases complete
+  exact postflight must confirm target firmware and the original config revision
+  ambiguous provider failure is accepted only when exact postflight proves completion
+  otherwise the typed error sets recoveryRequired for bootloader/config recovery handling
+
+Patch
+-----
+Path:
+  artifacts/verification/input-firmware-update-v1/input-firmware-update.patch
+SHA-256:
+  ac88ca04186f7c246ec2d3b818f577863408fd2c463148585d44e4577d57e466
+Command:
+  git apply --check --reverse artifacts/verification/input-firmware-update-v1/input-firmware-update.patch
+Exit status: 0
+
+Rollback
+--------
+Path:
+  artifacts/verification/input-firmware-update-v1/rollback.sh
+SHA-256:
+  f31bed1d82858d33b2f008442424a03e63b0e5b96f4ff3dc814c77f415cdb0cb
+Syntax command:
+  sh -n artifacts/verification/input-firmware-update-v1/rollback.sh
+Exit status: 0
+The isolated rollback execution is appended after the artifact commit.
