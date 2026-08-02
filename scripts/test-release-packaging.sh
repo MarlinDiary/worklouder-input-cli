@@ -40,12 +40,20 @@ cmp "$archive.sha256" "$second.sha256"
 
 version=$($bin version | awk '{print $2}')
 digest=$(awk '{print $1}' "$archive.sha256")
+intel_digest=$(printf '%s' "$digest-x86_64" | shasum -a 256 | awk '{print $1}')
 "$repo/scripts/render-homebrew-formula.py" \
   --version "$version" \
   --base-url "https://github.com/MarlinDiary/worklouder-input-cli/releases/download/v$version" \
-  --arm64-sha256 "$digest" --x86-64-sha256 "$digest" \
-  --output "$root/worklouderctl.rb" >"$root/formula.txt"
-ruby -c "$root/worklouderctl.rb" >"$root/ruby.txt"
+  --arm64-sha256 "$digest" --x86-64-sha256 "$intel_digest" \
+  --output "$root/Formula/worklouderctl.rb" >"$root/formula.txt"
+ruby -c "$root/Formula/worklouderctl.rb" >"$root/ruby.txt"
+if command -v brew >/dev/null 2>&1; then
+  if ! brew style "$root/Formula/worklouderctl.rb" \
+    >"$root/brew-style.txt" 2>&1; then
+    cat "$root/brew-style.txt" >&2
+    exit 1
+  fi
+fi
 
 mkdir "$root/extracted" "$root/prefix"
 tar -xzf "$archive" -C "$root/extracted"
@@ -70,4 +78,5 @@ printf '%s\n' \
   "release_archive_manifest=verified" \
   "release_binary_execute=verified" \
   "release_temp_prefix_install=verified" \
-  "homebrew_formula_syntax=verified"
+  "homebrew_formula_syntax=verified" \
+  "homebrew_formula_style=verified"

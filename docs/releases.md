@@ -65,7 +65,7 @@ name in `WORKLOUDERCTL_CODESIGN_IDENTITY`. The script signs a staging copy; it
 does not modify `target/.../release/worklouderctl`.
 
 To test deterministic packaging, archive verification, local-prefix install,
-and Homebrew formula syntax together:
+and Homebrew formula syntax/style together:
 
 ```console
 ./scripts/test-release-packaging.sh

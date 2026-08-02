@@ -101,7 +101,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Deterministic Apple Silicon and Intel archives with exact manifest, checksum, and executable verification
 - [x] Explicit unsigned, ad-hoc, Apple Development, Developer ID, and notarized signature-state validation
 - [x] Fail-closed Developer ID signing, Apple notarization, and build-provenance release workflow
-- [x] Checksum-pinned Homebrew formula generation, syntax check, isolated-prefix install, and execution test
+- [x] Checksum-pinned Homebrew formula generation, syntax/style checks, isolated-prefix install, and execution test
 - [ ] Publish the first signed/notarized macOS release and stable Homebrew tap
 - [x] Deterministic Bash/Zsh/Fish completions and exhaustive generated command reference
 - [x] Machine-readable compatibility matrix and Cargo-version gate for every release
