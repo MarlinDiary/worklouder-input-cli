@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-error",
+  "code": "provider-unavailable",
+  "exitStatus": 3,
+  "message": "doctor found 2 warning(s) and 0 failure(s)",
+  "causes": []
+}
