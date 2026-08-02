@@ -101,7 +101,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [ ] Signed macOS binaries
 - [ ] Homebrew formula
 - [x] Deterministic Bash/Zsh/Fish completions and exhaustive generated command reference
-- [ ] Compatibility matrix for every release
+- [x] Machine-readable compatibility matrix and Cargo-version gate for every release
 - [x] Strict backup inspection and schema migration assessment tools
 - [x] Shell-free agent JSON envelope over the same parser, typed statuses, and transaction core
 

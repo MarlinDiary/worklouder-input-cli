@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-compatibility-matrix",
+  "releases": [
+    {
+      "cliVersion": "0.1.0",
+      "publicationState": "source-alpha",
+      "hostOs": ["macOS"],
+      "deviceModels": ["codex_micro"],
+      "authorities": [
+        {
+          "id": "codex-app",
+          "version": "26.727.51351",
+          "state": "experimental",
+          "tiers": [1],
+          "evidence": ["codex-bridge-fixture", "tier1-offline-candidates"],
+          "boundary": "Exact read/offline candidates and isolated bridge mutations are verified; released Codex integration is pending."
+        },
+        {
+          "id": "codex-companion-bridge",
+          "version": "1",
+          "state": "experimental",
+          "tiers": [1],
+          "evidence": ["authenticated-cas", "readback", "automatic-rollback"],
+          "boundary": "Protocol and reference integration are fixture-verified."
+        },
+        {
+          "id": "input-app",
+          "version": "0.17.3",
+          "state": "read-only",
+          "tiers": [2, 3, 4],
+          "evidence": ["deterministic-sanitized-fixture"],
+          "boundary": "Structural and semantic fixture parsing only."
+        },
+        {
+          "id": "input-app",
+          "version": "0.18.0",
+          "state": "experimental",
+          "tiers": [2, 3, 4],
+          "evidence": ["deterministic-sanitized-fixture", "live-read", "bridge-transactions"],
+          "boundary": "Live reads and isolated bridge transactions are verified; official released bridge integration is pending."
+        },
+        {
+          "id": "input-companion-bridge",
+          "version": "1",
+          "state": "experimental",
+          "tiers": [2, 3, 4],
+          "evidence": ["authenticated-cas", "firmware-delegation", "transaction-rollback"],
+          "boundary": "Reference adapter and synthetic end-to-end fixtures are verified."
+        },
+        {
+          "id": "codex-micro-firmware",
+          "version": "v0.6.0",
+          "state": "read-only",
+          "tiers": [4],
+          "evidence": ["live-status-files-export", "deterministic-sanitized-fixture"],
+          "boundary": "Live read boundary; firmware update behavior is verified only through the synthetic delegated authority."
+        }
+      ],
+      "requiredGates": [
+        "cargo test --locked",
+        "npm test --prefix companion",
+        "./scripts/verify-sanitized-fixtures.sh",
+        "./scripts/verify-cli-assets.sh",
+        "./scripts/test-bridge-e2e.sh",
+        "./scripts/test-firmware-update-e2e.sh",
+        "./scripts/test-codex-bridge-e2e.sh",
+        "./scripts/test-transaction-e2e.sh",
+        "./scripts/test-transaction-rollback-e2e.sh"
+      ]
+    }
+  ]
+}

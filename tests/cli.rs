@@ -1648,6 +1648,27 @@ fn capability_filter_runs_end_to_end_as_json() {
 }
 
 #[test]
+fn compatibility_matrix_covers_the_running_release_end_to_end() {
+    let verify = binary()
+        .args(["--json", "compatibility", "verify"])
+        .output()
+        .unwrap();
+    assert!(verify.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&verify.stdout).unwrap();
+    assert_eq!(report["valid"], true);
+    assert_eq!(report["currentCliVersion"], env!("CARGO_PKG_VERSION"));
+
+    let show = binary()
+        .args(["--json", "compatibility", "show"])
+        .output()
+        .unwrap();
+    assert!(show.status.success());
+    let release: serde_json::Value = serde_json::from_slice(&show.stdout).unwrap();
+    assert_eq!(release["cliVersion"], env!("CARGO_PKG_VERSION"));
+    assert!(release["authorities"].as_array().unwrap().len() >= 6);
+}
+
+#[test]
 fn runtime_errors_have_typed_status_and_json_envelope() {
     let missing = fixture_root().join("missing-plan.json");
     let output = binary()

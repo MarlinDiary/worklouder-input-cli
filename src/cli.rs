@@ -30,6 +30,12 @@ pub enum Command {
         command: CapabilityCommand,
     },
 
+    /// Inspect the release-gated application, bridge, and firmware matrix.
+    Compatibility {
+        #[clap(subcommand)]
+        command: CompatibilityCommand,
+    },
+
     /// Diagnose Codex, Input, and cached device configuration providers.
     Doctor {
         /// Treat warnings as a failing exit status.
@@ -214,6 +220,22 @@ pub enum CapabilityCommand {
         #[clap(long)]
         tier: Option<u8>,
     },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CompatibilityCommand {
+    /// List every CLI release represented in the matrix.
+    List,
+
+    /// Show authority versions, states, evidence, and claim boundaries.
+    Show {
+        /// CLI version; defaults to the running binary version.
+        #[clap(long)]
+        version: Option<String>,
+    },
+
+    /// Verify that the running Cargo version has exactly one valid entry.
+    Verify,
 }
 
 #[derive(Debug, Subcommand)]

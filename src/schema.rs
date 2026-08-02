@@ -5,6 +5,8 @@ use serde_json::Value;
 const AGENT_EXECUTION: &str = include_str!("../spec/schemas/agent-execution-v1.schema.json");
 const BACKUP_INSPECTION: &str = include_str!("../spec/schemas/backup-inspection-v1.schema.json");
 const COMMAND_ENVELOPE: &str = include_str!("../spec/schemas/command-envelope-v1.schema.json");
+const COMPATIBILITY_MATRIX: &str =
+    include_str!("../spec/schemas/compatibility-matrix-v1.schema.json");
 const CONFIGURATION: &str = include_str!("../spec/schemas/configuration-v1.schema.json");
 const ERROR: &str = include_str!("../spec/schemas/error-v1.schema.json");
 const INPUT_OPERATIONS: &str = include_str!("../spec/schemas/input-operations-v1.schema.json");
@@ -47,6 +49,14 @@ const ENTRIES: &[SchemaEntry] = &[
             description: "Shell-free argv envelope and expected exit statuses",
         },
         source: COMMAND_ENVELOPE,
+    },
+    SchemaEntry {
+        summary: SchemaSummary {
+            name: "compatibility-matrix-v1",
+            id: "https://worklouderctl.dev/schemas/compatibility-matrix-v1.schema.json",
+            description: "Per-release application, bridge, firmware, evidence, and gate matrix",
+        },
+        source: COMPATIBILITY_MATRIX,
     },
     SchemaEntry {
         summary: SchemaSummary {
@@ -117,7 +127,7 @@ mod tests {
     #[test]
     fn registry_is_sorted_and_every_document_reopens() {
         let summaries = list();
-        assert_eq!(summaries.len(), 7);
+        assert_eq!(summaries.len(), 8);
         let names = summaries
             .iter()
             .map(|summary| summary.name)

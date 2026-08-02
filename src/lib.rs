@@ -6,6 +6,7 @@ pub mod codex;
 pub mod codex_agent_keys;
 pub mod codex_bridge;
 pub mod codex_runtime;
+pub mod compatibility;
 pub mod config;
 pub mod contract;
 pub mod device;
@@ -28,9 +29,9 @@ use cli::{
     CodexDialGestureCommand, CodexDialMode, CodexDialModeCommand, CodexJoystickCommand,
     CodexJoystickDirection, CodexLightingAutoOff, CodexLightingAutoOffCommand,
     CodexLightingBrightnessCommand, CodexLightingCommand, CodexResetCommand, CodexRuntimeCommand,
-    CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand,
-    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand,
-    InputCommandPermissionCommand, InputCommandPermissionValue, InputConfigCommand,
+    CodexVoiceCommand, CodexVoiceMode, Command, CompatibilityCommand, CompletionShell,
+    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
+    InputCommand, InputCommandPermissionCommand, InputCommandPermissionValue, InputConfigCommand,
     InputFirmwareCommand, InputLogsCommand, InputPermissionCommand, InputPresetCommand,
     LayerCommand, LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand,
     LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect, LightingZone,
@@ -68,6 +69,7 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         }
         Command::Tier { command } => run_tier(command, cli.json, &mut out)?,
         Command::Capability { command } => run_capability(command, cli.json, &mut out)?,
+        Command::Compatibility { command } => run_compatibility(command, cli.json, &mut out)?,
         Command::Doctor { strict } => run_doctor(strict, cli.json, &mut out)?,
         Command::Codex { command } => run_codex(command, cli.json, &mut out)?,
         Command::Input {
@@ -3614,6 +3616,68 @@ fn run_capability(command: CapabilityCommand, json: bool, mut out: impl Write) -
         }
     }
 
+    Ok(())
+}
+
+fn run_compatibility(command: CompatibilityCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        CompatibilityCommand::List => {
+            let releases = compatibility::list()?;
+            if json {
+                write_json(&mut out, &releases)?;
+            } else {
+                for release in releases {
+                    writeln!(
+                        out,
+                        "{}\t{}\tauthorities={}\tgates={}",
+                        release.cli_version,
+                        release.publication_state,
+                        release.authority_count,
+                        release.required_gate_count
+                    )?;
+                }
+            }
+        }
+        CompatibilityCommand::Show { version } => {
+            let release = compatibility::show(version.as_deref())?;
+            if json {
+                write_json(&mut out, &release)?;
+            } else {
+                writeln!(
+                    out,
+                    "WorkLouderCTL {} ({})",
+                    release.cli_version, release.publication_state
+                )?;
+                for authority in release.authorities {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}\ttiers={}",
+                        authority.id,
+                        authority.version,
+                        authority.state,
+                        authority
+                            .tiers
+                            .iter()
+                            .map(u8::to_string)
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    )?;
+                }
+            }
+        }
+        CompatibilityCommand::Verify => {
+            let report = compatibility::verify_current()?;
+            if json {
+                write_json(&mut out, &report)?;
+            } else {
+                writeln!(
+                    out,
+                    "Compatibility matrix: valid current={} releases={}",
+                    report.current_cli_version, report.release_count
+                )?;
+            }
+        }
+    }
     Ok(())
 }
 

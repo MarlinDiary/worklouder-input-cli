@@ -9,6 +9,14 @@ verification cover the relevant operations.
 There is no released binary yet. The versions below are research baselines,
 not a public support guarantee.
 
+The canonical release-gated form is
+[`spec/compatibility-matrix-v1.json`](../spec/compatibility-matrix-v1.json).
+`worklouderctl compatibility list|show|verify` exposes the same embedded data to
+humans and agents. `./scripts/verify-compatibility-matrix.sh` requires exactly
+one matrix record for the version declared by `Cargo.toml`; CI therefore blocks
+every future version bump until its application, bridge, firmware, evidence,
+claim-boundary, and required-gate inventory is added.
+
 | Component | Research baseline | Current claim |
 | --- | ---: | --- |
 | Device | Work Louder Codex Micro | Initial target |
