@@ -170,3 +170,28 @@ Path:
 SHA-256:
   6a5d86095676c24bef814457ca04b8989c8bd81a3983119307005b1f296265e4
 The isolated-worktree execution result is appended after the artifact commit.
+
+Isolated rollback execution
+---------------------------
+Artifact commit:
+  4e92af7 test: publish Codex settings diff evidence
+Command:
+  artifacts/verification/codex-settings-diff-v1/rollback.sh \
+    /tmp/worklouderctl-codex-settings-diff-v1.08HAMg/rollback-worktree
+Literal output:
+  rollback=verified
+  base=ae66d32e1157aa5592b09425245dd0af4396f059
+Exit status: 0
+Postcondition command:
+  git -C ROLLBACK_WORKTREE diff --quiet \
+    ae66d32e1157aa5592b09425245dd0af4396f059 -- . \
+    ':(exclude)artifacts/verification/codex-settings-diff-v1'
+Literal output: (empty)
+Exit status: 0
+Rolled-back behavior command:
+  cargo run --quiet --locked --manifest-path ROLLBACK_WORKTREE/Cargo.toml -- \
+    codex config diff BASE.json CANDIDATE.json
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'diff' which wasn't expected, or isn't valid in this context
+Exit status: 2
