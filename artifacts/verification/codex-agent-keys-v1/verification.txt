@@ -1,0 +1,221 @@
+WorkLouderCTL Codex Agent Keys v1 verification record
+=====================================================
+
+Scope
+-----
+Base commit: af5c7dd0bf077509e6ae0a4817a72ff395624f3f
+Feature commits:
+  c2487d5 spec: freeze Codex Agent Key mutations
+  a6b8397 feat: add Agent Key bridge transactions
+  3f5e035 feat: add Agent Key assignment CLI
+  67dfcc0 docs: publish Agent Key transaction workflow
+Changed authority: Codex global-state key codex-micro-custom-agent-assignments.
+Changed fields: complete AG00, AG01, AG02, AG03, AG04, AG05 assignment object;
+  command, Skill, task, keycap, and empty forms; canonical globalStateRevision.
+Separate authority retained: codex-micro-agent-source remains an explicit settings
+  transaction and is never changed implicitly by an Agent Key assignment apply.
+Provider boundary: the release Codex/Input apps and GUI were not launched or
+  controlled. Mutation evidence uses the isolated Codex Companion Bridge fixture.
+
+Installed Codex boundary (static reads only)
+--------------------------------------------
+Command:
+  /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' /Applications/ChatGPT.app/Contents/Info.plist
+Literal output:
+  26.727.51351
+Exit status: 0
+
+Command:
+  shasum -a 256 /Applications/ChatGPT.app/Contents/Resources/app.asar
+Literal output:
+  a529edd72e10b08931c0d695b5e3e6a0be7f51874610dafc04f578436ab7d74d  /Applications/ChatGPT.app/Contents/Resources/app.asar
+Exit status: 0
+The same hash was read again after verification.
+
+Preserved original and modified release binaries
+-------------------------------------------------
+Base build command:
+  cargo build --release --locked --manifest-path BASE_WORKTREE/Cargo.toml
+Exit status: 0
+Preserved original path:
+  /tmp/worklouderctl-codex-agent-keys-v1.i66VlM/original/worklouderctl
+Original SHA-256:
+  4b94a28958c946dde2ceb62ccf021e7ca4a2861bfe855d7e63eeff70ba7ca680
+
+Modified build command:
+  cargo build --release --locked
+Exit status: 0
+Modified artifact path:
+  target/release/worklouderctl
+Preserved modified copy:
+  /tmp/worklouderctl-codex-agent-keys-v1.i66VlM/modified/worklouderctl
+Modified SHA-256 for both paths:
+  7730eb25031e3bca8895b89444ebabd75f994ec19d97c91311df6e8636dad549
+
+Functional baseline-red
+-----------------------
+Binary input: /tmp/worklouderctl-codex-agent-keys-v1.i66VlM/original/worklouderctl
+Commands:
+  ORIGINAL codex agent-key get --help
+  ORIGINAL codex agent-key set --help
+  ORIGINAL codex agent-key clear --help
+  ORIGINAL codex agent-key apply --help
+  ORIGINAL codex agent-key restore --help
+  ORIGINAL codex agent-key snapshot --help
+Literal stdout for every command: (empty)
+Literal exit statuses:
+  get=2
+  set=2
+  clear=2
+  apply=2
+  restore=2
+  snapshot=2
+Literal stderr first line for each command:
+  error: Found argument 'get' which wasn't expected, or isn't valid in this context
+  error: Found argument 'set' which wasn't expected, or isn't valid in this context
+  error: Found argument 'clear' which wasn't expected, or isn't valid in this context
+  error: Found argument 'apply' which wasn't expected, or isn't valid in this context
+  error: Found argument 'restore' which wasn't expected, or isn't valid in this context
+  error: Found argument 'snapshot' which wasn't expected, or isn't valid in this context
+Literal common stderr tail:
+
+  USAGE:
+      worklouderctl codex agent-key [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+
+Modified command surface
+------------------------
+Binary input: /tmp/worklouderctl-codex-agent-keys-v1.i66VlM/modified/worklouderctl
+Commands:
+  MODIFIED codex agent-key get --help
+  MODIFIED codex agent-key set --help
+  MODIFIED codex agent-key clear --help
+  MODIFIED codex agent-key apply --help
+  MODIFIED codex agent-key restore --help
+  MODIFIED codex agent-key snapshot --help
+Literal exit statuses:
+  get=0
+  set=0
+  clear=0
+  apply=0
+  restore=0
+  snapshot=0
+Literal set synopsis and assignment options:
+  USAGE:
+      worklouderctl codex agent-key set [OPTIONS] --input <INPUT> --output <OUTPUT> <SLOT>
+  <SLOT>    Logical slot: AG00 through AG05
+  --command <COMMAND>
+  --keycap <KEYCAP>
+  --skill-name <SKILL_NAME> --skill-path <SKILL_PATH>
+  --thread-host <THREAD_HOST> --thread-key <THREAD_KEY> --title <TITLE>
+
+Modified functional input
+-------------------------
+Baseline assignments literal JSON:
+  {"AG00":{"type":"command","commandId":"fixture.command"},"AG01":null,"AG02":null,"AG03":null,"AG04":null,"AG05":null}
+Baseline global-state revision:
+  c1a788b94510693884366cebe7ca36c42b097851285b1c6068c925a337310be5
+Offline candidate operation sequence:
+  set AG01 --skill-name Review --skill-path /tmp/fixture-review/SKILL.md
+  set AG02 --thread-host local --thread-key fixture-thread --title 'Fixture Task'
+  set AG03 --keycap GIT
+  set AG04 --command fixture.command.two
+  clear AG00
+Candidate assignments literal JSON:
+  {"AG00":null,"AG01":{"type":"skill","skillName":"Review","skillPath":"/tmp/fixture-review/SKILL.md"},"AG02":{"hostId":"local","threadKey":"fixture-thread","title":"Fixture Task"},"AG03":{"keycapId":"GIT"},"AG04":{"type":"command","commandId":"fixture.command.two"},"AG05":null}
+Candidate global-state revision:
+  75a9d75d0812c9ab7553cff71a69aa13de80415d38a4d5ae8cb18d2dc0759d55
+
+Modified release E2E
+--------------------
+Command:
+  TMPDIR=/tmp/worklouderctl-codex-agent-keys-v1.i66VlM KEEP_CODEX_BRIDGE_E2E=1 WORKLOUDERCTL_BIN=/tmp/worklouderctl-codex-agent-keys-v1.i66VlM/modified/worklouderctl ./scripts/test-codex-bridge-e2e.sh
+Literal stdout:
+  {"status":"pass","baselineAgentSource":"recent","modifiedAgentSource":"custom","restoredAgentSource":"recent","baselineSourceSha256":"8d47e4f69727e8c5371e5b84d3578857a7255af3fb4e4b72bc171134ab4bcb00","modifiedSourceSha256":"5eed090cb9d71c269f48a7205025236e1bb0f32bf0ffb26ce864e719b65ac008","restoredSourceSha256":"8d47e4f69727e8c5371e5b84d3578857a7255af3fb4e4b72bc171134ab4bcb00","agentKeySlots":6,"agentKeysBaselineRevision":"c1a788b94510693884366cebe7ca36c42b097851285b1c6068c925a337310be5","agentKeysModifiedRevision":"75a9d75d0812c9ab7553cff71a69aa13de80415d38a4d5ae8cb18d2dc0759d55","agentKeysRestoredRevision":"c1a788b94510693884366cebe7ca36c42b097851285b1c6068c925a337310be5","agentKeysIdempotentReplay":true,"agentKeysStaleCasRejected":true}
+Literal stderr: (empty)
+Exit status: 0
+
+Apply literal result fields:
+  operation=apply
+  changed=true
+  rollbackPerformed=false
+  idempotentReplay=false
+  beforeGlobalStateRevision=c1a788b94510693884366cebe7ca36c42b097851285b1c6068c925a337310be5
+  afterGlobalStateRevision=75a9d75d0812c9ab7553cff71a69aa13de80415d38a4d5ae8cb18d2dc0759d55
+Replay literal result fields:
+  operation=apply
+  idempotentReplay=true
+  afterGlobalStateRevision=75a9d75d0812c9ab7553cff71a69aa13de80415d38a4d5ae8cb18d2dc0759d55
+Stale-CAS command input:
+  expectedGlobalStateRevision=0000000000000000000000000000000000000000000000000000000000000000
+Stale-CAS literal stderr:
+  error: Codex bridge method codex.agentKeys.apply failed with -32005: Codex Agent Key revision conflict; data={"expectedGlobalStateRevision":"0000000000000000000000000000000000000000000000000000000000000000","liveGlobalStateRevision":"75a9d75d0812c9ab7553cff71a69aa13de80415d38a4d5ae8cb18d2dc0759d55"}
+Stale-CAS exit status: nonzero, asserted by E2E
+Restore literal result fields:
+  operation=restore
+  changed=true
+  rollbackPerformed=false
+  beforeGlobalStateRevision=75a9d75d0812c9ab7553cff71a69aa13de80415d38a4d5ae8cb18d2dc0759d55
+  afterGlobalStateRevision=c1a788b94510693884366cebe7ca36c42b097851285b1c6068c925a337310be5
+Restored assignments exact-match baseline: true
+Restored revision exact-match baseline: true
+
+Automated quality gates
+-----------------------
+Command: cargo fmt --check
+Literal output: (empty)
+Exit status: 0
+
+Command: cargo clippy --all-targets -- -D warnings
+Literal result:
+  Finished dev [unoptimized + debuginfo] target(s)
+Exit status: 0
+
+Command: cargo test --all-targets
+Literal result:
+  52 passed; 0 failed (library)
+  13 passed; 0 failed (CLI integration)
+Exit status: 0
+
+Command: npm test --prefix companion
+Literal result:
+  tests 15
+  pass 15
+  fail 0
+Exit status: 0
+
+Command: ./scripts/test-bridge-e2e.sh
+Literal selected result lines:
+  bridge_protocol=1
+  node_conformance=verified
+  semantic_unknown_fields=preserved
+  config_live_cas=verified
+  config_apply_readback=verified
+  config_idempotent_replay=verified
+  config_stale_cas_rejected=verified
+  config_restore_readback=verified
+Exit status: 0
+
+Command: python3 JSON parse for every spec/*.json
+Literal result: all 14 spec documents parsed
+Exit status: 0
+
+Command: git diff --check
+Literal output: (empty)
+Exit status: 0
+
+Patch
+-----
+Path: artifacts/verification/codex-agent-keys-v1/codex-agent-keys.patch
+SHA-256: f927ae8124ec0d1a832370fa8a8fd5b7baa19aaa04785a7cdca48d599aafd490
+Command:
+  git apply --check --reverse artifacts/verification/codex-agent-keys-v1/codex-agent-keys.patch
+Literal output: (empty)
+Exit status: 0
+
+Rollback
+--------
+Path: artifacts/verification/codex-agent-keys-v1/rollback.sh
+SHA-256 before verification-result append: b1f079b387a1401fac6ec8edfb159f9be7e37663f90fef7ea0c591ff5572c084
+The isolated-worktree execution result is appended after the rollback test.

@@ -1,0 +1,2429 @@
+diff --git a/README.md b/README.md
+index e662791..ddba059 100644
+--- a/README.md
++++ b/README.md
+@@ -25,7 +25,7 @@
+ > diff, live device status/file reads, verified device export, revisioned bridge
+ > snapshots/CAS validation, offline profile/layer/AppSense/control/Action/Smart
+ > Action candidate generation, fixture-verified Input and Codex apply/restore
+-> transactions, live Codex Agent Key assignment snapshots, JSON output, and
++> transactions, six-slot Codex Agent Key candidates and transactions, JSON output, and
+ > shell completions.
+ > There is no packaged release yet.
+ > The bridge transaction engine now verifies backup, apply, idempotent retry,
+@@ -95,6 +95,12 @@ worklouderctl codex config snapshot --output CODEX_SNAPSHOT.json
+ worklouderctl codex config apply --input CODEX_CANDIDATE.json --backup CODEX_BEFORE.json
+ worklouderctl codex config restore --input CODEX_BEFORE.json --backup CODEX_CURRENT.json
+ worklouderctl codex agent-key assignments
++worklouderctl codex agent-key snapshot --output AGENT_KEYS.json
++worklouderctl codex agent-key get --input AGENT_KEYS.json AG00
++worklouderctl codex agent-key set --input AGENT_KEYS.json AG01 --command COMMAND_ID --output AGENT_CANDIDATE.json
++worklouderctl codex agent-key clear --input AGENT_CANDIDATE.json AG00 --output AGENT_CLEARED.json
++worklouderctl codex agent-key apply --input AGENT_CLEARED.json --backup AGENT_BEFORE.json
++worklouderctl codex agent-key restore --input AGENT_BEFORE.json --backup AGENT_CURRENT.json
+ worklouderctl codex agent-source get --input CODEX_SNAPSHOT.json
+ worklouderctl codex agent-source set --input CODEX_SNAPSHOT.json priority --output CODEX_CANDIDATE.json
+ worklouderctl codex agent-key tap-mode get --input CODEX_SNAPSHOT.json
+@@ -193,8 +199,13 @@ state unchanged. `codex config apply/restore` consumes those candidates through
+ the authenticated Codex Companion Bridge with source-SHA and canonical
+ settings-revision CAS, complete explicit-setting replacement, exact
+ explicit/effective readback, immutable backup, session idempotency, and
+-automatic rollback. `codex agent-key assignments` validates all six live slots
+-and the command, Skill, task, keycap, and empty assignment shapes.
++automatic rollback. `codex agent-key snapshot/get/set/clear` validates all six
++slots and the command, Skill, task, keycap, and empty assignment shapes while
++preserving untargeted unknown fields. `codex agent-key apply/restore` adds a
++separate global-state revision CAS, immutable backup, idempotent retry, exact
++six-slot readback, stale-CAS rejection, and automatic rollback. Assignment
++storage and the `codex-micro-agent-source=custom` setting remain independently
++controlled, so applying assignments never changes source ordering implicitly.
+ 
+ The repository ships the reference Codex main-process adapter and Electron
+ integration. The inspected Codex 26.727.51351 release exposes its internal
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 475f832..6ba1f23 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -11,7 +11,8 @@
+ > live device status/files、双哈希验证导出、带 revision 的 bridge snapshot、
+ > live CAS 校验、离线 profile/layer/AppSense/control/Action/Smart Action candidate
+ > 生成、fixture 验证的 Input/Codex apply/restore transaction、六个 Codex Agent
+-> Key assignment 的 live snapshot、结构化 diff、JSON 输出和 shell completion。
++> Key assignment 的 snapshot/get/set/clear/apply/restore、结构化 diff、JSON 输出和
++> shell completion。
+ > 尚未发布打包版本；bridge transaction 已通过隔离 writer fixture
+ > 验证，真实设备写入仍以 Input writer adapter 与硬件 rollback 验证为启用条件。
+ 
+@@ -63,6 +64,12 @@ worklouderctl codex config snapshot --output CODEX_SNAPSHOT.json
+ worklouderctl codex config apply --input CODEX_CANDIDATE.json --backup CODEX_BEFORE.json
+ worklouderctl codex config restore --input CODEX_BEFORE.json --backup CODEX_CURRENT.json
+ worklouderctl codex agent-key assignments
++worklouderctl codex agent-key snapshot --output AGENT_KEYS.json
++worklouderctl codex agent-key get --input AGENT_KEYS.json AG00
++worklouderctl codex agent-key set --input AGENT_KEYS.json AG01 --command COMMAND_ID --output AGENT_CANDIDATE.json
++worklouderctl codex agent-key clear --input AGENT_CANDIDATE.json AG00 --output AGENT_CLEARED.json
++worklouderctl codex agent-key apply --input AGENT_CLEARED.json --backup AGENT_BEFORE.json
++worklouderctl codex agent-key restore --input AGENT_BEFORE.json --backup AGENT_CURRENT.json
+ worklouderctl codex agent-source get --input CODEX_SNAPSHOT.json
+ worklouderctl codex agent-source set --input CODEX_SNAPSHOT.json priority --output CODEX_CANDIDATE.json
+ worklouderctl codex agent-key tap-mode get --input CODEX_SNAPSHOT.json
+@@ -154,8 +161,13 @@ receipt 中的 `expectedSourceSha256` 供 Codex `settings-write` CAS transaction
+ `codex config apply/restore` 通过认证的 Codex Companion Bridge 消费这些
+ candidate，执行 source SHA + canonical settings revision 双 CAS、complete explicit
+ settings replacement、explicit/effective exact readback、immutable backup、
+-session idempotency 和 automatic rollback。`codex agent-key assignments` 会校验
+-六个 live slots 以及 command、Skill、task、keycap 和 empty assignment shape。
++session idempotency 和 automatic rollback。`codex agent-key
++snapshot/get/set/clear` 会校验六个 slots 以及 command、Skill、task、keycap 和 empty
++assignment shape，并保留未修改 slot 的未知字段。`codex agent-key apply/restore`
++使用独立的 global-state revision CAS、immutable backup、session idempotency、exact
++readback、stale-CAS rejection 与 automatic rollback。assignment storage 和
++`codex-micro-agent-source=custom` 是两个独立 authority，因此 assignment transaction
++不会隐式改变 source ordering。
+ 
+ 仓库已经包含 Codex main-process reference adapter 和 Electron integration。
+ 静态检查确认 Codex 26.727.51351 内部有 `settings-read`、`settings-write` 与
+@@ -319,7 +331,7 @@ WorkLouderCTL 是 **Full-configuration CLI**：
+ contract/client/reference server、
+ revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
+ Input 自动恢复、Codex Companion Bridge settings snapshot/CAS/apply/restore/rollback
+-与六键 Agent assignment snapshot，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
++与六键 Agent assignment snapshot/get/set/clear/apply/restore transaction，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
+ 与 per-layer lighting、AppSense linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线 candidate 生成，keys、
+ encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
+ list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
+diff --git a/companion/codex-fixture-server.mjs b/companion/codex-fixture-server.mjs
+index cc32208..0068b96 100644
+--- a/companion/codex-fixture-server.mjs
++++ b/companion/codex-fixture-server.mjs
+@@ -15,7 +15,7 @@ const contract = JSON.parse(await readFile(resolve(here, "../spec/codex-settings
+ const sourcePath = join(dirname(socketPath), "codex-fixture-config.toml");
+ let settings = Object.fromEntries(Object.entries(contract.definitions).map(([key, definition]) => [key, structuredClone(definition.default)]));
+ let effectiveSettings = structuredClone(settings);
+-const assignments = {
++let assignments = {
+   AG00: { type: "command", commandId: "fixture.command" },
+   AG01: null,
+   AG02: null,
+@@ -38,6 +38,11 @@ const request = async (method, params) => {
+     if (params.key !== "codex-micro-custom-agent-assignments") throw new Error("unknown fixture state key");
+     return { value: structuredClone(assignments) };
+   }
++  if (method === "set-global-state") {
++    if (params.key !== "codex-micro-custom-agent-assignments") throw new Error("unknown fixture state key");
++    assignments = structuredClone(params.value);
++    return { success: true };
++  }
+   throw new Error("unsupported fixture request: " + method);
+ };
+ const adapter = createCodexMainAdapter({
+@@ -52,10 +57,16 @@ const adapter = createCodexMainAdapter({
+       await persist();
+     },
+   },
++  agentKeysWriter: {
++    async replaceAssignments({ key, assignments }) {
++      const result = await request("set-global-state", { key, value: assignments });
++      if (result.success !== true) throw new Error("fixture global-state write failed");
++    },
++  },
+ });
+ const bridge = await startCodexCompanionBridge({
+   adapter,
+-  codexVersion: contract.appVersion + "-fixture",
++  codexVersion: contract.appVersion,
+   bridgeVersion: "0.1.0-fixture",
+   socketPath,
+   tokenPath,
+diff --git a/companion/codex-main-adapter.mjs b/companion/codex-main-adapter.mjs
+index e2e1ad2..60cc756 100644
+--- a/companion/codex-main-adapter.mjs
++++ b/companion/codex-main-adapter.mjs
+@@ -5,7 +5,8 @@ import { CodexBridgeError } from "./codex-main-bridge.mjs";
+ export const CODEX_SETTINGS_SNAPSHOT_SCHEMA_VERSION = 1;
+ export const CODEX_SETTINGS_SNAPSHOT_KIND = "worklouderctl-codex-settings-snapshot";
+ export const CODEX_SETTINGS_REVISION_ALGORITHM = "codex-settings-revision-v1";
+-export const CODEX_AGENT_KEYS_SNAPSHOT_KIND = "worklouder-codex-agent-keys-snapshot";
++export const CODEX_AGENT_KEYS_SNAPSHOT_KIND = "worklouderctl-codex-agent-keys-snapshot";
++export const CODEX_AGENT_KEYS_MUTATION_KIND = "worklouderctl-codex-agent-keys-mutation";
+ export const CODEX_AGENT_KEYS_STATE_KEY = "codex-micro-custom-agent-assignments";
+ export const CODEX_AGENT_KEY_SLOTS = Object.freeze([
+   "AG00", "AG01", "AG02", "AG03", "AG04", "AG05",
+@@ -18,6 +19,7 @@ const MAX_IDEMPOTENCY_ENTRIES = 256;
+ export function createCodexMainAdapter({
+   request,
+   settingsReplacer,
++  agentKeysWriter,
+   readSettingsSource = (path) => readFile(path),
+ }) {
+   if (typeof request !== "function") throw new TypeError("request is required");
+@@ -30,7 +32,14 @@ export function createCodexMainAdapter({
+   if (typeof readSettingsSource !== "function") {
+     throw new TypeError("readSettingsSource must be a function");
+   }
+-  const idempotencyCache = new Map();
++  if (
++    agentKeysWriter !== undefined &&
++    (!agentKeysWriter || typeof agentKeysWriter.replaceAssignments !== "function")
++  ) {
++    throw new TypeError("agentKeysWriter.replaceAssignments is required");
++  }
++  const settingsIdempotencyCache = new Map();
++  const agentKeysIdempotencyCache = new Map();
+ 
+   const snapshotSettings = async () => {
+     const result = await request("settings-read", {});
+@@ -96,7 +105,7 @@ export function createCodexMainAdapter({
+       settings,
+       effectiveSettings,
+     })));
+-    const cached = idempotencyCache.get(idempotencyKey);
++    const cached = settingsIdempotencyCache.get(idempotencyKey);
+     if (cached) {
+       if (cached.requestDigest !== requestDigest) {
+         throw new CodexBridgeError(-32602, "idempotency key was reused with a different mutation");
+@@ -121,7 +130,7 @@ export function createCodexMainAdapter({
+         throw new CodexBridgeError(-32602, "target effectiveSettings differed from live settings");
+       }
+       const result = mutationResult({ operation, idempotencyKey, before, after: before, changed: false });
+-      cacheMutation(idempotencyCache, idempotencyKey, requestDigest, result);
++      cacheMutation(settingsIdempotencyCache, idempotencyKey, requestDigest, result);
+       return result;
+     }
+ 
+@@ -134,7 +143,7 @@ export function createCodexMainAdapter({
+       const after = await snapshotSettings();
+       assertReadback(after, { settings, effectiveSettings, targetSettingsRevision });
+       const result = mutationResult({ operation, idempotencyKey, before, after, changed: true });
+-      cacheMutation(idempotencyCache, idempotencyKey, requestDigest, result);
++      cacheMutation(settingsIdempotencyCache, idempotencyKey, requestDigest, result);
+       return result;
+     } catch (mutationError) {
+       let restored;
+@@ -167,11 +176,107 @@ export function createCodexMainAdapter({
+     }
+   };
+ 
++  const runAgentKeysMutation = async ({
++    operation,
++    expectedGlobalStateRevision,
++    targetGlobalStateRevision,
++    idempotencyKey,
++    assignments,
++  }) => {
++    validateSha(expectedGlobalStateRevision, "expectedGlobalStateRevision");
++    validateSha(targetGlobalStateRevision, "targetGlobalStateRevision");
++    const targetAssignments = normalizeAssignments(assignments);
++    if (agentKeysRevision(targetAssignments) !== targetGlobalStateRevision) {
++      throw new CodexBridgeError(-32602, "targetGlobalStateRevision did not match assignments");
++    }
++    const requestDigest = sha256(Buffer.from(canonicalJson({
++      operation,
++      expectedGlobalStateRevision,
++      targetGlobalStateRevision,
++      assignments: targetAssignments,
++    })));
++    const cached = agentKeysIdempotencyCache.get(idempotencyKey);
++    if (cached) {
++      if (cached.requestDigest !== requestDigest) {
++        throw new CodexBridgeError(-32602, "idempotency key was reused with a different mutation");
++      }
++      return { ...cached.result, idempotentReplay: true };
++    }
++
++    const before = await snapshotAgentKeys();
++    if (before.globalStateRevision !== expectedGlobalStateRevision) {
++      throw new CodexBridgeError(-32005, "Codex Agent Key revision conflict", {
++        expectedGlobalStateRevision,
++        liveGlobalStateRevision: before.globalStateRevision,
++      });
++    }
++    if (before.globalStateRevision === targetGlobalStateRevision) {
++      const result = agentKeysMutationResult({
++        operation,
++        idempotencyKey,
++        before,
++        after: before,
++        changed: false,
++      });
++      cacheMutation(agentKeysIdempotencyCache, idempotencyKey, requestDigest, result);
++      return result;
++    }
++
++    try {
++      await agentKeysWriter.replaceAssignments({
++        key: CODEX_AGENT_KEYS_STATE_KEY,
++        assignments: structuredClone(targetAssignments),
++        operation,
++        targetGlobalStateRevision,
++      });
++      const after = await snapshotAgentKeys();
++      assertAgentKeysReadback(after, targetAssignments, targetGlobalStateRevision);
++      const result = agentKeysMutationResult({
++        operation,
++        idempotencyKey,
++        before,
++        after,
++        changed: true,
++      });
++      cacheMutation(agentKeysIdempotencyCache, idempotencyKey, requestDigest, result);
++      return result;
++    } catch (mutationError) {
++      let restored;
++      try {
++        await agentKeysWriter.replaceAssignments({
++          key: CODEX_AGENT_KEYS_STATE_KEY,
++          assignments: structuredClone(before.assignments),
++          operation: "automatic-rollback",
++          targetGlobalStateRevision: before.globalStateRevision,
++        });
++        restored = await snapshotAgentKeys();
++        assertAgentKeysReadback(restored, before.assignments, before.globalStateRevision);
++      } catch (rollbackError) {
++        throw new CodexBridgeError(-32008, "Agent Key mutation and rollback failed", {
++          mutationError: errorMessage(mutationError),
++          rollbackError: errorMessage(rollbackError),
++        });
++      }
++      throw new CodexBridgeError(-32008, "Agent Key mutation failed and was rolled back", {
++        operation,
++        beforeGlobalStateRevision: before.globalStateRevision,
++        targetGlobalStateRevision,
++        rollbackGlobalStateRevision: restored.globalStateRevision,
++        rollbackPerformed: true,
++        mutationError: errorMessage(mutationError),
++      });
++    }
++  };
++
+   const adapter = { snapshotSettings, snapshotAgentKeys };
+   if (settingsReplacer) {
+     adapter.applySettings = (params) => runMutation({ ...params, operation: "apply" });
+     adapter.restoreSettings = (params) => runMutation({ ...params, operation: "restore" });
+   }
++  if (agentKeysWriter) {
++    adapter.applyAgentKeys = (params) => runAgentKeysMutation({ ...params, operation: "apply" });
++    adapter.restoreAgentKeys = (params) => runAgentKeysMutation({ ...params, operation: "restore" });
++  }
+   return adapter;
+ }
+ 
+@@ -203,15 +308,15 @@ function normalizeAssignment(value, slot) {
+   if (value === undefined || value === null) return null;
+   if (!isRecord(value)) throw invalidAssignment(slot);
+   if (value.type === "command" && nonEmpty(value.commandId)) {
+-    return { type: "command", commandId: value.commandId };
++    return structuredClone(value);
+   }
+   if (value.type === "skill" && nonEmpty(value.skillName) && nonEmpty(value.skillPath)) {
+-    return { type: "skill", skillName: value.skillName, skillPath: value.skillPath };
++    return structuredClone(value);
+   }
+   if (nonEmpty(value.hostId) && nonEmpty(value.threadKey) && nonEmpty(value.title)) {
+-    return { hostId: value.hostId, threadKey: value.threadKey, title: value.title };
++    return structuredClone(value);
+   }
+-  if (nonEmpty(value.keycapId)) return { keycapId: value.keycapId };
++  if (nonEmpty(value.keycapId)) return structuredClone(value);
+   throw invalidAssignment(slot);
+ }
+ 
+@@ -246,6 +351,30 @@ function mutationResult({ operation, idempotencyKey, before, after, changed }) {
+   };
+ }
+ 
++function assertAgentKeysReadback(after, assignments, targetGlobalStateRevision) {
++  if (
++    after.globalStateRevision !== targetGlobalStateRevision ||
++    canonicalJson(after.assignments) !== canonicalJson(assignments)
++  ) {
++    throw new Error("Codex exact Agent Key readback did not match the target");
++  }
++}
++
++function agentKeysMutationResult({ operation, idempotencyKey, before, after, changed }) {
++  return {
++    schemaVersion: 1,
++    kind: CODEX_AGENT_KEYS_MUTATION_KIND,
++    operation,
++    idempotencyKey,
++    idempotentReplay: false,
++    changed,
++    rollbackPerformed: false,
++    beforeGlobalStateRevision: before.globalStateRevision,
++    afterGlobalStateRevision: after.globalStateRevision,
++    targetGlobalStateRevision: after.globalStateRevision,
++  };
++}
++
+ function cacheMutation(cache, key, requestDigest, result) {
+   cache.set(key, { requestDigest, result });
+   while (cache.size > MAX_IDEMPOTENCY_ENTRIES) cache.delete(cache.keys().next().value);
+diff --git a/companion/codex-main-bridge.mjs b/companion/codex-main-bridge.mjs
+index 7752400..37f19c0 100644
+--- a/companion/codex-main-bridge.mjs
++++ b/companion/codex-main-bridge.mjs
+@@ -19,11 +19,15 @@ const METHOD_DEFINITIONS = new Map([
+   ["codex.settings.apply", ["codex.settings.apply.v1", "applySettings"]],
+   ["codex.settings.restore", ["codex.settings.restore.v1", "restoreSettings"]],
+   ["codex.agentKeys.snapshot", ["codex.agentKeys.snapshot.v1", "snapshotAgentKeys"]],
++  ["codex.agentKeys.apply", ["codex.agentKeys.apply.v1", "applyAgentKeys"]],
++  ["codex.agentKeys.restore", ["codex.agentKeys.restore.v1", "restoreAgentKeys"]],
+ ]);
+ 
+ const MUTATION_METHODS = new Set([
+   "codex.settings.apply",
+   "codex.settings.restore",
++  "codex.agentKeys.apply",
++  "codex.agentKeys.restore",
+ ]);
+ 
+ export class CodexBridgeError extends Error {
+@@ -164,7 +168,7 @@ export async function startCodexCompanionBridge({
+       }
+       try {
+         if (MUTATION_METHODS.has(request.method)) {
+-          validateMutationParams(request.params);
++          validateMutationParams(request.method, request.params);
+         }
+         const result = await enqueue(() => adapter[adapterMethod](request.params));
+         writeResult(socket, id, result, maxResponseBytes);
+@@ -269,7 +273,11 @@ function validateHello(params, expectedToken) {
+   }
+ }
+ 
+-function validateMutationParams(params) {
++function validateMutationParams(method, params) {
++  if (method.startsWith("codex.agentKeys.")) {
++    validateAgentKeysMutationParams(params);
++    return;
++  }
+   for (const name of [
+     "expectedSourceSha256",
+     "expectedSettingsRevision",
+@@ -294,6 +302,28 @@ function validateMutationParams(params) {
+   }
+ }
+ 
++function validateAgentKeysMutationParams(params) {
++  for (const name of [
++    "expectedGlobalStateRevision",
++    "targetGlobalStateRevision",
++  ]) {
++    if (typeof params[name] !== "string" || !/^[0-9a-f]{64}$/.test(params[name])) {
++      throw new CodexBridgeError(-32602, name + " is invalid");
++    }
++  }
++  if (
++    typeof params.idempotencyKey !== "string" ||
++    params.idempotencyKey.length === 0 ||
++    Buffer.byteLength(params.idempotencyKey) > 256 ||
++    params.idempotencyKey.includes("\0")
++  ) {
++    throw new CodexBridgeError(-32602, "idempotencyKey is invalid");
++  }
++  if (!isRecord(params.assignments)) {
++    throw new CodexBridgeError(-32602, "assignments is required");
++  }
++}
++
+ function writeKnownError(socket, id, error) {
+   if (error instanceof CodexBridgeError) {
+     writeError(socket, id, error.code, error.message, error.data);
+diff --git a/companion/codex-main-bridge.test.mjs b/companion/codex-main-bridge.test.mjs
+index c84ee19..9d024c4 100644
+--- a/companion/codex-main-bridge.test.mjs
++++ b/companion/codex-main-bridge.test.mjs
+@@ -39,6 +39,7 @@ test("Codex bridge authenticates, gates mutations, and dispatches snapshots", as
+     assert.equal(hello.result.codexVersion, "26.727.51351-test");
+     assert.ok(hello.result.capabilities.includes("codex.settings.snapshot.v1"));
+     assert.ok(!hello.result.capabilities.includes("codex.settings.apply.v1"));
++    assert.ok(!hello.result.capabilities.includes("codex.agentKeys.apply.v1"));
+     const snapshot = await client.request("codex.settings.snapshot", {});
+     assert.equal(snapshot.result.marker, "settings-from-codex-session");
+     const mutation = await client.request("codex.settings.apply", mutationParams({}));
+@@ -77,7 +78,7 @@ test("Codex bridge rejects a mismatched token before dispatch", async () => {
+ test("Codex adapter snapshots settings and validates all Agent Key assignment types", async () => {
+   const state = testState();
+   state.assignments = {
+-    AG00: { type: "command", commandId: "composer.togglePlanMode" },
++    AG00: { type: "command", commandId: "composer.togglePlanMode", futureField: "preserved" },
+     AG01: { type: "skill", skillName: "Review", skillPath: "/tmp/review/SKILL.md" },
+     AG02: { hostId: "host", threadKey: "thread", title: "Task" },
+     AG03: { keycapId: "GIT" },
+@@ -89,9 +90,65 @@ test("Codex adapter snapshots settings and validates all Agent Key assignment ty
+   const keys = await adapter.snapshotAgentKeys({});
+   assert.deepEqual(Object.keys(keys.assignments), ["AG00", "AG01", "AG02", "AG03", "AG04", "AG05"]);
+   assert.equal(keys.assignments.AG04, null);
++  assert.equal(keys.assignments.AG00.futureField, "preserved");
+   assert.equal(keys.globalStateRevision, agentKeysRevision(keys.assignments));
+ });
+ 
++test("Codex adapter applies, replays, rejects stale CAS, and restores Agent Keys", async () => {
++  const state = testState();
++  const adapter = testAdapter(state);
++  const baseline = await adapter.snapshotAgentKeys({});
++  const assignments = structuredClone(baseline.assignments);
++  assignments.AG01 = { type: "skill", skillName: "Review", skillPath: "/tmp/review/SKILL.md" };
++  const targetRevision = agentKeysRevision(assignments);
++  const params = agentMutationParams({
++    expectedGlobalStateRevision: baseline.globalStateRevision,
++    targetGlobalStateRevision: targetRevision,
++    idempotencyKey: "agent-apply-1",
++    assignments,
++  });
++  const apply = await adapter.applyAgentKeys(params);
++  assert.equal(apply.changed, true);
++  assert.equal(apply.afterGlobalStateRevision, targetRevision);
++  const replay = await adapter.applyAgentKeys(params);
++  assert.equal(replay.idempotentReplay, true);
++  await assert.rejects(
++    adapter.applyAgentKeys(agentMutationParams({
++      ...params,
++      idempotencyKey: "agent-stale",
++    })),
++    (error) => error.code === -32005,
++  );
++  const live = await adapter.snapshotAgentKeys({});
++  const restore = await adapter.restoreAgentKeys(agentMutationParams({
++    expectedGlobalStateRevision: live.globalStateRevision,
++    targetGlobalStateRevision: baseline.globalStateRevision,
++    idempotencyKey: "agent-restore-1",
++    assignments: baseline.assignments,
++  }));
++  assert.equal(restore.changed, true);
++  assert.equal(restore.afterGlobalStateRevision, baseline.globalStateRevision);
++});
++
++test("Codex adapter rolls back Agent Keys after exact readback failure", async () => {
++  const state = testState();
++  const adapter = testAdapter(state, { corruptAgentOnce: true });
++  const baseline = await adapter.snapshotAgentKeys({});
++  const assignments = structuredClone(baseline.assignments);
++  assignments.AG02 = { keycapId: "GIT" };
++  await assert.rejects(
++    adapter.applyAgentKeys(agentMutationParams({
++      expectedGlobalStateRevision: baseline.globalStateRevision,
++      targetGlobalStateRevision: agentKeysRevision(assignments),
++      idempotencyKey: "agent-corrupt-readback",
++      assignments,
++    })),
++    (error) => error.code === -32008 && error.data.rollbackPerformed === true,
++  );
++  const restored = await adapter.snapshotAgentKeys({});
++  assert.equal(restored.globalStateRevision, baseline.globalStateRevision);
++});
++
+ test("Codex adapter applies, replays, rejects stale CAS, and restores", async () => {
+   const state = testState();
+   const adapter = testAdapter(state);
+@@ -175,6 +232,7 @@ test("Codex integration uses the Codex userData boundary and lifecycle", async (
+     assert.equal(bridge.socketPath, root + "/worklouderctl-codex-bridge-v1.sock");
+     assert.ok(bridge.capabilities.includes("codex.settings.snapshot.v1"));
+     assert.ok(!bridge.capabilities.includes("codex.settings.apply.v1"));
++    assert.ok(!bridge.capabilities.includes("codex.agentKeys.apply.v1"));
+   } finally {
+     await bridge.stop();
+   }
+@@ -215,8 +273,9 @@ function makeRequest(state) {
+   };
+ }
+ 
+-function testAdapter(state, { corruptOnce = false } = {}) {
++function testAdapter(state, { corruptOnce = false, corruptAgentOnce = false } = {}) {
+   let corrupt = corruptOnce;
++  let corruptAgent = corruptAgentOnce;
+   return createCodexMainAdapter({
+     request: makeRequest(state),
+     readSettingsSource: async () => state.source,
+@@ -231,6 +290,15 @@ function testAdapter(state, { corruptOnce = false } = {}) {
+         }
+       },
+     },
++    agentKeysWriter: {
++      async replaceAssignments({ assignments, operation }) {
++        state.assignments = structuredClone(assignments);
++        if (corruptAgent && operation !== "automatic-rollback") {
++          corruptAgent = false;
++          state.assignments.AG05 = { keycapId: "CORRUPT" };
++        }
++      },
++    },
+   });
+ }
+ 
+@@ -246,6 +314,16 @@ function mutationParams(overrides) {
+   };
+ }
+ 
++function agentMutationParams(overrides) {
++  return {
++    expectedGlobalStateRevision: "0".repeat(64),
++    targetGlobalStateRevision: "0".repeat(64),
++    idempotencyKey: "agent-test",
++    assignments: {},
++    ...overrides,
++  };
++}
++
+ async function connect(socketPath) {
+   const socket = createConnection(socketPath);
+   socket.setEncoding("utf8");
+diff --git a/companion/codex-main-integration.mjs b/companion/codex-main-integration.mjs
+index 8febf20..d20ca53 100644
+--- a/companion/codex-main-integration.mjs
++++ b/companion/codex-main-integration.mjs
+@@ -6,6 +6,7 @@ export async function installCodexCompanionBridge({
+   app,
+   request,
+   settingsReplacer,
++  agentKeysWriter,
+   bridgeVersion,
+   socketPath,
+   tokenPath,
+@@ -17,7 +18,7 @@ export async function installCodexCompanionBridge({
+     throw new TypeError("Electron app lifecycle methods are required");
+   }
+   const userData = app.getPath("userData");
+-  const adapter = createCodexMainAdapter({ request, settingsReplacer });
++  const adapter = createCodexMainAdapter({ request, settingsReplacer, agentKeysWriter });
+   const bridge = await startCodexCompanionBridge({
+     adapter,
+     codexVersion: app.getVersion(),
+diff --git a/companion/index.mjs b/companion/index.mjs
+index a2ca997..999b910 100644
+--- a/companion/index.mjs
++++ b/companion/index.mjs
+@@ -18,6 +18,7 @@ export {
+ } from "./codex-main-bridge.mjs";
+ export {
+   CODEX_AGENT_KEYS_SNAPSHOT_KIND,
++  CODEX_AGENT_KEYS_MUTATION_KIND,
+   CODEX_AGENT_KEYS_STATE_KEY,
+   CODEX_AGENT_KEY_SLOTS,
+   CODEX_SETTINGS_REVISION_ALGORITHM,
+diff --git a/docs/architecture.md b/docs/architecture.md
+index 890d365..16b1a13 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -42,12 +42,15 @@ process over a user-only Unix socket. Its snapshot adapter delegates to Codex's
+ `settings-read` and `get-global-state` handlers, validates the exact frozen
+ definitions and all six Agent Key slots, and produces offline-editor-compatible
+ snapshots. When Codex injects complete explicit-setting replacement, the bridge
+-advertises apply/restore and serializes source-SHA plus settings-revision CAS,
+-immutable backup, exact explicit/effective readback, idempotency, restore, and
+-automatic rollback. The cross-language fixture verifies `recent -> custom ->
+-recent` and exact source SHA recovery. Codex 26.727.51351 contains the internal
+-handlers but does not yet ship the external listener, leaving released-app
+-integration as the next upstream milestone.
++advertises settings apply/restore and serializes source-SHA plus settings-revision
++CAS, immutable backup, exact explicit/effective readback, idempotency, restore,
++and automatic rollback. A separate injected Agent Key replacer advertises
++complete six-slot global-state apply/restore with its own revision CAS, backup,
++idempotency, exact readback, restore, and rollback. The cross-language fixture
++verifies `recent -> custom -> recent`, every Agent Key assignment type, exact
++Agent Key revision recovery, and exact source SHA recovery. Codex 26.727.51351
++contains the internal handlers but does not yet ship the external listener,
++leaving released-app integration as the next upstream milestone.
+ 
+ ## Implemented Input Companion Bridge path
+ 
+diff --git a/docs/codex-companion-bridge.md b/docs/codex-companion-bridge.md
+index d254129..cb2b1cf 100644
+--- a/docs/codex-companion-bridge.md
++++ b/docs/codex-companion-bridge.md
+@@ -52,6 +52,8 @@ one authenticated `bridge.hello` request and negotiates named capabilities.
+ | `codex.settings.apply` | `codex.settings.apply.v1` | complete-set CAS apply with readback and rollback |
+ | `codex.settings.restore` | `codex.settings.restore.v1` | complete-set CAS restore with readback and rollback |
+ | `codex.agentKeys.snapshot` | `codex.agentKeys.snapshot.v1` | read and validate all six custom Agent Key slots |
++| `codex.agentKeys.apply` | `codex.agentKeys.apply.v1` | complete six-slot global-state CAS apply |
++| `codex.agentKeys.restore` | `codex.agentKeys.restore.v1` | complete six-slot global-state CAS restore |
+ 
+ ## CLI workflow
+ 
+@@ -67,6 +69,16 @@ worklouderctl codex config restore \
+   --input before.json --backup pre-restore.json \
+   --idempotency-key agent-source-restore-1
+ worklouderctl codex agent-key assignments
++worklouderctl codex agent-key snapshot --output agent-before.json
++worklouderctl codex agent-key set \
++  --input agent-before.json AG01 --command COMMAND_ID \
++  --output agent-candidate.json
++worklouderctl codex agent-key apply \
++  --input agent-candidate.json --backup agent-pre-apply.json \
++  --idempotency-key agent-key-command-1
++worklouderctl codex agent-key restore \
++  --input agent-before.json --backup agent-pre-restore.json \
++  --idempotency-key agent-key-restore-1
+ ```
+ 
+ Pass `--socket PATH --token PATH` after `codex bridge` or `codex config`, or
+@@ -109,8 +121,22 @@ The global-state key is `codex-micro-custom-agent-assignments`. Slots are
+ - a task `{ "hostId": "...", "threadKey": "...", "title": "..." }`;
+ - a keycap `{ "keycapId": "..." }`.
+ 
+-The bridge normalizes all six slots and hashes recursive-key-sorted compact JSON
+-with the frozen `codex-agent-keys-revision-v1` framing.
++The bridge normalizes all six slots, preserves unknown fields inside valid
++assignment objects, and hashes recursive-key-sorted compact JSON with the frozen
++`codex-agent-keys-revision-v1` framing.
++
++Agent Key apply/restore takes `expectedGlobalStateRevision`,
++`targetGlobalStateRevision`, `idempotencyKey`, and the complete six-slot
++`assignments` object. Codex performs exact complete-object replacement through
++`set-global-state`; the adapter snapshots, checks CAS, writes, snapshots again,
++and compares the exact assignments and revision. A failed write/readback
++restores and verifies the pre-mutation object. Mutation capabilities appear only
++when the main-process integration injects `agentKeysWriter.replaceAssignments`.
++
++The assignment object and `codex-micro-agent-source` setting are separate Codex
++authorities. Use `codex agent-source set ... custom` plus `codex config apply`
++when the custom slots should become the active Agent Key source. Agent Key
++mutation itself does not silently change that setting.
+ 
+ ## Reference integration
+ 
+@@ -123,11 +149,15 @@ const bridge = await installCodexCompanionBridge({
+   settingsReplacer: {
+     replaceSettings: ({ settings }) => replaceCompleteCodexMicroSettings(settings),
+   },
++  agentKeysWriter: {
++    replaceAssignments: ({ key, assignments }) =>
++      nativeRequest("set-global-state", { key, value: assignments }),
++  },
+ });
+ ```
+ 
+-Omit `settingsReplacer` for a snapshot-only integration. The handshake then
+-excludes `codex.settings.apply.v1` and `codex.settings.restore.v1`.
++Omit either writer for a snapshot-only integration of that authority. The
++handshake excludes the corresponding apply/restore capabilities.
+ 
+ ## Verification
+ 
+@@ -139,5 +169,7 @@ WORKLOUDERCTL_BIN=./target/release/worklouderctl \
+   ./scripts/test-codex-bridge-e2e.sh
+ ```
+ 
+-The E2E test proves `recent -> custom -> recent`, validates six Agent Key slots,
+-and requires the restored source SHA-256 to equal the baseline source SHA-256.
++The E2E test proves `recent -> custom -> recent`, applies command/Skill/task/
++keycap/empty Agent Key assignments, verifies idempotent replay and stale-CAS
++rejection, restores the exact six-slot revision, and requires the restored
++settings source SHA-256 to equal the baseline source SHA-256.
+diff --git a/docs/compatibility.md b/docs/compatibility.md
+index dd8b9f3..0e3a0ee 100644
+--- a/docs/compatibility.md
++++ b/docs/compatibility.md
+@@ -14,7 +14,7 @@ not a public support guarantee.
+ | Device | Work Louder Codex Micro | Initial target |
+ | Host OS | macOS | Initial target |
+ | Codex app | 26.727.51351 | Exact Tier 1 settings read/offline candidate adapter verified; external bridge integration pending |
+-| Codex Companion Bridge | Protocol v1 | Settings snapshot/CAS/apply/restore/rollback and six Agent Key snapshot fixture verified |
++| Codex Companion Bridge | Protocol v1 | Settings and six-slot Agent Key snapshot/CAS/apply/restore/rollback fixture verified |
+ | Work Louder Input | 0.17.3 | Earlier schema fixture |
+ | Work Louder Input | 0.18.0 | Exact bundled-kit live read adapter verified |
+ | Input Companion Bridge | Protocol v1 | Snapshot/CAS/apply/replay/restore/rollback fixture conformance verified; released Input writer pending |
+@@ -35,14 +35,16 @@ Codex settings mutation. Static inspection found the internal `settings-read`,
+ released build did not expose an external listener.
+ 
+ The isolated Codex Companion Bridge v1 fixture has cross-language evidence for
+-authenticated capability negotiation, frozen-definition settings snapshot,
+-source-SHA plus canonical-settings CAS, immutable backup, complete explicit-set
+-apply, exact explicit/effective readback, idempotent replay, stale-CAS rejection,
+-explicit restore, automatic rollback after corrupt readback, and all six Agent
+-Key assignment slots. Its E2E path verifies `recent -> custom -> recent` and an
+-exact baseline source SHA-256 after restore. This is bridge transaction evidence;
+-released-Codex mutation begins when Codex installs the reference integration and
+-supplies its exact settings replacer.
++authenticated capability negotiation; frozen-definition settings snapshots;
++source-SHA plus canonical-settings CAS; immutable backup; complete explicit-set
++apply; and exact explicit/effective readback. It also verifies all six Agent Key
++slots, command/Skill/task/keycap/empty assignment types, a separate canonical
++global-state revision, complete-object apply, idempotent replay, stale-CAS
++rejection, explicit restore, and automatic rollback after corrupt readback. Its
++E2E path proves `recent -> custom -> recent`, restores the exact Agent Key
++revision, and recovers the exact baseline settings source SHA-256. This is bridge
++transaction evidence; released-Codex mutation begins when Codex installs the
++reference integration and supplies exact settings and Agent Key replacers.
+ 
+ For Input 0.18.0 and Codex Micro firmware v0.6.0,
+ `input-bundled-device-kit-read-v1` has live read-only evidence over HID: the CLI
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index 98081cf..1c0d4e3 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -24,7 +24,7 @@ parity contract.
+ | GUI surface | Configuration coverage | Planned command family | Current status |
+ | --- | --- | --- | --- |
+ | Agent source | pinned, recent, priority, custom | `codex agent-source get/set` | strict candidate plus bridge `recent -> custom -> recent` apply/readback/restore fixture verified |
+-| Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key assignments`, future set/clear | six-slot bridge snapshot and every assignment shape verified; mutation pending |
++| Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key snapshot/get/set/clear/apply/restore` | strict candidate, all assignment types, CAS, idempotency, stale rejection, exact readback, restore, and rollback fixture verified |
+ | Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | strict offline candidate verified; generic complete-settings bridge transaction verified |
+ | Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; generic complete-settings bridge transaction verified |
+ | Voice button | push-to-talk, Voice Chat | `codex voice get/set` | researched |
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index a314b68..e1392a1 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -38,6 +38,15 @@ worklouderctl codex config [--socket PATH] [--token PATH] snapshot --output FILE
+ worklouderctl codex config [--socket PATH] [--token PATH] apply --input CANDIDATE.json --backup BEFORE.json
+ worklouderctl codex config [--socket PATH] [--token PATH] restore --input BEFORE.json --backup CURRENT.json
+ worklouderctl codex agent-key assignments [--socket PATH] [--token PATH]
++worklouderctl codex agent-key snapshot --output AGENT_KEYS.json [--socket PATH] [--token PATH]
++worklouderctl codex agent-key get --input AGENT_KEYS.json SLOT
++worklouderctl codex agent-key set --input AGENT_KEYS.json SLOT --command COMMAND_ID --output CANDIDATE.json
++worklouderctl codex agent-key set --input AGENT_KEYS.json SLOT --skill-name NAME --skill-path PATH --output CANDIDATE.json
++worklouderctl codex agent-key set --input AGENT_KEYS.json SLOT --thread-host HOST --thread-key KEY --title TITLE --output CANDIDATE.json
++worklouderctl codex agent-key set --input AGENT_KEYS.json SLOT --keycap KEYCAP_ID --output CANDIDATE.json
++worklouderctl codex agent-key clear --input AGENT_KEYS.json SLOT --output CANDIDATE.json
++worklouderctl codex agent-key apply --input CANDIDATE.json --backup BEFORE.json [--socket PATH] [--token PATH]
++worklouderctl codex agent-key restore --input BEFORE.json --backup CURRENT.json [--socket PATH] [--token PATH]
+ worklouderctl codex agent-source get --input SNAPSHOT.json
+ worklouderctl codex agent-source set --input SNAPSHOT.json VALUE --output CANDIDATE.json
+ worklouderctl codex agent-key tap-mode get --input SNAPSHOT.json
+@@ -59,6 +68,15 @@ retained as the online transaction's source CAS value. The bridge also compares
+ the canonical settings revision, performs complete explicit-setting replacement,
+ and verifies exact explicit/effective readback before reporting success.
+ 
++Agent Key snapshots use the separate `codex-agent-keys-revision-v1` global-state
++revision. Offline set/clear changes one `AG00`–`AG05` slot, preserves the other
++five values and their unknown fields, atomically publishes, and reopens the
++candidate. Apply/restore replaces the complete six-slot object through
++`set-global-state` with revision CAS, immutable backup, session idempotency,
++exact readback, stale-CAS rejection, and automatic rollback. The custom
++assignment object does not imply `codex-micro-agent-source=custom`; source
++selection remains an explicit settings candidate and transaction.
++
+ ### Persisted setting keys
+ 
+ The installed Codex app exposes these Codex Micro setting records:
+diff --git a/docs/faq.md b/docs/faq.md
+index 9d3efd4..90b670e 100644
+--- a/docs/faq.md
++++ b/docs/faq.md
+@@ -60,6 +60,16 @@ Yes, through the deterministic JSON contract. Human and agent clients share
+ the same transaction model: inspect, plan, diff, apply, verify, and
+ rollback. There will be no separate unverified AI write path.
+ 
++## Can it configure all six Codex Agent Keys?
++
++Yes. The source-built CLI snapshots all six `AG00`-`AG05` assignments, reads or
++edits one slot offline, supports command, Skill, task, keycap, and empty values,
++then applies or restores the complete object through the Codex Companion Bridge.
++The transaction uses a canonical global-state revision, immutable backup,
++idempotent retry, stale-state rejection, exact readback, and automatic rollback.
++Selecting those custom assignments remains a separate explicit
++`codex-micro-agent-source=custom` settings transaction.
++
+ ## How will WorkLouderCTL protect an existing layout?
+ 
+ The safety contract requires:
+@@ -92,12 +102,14 @@ performs the older graceful quit/read/reopen cycle.
+ ## How can the CLI coexist with Codex while it is open?
+ 
+ The Codex Companion Bridge keeps the running Codex main process authoritative.
+-It delegates settings/global-state reads to Codex and advertises settings writes
+-only when Codex injects exact complete-setting replacement. The CLI performs
+-source-SHA and settings-revision CAS, immutable backup, exact readback, restore,
+-and rollback over a private authenticated Unix socket. The current Codex release
+-contains the internal handlers but has not yet installed this external listener;
+-the repository includes the reference integration and complete fixture E2E.
++It delegates settings/global-state reads to Codex and advertises each mutation
++capability only when Codex injects the corresponding exact complete-object
++replacer. Settings use source-SHA plus settings-revision CAS; Agent Keys use a
++separate global-state revision CAS. Both paths provide immutable backup, exact
++readback, restore, and rollback over a private authenticated Unix socket. The
++current Codex release contains the internal handlers but has not yet installed
++this external listener; the repository includes the reference integration and
++complete fixture E2E.
+ 
+ ## Will it support Smart Actions?
+ 
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 9d6445d..d9b01b1 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -48,7 +48,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [ ] Integrate the Codex Companion Bridge into a released Codex build
+ - [x] Agent source and single-tap behavior offline candidates
+ - [x] Six Agent Key task/command/Skill/keycap assignment snapshot and validation
+-- [ ] Six Agent Key assignment mutation commands
++- [x] Six Agent Key offline get/set/clear plus bridge apply/restore transaction
+ - [x] Six Command Key slots get/set/reset offline candidates
+ - [ ] voice mode
+ - [ ] dial modes and custom gestures
+diff --git a/docs/tier-model.md b/docs/tier-model.md
+index e2c57d9..66f4383 100644
+--- a/docs/tier-model.md
++++ b/docs/tier-model.md
+@@ -53,6 +53,9 @@ worklouderctl codex export
+ worklouderctl codex bridge inspect
+ worklouderctl codex config snapshot|apply|restore
+ worklouderctl codex agent-key assignments
++worklouderctl codex agent-key snapshot --output SNAPSHOT.json
++worklouderctl codex agent-key get|set|clear --input SNAPSHOT.json AG00
++worklouderctl codex agent-key apply|restore --input SNAPSHOT.json --backup BACKUP.json
+ worklouderctl codex diff CONFIG
+ worklouderctl codex agent-source get|set --input SNAPSHOT
+ worklouderctl codex agent-key get|set|clear AG00
+diff --git a/llms.txt b/llms.txt
+index 95e38e2..9439e09 100644
+--- a/llms.txt
++++ b/llms.txt
+@@ -32,8 +32,8 @@ Important: the project is currently a source alpha. The repository builds a work
+ - Non-goal: implementing a replacement hardware driver or firmware protocol
+ - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
+ - Current maturity: source alpha; read paths and isolated bridge apply/restore transaction conformance implemented; no packaged release
+-- Current Codex commands: `codex doctor/inspect/export`, `codex bridge inspect`, `codex config snapshot/apply/restore`, and six-slot `codex agent-key assignments`
+-- Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, and `codex command-key` provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; the Codex Companion Bridge fixture verifies complete settings apply/readback/restore/rollback while released-Codex integration remains pending
++- Current Codex commands: `codex doctor/inspect/export`, `codex bridge inspect`, `codex config snapshot/apply/restore`, and six-slot `codex agent-key assignments/snapshot/get/set/clear/apply/restore`
++- Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, and `codex command-key` provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; six-slot Agent Key candidates preserve untargeted unknown fields and use a separate global-state revision; the Codex Companion Bridge fixture verifies complete settings and Agent Key apply/readback/restore/rollback while released-Codex integration remains pending
+ - Input cache command: `input config snapshot` captures `keymap.json` plus optional `smart_actions.json` byte-for-byte, excludes host-only state, and emits a bridge-revision-equivalent semantic snapshot without controlling the Input GUI or device transport
+ - Primary device transport: authenticated Input Companion Bridge v1 over a private Unix socket; Rust client, one-call Input-main integration, release conformance command, and cross-language tests are implemented
+ - Bridge config commands: deterministic byte-exact snapshot/validate plus capability-gated apply/restore with immutable CLI backup, CAS, session idempotency, full readback, and automatic rollback
+diff --git a/scripts/test-codex-bridge-e2e.sh b/scripts/test-codex-bridge-e2e.sh
+index f14c2b3..0be706d 100755
+--- a/scripts/test-codex-bridge-e2e.sh
++++ b/scripts/test-codex-bridge-e2e.sh
+@@ -53,20 +53,69 @@ done
+ "$BIN" --json codex config --socket "$SOCKET" --token "$TOKEN" snapshot \
+   --output "$ROOT/restored.json" >"$ROOT/restored-receipt.json"
+ 
++"$BIN" --json codex agent-key snapshot --socket "$SOCKET" --token "$TOKEN" \
++  --output "$ROOT/agent-baseline.json" >"$ROOT/agent-baseline-receipt.json"
++"$BIN" --json codex agent-key get --input "$ROOT/agent-baseline.json" AG00 \
++  >"$ROOT/agent-get-baseline.json"
++"$BIN" --json codex agent-key set --input "$ROOT/agent-baseline.json" AG01 \
++  --skill-name Review --skill-path /tmp/fixture-review/SKILL.md \
++  --output "$ROOT/agent-skill.json" >"$ROOT/agent-skill-receipt.json"
++"$BIN" --json codex agent-key set --input "$ROOT/agent-skill.json" AG02 \
++  --thread-host local --thread-key fixture-thread --title "Fixture Task" \
++  --output "$ROOT/agent-thread.json" >"$ROOT/agent-thread-receipt.json"
++"$BIN" --json codex agent-key set --input "$ROOT/agent-thread.json" AG03 \
++  --keycap GIT --output "$ROOT/agent-keycap.json" \
++  >"$ROOT/agent-keycap-receipt.json"
++"$BIN" --json codex agent-key set --input "$ROOT/agent-keycap.json" AG04 \
++  --command fixture.command.two --output "$ROOT/agent-command.json" \
++  >"$ROOT/agent-command-receipt.json"
++"$BIN" --json codex agent-key clear --input "$ROOT/agent-command.json" AG00 \
++  --output "$ROOT/agent-candidate.json" >"$ROOT/agent-clear-receipt.json"
++"$BIN" --json codex agent-key apply --socket "$SOCKET" --token "$TOKEN" \
++  --input "$ROOT/agent-candidate.json" --backup "$ROOT/agent-pre-apply.json" \
++  --idempotency-key fixture-agent-apply-v1 >"$ROOT/agent-apply.json"
++"$BIN" --json codex agent-key apply --socket "$SOCKET" --token "$TOKEN" \
++  --input "$ROOT/agent-candidate.json" --backup "$ROOT/agent-pre-apply.json" \
++  --idempotency-key fixture-agent-apply-v1 >"$ROOT/agent-apply-replay.json"
++if "$BIN" --json codex agent-key apply --socket "$SOCKET" --token "$TOKEN" \
++  --input "$ROOT/agent-candidate.json" --backup "$ROOT/agent-pre-apply.json" \
++  --expected-global-state-revision "$(printf '0%.0s' {1..64})" \
++  --idempotency-key fixture-agent-stale >"$ROOT/agent-stale.stdout" \
++  2>"$ROOT/agent-stale.stderr"; then
++  echo "stale Agent Key CAS unexpectedly succeeded" >&2
++  exit 1
++fi
++"$BIN" --json codex agent-key snapshot --socket "$SOCKET" --token "$TOKEN" \
++  --output "$ROOT/agent-modified.json" >"$ROOT/agent-modified-receipt.json"
++"$BIN" --json codex agent-key restore --socket "$SOCKET" --token "$TOKEN" \
++  --input "$ROOT/agent-baseline.json" --backup "$ROOT/agent-pre-restore.json" \
++  --idempotency-key fixture-agent-restore-v1 >"$ROOT/agent-restore.json"
++"$BIN" --json codex agent-key snapshot --socket "$SOCKET" --token "$TOKEN" \
++  --output "$ROOT/agent-restored.json" >"$ROOT/agent-restored-receipt.json"
++
+ python3 - "$ROOT" <<'PY'
+ import json
+ import pathlib
+ import sys
+ 
+ root = pathlib.Path(sys.argv[1])
++bridge = json.loads((root / "bridge.json").read_text())
+ baseline = json.loads((root / "baseline.json").read_text())
+ modified = json.loads((root / "modified.json").read_text())
+ restored = json.loads((root / "restored.json").read_text())
+ keys = json.loads((root / "agent-keys.json").read_text())
+ apply = json.loads((root / "apply.json").read_text())
+ restore = json.loads((root / "restore.json").read_text())
++agent_baseline = json.loads((root / "agent-baseline.json").read_text())
++agent_modified = json.loads((root / "agent-modified.json").read_text())
++agent_restored = json.loads((root / "agent-restored.json").read_text())
++agent_apply = json.loads((root / "agent-apply.json").read_text())
++agent_replay = json.loads((root / "agent-apply-replay.json").read_text())
++agent_restore = json.loads((root / "agent-restore.json").read_text())
+ 
+ assert baseline["settings"]["codex-micro-agent-source"] == "recent"
++assert "codex.agentKeys.apply.v1" in bridge["capabilities"]
++assert "codex.agentKeys.restore.v1" in bridge["capabilities"]
+ assert modified["settings"]["codex-micro-agent-source"] == "custom"
+ assert apply["changed"] is True and apply["rollbackPerformed"] is False
+ assert restore["changed"] is True and restore["rollbackPerformed"] is False
+@@ -75,6 +124,18 @@ assert restored["effectiveSettings"] == baseline["effectiveSettings"]
+ assert restored["sourceSha256"] == baseline["sourceSha256"]
+ assert keys["assignments"]["AG00"]["commandId"] == "fixture.command"
+ assert len(keys["slots"]) == 6
++assert agent_baseline["assignments"]["AG00"]["commandId"] == "fixture.command"
++assert agent_modified["assignments"]["AG00"] is None
++assert agent_modified["assignments"]["AG01"]["type"] == "skill"
++assert agent_modified["assignments"]["AG02"]["threadKey"] == "fixture-thread"
++assert agent_modified["assignments"]["AG03"]["keycapId"] == "GIT"
++assert agent_modified["assignments"]["AG04"]["commandId"] == "fixture.command.two"
++assert agent_apply["changed"] is True and agent_apply["rollbackPerformed"] is False
++assert agent_replay["idempotentReplay"] is True
++assert agent_restore["changed"] is True and agent_restore["rollbackPerformed"] is False
++assert agent_restored["assignments"] == agent_baseline["assignments"]
++assert agent_restored["globalStateRevision"] == agent_baseline["globalStateRevision"]
++assert "revision conflict" in (root / "agent-stale.stderr").read_text()
+ 
+ print(json.dumps({
+     "status": "pass",
+@@ -85,5 +146,10 @@ print(json.dumps({
+     "modifiedSourceSha256": modified["sourceSha256"],
+     "restoredSourceSha256": restored["sourceSha256"],
+     "agentKeySlots": len(keys["slots"]),
++    "agentKeysBaselineRevision": agent_baseline["globalStateRevision"],
++    "agentKeysModifiedRevision": agent_modified["globalStateRevision"],
++    "agentKeysRestoredRevision": agent_restored["globalStateRevision"],
++    "agentKeysIdempotentReplay": agent_replay["idempotentReplay"],
++    "agentKeysStaleCasRejected": True,
+ }, separators=(",", ":")))
+ PY
+diff --git a/spec/codex-agent-keys-v1.json b/spec/codex-agent-keys-v1.json
+new file mode 100644
+index 0000000..8cabd15
+--- /dev/null
++++ b/spec/codex-agent-keys-v1.json
+@@ -0,0 +1,72 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouderctl-codex-agent-keys-contract",
++  "contractAppVersion": "26.727.51351",
++  "authority": "codex-global-state",
++  "globalStateKey": "codex-micro-custom-agent-assignments",
++  "snapshotKind": "worklouderctl-codex-agent-keys-snapshot",
++  "candidateReceiptKind": "worklouderctl-codex-agent-key-candidate",
++  "mutationResultKind": "worklouderctl-codex-agent-keys-mutation",
++  "adapter": "codex-companion-bridge-v1",
++  "slots": [
++    "AG00",
++    "AG01",
++    "AG02",
++    "AG03",
++    "AG04",
++    "AG05"
++  ],
++  "default": {
++    "AG00": null,
++    "AG01": null,
++    "AG02": null,
++    "AG03": null,
++    "AG04": null,
++    "AG05": null
++  },
++  "assignmentTypes": {
++    "thread": {
++      "required": ["hostId", "threadKey", "title"]
++    },
++    "command": {
++      "required": ["type", "commandId"],
++      "type": "command"
++    },
++    "skill": {
++      "required": ["type", "skillName", "skillPath"],
++      "type": "skill"
++    },
++    "keycap": {
++      "required": ["keycapId"]
++    },
++    "empty": null
++  },
++  "revisionAlgorithm": {
++    "id": "codex-agent-keys-revision-v1",
++    "prefixUtf8": "worklouder-codex-agent-keys-revision-v1\u0000",
++    "payload": "recursive-key-sorted compact JSON"
++  },
++  "offlineOperations": {
++    "snapshot": "codex agent-key snapshot --output SNAPSHOT.json",
++    "get": "codex agent-key get --input SNAPSHOT.json SLOT",
++    "setCommand": "codex agent-key set --input SNAPSHOT.json SLOT --command COMMAND_ID --output CANDIDATE.json",
++    "setSkill": "codex agent-key set --input SNAPSHOT.json SLOT --skill-name NAME --skill-path PATH --output CANDIDATE.json",
++    "setThread": "codex agent-key set --input SNAPSHOT.json SLOT --thread-host HOST --thread-key KEY --title TITLE --output CANDIDATE.json",
++    "setKeycap": "codex agent-key set --input SNAPSHOT.json SLOT --keycap KEYCAP_ID --output CANDIDATE.json",
++    "clear": "codex agent-key clear --input SNAPSHOT.json SLOT --output CANDIDATE.json"
++  },
++  "liveOperations": {
++    "apply": "codex agent-key apply --input CANDIDATE.json --backup BEFORE.json",
++    "restore": "codex agent-key restore --input BEFORE.json --backup CURRENT.json"
++  },
++  "validation": {
++    "requireExactContractAppVersionForMutation": true,
++    "preserveUntargetedAssignments": true,
++    "preserveUnknownFieldsInUntargetedAssignments": true,
++    "rejectUnknownSlots": true,
++    "atomicPublishAndReopen": true,
++    "compareAndSwapRevision": true,
++    "exactReadback": true,
++    "automaticRollback": true
++  }
++}
+diff --git a/spec/codex-companion-bridge-v1.json b/spec/codex-companion-bridge-v1.json
+index 7d6c59d..9694fd8 100644
+--- a/spec/codex-companion-bridge-v1.json
++++ b/spec/codex-companion-bridge-v1.json
+@@ -51,7 +51,9 @@
+     "codex.settings.snapshot": "codex.settings.snapshot.v1",
+     "codex.settings.apply": "codex.settings.apply.v1",
+     "codex.settings.restore": "codex.settings.restore.v1",
+-    "codex.agentKeys.snapshot": "codex.agentKeys.snapshot.v1"
++    "codex.agentKeys.snapshot": "codex.agentKeys.snapshot.v1",
++    "codex.agentKeys.apply": "codex.agentKeys.apply.v1",
++    "codex.agentKeys.restore": "codex.agentKeys.restore.v1"
+   },
+   "settingsSnapshot": {
+     "kind": "worklouderctl-codex-settings-snapshot",
+@@ -88,7 +90,8 @@
+     "idempotencyScope": "bridge session"
+   },
+   "agentKeys": {
+-    "snapshotKind": "worklouder-codex-agent-keys-snapshot",
++    "snapshotKind": "worklouderctl-codex-agent-keys-snapshot",
++    "mutationResultKind": "worklouderctl-codex-agent-keys-mutation",
+     "globalStateKey": "codex-micro-custom-agent-assignments",
+     "slots": [
+       "AG00",
+@@ -140,7 +143,22 @@
+       "id": "codex-agent-keys-revision-v1",
+       "prefixUtf8": "worklouder-codex-agent-keys-revision-v1\\u0000",
+       "payload": "recursive-key-sorted compact JSON"
+-    }
++    },
++    "mutationRequiredRequestFields": [
++      "expectedGlobalStateRevision",
++      "targetGlobalStateRevision",
++      "idempotencyKey",
++      "assignments"
++    ],
++    "mutationSequence": [
++      "serialize on Codex main-process queue",
++      "snapshot current assignments and revision",
++      "compare global-state revision",
++      "replace all six assignments through set-global-state",
++      "snapshot and validate exact readback",
++      "restore pre-mutation assignments after any readback failure"
++    ],
++    "capabilityGate": "apply/restore are advertised only when the integration supplies an exact global-state writer"
+   },
+   "limits": {
+     "tokenBytes": 4096,
+diff --git a/src/cli.rs b/src/cli.rs
+index aeac90a..b531e9d 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -481,6 +481,124 @@ pub enum CodexAgentKeyCommand {
+         token: Option<PathBuf>,
+     },
+ 
++    /// Save all six live Agent Key assignments as a revisioned snapshot.
++    Snapshot {
++        /// Destination JSON file. It must not already exist.
++        #[clap(long, value_parser)]
++        output: PathBuf,
++
++        /// Override the Codex Companion Bridge Unix socket path.
++        #[clap(long, value_parser)]
++        socket: Option<PathBuf>,
++
++        /// Override the Codex Companion Bridge token file path.
++        #[clap(long, value_parser)]
++        token: Option<PathBuf>,
++    },
++
++    /// Read one assignment from an offline Agent Key snapshot.
++    Get {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++
++        /// Logical slot: AG00 through AG05.
++        slot: String,
++    },
++
++    /// Set one assignment in an offline Agent Key candidate.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++
++        /// Logical slot: AG00 through AG05.
++        slot: String,
++
++        /// Assign a Codex command ID.
++        #[clap(long)]
++        command: Option<String>,
++
++        /// Assign a Skill display name; pair with --skill-path.
++        #[clap(long)]
++        skill_name: Option<String>,
++
++        /// Assign a Skill path; pair with --skill-name.
++        #[clap(long)]
++        skill_path: Option<String>,
++
++        /// Assign a task host ID; pair with --thread-key and --title.
++        #[clap(long)]
++        thread_host: Option<String>,
++
++        /// Assign a task thread key; pair with --thread-host and --title.
++        #[clap(long)]
++        thread_key: Option<String>,
++
++        /// Assign a task title; pair with --thread-host and --thread-key.
++        #[clap(long)]
++        title: Option<String>,
++
++        /// Assign a frozen keycap ID.
++        #[clap(long)]
++        keycap: Option<String>,
++
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Clear one assignment in an offline Agent Key candidate.
++    Clear {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++
++        /// Logical slot: AG00 through AG05.
++        slot: String,
++
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Apply all six Agent Key assignments with backup, CAS, and readback.
++    Apply {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++
++        #[clap(long, value_parser)]
++        backup: PathBuf,
++
++        #[clap(long)]
++        expected_global_state_revision: Option<String>,
++
++        #[clap(long)]
++        idempotency_key: Option<String>,
++
++        #[clap(long, value_parser)]
++        socket: Option<PathBuf>,
++
++        #[clap(long, value_parser)]
++        token: Option<PathBuf>,
++    },
++
++    /// Restore all six Agent Key assignments with backup, CAS, and readback.
++    Restore {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++
++        #[clap(long, value_parser)]
++        backup: PathBuf,
++
++        #[clap(long)]
++        expected_global_state_revision: Option<String>,
++
++        #[clap(long)]
++        idempotency_key: Option<String>,
++
++        #[clap(long, value_parser)]
++        socket: Option<PathBuf>,
++
++        #[clap(long, value_parser)]
++        token: Option<PathBuf>,
++    },
++
+     /// Inspect or edit the single-tap focus behavior.
+     TapMode {
+         #[clap(subcommand)]
+diff --git a/src/codex_agent_keys.rs b/src/codex_agent_keys.rs
+new file mode 100644
+index 0000000..d9e3075
+--- /dev/null
++++ b/src/codex_agent_keys.rs
+@@ -0,0 +1,503 @@
++use crate::fsutil;
++use anyhow::{bail, ensure, Context, Result};
++use serde::{Deserialize, Serialize};
++use serde_json::{Map, Value};
++use std::collections::BTreeMap;
++use std::fs;
++use std::path::{Path, PathBuf};
++use std::sync::atomic::{AtomicU64, Ordering};
++
++pub const SNAPSHOT_SCHEMA_VERSION: u64 = 1;
++pub const REVISION_ALGORITHM: &str = "codex-agent-keys-revision-v1";
++const CONTRACT_JSON: &str = include_str!("../spec/codex-agent-keys-v1.json");
++const REVISION_PREFIX: &[u8] = b"worklouder-codex-agent-keys-revision-v1\0";
++static NEXT_STAGING_ID: AtomicU64 = AtomicU64::new(0);
++
++#[derive(Clone, Debug, Deserialize)]
++#[serde(rename_all = "camelCase")]
++struct Contract {
++    contract_app_version: String,
++    global_state_key: String,
++    snapshot_kind: String,
++    candidate_receipt_kind: String,
++    mutation_result_kind: String,
++    adapter: String,
++    slots: Vec<String>,
++}
++
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
++#[serde(rename_all = "camelCase")]
++pub struct Snapshot {
++    pub schema_version: u64,
++    pub kind: String,
++    pub adapter: String,
++    pub contract_app_version: String,
++    pub installed_app_version: String,
++    pub global_state_key: String,
++    pub slots: Vec<String>,
++    pub assignments: BTreeMap<String, Value>,
++    pub global_state_revision: String,
++    pub warnings: Vec<String>,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SnapshotReceipt {
++    pub output: PathBuf,
++    pub global_state_revision: String,
++    pub assigned_count: usize,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct AssignmentView {
++    pub schema_version: u64,
++    pub kind: &'static str,
++    pub slot: String,
++    pub assignment_type: String,
++    pub assignment: Value,
++    pub global_state_revision: String,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct CandidateReceipt {
++    pub schema_version: u64,
++    pub kind: String,
++    pub operation: &'static str,
++    pub output: PathBuf,
++    pub changed: bool,
++    pub changed_paths: Vec<String>,
++    pub revision_algorithm: &'static str,
++    pub before_revision: String,
++    pub after_revision: String,
++}
++
++pub fn snapshot_from_bridge(
++    installed_app_version: String,
++    global_state_key: String,
++    slots: Vec<String>,
++    assignments: BTreeMap<String, Value>,
++    global_state_revision: String,
++) -> Result<Snapshot> {
++    let contract = load_contract()?;
++    let warnings = if installed_app_version == contract.contract_app_version {
++        Vec::new()
++    } else {
++        vec![format!(
++            "connected Codex version {installed_app_version} differs from frozen contract {}",
++            contract.contract_app_version
++        )]
++    };
++    let snapshot = Snapshot {
++        schema_version: SNAPSHOT_SCHEMA_VERSION,
++        kind: contract.snapshot_kind,
++        adapter: contract.adapter,
++        contract_app_version: contract.contract_app_version,
++        installed_app_version,
++        global_state_key,
++        slots,
++        assignments,
++        global_state_revision,
++        warnings,
++    };
++    validate_snapshot(&snapshot)?;
++    Ok(snapshot)
++}
++
++pub fn read_snapshot(path: &Path) -> Result<Snapshot> {
++    let metadata = fs::symlink_metadata(path)
++        .with_context(|| format!("failed to inspect Agent Key snapshot {}", path.display()))?;
++    ensure!(
++        metadata.file_type().is_file() && !metadata.file_type().is_symlink(),
++        "Agent Key snapshot must be a regular file"
++    );
++    let snapshot: Snapshot = serde_json::from_slice(
++        &fs::read(path)
++            .with_context(|| format!("failed to read Agent Key snapshot {}", path.display()))?,
++    )
++    .with_context(|| format!("invalid Agent Key snapshot JSON at {}", path.display()))?;
++    validate_snapshot(&snapshot)?;
++    Ok(snapshot)
++}
++
++pub fn write_snapshot(output: &Path, snapshot: &Snapshot) -> Result<()> {
++    ensure!(
++        !output.exists(),
++        "Agent Key snapshot destination already exists: {}",
++        output.display()
++    );
++    validate_snapshot(snapshot)?;
++    let parent = output
++        .parent()
++        .filter(|path| !path.as_os_str().is_empty())
++        .unwrap_or_else(|| Path::new("."));
++    fs::create_dir_all(parent)
++        .with_context(|| format!("failed to create snapshot parent {}", parent.display()))?;
++    let file_name = output
++        .file_name()
++        .and_then(|value| value.to_str())
++        .context("Agent Key snapshot destination had no UTF-8 file name")?;
++    let staging = output.with_file_name(format!(
++        ".{file_name}.worklouderctl-agent-keys-{}-{}.tmp",
++        std::process::id(),
++        NEXT_STAGING_ID.fetch_add(1, Ordering::Relaxed)
++    ));
++    let result = (|| -> Result<()> {
++        let mut bytes = serde_json::to_vec_pretty(snapshot)?;
++        bytes.push(b'\n');
++        fs::write(&staging, bytes)
++            .with_context(|| format!("failed to write staging file {}", staging.display()))?;
++        ensure!(
++            read_snapshot(&staging)? == *snapshot,
++            "Agent Key staging readback differed"
++        );
++        fs::rename(&staging, output).with_context(|| {
++            format!(
++                "failed to atomically publish {} as {}",
++                staging.display(),
++                output.display()
++            )
++        })?;
++        ensure!(
++            read_snapshot(output)? == *snapshot,
++            "Agent Key published readback differed"
++        );
++        Ok(())
++    })();
++    if result.is_err() && staging.exists() {
++        let _ = fs::remove_file(staging);
++    }
++    result
++}
++
++pub fn snapshot_receipt(output: &Path, snapshot: &Snapshot) -> SnapshotReceipt {
++    SnapshotReceipt {
++        output: output.to_path_buf(),
++        global_state_revision: snapshot.global_state_revision.clone(),
++        assigned_count: snapshot
++            .assignments
++            .values()
++            .filter(|assignment| !assignment.is_null())
++            .count(),
++    }
++}
++
++pub fn get(input: &Path, slot: &str) -> Result<AssignmentView> {
++    let snapshot = read_snapshot(input)?;
++    let assignment = snapshot
++        .assignments
++        .get(slot)
++        .with_context(|| format!("unknown Agent Key slot {slot}"))?
++        .clone();
++    Ok(AssignmentView {
++        schema_version: 1,
++        kind: "worklouderctl-codex-agent-key-assignment",
++        slot: slot.to_owned(),
++        assignment_type: assignment_type(&assignment)?.to_owned(),
++        assignment,
++        global_state_revision: snapshot.global_state_revision,
++    })
++}
++
++pub fn set(input: &Path, slot: &str, assignment: Value, output: &Path) -> Result<CandidateReceipt> {
++    validate_assignment(&assignment)?;
++    mutate(input, slot, assignment, output, "codex-agent-key-set")
++}
++
++pub fn clear(input: &Path, slot: &str, output: &Path) -> Result<CandidateReceipt> {
++    mutate(input, slot, Value::Null, output, "codex-agent-key-clear")
++}
++
++pub fn ensure_mutation_compatible(snapshot: &Snapshot) -> Result<()> {
++    let contract = load_contract()?;
++    ensure!(
++        snapshot.installed_app_version == contract.contract_app_version,
++        "Agent Key mutation requires Codex {}, snapshot reports {}",
++        contract.contract_app_version,
++        snapshot.installed_app_version
++    );
++    ensure!(
++        snapshot.warnings.is_empty(),
++        "Agent Key mutation requires a warning-free exact-version snapshot"
++    );
++    Ok(())
++}
++
++pub fn revision(assignments: &BTreeMap<String, Value>) -> Result<String> {
++    let mut framed = REVISION_PREFIX.to_vec();
++    framed.extend(serde_json::to_vec(&canonical_json(&serde_json::to_value(
++        assignments,
++    )?))?);
++    fsutil::sha256_bytes(&framed)
++}
++
++pub fn mutation_result_kind() -> Result<String> {
++    Ok(load_contract()?.mutation_result_kind)
++}
++
++fn mutate(
++    input: &Path,
++    slot: &str,
++    assignment: Value,
++    output: &Path,
++    operation: &'static str,
++) -> Result<CandidateReceipt> {
++    let mut snapshot = read_snapshot(input)?;
++    ensure_mutation_compatible(&snapshot)?;
++    ensure!(
++        snapshot.slots.iter().any(|candidate| candidate == slot),
++        "unknown Agent Key slot {slot}"
++    );
++    let before_revision = snapshot.global_state_revision.clone();
++    let changed = snapshot.assignments.get(slot) != Some(&assignment);
++    if changed {
++        snapshot.assignments.insert(slot.to_owned(), assignment);
++        snapshot.global_state_revision = revision(&snapshot.assignments)?;
++    }
++    validate_snapshot(&snapshot)?;
++    write_snapshot(output, &snapshot)?;
++    let contract = load_contract()?;
++    Ok(CandidateReceipt {
++        schema_version: 1,
++        kind: contract.candidate_receipt_kind,
++        operation,
++        output: output.to_path_buf(),
++        changed,
++        changed_paths: changed
++            .then(|| format!("/assignments/{slot}"))
++            .into_iter()
++            .collect(),
++        revision_algorithm: REVISION_ALGORITHM,
++        before_revision,
++        after_revision: snapshot.global_state_revision,
++    })
++}
++
++fn validate_snapshot(snapshot: &Snapshot) -> Result<()> {
++    let contract = load_contract()?;
++    ensure!(
++        snapshot.schema_version == SNAPSHOT_SCHEMA_VERSION,
++        "Agent Key snapshot schemaVersion is invalid"
++    );
++    ensure!(
++        snapshot.kind == contract.snapshot_kind,
++        "Agent Key snapshot kind is invalid"
++    );
++    ensure!(
++        snapshot.adapter == contract.adapter,
++        "Agent Key snapshot adapter is invalid"
++    );
++    ensure!(
++        snapshot.contract_app_version == contract.contract_app_version,
++        "Agent Key snapshot contract version is invalid"
++    );
++    ensure!(
++        snapshot.global_state_key == contract.global_state_key,
++        "Agent Key global-state key is invalid"
++    );
++    ensure!(
++        snapshot.slots == contract.slots,
++        "Agent Key slots are invalid"
++    );
++    ensure!(
++        snapshot.assignments.len() == contract.slots.len(),
++        "Agent Key assignments are incomplete"
++    );
++    for slot in &contract.slots {
++        validate_assignment(
++            snapshot
++                .assignments
++                .get(slot)
++                .with_context(|| format!("Agent Key assignment {slot} is missing"))?,
++        )?;
++    }
++    for slot in snapshot.assignments.keys() {
++        ensure!(
++            contract.slots.iter().any(|candidate| candidate == slot),
++            "unknown Agent Key slot {slot}"
++        );
++    }
++    ensure!(
++        is_lower_sha256(&snapshot.global_state_revision),
++        "Agent Key globalStateRevision must be lowercase SHA-256"
++    );
++    ensure!(
++        revision(&snapshot.assignments)? == snapshot.global_state_revision,
++        "Agent Key global-state revision readback differed"
++    );
++    Ok(())
++}
++
++fn validate_assignment(value: &Value) -> Result<()> {
++    assignment_type(value).map(|_| ())
++}
++
++fn assignment_type(value: &Value) -> Result<&'static str> {
++    if value.is_null() {
++        return Ok("empty");
++    }
++    let object = value
++        .as_object()
++        .context("Agent Key assignment must be an object")?;
++    let required = |key: &str| -> Result<()> {
++        let value = object
++            .get(key)
++            .and_then(Value::as_str)
++            .with_context(|| format!("Agent Key assignment {key} must be a string"))?;
++        ensure!(
++            !value.is_empty() && value.len() <= 16 * 1024 && !value.contains('\0'),
++            "Agent Key assignment {key} is invalid"
++        );
++        Ok(())
++    };
++    match object.get("type").and_then(Value::as_str) {
++        Some("command") => {
++            required("commandId")?;
++            Ok("command")
++        }
++        Some("skill") => {
++            required("skillName")?;
++            required("skillPath")?;
++            Ok("skill")
++        }
++        Some(other) => bail!("unknown Agent Key assignment type {other}"),
++        None if object.contains_key("hostId") || object.contains_key("threadKey") => {
++            required("hostId")?;
++            required("threadKey")?;
++            required("title")?;
++            Ok("thread")
++        }
++        None => {
++            required("keycapId")?;
++            Ok("keycap")
++        }
++    }
++}
++
++fn canonical_json(value: &Value) -> Value {
++    match value {
++        Value::Object(object) => {
++            let sorted: BTreeMap<&String, &Value> = object.iter().collect();
++            let mut canonical = Map::new();
++            for (key, value) in sorted {
++                canonical.insert(key.clone(), canonical_json(value));
++            }
++            Value::Object(canonical)
++        }
++        Value::Array(values) => Value::Array(values.iter().map(canonical_json).collect()),
++        value => value.clone(),
++    }
++}
++
++fn load_contract() -> Result<Contract> {
++    serde_json::from_str(CONTRACT_JSON).context("embedded Agent Key contract is invalid")
++}
++
++fn is_lower_sha256(value: &str) -> bool {
++    value.len() == 64
++        && value
++            .bytes()
++            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn fixture_snapshot() -> Snapshot {
++        let contract = load_contract().unwrap();
++        let assignments = BTreeMap::from([
++            (
++                "AG00".into(),
++                serde_json::json!({"type":"command","commandId":"fixture.command","future":true}),
++            ),
++            ("AG01".into(), Value::Null),
++            ("AG02".into(), Value::Null),
++            ("AG03".into(), Value::Null),
++            ("AG04".into(), Value::Null),
++            ("AG05".into(), Value::Null),
++        ]);
++        let revision = revision(&assignments).unwrap();
++        Snapshot {
++            schema_version: 1,
++            kind: contract.snapshot_kind,
++            adapter: contract.adapter,
++            contract_app_version: contract.contract_app_version.clone(),
++            installed_app_version: contract.contract_app_version,
++            global_state_key: contract.global_state_key,
++            slots: contract.slots,
++            assignments,
++            global_state_revision: revision,
++            warnings: Vec::new(),
++        }
++    }
++
++    fn root(name: &str) -> PathBuf {
++        std::env::temp_dir().join(format!(
++            "worklouderctl-agent-keys-{name}-{}-{}",
++            std::process::id(),
++            NEXT_STAGING_ID.fetch_add(1, Ordering::Relaxed)
++        ))
++    }
++
++    #[test]
++    fn candidates_preserve_untargeted_unknown_fields_and_cover_every_type() {
++        let root = root("types");
++        fs::create_dir_all(&root).unwrap();
++        let baseline_path = root.join("baseline.json");
++        let skill_path = root.join("skill.json");
++        let thread_path = root.join("thread.json");
++        let keycap_path = root.join("keycap.json");
++        let clear_path = root.join("clear.json");
++        let baseline = fixture_snapshot();
++        write_snapshot(&baseline_path, &baseline).unwrap();
++        set(
++            &baseline_path,
++            "AG01",
++            serde_json::json!({"type":"skill","skillName":"Review","skillPath":"/tmp/SKILL.md"}),
++            &skill_path,
++        )
++        .unwrap();
++        set(
++            &skill_path,
++            "AG02",
++            serde_json::json!({"hostId":"local","threadKey":"thread","title":"Task"}),
++            &thread_path,
++        )
++        .unwrap();
++        set(
++            &thread_path,
++            "AG03",
++            serde_json::json!({"keycapId":"GIT"}),
++            &keycap_path,
++        )
++        .unwrap();
++        clear(&keycap_path, "AG00", &clear_path).unwrap();
++        let final_snapshot = read_snapshot(&clear_path).unwrap();
++        assert_eq!(final_snapshot.assignments["AG00"], Value::Null);
++        assert_eq!(final_snapshot.assignments["AG01"]["type"], "skill");
++        assert_eq!(final_snapshot.assignments["AG02"]["title"], "Task");
++        assert_eq!(final_snapshot.assignments["AG03"]["keycapId"], "GIT");
++        assert_ne!(
++            final_snapshot.global_state_revision,
++            baseline.global_state_revision
++        );
++        fs::remove_dir_all(root).unwrap();
++    }
++
++    #[test]
++    fn tampering_unknown_slots_and_version_mismatch_are_rejected() {
++        let root = root("reject");
++        fs::create_dir_all(&root).unwrap();
++        let path = root.join("snapshot.json");
++        let mut snapshot = fixture_snapshot();
++        snapshot.assignments.insert("AG99".into(), Value::Null);
++        assert!(write_snapshot(&path, &snapshot).is_err());
++        snapshot.assignments.remove("AG99");
++        snapshot.installed_app_version = "future".into();
++        snapshot.warnings = vec!["future".into()];
++        assert!(ensure_mutation_compatible(&snapshot).is_err());
++        fs::remove_dir_all(root).unwrap();
++    }
++}
+diff --git a/src/codex_bridge.rs b/src/codex_bridge.rs
+index 32c0828..8cfdfbc 100644
+--- a/src/codex_bridge.rs
++++ b/src/codex_bridge.rs
+@@ -1,4 +1,4 @@
+-use crate::{codex, fsutil};
++use crate::{codex, codex_agent_keys};
+ use anyhow::{bail, ensure, Context, Result};
+ use serde::de::DeserializeOwned;
+ use serde::{Deserialize, Serialize};
+@@ -19,10 +19,7 @@ const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
+ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+ const SETTINGS_SNAPSHOT_KIND: &str = "worklouderctl-codex-settings-snapshot";
+ const SETTINGS_MUTATION_KIND: &str = "worklouderctl-codex-settings-mutation";
+-const AGENT_KEYS_SNAPSHOT_KIND: &str = "worklouder-codex-agent-keys-snapshot";
+-const AGENT_KEYS_STATE_KEY: &str = "codex-micro-custom-agent-assignments";
+-const AGENT_KEYS_PREFIX: &[u8] = b"worklouder-codex-agent-keys-revision-v1\0";
+-const AGENT_KEY_SLOTS: [&str; 6] = ["AG00", "AG01", "AG02", "AG03", "AG04", "AG05"];
++const AGENT_KEYS_SNAPSHOT_KIND: &str = "worklouderctl-codex-agent-keys-snapshot";
+ static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
+ 
+ #[derive(Clone, Debug)]
+@@ -42,17 +39,6 @@ pub struct CodexBridgeInspection {
+     pub socket: PathBuf,
+ }
+ 
+-#[derive(Clone, Debug, Deserialize, Serialize)]
+-#[serde(rename_all = "camelCase")]
+-pub struct AgentKeysSnapshot {
+-    pub schema_version: u64,
+-    pub kind: String,
+-    pub global_state_key: String,
+-    pub slots: Vec<String>,
+-    pub assignments: BTreeMap<String, Value>,
+-    pub global_state_revision: String,
+-}
+-
+ #[derive(Clone, Debug, Serialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct SettingsSnapshotReceipt {
+@@ -81,6 +67,22 @@ pub struct SettingsMutationReceipt {
+     pub target_settings_revision: String,
+ }
+ 
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct AgentKeysMutationReceipt {
++    pub backup: PathBuf,
++    pub schema_version: u64,
++    pub kind: String,
++    pub operation: String,
++    pub idempotency_key: String,
++    pub idempotent_replay: bool,
++    pub changed: bool,
++    pub rollback_performed: bool,
++    pub before_global_state_revision: String,
++    pub after_global_state_revision: String,
++    pub target_global_state_revision: String,
++}
++
+ #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ struct Handshake {
+@@ -104,6 +106,17 @@ struct RawSettingsSnapshot {
+     settings_revision: String,
+ }
+ 
++#[derive(Debug, Deserialize)]
++#[serde(rename_all = "camelCase")]
++struct RawAgentKeysSnapshot {
++    schema_version: u64,
++    kind: String,
++    global_state_key: String,
++    slots: Vec<String>,
++    assignments: BTreeMap<String, Value>,
++    global_state_revision: String,
++}
++
+ #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ struct RawMutationResponse {
+@@ -121,6 +134,21 @@ struct RawMutationResponse {
+     target_settings_revision: String,
+ }
+ 
++#[derive(Debug, Deserialize)]
++#[serde(rename_all = "camelCase")]
++struct RawAgentKeysMutationResponse {
++    schema_version: u64,
++    kind: String,
++    operation: String,
++    idempotency_key: String,
++    idempotent_replay: bool,
++    changed: bool,
++    rollback_performed: bool,
++    before_global_state_revision: String,
++    after_global_state_revision: String,
++    target_global_state_revision: String,
++}
++
+ #[derive(Debug, Serialize)]
+ struct RpcRequest<'a> {
+     jsonrpc: &'static str,
+@@ -200,15 +228,61 @@ pub fn settings_snapshot(
+     })
+ }
+ 
+-pub fn agent_keys_snapshot(paths: &CodexBridgePaths) -> Result<AgentKeysSnapshot> {
++pub fn agent_keys_snapshot(paths: &CodexBridgePaths) -> Result<codex_agent_keys::Snapshot> {
+     let mut client = Client::connect(paths)?;
+-    let snapshot: AgentKeysSnapshot = client.call(
++    let raw: RawAgentKeysSnapshot = client.call(
+         "codex.agentKeys.snapshot",
+         "codex.agentKeys.snapshot.v1",
+         json!({}),
+     )?;
+-    validate_agent_keys(&snapshot)?;
+-    Ok(snapshot)
++    validate_raw_agent_keys_snapshot(raw, &client.handshake.codex_version)
++}
++
++pub fn agent_keys_snapshot_to_file(
++    paths: &CodexBridgePaths,
++    output: &Path,
++) -> Result<codex_agent_keys::SnapshotReceipt> {
++    let snapshot = agent_keys_snapshot(paths)?;
++    codex_agent_keys::write_snapshot(output, &snapshot)?;
++    Ok(codex_agent_keys::snapshot_receipt(output, &snapshot))
++}
++
++pub fn agent_keys_apply(
++    paths: &CodexBridgePaths,
++    input: &Path,
++    backup: &Path,
++    expected_revision: Option<&str>,
++    idempotency_key: Option<&str>,
++) -> Result<AgentKeysMutationReceipt> {
++    agent_keys_mutate(
++        paths,
++        "apply",
++        "codex.agentKeys.apply",
++        "codex.agentKeys.apply.v1",
++        input,
++        backup,
++        expected_revision,
++        idempotency_key,
++    )
++}
++
++pub fn agent_keys_restore(
++    paths: &CodexBridgePaths,
++    input: &Path,
++    backup: &Path,
++    expected_revision: Option<&str>,
++    idempotency_key: Option<&str>,
++) -> Result<AgentKeysMutationReceipt> {
++    agent_keys_mutate(
++        paths,
++        "restore",
++        "codex.agentKeys.restore",
++        "codex.agentKeys.restore.v1",
++        input,
++        backup,
++        expected_revision,
++        idempotency_key,
++    )
+ }
+ 
+ pub fn settings_apply(
+@@ -326,6 +400,66 @@ fn settings_mutate(
+     })
+ }
+ 
++#[allow(clippy::too_many_arguments)]
++fn agent_keys_mutate(
++    paths: &CodexBridgePaths,
++    operation: &str,
++    method: &str,
++    capability: &str,
++    input: &Path,
++    backup: &Path,
++    expected_revision: Option<&str>,
++    idempotency_key: Option<&str>,
++) -> Result<AgentKeysMutationReceipt> {
++    ensure!(input != backup, "input and backup paths must differ");
++    let candidate = codex_agent_keys::read_snapshot(input)?;
++    codex_agent_keys::ensure_mutation_compatible(&candidate)?;
++    let target_revision = codex_agent_keys::revision(&candidate.assignments)?;
++    let backup_snapshot = prepare_agent_keys_backup(paths, backup)?;
++    codex_agent_keys::ensure_mutation_compatible(&backup_snapshot)?;
++    let expected = expected_revision.unwrap_or(&backup_snapshot.global_state_revision);
++    ensure!(
++        is_lower_sha256(expected),
++        "expected Agent Key revision is invalid"
++    );
++    let key = idempotency_key
++        .map(str::to_owned)
++        .unwrap_or_else(|| generated_idempotency_key("agent-keys", &target_revision));
++    ensure!(
++        !key.is_empty() && key.len() <= 256 && !key.contains('\0'),
++        "idempotency key is invalid"
++    );
++    let mut client = Client::connect(paths)?;
++    ensure!(
++        client.handshake.codex_version == candidate.installed_app_version,
++        "connected Codex version differs from the Agent Key candidate"
++    );
++    let response: RawAgentKeysMutationResponse = client.call(
++        method,
++        capability,
++        json!({
++            "expectedGlobalStateRevision": expected,
++            "targetGlobalStateRevision": target_revision,
++            "idempotencyKey": key,
++            "assignments": candidate.assignments,
++        }),
++    )?;
++    validate_agent_keys_mutation_response(&response, operation, &key, expected, &target_revision)?;
++    Ok(AgentKeysMutationReceipt {
++        backup: backup.to_path_buf(),
++        schema_version: response.schema_version,
++        kind: response.kind,
++        operation: response.operation,
++        idempotency_key: response.idempotency_key,
++        idempotent_replay: response.idempotent_replay,
++        changed: response.changed,
++        rollback_performed: response.rollback_performed,
++        before_global_state_revision: response.before_global_state_revision,
++        after_global_state_revision: response.after_global_state_revision,
++        target_global_state_revision: response.target_global_state_revision,
++    })
++}
++
+ fn prepare_backup(paths: &CodexBridgePaths, backup: &Path) -> Result<codex::Snapshot> {
+     if backup.exists() {
+         return codex::read_snapshot(backup);
+@@ -334,6 +468,17 @@ fn prepare_backup(paths: &CodexBridgePaths, backup: &Path) -> Result<codex::Snap
+     codex::read_snapshot(backup)
+ }
+ 
++fn prepare_agent_keys_backup(
++    paths: &CodexBridgePaths,
++    backup: &Path,
++) -> Result<codex_agent_keys::Snapshot> {
++    if backup.exists() {
++        return codex_agent_keys::read_snapshot(backup);
++    }
++    agent_keys_snapshot_to_file(paths, backup)?;
++    codex_agent_keys::read_snapshot(backup)
++}
++
+ fn validate_raw_snapshot(raw: RawSettingsSnapshot, codex_version: &str) -> Result<codex::Snapshot> {
+     ensure!(
+         raw.schema_version == 1,
+@@ -366,79 +511,25 @@ fn validate_raw_snapshot(raw: RawSettingsSnapshot, codex_version: &str) -> Resul
+     )
+ }
+ 
+-fn validate_agent_keys(snapshot: &AgentKeysSnapshot) -> Result<()> {
++fn validate_raw_agent_keys_snapshot(
++    raw: RawAgentKeysSnapshot,
++    codex_version: &str,
++) -> Result<codex_agent_keys::Snapshot> {
+     ensure!(
+-        snapshot.schema_version == 1,
++        raw.schema_version == 1,
+         "Codex bridge returned an unknown Agent Key schema"
+     );
+     ensure!(
+-        snapshot.kind == AGENT_KEYS_SNAPSHOT_KIND,
++        raw.kind == AGENT_KEYS_SNAPSHOT_KIND,
+         "Codex bridge returned an unknown Agent Key kind"
+     );
+-    ensure!(
+-        snapshot.global_state_key == AGENT_KEYS_STATE_KEY,
+-        "Codex bridge returned the wrong Agent Key state key"
+-    );
+-    ensure!(
+-        snapshot
+-            .slots
+-            .iter()
+-            .map(String::as_str)
+-            .eq(AGENT_KEY_SLOTS),
+-        "Codex bridge returned unexpected Agent Key slots"
+-    );
+-    ensure!(
+-        snapshot.assignments.len() == AGENT_KEY_SLOTS.len(),
+-        "Codex bridge returned incomplete Agent Key assignments"
+-    );
+-    for slot in AGENT_KEY_SLOTS {
+-        validate_assignment(
+-            snapshot
+-                .assignments
+-                .get(slot)
+-                .context("Agent Key slot was missing")?,
+-        )?;
+-    }
+-    let canonical = serde_json::to_vec(&canonical_json(&serde_json::to_value(
+-        &snapshot.assignments,
+-    )?))?;
+-    let mut framed = AGENT_KEYS_PREFIX.to_vec();
+-    framed.extend(canonical);
+-    ensure!(
+-        fsutil::sha256_bytes(&framed)? == snapshot.global_state_revision,
+-        "Codex Agent Key revision readback differed"
+-    );
+-    Ok(())
+-}
+-
+-fn validate_assignment(value: &Value) -> Result<()> {
+-    if value.is_null() {
+-        return Ok(());
+-    }
+-    let object = value
+-        .as_object()
+-        .context("Agent Key assignment must be an object")?;
+-    let non_empty = |key: &str| {
+-        object
+-            .get(key)
+-            .and_then(Value::as_str)
+-            .map(|value| !value.is_empty())
+-            .unwrap_or(false)
+-    };
+-    let valid = match object.get("type").and_then(Value::as_str) {
+-        Some("command") => non_empty("commandId"),
+-        Some("skill") => non_empty("skillName") && non_empty("skillPath"),
+-        Some(_) => false,
+-        None => {
+-            non_empty("keycapId")
+-                || (non_empty("hostId") && non_empty("threadKey") && non_empty("title"))
+-        }
+-    };
+-    ensure!(
+-        valid,
+-        "Codex bridge returned an invalid Agent Key assignment"
+-    );
+-    Ok(())
++    codex_agent_keys::snapshot_from_bridge(
++        codex_version.to_owned(),
++        raw.global_state_key,
++        raw.slots,
++        raw.assignments,
++        raw.global_state_revision,
++    )
+ }
+ 
+ fn validate_mutation_response(
+@@ -489,6 +580,45 @@ fn validate_mutation_response(
+     Ok(())
+ }
+ 
++fn validate_agent_keys_mutation_response(
++    response: &RawAgentKeysMutationResponse,
++    operation: &str,
++    idempotency_key: &str,
++    expected_revision: &str,
++    target_revision: &str,
++) -> Result<()> {
++    ensure!(
++        response.schema_version == 1 && response.kind == codex_agent_keys::mutation_result_kind()?,
++        "Codex bridge returned an unknown Agent Key mutation result"
++    );
++    ensure!(
++        response.operation == operation,
++        "Codex bridge returned the wrong Agent Key operation"
++    );
++    ensure!(
++        response.idempotency_key == idempotency_key,
++        "Codex bridge returned the wrong Agent Key idempotency key"
++    );
++    ensure!(
++        response.before_global_state_revision == expected_revision,
++        "Codex Agent Key mutation began from an unexpected revision"
++    );
++    ensure!(
++        response.after_global_state_revision == target_revision
++            && response.target_global_state_revision == target_revision,
++        "Codex Agent Key mutation readback did not match the target revision"
++    );
++    ensure!(
++        response.changed != (expected_revision == target_revision),
++        "Codex Agent Key mutation returned an inconsistent changed flag"
++    );
++    ensure!(
++        !response.rollback_performed,
++        "Codex bridge reported rollback for a successful Agent Key mutation"
++    );
++    Ok(())
++}
++
+ fn generated_idempotency_key(operation: &str, target_revision: &str) -> String {
+     let nonce = SystemTime::now()
+         .duration_since(UNIX_EPOCH)
+@@ -548,21 +678,6 @@ fn is_lower_sha256(value: &str) -> bool {
+             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+ }
+ 
+-fn canonical_json(value: &Value) -> Value {
+-    match value {
+-        Value::Object(object) => {
+-            let sorted: BTreeMap<&String, &Value> = object.iter().collect();
+-            let mut canonical = serde_json::Map::new();
+-            for (key, value) in sorted {
+-                canonical.insert(key.clone(), canonical_json(value));
+-            }
+-            Value::Object(canonical)
+-        }
+-        Value::Array(values) => Value::Array(values.iter().map(canonical_json).collect()),
+-        value => value.clone(),
+-    }
+-}
+-
+ impl Client {
+     fn connect(paths: &CodexBridgePaths) -> Result<Self> {
+         validate_paths(paths)?;
+diff --git a/src/lib.rs b/src/lib.rs
+index 1f7bf36..cfab341 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,6 +1,7 @@
+ pub mod bridge;
+ pub mod cli;
+ pub mod codex;
++pub mod codex_agent_keys;
+ pub mod codex_bridge;
+ pub mod config;
+ pub mod contract;
+@@ -1771,6 +1772,116 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
+                     writeln!(out, "revision={}", result.global_state_revision)?;
+                 }
+             }
++            CodexAgentKeyCommand::Snapshot {
++                output,
++                socket,
++                token,
++            } => {
++                let result = codex_bridge::agent_keys_snapshot_to_file(
++                    &codex_bridge::paths(socket, token),
++                    &output,
++                )?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "Saved {} Agent Key assignment(s) to {}",
++                        result.assigned_count,
++                        result.output.display()
++                    )?;
++                    writeln!(out, "revision={}", result.global_state_revision)?;
++                }
++            }
++            CodexAgentKeyCommand::Get { input, slot } => {
++                let result = codex_agent_keys::get(&input, &slot)?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "slot={}\ttype={}\t{}",
++                        result.slot,
++                        result.assignment_type,
++                        serde_json::to_string(&result.assignment)?
++                    )?;
++                    writeln!(out, "revision={}", result.global_state_revision)?;
++                }
++            }
++            CodexAgentKeyCommand::Set {
++                input,
++                slot,
++                command,
++                skill_name,
++                skill_path,
++                thread_host,
++                thread_key,
++                title,
++                keycap,
++                output,
++            } => write_agent_key_candidate_result(
++                codex_agent_keys::set(
++                    &input,
++                    &slot,
++                    agent_key_assignment(
++                        command,
++                        skill_name,
++                        skill_path,
++                        thread_host,
++                        thread_key,
++                        title,
++                        keycap,
++                    )?,
++                    &output,
++                )?,
++                json,
++                &mut out,
++            )?,
++            CodexAgentKeyCommand::Clear {
++                input,
++                slot,
++                output,
++            } => write_agent_key_candidate_result(
++                codex_agent_keys::clear(&input, &slot, &output)?,
++                json,
++                &mut out,
++            )?,
++            CodexAgentKeyCommand::Apply {
++                input,
++                backup,
++                expected_global_state_revision,
++                idempotency_key,
++                socket,
++                token,
++            } => write_agent_key_mutation_result(
++                codex_bridge::agent_keys_apply(
++                    &codex_bridge::paths(socket, token),
++                    &input,
++                    &backup,
++                    expected_global_state_revision.as_deref(),
++                    idempotency_key.as_deref(),
++                )?,
++                json,
++                &mut out,
++            )?,
++            CodexAgentKeyCommand::Restore {
++                input,
++                backup,
++                expected_global_state_revision,
++                idempotency_key,
++                socket,
++                token,
++            } => write_agent_key_mutation_result(
++                codex_bridge::agent_keys_restore(
++                    &codex_bridge::paths(socket, token),
++                    &input,
++                    &backup,
++                    expected_global_state_revision.as_deref(),
++                    idempotency_key.as_deref(),
++                )?,
++                json,
++                &mut out,
++            )?,
+             CodexAgentKeyCommand::TapMode { command } => match command {
+                 CodexAgentTapModeCommand::Get { input } => {
+                     let result = codex::agent_tap_mode_get(&input)?;
+@@ -1890,6 +2001,106 @@ fn write_codex_mutation_result(
+     Ok(())
+ }
+ 
++#[allow(clippy::too_many_arguments)]
++fn agent_key_assignment(
++    command: Option<String>,
++    skill_name: Option<String>,
++    skill_path: Option<String>,
++    thread_host: Option<String>,
++    thread_key: Option<String>,
++    title: Option<String>,
++    keycap: Option<String>,
++) -> Result<serde_json::Value> {
++    match (
++        command,
++        skill_name,
++        skill_path,
++        thread_host,
++        thread_key,
++        title,
++        keycap,
++    ) {
++        (Some(command_id), None, None, None, None, None, None) => Ok(serde_json::json!({
++            "type": "command",
++            "commandId": command_id,
++        })),
++        (None, Some(skill_name), Some(skill_path), None, None, None, None) => {
++            Ok(serde_json::json!({
++                "type": "skill",
++                "skillName": skill_name,
++                "skillPath": skill_path,
++            }))
++        }
++        (None, None, None, Some(host_id), Some(thread_key), Some(title), None) => {
++            Ok(serde_json::json!({
++                "hostId": host_id,
++                "threadKey": thread_key,
++                "title": title,
++            }))
++        }
++        (None, None, None, None, None, None, Some(keycap_id)) => {
++            Ok(serde_json::json!({ "keycapId": keycap_id }))
++        }
++        _ => anyhow::bail!(
++            "select exactly one Agent Key assignment: --command, --skill-name with --skill-path, --thread-host with --thread-key and --title, or --keycap"
++        ),
++    }
++}
++
++fn write_agent_key_candidate_result(
++    result: codex_agent_keys::CandidateReceipt,
++    json: bool,
++    mut out: impl Write,
++) -> Result<()> {
++    if json {
++        write_json(&mut out, &result)?;
++    } else {
++        writeln!(
++            out,
++            "{} candidate {} at {}",
++            result.operation,
++            if result.changed {
++                "changed"
++            } else {
++                "unchanged"
++            },
++            result.output.display()
++        )?;
++        writeln!(
++            out,
++            "revision={} -> {}",
++            result.before_revision, result.after_revision
++        )?;
++    }
++    Ok(())
++}
++
++fn write_agent_key_mutation_result(
++    result: codex_bridge::AgentKeysMutationReceipt,
++    json: bool,
++    mut out: impl Write,
++) -> Result<()> {
++    if json {
++        write_json(&mut out, &result)?;
++    } else {
++        writeln!(
++            out,
++            "Agent Keys {} {} (revision {} -> {})",
++            result.operation,
++            if result.changed {
++                "changed"
++            } else {
++                "unchanged"
++            },
++            result.before_global_state_revision,
++            result.after_global_state_revision
++        )?;
++        writeln!(out, "backup={}", result.backup.display())?;
++        writeln!(out, "idempotency-key={}", result.idempotency_key)?;
++    }
++    Ok(())
++}
++
+ fn codex_agent_source_value(value: CodexAgentSource) -> &'static str {
+     match value {
+         CodexAgentSource::Pinned => "pinned",
+diff --git a/tests/cli.rs b/tests/cli.rs
+index ccf6259..fc28e22 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -342,8 +342,18 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
+         .unwrap();
+     let agent_key_stdout = String::from_utf8(agent_key.stdout).unwrap();
+     assert!(agent_key.status.success());
+-    assert!(agent_key_stdout.contains("assignments"));
+-    assert!(agent_key_stdout.contains("tap-mode"));
++    for command in [
++        "assignments",
++        "snapshot",
++        "get",
++        "set",
++        "clear",
++        "apply",
++        "restore",
++        "tap-mode",
++    ] {
++        assert!(agent_key_stdout.contains(command));
++    }
+ }
+ 
+ #[test]
