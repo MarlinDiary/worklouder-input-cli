@@ -27,12 +27,21 @@ export async function installInputCompanionBridge({
           services.analyticsService,
         )
       : undefined);
+  const appsenseRuntimeAuthority =
+    services.appsenseRuntimeAuthority ??
+    (services.nativeService && services.focusAppService
+      ? inputFocusServiceRuntimeAuthority(
+          services.nativeService,
+          services.focusAppService,
+        )
+      : undefined);
   const adapter = createInputMainAdapter({
     devicesCommManager: services.devicesCommManager,
     deviceKitVersion,
     configurationWriter: services.configurationWriter,
     hostSettingsAuthority,
     presetCatalogAuthority: services.presetCatalogAuthority,
+    appsenseRuntimeAuthority,
   });
   const bridge = await startInputCompanionBridge({
     adapter,
@@ -59,6 +68,26 @@ export async function installInputCompanionBridge({
   return {
     ...bridge,
     stop,
+  };
+}
+
+function inputFocusServiceRuntimeAuthority(nativeService, focusAppService) {
+  if (typeof nativeService.getWindowInFocus !== "function") {
+    throw new TypeError("nativeService.getWindowInFocus must be a function");
+  }
+  return {
+    async readState() {
+      const focusedApp = await nativeService.getWindowInFocus();
+      const devices = Array.isArray(focusAppService.focusAppDevices)
+        ? focusAppService.focusAppDevices
+        : [];
+      return {
+        collecting: Boolean(focusAppService.getFocusApp),
+        deviceIds: devices.map((device) => String(device.id)),
+        focusedApp: focusedApp ?? null,
+        lastForwardedApp: focusAppService.lastAppInFocus ?? null,
+      };
+    },
   };
 }
 

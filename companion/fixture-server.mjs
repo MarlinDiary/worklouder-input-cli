@@ -303,6 +303,20 @@ const adapter = createInputMainAdapter({
       ];
     },
   },
+  appsenseRuntimeAuthority: {
+    async readState() {
+      const focusedApp = {
+        appName: "Fixture App",
+        process: "com.example.fixture",
+      };
+      return {
+        collecting: true,
+        deviceIds: ["fixture-device"],
+        focusedApp,
+        lastForwardedApp: focusedApp,
+      };
+    },
+  },
 });
 
 const bridge = await startInputCompanionBridge({

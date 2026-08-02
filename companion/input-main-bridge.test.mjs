@@ -533,6 +533,48 @@ test("Input adapter snapshots a complete preset catalog deterministically", asyn
   assert.equal(snapshot.presets[0].name, "Fixture");
 });
 
+test("Input adapter exposes AppSense focus forwarding and device layer state", async () => {
+  const device = configDevice("appsense-device", new Map());
+  const adapter = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [device] },
+    deviceKitVersion: "0.1.29",
+    appsenseRuntimeAuthority: {
+      async readState() {
+        return {
+          collecting: true,
+          deviceIds: ["appsense-device", "appsense-device"],
+          focusedApp: {
+            appName: "Fixture App",
+            process: "com.example.fixture",
+          },
+          lastForwardedApp: {
+            appName: "Fixture App",
+            process: "com.example.fixture",
+          },
+        };
+      },
+    },
+  });
+  const runtime = await adapter.getAppSenseRuntime({ deviceId: null });
+  assert.equal(runtime.kind, "worklouder-input-appsense-runtime");
+  assert.equal(runtime.status.selectedProfileIndex, 0);
+  assert.equal(runtime.status.selectedLayerIndex, 2);
+  assert.equal(runtime.runtime.collecting, true);
+  assert.equal(runtime.runtime.selectedDeviceRegistered, true);
+  assert.deepEqual(runtime.runtime.deviceIds, ["appsense-device"]);
+  assert.equal(runtime.runtime.focusedApp.process, "com.example.fixture");
+
+  const invalid = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [device] },
+    deviceKitVersion: "0.1.29",
+    appsenseRuntimeAuthority: { readState: async () => ({ collecting: true }) },
+  });
+  await assert.rejects(
+    invalid.getAppSenseRuntime({ deviceId: null }),
+    (error) => error.code === -32008,
+  );
+});
+
 test("one-call Input integration owns discovery and lifecycle paths", async () => {
   const root = await mkdtemp("/tmp/wlb-integration-");
   class FixtureApp extends EventEmitter {
@@ -596,6 +638,17 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
       presetCatalogAuthority: {
         listPresets: () => [],
       },
+      appsenseRuntimeAuthority: {
+        readState: () => ({
+          collecting: true,
+          deviceIds: ["device-1"],
+          focusedApp: { appName: "Fixture", process: "fixture.bundle" },
+          lastForwardedApp: {
+            appName: "Fixture",
+            process: "fixture.bundle",
+          },
+        }),
+      },
     },
     deviceKitVersion: "0.1.29-integration",
     bridgeVersion: "0.1.0-integration",
@@ -618,6 +671,7 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
     integration.capabilities.includes("input.host-settings.restore.v1"),
   );
   assert.ok(integration.capabilities.includes("input.presets.snapshot.v1"));
+  assert.ok(integration.capabilities.includes("input.appsense.runtime.v1"));
   assert.equal(app.listenerCount("before-quit"), 1);
   await integration.stop();
   assert.equal(app.listenerCount("before-quit"), 0);

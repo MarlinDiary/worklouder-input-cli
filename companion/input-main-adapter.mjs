@@ -26,6 +26,7 @@ export function createInputMainAdapter({
   configurationWriter,
   hostSettingsAuthority,
   presetCatalogAuthority,
+  appsenseRuntimeAuthority,
 }) {
   if (
     !devicesCommManager ||
@@ -61,6 +62,13 @@ export function createInputMainAdapter({
       typeof presetCatalogAuthority.listPresets !== "function")
   ) {
     throw new TypeError("presetCatalogAuthority.listPresets must be a function");
+  }
+  if (
+    appsenseRuntimeAuthority !== undefined &&
+    (!appsenseRuntimeAuthority ||
+      typeof appsenseRuntimeAuthority.readState !== "function")
+  ) {
+    throw new TypeError("appsenseRuntimeAuthority.readState must be a function");
   }
   const idempotencyCache = new Map();
   const hostSettingsIdempotencyCache = new Map();
@@ -593,7 +601,72 @@ export function createInputMainAdapter({
     adapter.snapshotPresets = async () =>
       presetCatalogSnapshot(await presetCatalogAuthority.listPresets());
   }
+  if (appsenseRuntimeAuthority) {
+    adapter.getAppSenseRuntime = async ({ deviceId = null }) => {
+      const device = selectDevice(deviceId);
+      const [runtime, status] = await Promise.all([
+        appsenseRuntimeAuthority.readState({ device }),
+        common(device),
+      ]);
+      return {
+        schemaVersion: 1,
+        kind: "worklouder-input-appsense-runtime",
+        ...status,
+        runtime: normalizeAppSenseRuntime(runtime, String(device.id)),
+      };
+    };
+  }
   return adapter;
+}
+
+function normalizeAppSenseRuntime(runtime, selectedDeviceId) {
+  if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) {
+    throw new BridgeError(-32008, "AppSense runtime state was invalid");
+  }
+  if (typeof runtime.collecting !== "boolean") {
+    throw new BridgeError(-32008, "AppSense collecting state was invalid");
+  }
+  if (
+    !Array.isArray(runtime.deviceIds) ||
+    runtime.deviceIds.length > 256 ||
+    runtime.deviceIds.some(
+      (id) => typeof id !== "string" || id.length === 0 || id.length > 256,
+    )
+  ) {
+    throw new BridgeError(-32008, "AppSense device IDs were invalid");
+  }
+  const deviceIds = [...new Set(runtime.deviceIds)].sort();
+  return {
+    collecting: runtime.collecting,
+    selectedDeviceRegistered: deviceIds.includes(selectedDeviceId),
+    deviceIds,
+    focusedApp: normalizeFocusedApp(runtime.focusedApp),
+    lastForwardedApp: normalizeFocusedApp(runtime.lastForwardedApp),
+  };
+}
+
+function normalizeFocusedApp(app) {
+  if (app === null || app === undefined) return null;
+  if (!app || typeof app !== "object" || Array.isArray(app)) {
+    throw new BridgeError(-32008, "AppSense focused application was invalid");
+  }
+  const normalized = {};
+  for (const field of ["appName", "process", "path"]) {
+    const value = app[field];
+    if (value !== undefined && value !== null) {
+      if (typeof value !== "string" || value.length > 4096 || value.includes("\0")) {
+        throw new BridgeError(
+          -32008,
+          `AppSense focused application ${field} was invalid`,
+        );
+      }
+      normalized[field] = value;
+    }
+  }
+  if (!normalized.appName && !normalized.process && !normalized.path) {
+    throw new BridgeError(-32008, "AppSense focused application was empty");
+  }
+  return normalized;
 }
 
 async function replaceConfiguration(

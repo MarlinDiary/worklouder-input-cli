@@ -36,6 +36,10 @@ const METHOD_DEFINITIONS = new Map([
     ["input.host-settings.restore.v1", "restoreHostSettings"],
   ],
   ["input.presets.snapshot", ["input.presets.snapshot.v1", "snapshotPresets"]],
+  [
+    "input.appsense.runtime",
+    ["input.appsense.runtime.v1", "getAppSenseRuntime"],
+  ],
 ]);
 
 const MUTATION_METHODS = new Set([
