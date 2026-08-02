@@ -92,6 +92,32 @@ done
   >"$ROOT/codex-transaction-plan-receipt.json"
 "$BIN" --json transaction show --input "$ROOT/codex-transaction-plan.json" \
   >"$ROOT/codex-transaction-plan-show.json"
+"$BIN" --json transaction apply \
+  --plan "$ROOT/codex-transaction-plan.json" \
+  --backup-dir "$ROOT/codex-transaction-backup" \
+  --receipt "$ROOT/codex-transaction-apply.json" \
+  --idempotency-key codex-transaction-apply-1 \
+  --codex-socket "$SOCKET" --codex-token "$TOKEN" \
+  >"$ROOT/codex-transaction-apply-stdout.json"
+"$BIN" --json codex config --socket "$SOCKET" --token "$TOKEN" snapshot \
+  --output "$ROOT/codex-transaction-post-settings.json" \
+  >"$ROOT/codex-transaction-post-settings-receipt.json"
+"$BIN" --json codex agent-key snapshot --socket "$SOCKET" --token "$TOKEN" \
+  --output "$ROOT/codex-transaction-post-agent.json" \
+  >"$ROOT/codex-transaction-post-agent-receipt.json"
+"$BIN" --json transaction restore \
+  --apply-receipt "$ROOT/codex-transaction-apply.json" \
+  --backup-dir "$ROOT/codex-transaction-restore-backup" \
+  --receipt "$ROOT/codex-transaction-restore.json" \
+  --idempotency-key codex-transaction-restore-1 \
+  --codex-socket "$SOCKET" --codex-token "$TOKEN" \
+  >"$ROOT/codex-transaction-restore-stdout.json"
+"$BIN" --json codex config --socket "$SOCKET" --token "$TOKEN" snapshot \
+  --output "$ROOT/codex-transaction-restored-settings.json" \
+  >"$ROOT/codex-transaction-restored-settings-receipt.json"
+"$BIN" --json codex agent-key snapshot --socket "$SOCKET" --token "$TOKEN" \
+  --output "$ROOT/codex-transaction-restored-agent.json" \
+  >"$ROOT/codex-transaction-restored-agent-receipt.json"
 "$BIN" --json codex agent-key apply --socket "$SOCKET" --token "$TOKEN" \
   --input "$ROOT/agent-candidate.json" --backup "$ROOT/agent-pre-apply.json" \
   --idempotency-key fixture-agent-apply-v1 >"$ROOT/agent-apply.json"
@@ -122,6 +148,7 @@ import sys
 root = pathlib.Path(sys.argv[1])
 bridge = json.loads((root / "bridge.json").read_text())
 baseline = json.loads((root / "baseline.json").read_text())
+candidate = json.loads((root / "candidate.json").read_text())
 modified = json.loads((root / "modified.json").read_text())
 restored = json.loads((root / "restored.json").read_text())
 keys = json.loads((root / "agent-keys.json").read_text())
@@ -139,6 +166,16 @@ agent_restore = json.loads((root / "agent-restore.json").read_text())
 transaction_plan = json.loads((root / "codex-transaction-plan.json").read_text())
 transaction_receipt = json.loads((root / "codex-transaction-plan-receipt.json").read_text())
 transaction_show = json.loads((root / "codex-transaction-plan-show.json").read_text())
+transaction_apply = json.loads((root / "codex-transaction-apply.json").read_text())
+transaction_apply_stdout = json.loads((root / "codex-transaction-apply-stdout.json").read_text())
+transaction_post_settings = json.loads((root / "codex-transaction-post-settings.json").read_text())
+transaction_post_agent = json.loads((root / "codex-transaction-post-agent.json").read_text())
+transaction_catalog = json.loads((root / "codex-transaction-backup/catalog.json").read_text())
+transaction_restore = json.loads((root / "codex-transaction-restore.json").read_text())
+transaction_restore_stdout = json.loads((root / "codex-transaction-restore-stdout.json").read_text())
+transaction_restored_settings = json.loads((root / "codex-transaction-restored-settings.json").read_text())
+transaction_restored_agent = json.loads((root / "codex-transaction-restored-agent.json").read_text())
+transaction_restore_catalog = json.loads((root / "codex-transaction-restore-backup/catalog.json").read_text())
 
 assert baseline["settings"]["codex-micro-agent-source"] == "recent"
 assert "codex.agentKeys.apply.v1" in bridge["capabilities"]
@@ -181,6 +218,26 @@ assert [item["id"] for item in transaction_plan["authorities"]] == [
 assert transaction_plan["authorities"][0]["beforeRevision"] != transaction_plan["authorities"][0]["targetRevision"]
 assert transaction_plan["authorities"][1]["beforeRevision"] == agent_baseline["globalStateRevision"]
 assert transaction_plan["authorities"][1]["targetRevision"] == agent_modified["globalStateRevision"]
+assert transaction_apply_stdout == transaction_apply
+assert transaction_apply["status"] == "applied"
+assert [item["id"] for item in transaction_apply["mutations"]] == [
+    "codex-agent-keys", "codex-settings",
+]
+assert transaction_post_settings["settings"] == candidate["settings"]
+assert transaction_post_agent["assignments"] == agent_modified["assignments"]
+assert transaction_catalog["planRevision"] == transaction_plan["revision"]
+assert [item["id"] for item in transaction_catalog["authorities"]] == [
+    "codex-settings", "codex-agent-keys",
+]
+assert transaction_catalog["operation"] == "apply"
+assert transaction_restore_stdout == transaction_restore
+assert transaction_restore["status"] == "restored"
+assert [item["id"] for item in transaction_restore["mutations"]] == [
+    "codex-settings", "codex-agent-keys",
+]
+assert transaction_restored_settings["settings"] == baseline["settings"]
+assert transaction_restored_agent["assignments"] == agent_baseline["assignments"]
+assert transaction_restore_catalog["operation"] == "restore"
 
 print(json.dumps({
     "status": "pass",
@@ -206,5 +263,7 @@ print(json.dumps({
     "agentKeysIdempotentReplay": agent_replay["idempotentReplay"],
     "agentKeysStaleCasRejected": True,
     "crossAuthorityPlanDiff": True,
+    "crossAuthorityApplyCatalog": True,
+    "crossAuthorityRestore": True,
 }, separators=(",", ":")))
 PY

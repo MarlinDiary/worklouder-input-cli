@@ -1120,6 +1120,46 @@ pub enum TransactionCommand {
         #[clap(long, value_parser)]
         input: PathBuf,
     },
+
+    /// Preflight every live authority, create a private backup catalog, then apply in order.
+    Apply {
+        #[clap(long, value_parser)]
+        plan: PathBuf,
+        #[clap(long, value_parser)]
+        backup_dir: PathBuf,
+        #[clap(long, value_parser)]
+        receipt: PathBuf,
+        #[clap(long)]
+        idempotency_key: String,
+        #[clap(long, value_parser)]
+        codex_socket: Option<PathBuf>,
+        #[clap(long, value_parser)]
+        codex_token: Option<PathBuf>,
+        #[clap(long, value_parser)]
+        input_socket: Option<PathBuf>,
+        #[clap(long, value_parser)]
+        input_token: Option<PathBuf>,
+    },
+
+    /// Restore every authority from an apply receipt with global preflight and roll-forward.
+    Restore {
+        #[clap(long, value_parser)]
+        apply_receipt: PathBuf,
+        #[clap(long, value_parser)]
+        backup_dir: PathBuf,
+        #[clap(long, value_parser)]
+        receipt: PathBuf,
+        #[clap(long)]
+        idempotency_key: String,
+        #[clap(long, value_parser)]
+        codex_socket: Option<PathBuf>,
+        #[clap(long, value_parser)]
+        codex_token: Option<PathBuf>,
+        #[clap(long, value_parser)]
+        input_socket: Option<PathBuf>,
+        #[clap(long, value_parser)]
+        input_token: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]

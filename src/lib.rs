@@ -175,6 +175,70 @@ fn run_transaction(command: TransactionCommand, json: bool, mut out: impl Write)
                 writeln!(out, "revision={}", plan.revision)?;
             }
         }
+        TransactionCommand::Apply {
+            plan,
+            backup_dir,
+            receipt,
+            idempotency_key,
+            codex_socket,
+            codex_token,
+            input_socket,
+            input_token,
+        } => {
+            let result = transaction::apply_transaction(
+                &plan,
+                &backup_dir,
+                &receipt,
+                &transaction::RuntimePaths {
+                    codex: codex_bridge::paths(codex_socket, codex_token),
+                    input: bridge::paths(input_socket, input_token),
+                },
+                &idempotency_key,
+            )?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "Transaction {}: {} authorities; backup catalog {}",
+                    result.status,
+                    result.mutations.len(),
+                    result.backup_catalog.display()
+                )?;
+            }
+        }
+        TransactionCommand::Restore {
+            apply_receipt,
+            backup_dir,
+            receipt,
+            idempotency_key,
+            codex_socket,
+            codex_token,
+            input_socket,
+            input_token,
+        } => {
+            let result = transaction::restore_transaction(
+                &apply_receipt,
+                &backup_dir,
+                &receipt,
+                &transaction::RuntimePaths {
+                    codex: codex_bridge::paths(codex_socket, codex_token),
+                    input: bridge::paths(input_socket, input_token),
+                },
+                &idempotency_key,
+            )?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "Transaction {}: {} authorities; restore catalog {}",
+                    result.status,
+                    result.mutations.len(),
+                    result.backup_catalog.display()
+                )?;
+            }
+        }
     }
     Ok(())
 }

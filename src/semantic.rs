@@ -9448,6 +9448,36 @@ mod tests {
     }
 
     #[test]
+    fn transaction_authority_summarizes_non_json_device_files() {
+        let source = root("transaction-binary-source");
+        let fixture = fixture();
+        let mut files = fixture["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|record| {
+                (
+                    record["relativePath"].as_str().unwrap().to_owned(),
+                    decode_base64(record["dataBase64"].as_str().unwrap()).unwrap(),
+                )
+            })
+            .collect::<Vec<_>>();
+        files.push(("wallpaper.gif".into(), b"GIF89a\0fixture".to_vec()));
+        let snapshot = build_config_snapshot("fixture-device", &files).unwrap();
+        fs::write(&source, serde_json::to_vec_pretty(&snapshot).unwrap()).unwrap();
+
+        let authority = snapshot_authority(&source).unwrap();
+        assert_eq!(authority.device_id, "fixture-device");
+        assert_eq!(authority.documents["wallpaper.gif"]["kind"], "binary");
+        assert_eq!(authority.documents["wallpaper.gif"]["size"], 14);
+        assert_eq!(
+            authority.documents["wallpaper.gif"]["sha256"],
+            fsutil::sha256_bytes(b"GIF89a\0fixture").unwrap()
+        );
+        fs::remove_file(source).unwrap();
+    }
+
+    #[test]
     fn base64_roundtrip_is_canonical() {
         for bytes in [
             b"".as_slice(),

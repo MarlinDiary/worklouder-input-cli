@@ -66,6 +66,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("device"));
     assert!(stdout.contains("input"));
     assert!(stdout.contains("config"));
+    assert!(stdout.contains("transaction"));
     assert!(stdout.contains("profile"));
     assert!(stdout.contains("layer"));
     assert!(stdout.contains("control"));
@@ -76,6 +77,32 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("preset"));
     assert!(stdout.contains("radial"));
     assert!(stdout.contains("completion"));
+}
+
+#[test]
+fn transaction_help_exposes_cross_authority_plan_workflow() {
+    let output = binary().args(["transaction", "--help"]).output().unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(output.status.success());
+    assert!(stdout.contains("plan"));
+    assert!(stdout.contains("show"));
+    assert!(stdout.contains("apply"));
+    assert!(stdout.contains("restore"));
+
+    let plan = binary()
+        .args(["transaction", "plan", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(plan.stdout).unwrap();
+    assert!(plan.status.success());
+    for authority in [
+        "--codex-settings-base",
+        "--codex-agent-keys-base",
+        "--input-config-base",
+        "--input-host-settings-base",
+    ] {
+        assert!(stdout.contains(authority));
+    }
 }
 
 #[test]

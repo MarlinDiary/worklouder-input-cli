@@ -193,6 +193,36 @@ preset_candidate_revision=$(python3 -c \
   >"$root/input-transaction-plan-receipt.json"
 "$bin" --json transaction show --input "$root/input-transaction-plan.json" \
   >"$root/input-transaction-plan-show.json"
+"$bin" --json transaction apply \
+  --plan "$root/input-transaction-plan.json" \
+  --backup-dir "$root/input-transaction-backup" \
+  --receipt "$root/input-transaction-apply.json" \
+  --idempotency-key input-transaction-apply-1 \
+  --input-socket "$socket" --input-token "$token" \
+  >"$root/input-transaction-apply-stdout.json"
+"$bin" --json device --transport bridge \
+  --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+  --output "$root/input-transaction-post-config.json" \
+  >"$root/input-transaction-post-config-receipt.json"
+"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
+  permission command snapshot \
+  --output "$root/input-transaction-post-host.json" \
+  >"$root/input-transaction-post-host-receipt.json"
+"$bin" --json transaction restore \
+  --apply-receipt "$root/input-transaction-apply.json" \
+  --backup-dir "$root/input-transaction-restore-backup" \
+  --receipt "$root/input-transaction-restore.json" \
+  --idempotency-key input-transaction-restore-1 \
+  --input-socket "$socket" --input-token "$token" \
+  >"$root/input-transaction-restore-stdout.json"
+"$bin" --json device --transport bridge \
+  --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+  --output "$root/input-transaction-restored-config.json" \
+  >"$root/input-transaction-restored-config-receipt.json"
+"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
+  permission command snapshot \
+  --output "$root/input-transaction-restored-host.json" \
+  >"$root/input-transaction-restored-host-receipt.json"
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config validate \
   --input "$preset_installed_snapshot" --expected-revision "$revision" \
@@ -598,6 +628,16 @@ preset_post_restore = json.loads((root / "preset-post-restore.json").read_text()
 input_transaction_plan = json.loads((root / "input-transaction-plan.json").read_text())
 input_transaction_plan_receipt = json.loads((root / "input-transaction-plan-receipt.json").read_text())
 input_transaction_plan_show = json.loads((root / "input-transaction-plan-show.json").read_text())
+input_transaction_apply = json.loads((root / "input-transaction-apply.json").read_text())
+input_transaction_apply_stdout = json.loads((root / "input-transaction-apply-stdout.json").read_text())
+input_transaction_post_config = json.loads((root / "input-transaction-post-config.json").read_text())
+input_transaction_post_host = json.loads((root / "input-transaction-post-host.json").read_text())
+input_transaction_catalog = json.loads((root / "input-transaction-backup/catalog.json").read_text())
+input_transaction_restore = json.loads((root / "input-transaction-restore.json").read_text())
+input_transaction_restore_stdout = json.loads((root / "input-transaction-restore-stdout.json").read_text())
+input_transaction_restored_config = json.loads((root / "input-transaction-restored-config.json").read_text())
+input_transaction_restored_host = json.loads((root / "input-transaction-restored-host.json").read_text())
+input_transaction_restore_catalog = json.loads((root / "input-transaction-restore-backup/catalog.json").read_text())
 
 assert conformance["conformant"] is True
 assert conformance["protocolVersion"] == 1
@@ -1196,6 +1236,27 @@ assert input_transaction_plan["authorities"][0]["beforeRevision"] == snapshot["r
 assert input_transaction_plan["authorities"][0]["targetRevision"] == preset_installed["revision"]
 assert input_transaction_plan["authorities"][1]["beforeRevision"] == host_settings["revision"]
 assert input_transaction_plan["authorities"][1]["targetRevision"] == host_settings_enabled["revision"]
+assert input_transaction_apply_stdout == input_transaction_apply
+assert input_transaction_apply["status"] == "applied"
+assert [item["id"] for item in input_transaction_apply["mutations"]] == [
+    "input-host-settings", "input-config",
+]
+assert input_transaction_apply["rollbackMutations"] == []
+assert input_transaction_post_config["revision"] == preset_installed["revision"]
+assert input_transaction_post_host["revision"] == host_settings_enabled["revision"]
+assert input_transaction_catalog["planRevision"] == input_transaction_plan["revision"]
+assert [item["id"] for item in input_transaction_catalog["authorities"]] == [
+    "input-config", "input-host-settings",
+]
+assert input_transaction_catalog["operation"] == "apply"
+assert input_transaction_restore_stdout == input_transaction_restore
+assert input_transaction_restore["status"] == "restored"
+assert [item["id"] for item in input_transaction_restore["mutations"]] == [
+    "input-config", "input-host-settings",
+]
+assert input_transaction_restored_config["revision"] == snapshot["revision"]
+assert input_transaction_restored_host["revision"] == host_settings["revision"]
+assert input_transaction_restore_catalog["operation"] == "restore"
 
 print("bridge_protocol=1")
 print("node_conformance=verified")
@@ -1258,4 +1319,6 @@ print("preset_list_show_preview=verified")
 print("preset_install_remap_dedup=verified")
 print("preset_apply_readback_restore=verified")
 print("input_cross_authority_plan_diff=verified")
+print("input_cross_authority_apply_catalog=verified")
+print("input_cross_authority_restore=verified")
 PY
