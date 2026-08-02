@@ -18,6 +18,9 @@
     "linkRule": "append one linkedApps record and set the selected layer linkedAppId to the new id",
     "unlinkRule": "remove the linkedApps record and remove the selected layer linkedAppId",
     "renameRule": "editing the label changes only linkedApps name",
+    "layerDeleteRule": "remove only the selected profiles[].layers entry; an unreferenced linkedApps record is retained",
+    "profileDeleteRule": "remove only the selected profiles entry; unreferenced linkedApps records are retained",
+    "duplicateLayerRule": "create the copied layer without linkedAppId",
     "detectionFieldsEditableInGui": false,
     "minimumIdentity": "process or path must be a non-empty string"
   },
