@@ -46,6 +46,15 @@ afterward. It never force-terminates the application.
 The 0.18.0 provider successfully returned firmware/status and listed the live
 device files. Before and after the probe, SHA-256 values for Input's cached
 `keymap.json`, `smart_actions.json`, and `input_storage.json` were identical.
+
+A later back-to-back restart stress test exposed a narrower Input-owned side
+effect: after relaunch, Input can refresh `input_storage.json` fields
+`options.started`, `collections[].data[].meta.revision`, and
+`collections[].data[].meta.updated`. Recursive JSON comparison found no other
+change, while cached `keymap.json`, cached `smart_actions.json`, and both live
+device files remained byte-identical. Device read verification therefore uses
+the live-file SHA-1/SHA-256 records rather than treating Input runtime metadata
+as immutable.
 The Input application was reopened after the probe.
 
 The public fixture records schemas and hashes only. User key assignments,

@@ -420,7 +420,7 @@ fn with_input_coordination<T>(
             InputCoordinationMode::RequireClosed => {
                 bail!("Work Louder Input is running; quit it or select --input-mode restart")
             }
-            InputCoordinationMode::Restart => quit_input()?,
+            InputCoordinationMode::Restart => quit_input(app)?,
         }
     }
 
@@ -454,7 +454,7 @@ fn input_is_running() -> Result<bool> {
     }
 }
 
-fn quit_input() -> Result<()> {
+fn quit_input(app: &Path) -> Result<()> {
     let status = Command::new("/usr/bin/osascript")
         .args([
             "-e",
@@ -467,7 +467,9 @@ fn quit_input() -> Result<()> {
         "Input did not accept the graceful quit request"
     );
     wait_for_input(false, Duration::from_secs(10))
-        .context("Input was still running after the graceful quit request")
+        .context("Input was still running after the graceful quit request")?;
+    wait_for_input_renderer(app, false, Duration::from_secs(10))
+        .context("Input renderer was still running after the graceful quit request")
 }
 
 fn reopen_input(app: &Path) -> Result<()> {
@@ -480,7 +482,17 @@ fn reopen_input(app: &Path) -> Result<()> {
         status.success(),
         "the macOS open command did not reopen Input"
     );
-    wait_for_input(true, Duration::from_secs(10)).context("Input did not return after the read")
+    wait_for_input(true, Duration::from_secs(10)).context("Input did not return after the read")?;
+    // The main Electron process appears several seconds before its renderer and
+    // device services. A subsequent quit during that window can be rejected with
+    // Apple event -128, so wait for the exact app's renderer before returning.
+    wait_for_input_renderer(app, true, Duration::from_secs(15))
+        .context("Input renderer did not return after the read")?;
+    ensure!(
+        input_is_running()?,
+        "Input exited while reopening after the read"
+    );
+    Ok(())
 }
 
 fn wait_for_input(expected: bool, timeout: Duration) -> Result<()> {
@@ -491,6 +503,40 @@ fn wait_for_input(expected: bool, timeout: Duration) -> Result<()> {
         }
         if started.elapsed().unwrap_or(timeout) >= timeout {
             bail!("timed out waiting for Input process state {expected}");
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
+fn input_renderer_is_running(app: &Path) -> Result<bool> {
+    let marker = app
+        .join(
+            "Contents/Frameworks/input Helper (Renderer).app/Contents/MacOS/input Helper (Renderer)",
+        )
+        .to_string_lossy()
+        .into_owned();
+    let output = Command::new("/bin/ps")
+        .args(["-axo", "command="])
+        .output()
+        .context("failed to inspect Input renderer processes")?;
+    ensure!(
+        output.status.success(),
+        "ps failed while inspecting Input renderers"
+    );
+    let commands = String::from_utf8(output.stdout).context("ps returned non-UTF-8 output")?;
+    Ok(commands
+        .lines()
+        .any(|command| command.trim_start().starts_with(&marker)))
+}
+
+fn wait_for_input_renderer(app: &Path, expected: bool, timeout: Duration) -> Result<()> {
+    let started = SystemTime::now();
+    loop {
+        if input_renderer_is_running(app)? == expected {
+            return Ok(());
+        }
+        if started.elapsed().unwrap_or(timeout) >= timeout {
+            bail!("timed out waiting for Input renderer state {expected}");
         }
         thread::sleep(Duration::from_millis(100));
     }

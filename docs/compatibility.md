@@ -36,9 +36,11 @@ read status, listed `keymap.json` and `smart_actions.json`, exported their exact
 bytes, matched device SHA-1 and host SHA-256, reopened the typed manifest and
 files, and atomically published the bundle. The tested session used the
 Bluetooth-reported connection (`isUsbConnection=false`). Input was gracefully
-quit and reopened for each read, and the three cached configuration-file
-SHA-256 values were identical before and after. This boundary does not cover
-device, cache, or database mutation.
+quit and reopened for each read. Cached `keymap.json` and `smart_actions.json`
+remained byte-identical. Input may rewrite its own `input_storage.json` startup
+metadata (`options.started` and Loki `meta.revision`/`meta.updated`) after a
+reopen; a recursive comparison found no semantic configuration difference.
+This boundary does not cover device, cache, or database mutation.
 
 ## Compatibility states
 
