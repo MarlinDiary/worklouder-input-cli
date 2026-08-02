@@ -12,9 +12,9 @@ pub mod semantic;
 use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
-    BridgeCommand, CapabilityCommand, Cli, CodexCommand, Command, CompletionShell, ConfigCommand,
-    ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand,
-    LayerCommand, ProfileCommand, TierCommand,
+    ActionCommand, ActionEventCommand, BridgeCommand, CapabilityCommand, Cli, CodexCommand,
+    Command, CompletionShell, ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand,
+    DeviceTransport, InputCommand, LayerCommand, ProfileCommand, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -73,6 +73,7 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Profile { command } => run_profile(command, cli.json, &mut out)?,
         Command::Layer { command } => run_layer(command, cli.json, &mut out)?,
         Command::Control { command } => run_control(command, cli.json, &mut out)?,
+        Command::Action { command } => run_action(command, cli.json, &mut out)?,
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
@@ -277,6 +278,129 @@ fn run_control(command: ControlCommand, json: bool, mut out: impl Write) -> Resu
     Ok(())
 }
 
+fn run_action(command: ActionCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        ActionCommand::List { input } => {
+            let result = semantic::action_list(&input)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                for action in result.actions {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{} event(s)\t{} reference(s)",
+                        action.id, action.name, action.event_count, action.reference_count
+                    )?;
+                }
+            }
+        }
+        ActionCommand::Show { input, id } => {
+            let result = semantic::action_show(&input, id)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "action={}\t{}\t{} reference(s)",
+                    result.action.id, result.action.name, result.action.reference_count
+                )?;
+                for event in result.events {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}\t{}\t{}ms",
+                        event.index,
+                        event.event_type,
+                        event.assignment_kind,
+                        event.assignment,
+                        event.delay
+                    )?;
+                }
+            }
+        }
+        ActionCommand::Create {
+            input,
+            name,
+            output,
+        } => {
+            let result = semantic::action_create(&input, &name, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        ActionCommand::Rename {
+            input,
+            id,
+            name,
+            output,
+        } => {
+            let result = semantic::action_rename(&input, id, &name, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        ActionCommand::Delete { input, id, output } => {
+            let result = semantic::action_delete(&input, id, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        ActionCommand::Event { command } => match command {
+            ActionEventCommand::Add {
+                input,
+                id,
+                assignment,
+                event_type,
+                delay,
+                output,
+            } => {
+                let result = semantic::action_event_add(
+                    &input,
+                    id,
+                    &assignment,
+                    event_type.device_value(),
+                    delay,
+                    &output,
+                )?;
+                write_candidate_result(result, json, &mut out)?;
+            }
+            ActionEventCommand::Set {
+                input,
+                id,
+                index,
+                assignment,
+                event_type,
+                delay,
+                output,
+            } => {
+                let result = semantic::action_event_set(
+                    &input,
+                    id,
+                    index,
+                    assignment.as_deref(),
+                    event_type.map(|value| value.device_value()),
+                    delay,
+                    &output,
+                )?;
+                write_candidate_result(result, json, &mut out)?;
+            }
+            ActionEventCommand::Delete {
+                input,
+                id,
+                index,
+                output,
+            } => {
+                let result = semantic::action_event_delete(&input, id, index, &output)?;
+                write_candidate_result(result, json, &mut out)?;
+            }
+            ActionEventCommand::Move {
+                input,
+                id,
+                from,
+                to,
+                output,
+            } => {
+                let result = semantic::action_event_move(&input, id, from, to, &output)?;
+                write_candidate_result(result, json, &mut out)?;
+            }
+        },
+    }
+    Ok(())
+}
+
 fn write_candidate_result(
     result: semantic::CandidateReceipt,
     json: bool,
@@ -296,6 +420,9 @@ fn write_candidate_result(
         writeln!(out, "afterRevision={}", result.after_revision)?;
         for path in result.changed_paths {
             writeln!(out, "CHANGE\t{path}")?;
+        }
+        if let Some(id) = result.resource_id {
+            writeln!(out, "RESOURCE\t{id}")?;
         }
     }
     Ok(())

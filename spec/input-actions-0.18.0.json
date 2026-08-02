@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouder-input-action-model",
+  "inputVersion": "0.18.0",
+  "sourceAsarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
+  "deviceCollection": "macros",
+  "deviceActionShape": [
+    "id",
+    "name",
+    "color",
+    "actions"
+  ],
+  "deviceEventShape": [
+    "act",
+    "delay",
+    "kc"
+  ],
+  "eventTypes": {
+    "release": 0,
+    "press": 1,
+    "click": 2
+  },
+  "defaultEvent": {
+    "act": 1,
+    "delay": 0,
+    "kc": "KC_NONE"
+  },
+  "delay": {
+    "minimum": 0,
+    "maximum": 9999,
+    "unit": "milliseconds",
+    "evidence": "Input advanced editor limits the numeric field to four characters"
+  },
+  "idAllocation": "last-action-id-plus-one",
+  "groupsCollection": "macrosGroups",
+  "groupShape": [
+    "id",
+    "name",
+    "tags",
+    "color",
+    "actionIds"
+  ],
+  "deleteCascade": [
+    "profile-control-references-to-KC_NONE",
+    "action-event-references-to-KC_NONE",
+    "multi-action-references-to-KC_NONE",
+    "remove-from-groups-and-drop-empty-groups",
+    "recompute-profile-macrosUsed"
+  ]
+}

@@ -9,6 +9,13 @@ export_dir=$root/export
 config_snapshot=$root/config-snapshot.json
 candidate_snapshot=$root/config-candidate.json
 color_snapshot=$root/config-color.json
+control_snapshot=$root/config-control.json
+action_created_snapshot=$root/config-action-created.json
+action_renamed_snapshot=$root/config-action-renamed.json
+action_event_added_snapshot=$root/config-action-event-added.json
+action_event_deleted_snapshot=$root/config-action-event-deleted.json
+action_event_moved_snapshot=$root/config-action-event-moved.json
+action_deleted_snapshot=$root/config-action-deleted.json
 renamed_profile_snapshot=$root/config-profile-renamed.json
 selected_snapshot=$root/config-selected.json
 layer_snapshot=$root/config-layer.json
@@ -81,6 +88,10 @@ revision=$(python3 -c \
   >"$root/control-list.json"
 "$bin" --json control show --input "$config_snapshot" --layer 0 \
   --control encoder:0:press >"$root/control-show.json"
+"$bin" --json action list --input "$config_snapshot" \
+  >"$root/action-list.json"
+"$bin" --json action show --input "$config_snapshot" --id 3 \
+  >"$root/action-show.json"
 "$bin" --json profile rename --input "$config_snapshot" --id 7 \
   --name Research --output "$renamed_profile_snapshot" \
   >"$root/profile-rename.json"
@@ -91,8 +102,25 @@ revision=$(python3 -c \
 "$bin" --json layer color --input "$config_snapshot" --profile 0 --id 1 \
   --color '#A1B2C3' --output "$color_snapshot" >"$root/layer-color.json"
 "$bin" --json control set --input "$config_snapshot" --profile 0 --layer 0 \
-  --control key:0:0 --assignment KA_A4 --output "$candidate_snapshot" \
+  --control key:0:0 --assignment KA_A4 --output "$control_snapshot" \
   >"$root/control-set.json"
+"$bin" --json action create --input "$config_snapshot" --name 'New Action' \
+  --output "$action_created_snapshot" >"$root/action-create.json"
+"$bin" --json action rename --input "$config_snapshot" --id 4 --name Renamed \
+  --output "$action_renamed_snapshot" >"$root/action-rename.json"
+"$bin" --json action event add --input "$config_snapshot" --id 3 \
+  --assignment KC_F1 --type release --delay 25 \
+  --output "$action_event_added_snapshot" >"$root/action-event-add.json"
+"$bin" --json action event set --input "$config_snapshot" --id 3 --index 0 \
+  --assignment KC_X --type click --delay 200 --output "$candidate_snapshot" \
+  >"$root/action-event-set.json"
+"$bin" --json action event delete --input "$config_snapshot" --id 3 --index 0 \
+  --output "$action_event_deleted_snapshot" >"$root/action-event-delete.json"
+"$bin" --json action event move --input "$action_event_added_snapshot" --id 3 \
+  --from 1 --to 0 --output "$action_event_moved_snapshot" \
+  >"$root/action-event-move.json"
+"$bin" --json action delete --input "$config_snapshot" --id 3 \
+  --output "$action_deleted_snapshot" >"$root/action-delete.json"
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config validate \
   --input "$config_snapshot" --expected-revision "$revision" \
@@ -164,12 +192,28 @@ layer_list = json.loads((root / "layer-list.json").read_text())
 layer_show = json.loads((root / "layer-show.json").read_text())
 control_list = json.loads((root / "control-list.json").read_text())
 control_show = json.loads((root / "control-show.json").read_text())
+action_list = json.loads((root / "action-list.json").read_text())
+action_show = json.loads((root / "action-show.json").read_text())
 profile_rename = json.loads((root / "profile-rename.json").read_text())
 profile_select = json.loads((root / "profile-select.json").read_text())
 layer_rename = json.loads((root / "layer-rename.json").read_text())
 layer_color = json.loads((root / "layer-color.json").read_text())
 control_set = json.loads((root / "control-set.json").read_text())
+action_create = json.loads((root / "action-create.json").read_text())
+action_rename = json.loads((root / "action-rename.json").read_text())
+action_event_add = json.loads((root / "action-event-add.json").read_text())
+action_event_set = json.loads((root / "action-event-set.json").read_text())
+action_event_delete = json.loads((root / "action-event-delete.json").read_text())
+action_event_move = json.loads((root / "action-event-move.json").read_text())
+action_delete = json.loads((root / "action-delete.json").read_text())
 color_candidate = json.loads((root / "config-color.json").read_text())
+control_candidate = json.loads((root / "config-control.json").read_text())
+action_created_candidate = json.loads((root / "config-action-created.json").read_text())
+action_renamed_candidate = json.loads((root / "config-action-renamed.json").read_text())
+action_event_added_candidate = json.loads((root / "config-action-event-added.json").read_text())
+action_event_deleted_candidate = json.loads((root / "config-action-event-deleted.json").read_text())
+action_event_moved_candidate = json.loads((root / "config-action-event-moved.json").read_text())
+action_deleted_candidate = json.loads((root / "config-action-deleted.json").read_text())
 apply = json.loads((root / "config-apply.json").read_text())
 replay = json.loads((root / "config-apply-replay.json").read_text())
 pre_apply = json.loads((root / "pre-apply.json").read_text())
@@ -249,6 +293,17 @@ assert control_show["control"] == {
     "assignment": "KC_MUTE",
     "assignmentKind": "basic",
 }
+assert [item["id"] for item in action_list["actions"]] == [3, 4, 10]
+assert action_list["actions"][0]["referenceCount"] == 5
+assert action_show["action"]["id"] == 3
+assert action_show["events"] == [{
+    "index": 0,
+    "assignment": "KC_C",
+    "assignmentKind": "basic",
+    "eventType": "press",
+    "eventTypeValue": 1,
+    "delay": 0,
+}]
 assert profile_rename["changed"] is True
 assert profile_rename["changedPaths"] == ["/keymap.json/profiles/1/name"]
 assert profile_select["changedPaths"] == ["/keymap.json/activeProfileId"]
@@ -258,6 +313,18 @@ assert control_set["changedPaths"] == [
     "/keymap.json/profiles/0/layers/0/layout/keymap/0/0",
     "/keymap.json/profiles/0/macrosUsed",
 ]
+assert action_create["resourceId"] == 11
+assert action_create["changedPaths"] == ["/keymap.json/macros/3"]
+assert action_rename["changedPaths"] == ["/keymap.json/macros/1/name"]
+assert action_event_add["changedPaths"] == ["/keymap.json/macros/0/actions/1"]
+assert action_event_set["changedPaths"] == [
+    "/keymap.json/macros/0/actions/0/kc",
+    "/keymap.json/macros/0/actions/0/act",
+    "/keymap.json/macros/0/actions/0/delay",
+]
+assert action_event_delete["changedPaths"] == ["/keymap.json/macros/0/actions/0"]
+assert action_event_move["changedPaths"] == ["/keymap.json/macros/0/actions"]
+assert "/keymap.json/macros/0" in action_delete["changedPaths"]
 
 def payload(document, name):
     record = next(item for item in document["files"] if item["relativePath"] == name)
@@ -277,19 +344,48 @@ def verify_snapshot(document):
         digest.update(data)
     assert digest.hexdigest() == document["revision"]
 
-for document in [candidate, color_candidate, renamed_profile, selected, layer_candidate]:
+for document in [
+    candidate, color_candidate, control_candidate, renamed_profile, selected,
+    layer_candidate, action_created_candidate, action_renamed_candidate,
+    action_event_added_candidate, action_event_deleted_candidate,
+    action_event_moved_candidate, action_deleted_candidate,
+]:
     verify_snapshot(document)
     assert payload(document, "smart_actions.json") == payload(snapshot, "smart_actions.json")
 candidate_keymap = json.loads(payload(candidate, "keymap.json"))
 color_keymap = json.loads(payload(color_candidate, "keymap.json"))
+control_keymap = json.loads(payload(control_candidate, "keymap.json"))
+action_created_keymap = json.loads(payload(action_created_candidate, "keymap.json"))
+action_renamed_keymap = json.loads(payload(action_renamed_candidate, "keymap.json"))
+action_event_added_keymap = json.loads(payload(action_event_added_candidate, "keymap.json"))
+action_event_deleted_keymap = json.loads(payload(action_event_deleted_candidate, "keymap.json"))
+action_event_moved_keymap = json.loads(payload(action_event_moved_candidate, "keymap.json"))
+action_deleted_keymap = json.loads(payload(action_deleted_candidate, "keymap.json"))
 renamed_profile_keymap = json.loads(payload(renamed_profile, "keymap.json"))
 selected_keymap = json.loads(payload(selected, "keymap.json"))
 layer_keymap = json.loads(payload(layer_candidate, "keymap.json"))
 assert renamed_profile_keymap["profiles"][1]["name"] == "Research"
 assert candidate_keymap["fixtureExtension"] == {"preserved": True}
-assert candidate_keymap["profiles"][0]["layers"][0]["layout"]["keymap"][0][0] == "KA_A4"
-assert candidate_keymap["profiles"][0]["macrosUsed"] == [10, 3, 4]
+assert candidate_keymap["macros"][0]["actions"][0] == {"act": 2, "delay": 200, "kc": "KC_X"}
+assert control_keymap["profiles"][0]["layers"][0]["layout"]["keymap"][0][0] == "KA_A4"
+assert control_keymap["profiles"][0]["macrosUsed"] == [10, 3, 4]
 assert color_keymap["profiles"][0]["layers"][1]["color"] == 0xA1B2C3
+assert action_created_keymap["macros"][-1] == {
+    "id": 11, "name": "New Action", "color": None,
+    "actions": [{"act": 1, "delay": 0, "kc": "KC_NONE"}],
+}
+assert action_renamed_keymap["macros"][1]["name"] == "Renamed"
+assert action_event_added_keymap["macros"][0]["actions"][1] == {"act": 0, "delay": 25, "kc": "KC_F1"}
+assert action_event_deleted_keymap["macros"][0]["actions"] == [{"act": 1, "delay": 0, "kc": "KC_NONE"}]
+assert action_event_moved_keymap["macros"][0]["actions"][0]["kc"] == "KC_F1"
+assert [item["id"] for item in action_deleted_keymap["macros"]] == [4, 10]
+assert action_deleted_keymap["profiles"][0]["layers"][0]["layout"]["joystick"]["sectors"][0]["k"] == "KC_NONE"
+assert action_deleted_keymap["macros"][0]["actions"][0]["kc"] == "KC_NONE"
+assert action_deleted_keymap["multiActions"][0]["kcOnTap"] == "KC_NONE"
+assert action_deleted_keymap["profiles"][0]["macrosUsed"] == [10]
+assert action_deleted_keymap["macrosGroups"] == [{
+    "id": 0, "name": "Primary", "tags": ["fixture"], "color": None, "actionIds": [4],
+}]
 assert selected_keymap["activeProfileId"] == 7
 assert layer_keymap["profiles"][0]["layers"][1]["name"] == "Build"
 assert candidate["revision"] != snapshot["revision"]
@@ -331,6 +427,10 @@ print("semantic_control_list=verified")
 print("semantic_control_show=verified")
 print("semantic_control_set=verified")
 print("semantic_control_usage_sync=verified")
+print("semantic_action_list_show=verified")
+print("semantic_action_create_rename=verified")
+print("semantic_action_event_crud=verified")
+print("semantic_action_delete_cascade=verified")
 print("semantic_unknown_fields=preserved")
 print("semantic_unrelated_file_bytes=preserved")
 print("config_live_cas=verified")

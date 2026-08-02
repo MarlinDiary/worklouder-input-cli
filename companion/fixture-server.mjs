@@ -24,9 +24,9 @@ const files = new Map([
           },
           {
             id: 4,
-            name: "Unused Action",
+            name: "Dependent Action",
             color: null,
-            actions: [{ act: 1, delay: 0, kc: "KC_D" }],
+            actions: [{ act: 1, delay: 0, kc: "KA_A3" }],
           },
           {
             id: 10,
@@ -35,7 +35,43 @@ const files = new Map([
             actions: [{ act: 1, delay: 0, kc: "KC_E" }],
           },
         ],
-        multiActions: [{ id: 1, name: "Fixture Multi", actions: [] }],
+        macrosGroups: [
+          {
+            id: 0,
+            name: "Primary",
+            tags: ["fixture"],
+            color: null,
+            actionIds: [3, 4],
+          },
+          {
+            id: 1,
+            name: "Single",
+            tags: [],
+            color: null,
+            actionIds: [3],
+          },
+        ],
+        multiActions: [
+          {
+            id: 1,
+            name: "Fixture Multi",
+            color: null,
+            kcOnTap: "KA_A3",
+            kcOnHold: "KC_NONE",
+            kcOnDoubleTap: "KC_NONE",
+            kcOnTapHold: "KC_NONE",
+            tt: 250,
+          },
+        ],
+        multiActionsGroups: [
+          {
+            id: 0,
+            name: "Multi",
+            tags: [],
+            color: null,
+            actionIds: [1],
+          },
+        ],
         profiles: [
           {
             id: 0,

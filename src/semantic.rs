@@ -19,7 +19,10 @@ const MAX_TOTAL_BYTES: usize = 32 * 1024 * 1024;
 const MAX_LAYERS: usize = 6;
 const MAX_NAME_BYTES: usize = 64;
 const MAX_RGB: u64 = 0x00ff_ffff;
+const MAX_ACTION_EVENTS: usize = 1024;
+const MAX_ACTION_DELAY: u64 = 9999;
 const ASSIGNMENT_SPEC_JSON: &str = include_str!("../spec/input-assignment-tokens-0.18.0.json");
+const ACTION_SPEC_JSON: &str = include_str!("../spec/input-actions-0.18.0.json");
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize)]
@@ -132,6 +135,45 @@ pub struct ControlEntry {
     pub a2: Option<f64>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionList {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub actions: Vec<ActionEntry>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionShow {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub action: ActionEntry,
+    pub events: Vec<ActionEventEntry>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionEntry {
+    pub id: u64,
+    pub name: String,
+    pub event_count: usize,
+    pub reference_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionEventEntry {
+    pub index: usize,
+    pub assignment: String,
+    pub assignment_kind: &'static str,
+    pub event_type: &'static str,
+    pub event_type_value: u64,
+    pub delay: u64,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AssignmentSpec {
@@ -162,6 +204,8 @@ pub struct CandidateReceipt {
     pub changed_paths: Vec<String>,
     pub before_revision: String,
     pub after_revision: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_id: Option<u64>,
 }
 
 struct SemanticSnapshot {
@@ -356,6 +400,314 @@ pub fn control_set(
     sync_profile_usage(&mut snapshot.keymap, profile_index, &mut changed_paths)?;
     let changed = !changed_paths.is_empty();
     snapshot.publish(output, "control-set", changed, changed_paths)
+}
+
+pub fn action_list(input: &Path) -> Result<ActionList> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let entries = actions(&snapshot.keymap)?
+        .iter()
+        .map(|action| action_entry(&snapshot.keymap, action))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(ActionList {
+        schema_version: 1,
+        kind: "worklouderctl-action-list",
+        revision: snapshot.revision,
+        actions: entries,
+    })
+}
+
+pub fn action_show(input: &Path, id: u64) -> Result<ActionShow> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let action = find_action(&snapshot.keymap, id)?;
+    let events = action_events(action)?
+        .iter()
+        .enumerate()
+        .map(|(index, event)| action_event_entry(index, event))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(ActionShow {
+        schema_version: 1,
+        kind: "worklouderctl-action",
+        revision: snapshot.revision,
+        action: action_entry(&snapshot.keymap, action)?,
+        events,
+    })
+}
+
+pub fn action_create(input: &Path, name: &str, output: &Path) -> Result<CandidateReceipt> {
+    validate_name(name)?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let items = snapshot
+        .keymap
+        .get_mut("macros")
+        .and_then(Value::as_array_mut)
+        .context("keymap.json macros was invalid")?;
+    let id = match items.last() {
+        Some(action) => object_u64(action, "id", "action")?
+            .checked_add(1)
+            .context("last Action id overflowed")?,
+        None => 0,
+    };
+    ensure!(
+        !items
+            .iter()
+            .any(|action| matches!(object_u64(action, "id", "action"), Ok(value) if value == id)),
+        "Input last-id allocation produced duplicate Action id {id}"
+    );
+    let index = items.len();
+    items.push(serde_json::json!({
+        "id": id,
+        "name": name,
+        "color": null,
+        "actions": [{"act": 1_u64, "delay": 0_u64, "kc": "KC_NONE"}]
+    }));
+    let mut receipt = snapshot.publish(
+        output,
+        "action-create",
+        true,
+        vec![format!("/keymap.json/macros/{index}")],
+    )?;
+    receipt.resource_id = Some(id);
+    Ok(receipt)
+}
+
+pub fn action_rename(input: &Path, id: u64, name: &str, output: &Path) -> Result<CandidateReceipt> {
+    validate_name(name)?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let index = action_index(&snapshot.keymap, id)?;
+    let action = snapshot
+        .keymap
+        .get_mut("macros")
+        .and_then(Value::as_array_mut)
+        .and_then(|items| items.get_mut(index))
+        .context("Action disappeared during candidate generation")?;
+    let previous = object_string(action, "name", "action")?;
+    let changed = previous != name;
+    if changed {
+        action
+            .as_object_mut()
+            .context("Action was not an object")?
+            .insert("name".into(), Value::String(name.to_owned()));
+    }
+    snapshot.publish(
+        output,
+        "action-rename",
+        changed,
+        if changed {
+            vec![format!("/keymap.json/macros/{index}/name")]
+        } else {
+            Vec::new()
+        },
+    )
+}
+
+pub fn action_delete(input: &Path, id: u64, output: &Path) -> Result<CandidateReceipt> {
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let index = action_index(&snapshot.keymap, id)?;
+    let token = format!("KA_A{id}");
+    let mut changed_paths = Vec::new();
+    replace_action_references(&mut snapshot.keymap, &token, &mut changed_paths)?;
+    remove_action_from_groups(&mut snapshot.keymap, id, &mut changed_paths)?;
+    snapshot
+        .keymap
+        .get_mut("macros")
+        .and_then(Value::as_array_mut)
+        .context("keymap.json macros was invalid")?
+        .remove(index);
+    changed_paths.push(format!("/keymap.json/macros/{index}"));
+    let profile_count = profiles(&snapshot.keymap)?.len();
+    for profile_index in 0..profile_count {
+        sync_profile_usage(&mut snapshot.keymap, profile_index, &mut changed_paths)?;
+    }
+    snapshot.publish(output, "action-delete", true, changed_paths)
+}
+
+pub fn action_event_add(
+    input: &Path,
+    id: u64,
+    assignment: &str,
+    event_type: u64,
+    delay: u64,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    validate_action_event_input(event_type, delay)?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    validate_action_event_assignment(&snapshot.keymap, id, assignment)?;
+    let action_index = action_index(&snapshot.keymap, id)?;
+    let events = action_events_mut(
+        snapshot
+            .keymap
+            .get_mut("macros")
+            .and_then(Value::as_array_mut)
+            .and_then(|items| items.get_mut(action_index))
+            .context("Action disappeared during candidate generation")?,
+    )?;
+    ensure!(
+        events.len() < MAX_ACTION_EVENTS,
+        "Action event count reached the supported limit"
+    );
+    let event_index = events.len();
+    events.push(serde_json::json!({
+        "act": event_type,
+        "delay": delay,
+        "kc": assignment
+    }));
+    snapshot.publish(
+        output,
+        "action-event-add",
+        true,
+        vec![format!(
+            "/keymap.json/macros/{action_index}/actions/{event_index}"
+        )],
+    )
+}
+
+pub fn action_event_set(
+    input: &Path,
+    id: u64,
+    event_index: usize,
+    assignment: Option<&str>,
+    event_type: Option<u64>,
+    delay: Option<u64>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    ensure!(
+        assignment.is_some() || event_type.is_some() || delay.is_some(),
+        "action event set requires assignment, type, or delay"
+    );
+    if let Some(event_type) = event_type {
+        validate_action_event_input(event_type, delay.unwrap_or(0))?;
+    } else if let Some(delay) = delay {
+        ensure!(delay <= MAX_ACTION_DELAY, "Action delay exceeded 9999 ms");
+    }
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let action_index = action_index(&snapshot.keymap, id)?;
+    if let Some(assignment) = assignment {
+        let current = actions(&snapshot.keymap)?
+            .get(action_index)
+            .and_then(|action| action.get("actions"))
+            .and_then(Value::as_array)
+            .and_then(|events| events.get(event_index))
+            .and_then(|event| event.get("kc"))
+            .and_then(Value::as_str)
+            .with_context(|| format!("Action event index {event_index} was not found"))?;
+        if current != assignment {
+            validate_action_event_assignment(&snapshot.keymap, id, assignment)?;
+        }
+    }
+    let event = action_events_mut(
+        snapshot
+            .keymap
+            .get_mut("macros")
+            .and_then(Value::as_array_mut)
+            .and_then(|items| items.get_mut(action_index))
+            .context("Action disappeared during candidate generation")?,
+    )?
+    .get_mut(event_index)
+    .with_context(|| format!("Action event index {event_index} was not found"))?;
+    let event = event
+        .as_object_mut()
+        .context("Action event was not an object")?;
+    let prefix = format!("/keymap.json/macros/{action_index}/actions/{event_index}");
+    let mut paths = Vec::new();
+    if let Some(assignment) = assignment {
+        if event.get("kc").and_then(Value::as_str) != Some(assignment) {
+            event.insert("kc".into(), Value::String(assignment.to_owned()));
+            paths.push(format!("{prefix}/kc"));
+        }
+    }
+    if let Some(event_type) = event_type {
+        if event.get("act").and_then(Value::as_u64) != Some(event_type) {
+            event.insert("act".into(), Value::from(event_type));
+            paths.push(format!("{prefix}/act"));
+        }
+    }
+    if let Some(delay) = delay {
+        if event.get("delay").and_then(Value::as_u64) != Some(delay) {
+            event.insert("delay".into(), Value::from(delay));
+            paths.push(format!("{prefix}/delay"));
+        }
+    }
+    snapshot.publish(output, "action-event-set", !paths.is_empty(), paths)
+}
+
+pub fn action_event_delete(
+    input: &Path,
+    id: u64,
+    event_index: usize,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let action_index = action_index(&snapshot.keymap, id)?;
+    let events = action_events_mut(
+        snapshot
+            .keymap
+            .get_mut("macros")
+            .and_then(Value::as_array_mut)
+            .and_then(|items| items.get_mut(action_index))
+            .context("Action disappeared during candidate generation")?,
+    )?;
+    ensure!(
+        event_index < events.len(),
+        "Action event index {event_index} was not found"
+    );
+    let path = format!("/keymap.json/macros/{action_index}/actions/{event_index}");
+    let changed = if events.len() == 1 {
+        let default = serde_json::json!({"act": 1, "delay": 0, "kc": "KC_NONE"});
+        if events[0] == default {
+            false
+        } else {
+            events[0] = default;
+            true
+        }
+    } else {
+        events.remove(event_index);
+        true
+    };
+    snapshot.publish(
+        output,
+        "action-event-delete",
+        changed,
+        if changed { vec![path] } else { Vec::new() },
+    )
+}
+
+pub fn action_event_move(
+    input: &Path,
+    id: u64,
+    from: usize,
+    to: usize,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let action_index = action_index(&snapshot.keymap, id)?;
+    let events = action_events_mut(
+        snapshot
+            .keymap
+            .get_mut("macros")
+            .and_then(Value::as_array_mut)
+            .and_then(|items| items.get_mut(action_index))
+            .context("Action disappeared during candidate generation")?,
+    )?;
+    ensure!(
+        from < events.len(),
+        "Action event index {from} was not found"
+    );
+    ensure!(to < events.len(), "Action event index {to} was not found");
+    let changed = from != to;
+    if changed {
+        let event = events.remove(from);
+        events.insert(to, event);
+    }
+    snapshot.publish(
+        output,
+        "action-event-move",
+        changed,
+        if changed {
+            vec![format!("/keymap.json/macros/{action_index}/actions")]
+        } else {
+            Vec::new()
+        },
+    )
 }
 
 pub fn profile_select(input: &Path, id: u64, output: &Path) -> Result<CandidateReceipt> {
@@ -670,8 +1022,302 @@ impl SemanticSnapshot {
             changed_paths,
             before_revision,
             after_revision,
+            resource_id: None,
         })
     }
+}
+
+fn validate_action_model_spec() -> Result<()> {
+    let spec: Value = serde_json::from_str(ACTION_SPEC_JSON)
+        .context("embedded Input Action model was invalid")?;
+    ensure!(
+        spec.get("schemaVersion").and_then(Value::as_u64) == Some(1)
+            && spec.get("kind").and_then(Value::as_str) == Some("worklouder-input-action-model")
+            && spec.get("inputVersion").and_then(Value::as_str) == Some("0.18.0")
+            && spec
+                .get("sourceAsarSha256")
+                .and_then(Value::as_str)
+                .map(|value| is_digest(value, 64))
+                == Some(true),
+        "embedded Input Action model identity was invalid"
+    );
+    Ok(())
+}
+
+fn actions(keymap: &Value) -> Result<&Vec<Value>> {
+    keymap
+        .get("macros")
+        .and_then(Value::as_array)
+        .context("keymap.json macros was invalid")
+}
+
+fn action_index(keymap: &Value, id: u64) -> Result<usize> {
+    actions(keymap)?
+        .iter()
+        .position(|action| matches!(object_u64(action, "id", "action"), Ok(value) if value == id))
+        .with_context(|| format!("Action id {id} was not found"))
+}
+
+fn find_action(keymap: &Value, id: u64) -> Result<&Value> {
+    actions(keymap)?
+        .get(action_index(keymap, id)?)
+        .context("Action disappeared during lookup")
+}
+
+fn action_events(action: &Value) -> Result<&Vec<Value>> {
+    action
+        .get("actions")
+        .and_then(Value::as_array)
+        .context("Action events was invalid")
+}
+
+fn action_events_mut(action: &mut Value) -> Result<&mut Vec<Value>> {
+    action
+        .get_mut("actions")
+        .and_then(Value::as_array_mut)
+        .context("Action events was invalid")
+}
+
+fn action_entry(keymap: &Value, action: &Value) -> Result<ActionEntry> {
+    let id = object_u64(action, "id", "action")?;
+    Ok(ActionEntry {
+        id,
+        name: object_string(action, "name", "action")?.to_owned(),
+        event_count: action_events(action)?.len(),
+        reference_count: count_action_references(keymap, id)?,
+    })
+}
+
+fn action_event_entry(index: usize, event: &Value) -> Result<ActionEventEntry> {
+    let assignment = object_string(event, "kc", "Action event")?;
+    let event_type_value = object_u64(event, "act", "Action event")?;
+    Ok(ActionEventEntry {
+        index,
+        assignment: assignment.to_owned(),
+        assignment_kind: assignment_kind(assignment)?,
+        event_type: action_event_type_name(event_type_value)?,
+        event_type_value,
+        delay: object_u64(event, "delay", "Action event")?,
+    })
+}
+
+fn action_event_type_name(value: u64) -> Result<&'static str> {
+    match value {
+        0 => Ok("release"),
+        1 => Ok("press"),
+        2 => Ok("click"),
+        _ => bail!("Action event type {value} was invalid"),
+    }
+}
+
+fn validate_action_event_input(event_type: u64, delay: u64) -> Result<()> {
+    action_event_type_name(event_type)?;
+    ensure!(delay <= MAX_ACTION_DELAY, "Action delay exceeded 9999 ms");
+    Ok(())
+}
+
+fn validate_action_event_assignment(keymap: &Value, action_id: u64, token: &str) -> Result<()> {
+    validate_writable_assignment(keymap, token)?;
+    ensure!(
+        reference_id(token, "KA_A")? != Some(action_id),
+        "Action id {action_id} self-reference was invalid"
+    );
+    Ok(())
+}
+
+fn count_action_references(keymap: &Value, id: u64) -> Result<usize> {
+    let token = format!("KA_A{id}");
+    let mut count = 0_usize;
+    for profile in profiles(keymap)? {
+        for layer in profile_layers(profile)? {
+            for_each_assignment(layer, |assignment| {
+                if assignment == token {
+                    count += 1;
+                }
+                Ok(())
+            })?;
+        }
+    }
+    for action in actions(keymap)? {
+        for event in action_events(action)? {
+            if event.get("kc").and_then(Value::as_str) == Some(token.as_str()) {
+                count += 1;
+            }
+        }
+    }
+    if let Some(items) = keymap.get("multiActions").and_then(Value::as_array) {
+        for item in items {
+            for field in multi_action_assignment_fields() {
+                if item.get(field).and_then(Value::as_str) == Some(token.as_str()) {
+                    count += 1;
+                }
+            }
+        }
+    }
+    if let Some(groups) = keymap.get("macrosGroups").and_then(Value::as_array) {
+        for group in groups {
+            count += group
+                .get("actionIds")
+                .and_then(Value::as_array)
+                .map(|ids| {
+                    ids.iter()
+                        .filter(|value| value.as_u64() == Some(id))
+                        .count()
+                })
+                .unwrap_or(0);
+        }
+    }
+    Ok(count)
+}
+
+fn multi_action_assignment_fields() -> [&'static str; 4] {
+    ["kcOnTap", "kcOnHold", "kcOnDoubleTap", "kcOnTapHold"]
+}
+
+fn replace_action_references(
+    keymap: &mut Value,
+    token: &str,
+    paths: &mut Vec<String>,
+) -> Result<()> {
+    if let Some(profiles) = keymap.get_mut("profiles").and_then(Value::as_array_mut) {
+        for (profile_index, profile) in profiles.iter_mut().enumerate() {
+            let layers = profile
+                .get_mut("layers")
+                .and_then(Value::as_array_mut)
+                .context("profile layers was invalid")?;
+            for (layer_index, layer) in layers.iter_mut().enumerate() {
+                let layout = match layer.get_mut("layout") {
+                    Some(layout) => layout,
+                    None => continue,
+                };
+                if let Some(rows) = layout.get_mut("keymap").and_then(Value::as_array_mut) {
+                    for (row_index, row) in rows.iter_mut().enumerate() {
+                        for (column_index, value) in row
+                            .as_array_mut()
+                            .context("layout keymap row was not an array")?
+                            .iter_mut()
+                            .enumerate()
+                        {
+                            replace_token_value(
+                                value,
+                                token,
+                                format!("/keymap.json/profiles/{profile_index}/layers/{layer_index}/layout/keymap/{row_index}/{column_index}"),
+                                paths,
+                            )?;
+                        }
+                    }
+                }
+                if let Some(encoders) = layout.get_mut("encoders").and_then(Value::as_array_mut) {
+                    for (encoder_index, encoder) in encoders.iter_mut().enumerate() {
+                        for (gesture_index, value) in encoder
+                            .as_array_mut()
+                            .context("encoder entry was not an array")?
+                            .iter_mut()
+                            .enumerate()
+                        {
+                            replace_token_value(
+                                value,
+                                token,
+                                format!("/keymap.json/profiles/{profile_index}/layers/{layer_index}/layout/encoders/{encoder_index}/{gesture_index}"),
+                                paths,
+                            )?;
+                        }
+                    }
+                }
+                if let Some(sectors) = layout
+                    .get_mut("joystick")
+                    .and_then(|joystick| joystick.get_mut("sectors"))
+                    .and_then(Value::as_array_mut)
+                {
+                    for (sector_index, sector) in sectors.iter_mut().enumerate() {
+                        if let Some(value) = sector.get_mut("k") {
+                            replace_token_value(
+                                value,
+                                token,
+                                format!("/keymap.json/profiles/{profile_index}/layers/{layer_index}/layout/joystick/sectors/{sector_index}/k"),
+                                paths,
+                            )?;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if let Some(items) = keymap.get_mut("macros").and_then(Value::as_array_mut) {
+        for (action_index, action) in items.iter_mut().enumerate() {
+            for (event_index, event) in action_events_mut(action)?.iter_mut().enumerate() {
+                if let Some(value) = event.get_mut("kc") {
+                    replace_token_value(
+                        value,
+                        token,
+                        format!("/keymap.json/macros/{action_index}/actions/{event_index}/kc"),
+                        paths,
+                    )?;
+                }
+            }
+        }
+    }
+    if let Some(items) = keymap.get_mut("multiActions").and_then(Value::as_array_mut) {
+        for (multi_index, item) in items.iter_mut().enumerate() {
+            for field in multi_action_assignment_fields() {
+                if let Some(value) = item.get_mut(field) {
+                    replace_token_value(
+                        value,
+                        token,
+                        format!("/keymap.json/multiActions/{multi_index}/{field}"),
+                        paths,
+                    )?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn replace_token_value(
+    value: &mut Value,
+    token: &str,
+    path: String,
+    paths: &mut Vec<String>,
+) -> Result<()> {
+    let current = value
+        .as_str()
+        .context("assignment reference was not a string")?;
+    if current == token {
+        *value = Value::String("KC_NONE".into());
+        paths.push(path);
+    }
+    Ok(())
+}
+
+fn remove_action_from_groups(keymap: &mut Value, id: u64, paths: &mut Vec<String>) -> Result<()> {
+    let groups = match keymap.get_mut("macrosGroups").and_then(Value::as_array_mut) {
+        Some(groups) => groups,
+        None => return Ok(()),
+    };
+    let before = groups.len();
+    for (group_index, group) in groups.iter_mut().enumerate() {
+        let ids = group
+            .get_mut("actionIds")
+            .and_then(Value::as_array_mut)
+            .context("Action group actionIds was invalid")?;
+        let old_len = ids.len();
+        ids.retain(|value| value.as_u64() != Some(id));
+        if ids.len() != old_len {
+            paths.push(format!("/keymap.json/macrosGroups/{group_index}/actionIds"));
+        }
+    }
+    groups.retain(|group| {
+        group
+            .get("actionIds")
+            .and_then(Value::as_array)
+            .map(|ids| !ids.is_empty())
+            .unwrap_or(true)
+    });
+    if groups.len() != before {
+        paths.push("/keymap.json/macrosGroups".into());
+    }
+    Ok(())
 }
 
 fn assignment_spec() -> Result<AssignmentSpec> {
@@ -1142,6 +1788,7 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
     let object = keymap
         .as_object()
         .context("keymap.json was not an object")?;
+    validate_action_model_spec()?;
     ensure!(
         object.get("version").and_then(Value::as_u64) == Some(1),
         "keymap.json version was not supported"
@@ -1150,6 +1797,10 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
     let spec = assignment_spec()?;
     let action_ids = resource_ids(keymap, "macros")?;
     let multi_action_ids = resource_ids(keymap, "multiActions")?;
+    validate_actions(keymap, &spec, &action_ids, &multi_action_ids)?;
+    validate_multi_actions(keymap, &spec, &action_ids, &multi_action_ids)?;
+    validate_action_groups(keymap, "macrosGroups", &action_ids)?;
+    validate_action_groups(keymap, "multiActionsGroups", &multi_action_ids)?;
     let profiles = profiles(keymap)?;
     ensure!(!profiles.is_empty(), "keymap.json contained no profiles");
     let mut profile_ids = HashSet::new();
@@ -1188,6 +1839,144 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
         "activeProfileId did not identify an existing profile"
     );
     Ok(())
+}
+
+fn validate_actions(
+    keymap: &Value,
+    spec: &AssignmentSpec,
+    action_ids: &HashSet<u64>,
+    multi_action_ids: &HashSet<u64>,
+) -> Result<()> {
+    for action in actions(keymap)? {
+        let id = object_u64(action, "id", "action")?;
+        validate_name(object_string(action, "name", "action")?)?;
+        validate_resource_color(action, "Action")?;
+        validate_optional_icon(action, "Action")?;
+        let events = action_events(action)?;
+        ensure!(!events.is_empty(), "Action id {id} contained no events");
+        ensure!(
+            events.len() <= MAX_ACTION_EVENTS,
+            "Action id {id} exceeded the event limit"
+        );
+        for event in events {
+            let event_type = object_u64(event, "act", "Action event")?;
+            let delay = object_u64(event, "delay", "Action event")?;
+            validate_action_event_input(event_type, delay)?;
+            let token = object_string(event, "kc", "Action event")?;
+            validate_assignment_token(token, spec, action_ids, multi_action_ids)?;
+            ensure!(
+                reference_id(token, "KA_A")? != Some(id),
+                "Action id {id} contained a self-reference"
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_multi_actions(
+    keymap: &Value,
+    spec: &AssignmentSpec,
+    action_ids: &HashSet<u64>,
+    multi_action_ids: &HashSet<u64>,
+) -> Result<()> {
+    let items = keymap
+        .get("multiActions")
+        .and_then(Value::as_array)
+        .context("keymap.json multiActions was invalid")?;
+    for item in items {
+        let id = object_u64(item, "id", "Multi Action")?;
+        validate_name(object_string(item, "name", "Multi Action")?)?;
+        validate_resource_color(item, "Multi Action")?;
+        validate_optional_icon(item, "Multi Action")?;
+        let tapping_terms = object_u64(item, "tt", "Multi Action")?;
+        ensure!(
+            tapping_terms <= 60_000,
+            "Multi Action id {id} tapping term exceeded 60000 ms"
+        );
+        for field in multi_action_assignment_fields() {
+            let token = object_string(item, field, "Multi Action")?;
+            validate_assignment_token(token, spec, action_ids, multi_action_ids)?;
+            ensure!(
+                reference_id(token, "KA_M")? != Some(id),
+                "Multi Action id {id} contained a self-reference"
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_action_groups(
+    keymap: &Value,
+    field: &str,
+    valid_action_ids: &HashSet<u64>,
+) -> Result<()> {
+    let groups = keymap
+        .get(field)
+        .and_then(Value::as_array)
+        .with_context(|| format!("keymap.json {field} was invalid"))?;
+    let mut group_ids = HashSet::new();
+    for group in groups {
+        let id = object_u64(group, "id", "Action group")?;
+        ensure!(group_ids.insert(id), "{field} contained duplicate id {id}");
+        validate_name(object_string(group, "name", "Action group")?)?;
+        validate_resource_color(group, "Action group")?;
+        if let Some(tags) = group.get("tags") {
+            for tag in tags
+                .as_array()
+                .context("Action group tags was not an array")?
+            {
+                tag.as_str().context("Action group tag was not a string")?;
+            }
+        }
+        let ids = group
+            .get("actionIds")
+            .and_then(Value::as_array)
+            .context("Action group actionIds was invalid")?;
+        ensure!(!ids.is_empty(), "Action group id {id} was empty");
+        let mut seen = HashSet::new();
+        for value in ids {
+            let action_id = value
+                .as_u64()
+                .context("Action group contained a non-integer action id")?;
+            ensure!(
+                seen.insert(action_id),
+                "Action group id {id} contained duplicate action id {action_id}"
+            );
+            ensure!(
+                valid_action_ids.contains(&action_id),
+                "Action group id {id} referenced missing action id {action_id}"
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_resource_color(value: &Value, kind: &str) -> Result<()> {
+    match value.get("color") {
+        None | Some(Value::Null) => Ok(()),
+        Some(Value::Number(number)) => {
+            let color = number
+                .as_u64()
+                .with_context(|| format!("{kind} color was invalid"))?;
+            ensure!(color <= MAX_RGB, "{kind} color exceeded 24-bit RGB");
+            Ok(())
+        }
+        Some(Value::String(color)) => {
+            ensure!(
+                color.starts_with('#') && parse_color(color).is_ok(),
+                "{kind} color string was invalid"
+            );
+            Ok(())
+        }
+        Some(_) => bail!("{kind} color was invalid"),
+    }
+}
+
+fn validate_optional_icon(value: &Value, kind: &str) -> Result<()> {
+    match value.get("icon") {
+        None | Some(Value::Null) | Some(Value::String(_)) => Ok(()),
+        Some(_) => bail!("{kind} icon was invalid"),
+    }
 }
 
 fn validate_usage_field(profile: &Value, field: &str, valid_ids: &HashSet<u64>) -> Result<()> {
@@ -1563,10 +2352,26 @@ mod tests {
             "vendorFutureField": {"kept": true},
             "macros": [
                 {"id": 3, "name": "Fixture Action", "color": null, "actions": [{"act": 1, "delay": 0, "kc": "KC_C"}]},
-                {"id": 4, "name": "Unused Action", "color": null, "actions": [{"act": 1, "delay": 0, "kc": "KC_D"}]},
+                {"id": 4, "name": "Dependent Action", "color": null, "actions": [{"act": 1, "delay": 0, "kc": "KA_A3"}]},
                 {"id": 10, "name": "Two Digit Action", "color": null, "actions": [{"act": 1, "delay": 0, "kc": "KC_E"}]}
             ],
-            "multiActions": [{"id": 1, "name": "Fixture Multi", "actions": []}],
+            "macrosGroups": [
+                {"id": 0, "name": "Primary", "tags": ["fixture"], "color": null, "actionIds": [3, 4]},
+                {"id": 1, "name": "Single", "tags": [], "color": null, "actionIds": [3]}
+            ],
+            "multiActions": [{
+                "id": 1,
+                "name": "Fixture Multi",
+                "color": null,
+                "kcOnTap": "KA_A3",
+                "kcOnHold": "KC_NONE",
+                "kcOnDoubleTap": "KC_NONE",
+                "kcOnTapHold": "KC_NONE",
+                "tt": 250
+            }],
+            "multiActionsGroups": [
+                {"id": 0, "name": "Multi", "tags": [], "color": null, "actionIds": [1]}
+            ],
             "profiles": [
                 {"id": 0, "name": "Alpha", "macrosUsed": [10, 3], "multiActionsUsed": [1], "layers": [
                     {"id": 0, "name": "Base", "color": 1122867, "layout": {
@@ -1828,6 +2633,190 @@ mod tests {
             assert!(error.contains(needle), "unexpected error: {error}");
             assert!(!output.exists());
         }
+        fs::remove_file(source).unwrap();
+    }
+
+    #[test]
+    fn actions_are_listed_and_shown_with_event_semantics_and_references() {
+        let source = root("action-list");
+        write_fixture(&source);
+        let listed = action_list(&source).unwrap();
+        assert_eq!(
+            listed
+                .actions
+                .iter()
+                .map(|action| action.id)
+                .collect::<Vec<_>>(),
+            vec![3, 4, 10]
+        );
+        assert_eq!(listed.actions[0].event_count, 1);
+        assert_eq!(listed.actions[0].reference_count, 5);
+        let shown = action_show(&source, 3).unwrap();
+        assert_eq!(shown.action.name, "Fixture Action");
+        assert_eq!(shown.events[0].assignment, "KC_C");
+        assert_eq!(shown.events[0].event_type, "press");
+        assert_eq!(shown.events[0].event_type_value, 1);
+        assert_eq!(shown.events[0].delay, 0);
+        fs::remove_file(source).unwrap();
+    }
+
+    #[test]
+    fn action_create_and_rename_follow_input_id_allocation_and_preserve_bytes() {
+        let source = root("action-create-source");
+        let created = root("action-created");
+        let renamed = root("action-renamed");
+        write_fixture(&source);
+        let original = SemanticSnapshot::read(&source).unwrap();
+        let smart_before = original.file_bytes[1].clone();
+
+        let receipt = action_create(&source, "New Action", &created).unwrap();
+        assert_eq!(receipt.resource_id, Some(11));
+        assert_eq!(receipt.changed_paths, vec!["/keymap.json/macros/3"]);
+        let candidate = SemanticSnapshot::read(&created).unwrap();
+        assert_eq!(candidate.file_bytes[1], smart_before);
+        assert_eq!(candidate.keymap["macros"][3]["id"], 11);
+        assert_eq!(candidate.keymap["macros"][3]["name"], "New Action");
+        assert_eq!(
+            candidate.keymap["macros"][3]["actions"],
+            json!([{"act": 1, "delay": 0, "kc": "KC_NONE"}])
+        );
+
+        let receipt = action_rename(&source, 4, "Renamed", &renamed).unwrap();
+        assert_eq!(receipt.changed_paths, vec!["/keymap.json/macros/1/name"]);
+        assert_eq!(
+            SemanticSnapshot::read(&renamed).unwrap().keymap["macros"][1]["name"],
+            "Renamed"
+        );
+
+        for path in [&source, &created, &renamed] {
+            fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn action_events_support_add_set_delete_and_move_candidates() {
+        let source = root("action-event-source");
+        let added = root("action-event-added");
+        let set = root("action-event-set");
+        let deleted = root("action-event-deleted");
+        let moved = root("action-event-moved");
+        write_fixture(&source);
+
+        let receipt = action_event_add(&source, 3, "KC_LGUI", 0, 12, &added).unwrap();
+        assert_eq!(
+            receipt.changed_paths,
+            vec!["/keymap.json/macros/0/actions/1"]
+        );
+        let added_snapshot = SemanticSnapshot::read(&added).unwrap();
+        assert_eq!(
+            added_snapshot.keymap["macros"][0]["actions"][1],
+            json!({"act": 0, "delay": 12, "kc": "KC_LGUI"})
+        );
+
+        let receipt =
+            action_event_set(&source, 3, 0, Some("KC_X"), Some(2), Some(200), &set).unwrap();
+        assert_eq!(
+            receipt.changed_paths,
+            vec![
+                "/keymap.json/macros/0/actions/0/kc",
+                "/keymap.json/macros/0/actions/0/act",
+                "/keymap.json/macros/0/actions/0/delay"
+            ]
+        );
+        assert_eq!(
+            SemanticSnapshot::read(&set).unwrap().keymap["macros"][0]["actions"][0],
+            json!({"act": 2, "delay": 200, "kc": "KC_X"})
+        );
+
+        action_event_delete(&source, 3, 0, &deleted).unwrap();
+        assert_eq!(
+            SemanticSnapshot::read(&deleted).unwrap().keymap["macros"][0]["actions"],
+            json!([{"act": 1, "delay": 0, "kc": "KC_NONE"}])
+        );
+
+        action_event_move(&added, 3, 1, 0, &moved).unwrap();
+        let moved_snapshot = SemanticSnapshot::read(&moved).unwrap();
+        assert_eq!(
+            moved_snapshot.keymap["macros"][0]["actions"][0]["kc"],
+            "KC_LGUI"
+        );
+        assert_eq!(
+            moved_snapshot.keymap["macros"][0]["actions"][1]["kc"],
+            "KC_C"
+        );
+
+        for path in [&source, &added, &set, &deleted, &moved] {
+            fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn action_delete_cascades_every_reference_and_recomputes_profile_usage() {
+        let source = root("action-delete-source");
+        let output = root("action-delete-output");
+        write_fixture(&source);
+        let original = SemanticSnapshot::read(&source).unwrap();
+        let smart_before = original.file_bytes[1].clone();
+        let receipt = action_delete(&source, 3, &output).unwrap();
+        let candidate = SemanticSnapshot::read(&output).unwrap();
+
+        assert_eq!(
+            candidate.keymap["macros"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|action| action["id"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
+            vec![4, 10]
+        );
+        assert_eq!(
+            candidate.keymap["profiles"][0]["layers"][0]["layout"]["joystick"]["sectors"][0]["k"],
+            "KC_NONE"
+        );
+        assert_eq!(candidate.keymap["macros"][0]["actions"][0]["kc"], "KC_NONE");
+        assert_eq!(candidate.keymap["multiActions"][0]["kcOnTap"], "KC_NONE");
+        assert_eq!(candidate.keymap["profiles"][0]["macrosUsed"], json!([10]));
+        assert_eq!(
+            candidate.keymap["macrosGroups"].as_array().unwrap().len(),
+            1
+        );
+        assert_eq!(candidate.keymap["macrosGroups"][0]["actionIds"], json!([4]));
+        assert_eq!(candidate.file_bytes[1], smart_before);
+        for path in [
+            "/keymap.json/profiles/0/layers/0/layout/joystick/sectors/0/k",
+            "/keymap.json/macros/1/actions/0/kc",
+            "/keymap.json/multiActions/0/kcOnTap",
+            "/keymap.json/macrosGroups",
+            "/keymap.json/macros/0",
+            "/keymap.json/profiles/0/macrosUsed",
+        ] {
+            assert!(receipt.changed_paths.iter().any(|changed| changed == path));
+        }
+
+        fs::remove_file(source).unwrap();
+        fs::remove_file(output).unwrap();
+    }
+
+    #[test]
+    fn action_mutations_reject_invalid_events_and_self_references() {
+        let source = root("action-invalid-source");
+        write_fixture(&source);
+        let cases = [
+            (Some("KA_A3"), Some(1), Some(0), "self-reference"),
+            (Some("KA_A99"), Some(1), Some(0), "missing Action"),
+            (Some("KC_A"), Some(1), Some(10_000), "9999"),
+        ];
+        for (assignment, event_type, delay, needle) in cases {
+            let output = root("action-invalid-output");
+            let error = action_event_set(&source, 3, 0, assignment, event_type, delay, &output)
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains(needle), "unexpected error: {error}");
+            assert!(!output.exists());
+        }
+        let output = root("action-invalid-name");
+        assert!(action_create(&source, "\n", &output).is_err());
+        assert!(!output.exists());
         fs::remove_file(source).unwrap();
     }
 

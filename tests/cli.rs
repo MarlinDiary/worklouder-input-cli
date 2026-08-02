@@ -40,6 +40,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("profile"));
     assert!(stdout.contains("layer"));
     assert!(stdout.contains("control"));
+    assert!(stdout.contains("action"));
     assert!(stdout.contains("completion"));
 }
 
@@ -67,6 +68,23 @@ fn semantic_help_exposes_offline_candidate_workflow() {
     assert!(control_stdout.contains("list"));
     assert!(control_stdout.contains("show"));
     assert!(control_stdout.contains("set"));
+
+    let action = binary().args(["action", "--help"]).output().unwrap();
+    let action_stdout = String::from_utf8(action.stdout).unwrap();
+    assert!(action.status.success());
+    for command in ["list", "show", "create", "rename", "delete", "event"] {
+        assert!(action_stdout.contains(command));
+    }
+
+    let event = binary()
+        .args(["action", "event", "--help"])
+        .output()
+        .unwrap();
+    let event_stdout = String::from_utf8(event.stdout).unwrap();
+    assert!(event.status.success());
+    for command in ["add", "set", "delete", "move"] {
+        assert!(event_stdout.contains(command));
+    }
 }
 
 #[test]

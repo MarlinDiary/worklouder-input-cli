@@ -113,6 +113,12 @@ pub enum Command {
         command: ControlCommand,
     },
 
+    /// Inspect or edit Actions in an offline configuration snapshot.
+    Action {
+        #[clap(subcommand)]
+        command: ActionCommand,
+    },
+
     /// Generate a shell completion script on standard output.
     Completion {
         #[clap(value_enum)]
@@ -496,6 +502,141 @@ pub enum ControlCommand {
         #[clap(long, value_parser)]
         output: PathBuf,
     },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ActionCommand {
+    /// List Actions and their reference counts.
+    List {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Show one Action and its ordered key-input events.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+    },
+
+    /// Create an Action with Input's default KC_NONE press event.
+    Create {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        name: String,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Rename one Action.
+    Rename {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        name: String,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Delete an Action and replace every live reference with KC_NONE.
+    Delete {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Add, update, delete, or reorder Action events.
+    Event {
+        #[clap(subcommand)]
+        command: ActionEventCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ActionEventCommand {
+    /// Append one key-input event.
+    Add {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        assignment: String,
+        #[clap(long = "type", value_enum, default_value = "press")]
+        event_type: ActionEventType,
+        #[clap(long, default_value_t = 0)]
+        delay: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Update selected fields of one existing event.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        index: usize,
+        #[clap(long)]
+        assignment: Option<String>,
+        #[clap(long = "type", value_enum)]
+        event_type: Option<ActionEventType>,
+        #[clap(long)]
+        delay: Option<u64>,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Delete one event; a sole event resets to Input's default.
+    Delete {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        index: usize,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Move one event while preserving its fields.
+    Move {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        from: usize,
+        #[clap(long)]
+        to: usize,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum ActionEventType {
+    Release,
+    Press,
+    Click,
+}
+
+impl ActionEventType {
+    pub fn device_value(self) -> u64 {
+        match self {
+            Self::Release => 0,
+            Self::Press => 1,
+            Self::Click => 2,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
