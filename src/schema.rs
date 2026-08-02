@@ -8,6 +8,7 @@ const COMMAND_ENVELOPE: &str = include_str!("../spec/schemas/command-envelope-v1
 const COMPATIBILITY_MATRIX: &str =
     include_str!("../spec/schemas/compatibility-matrix-v1.schema.json");
 const CONFIGURATION: &str = include_str!("../spec/schemas/configuration-v1.schema.json");
+const DOCTOR_REPORT: &str = include_str!("../spec/schemas/doctor-report-v1.schema.json");
 const ERROR: &str = include_str!("../spec/schemas/error-v1.schema.json");
 const INPUT_OPERATIONS: &str = include_str!("../spec/schemas/input-operations-v1.schema.json");
 const RELEASE_ARCHIVE: &str = include_str!("../spec/schemas/release-archive-v1.schema.json");
@@ -66,6 +67,14 @@ const ENTRIES: &[SchemaEntry] = &[
             description: "Four-authority Codex and Input configuration snapshots",
         },
         source: CONFIGURATION,
+    },
+    SchemaEntry {
+        summary: SchemaSummary {
+            name: "doctor-report-v1",
+            id: "https://worklouderctl.dev/schemas/doctor-report-v1.schema.json",
+            description: "Global provider health and authenticated configuration readiness",
+        },
+        source: DOCTOR_REPORT,
     },
     SchemaEntry {
         summary: SchemaSummary {
@@ -136,7 +145,7 @@ mod tests {
     #[test]
     fn registry_is_sorted_and_every_document_reopens() {
         let summaries = list();
-        assert_eq!(summaries.len(), 9);
+        assert_eq!(summaries.len(), 10);
         let names = summaries
             .iter()
             .map(|summary| summary.name)
@@ -160,5 +169,68 @@ mod tests {
         let error = show("missing-v1").unwrap_err().to_string();
         assert!(error.starts_with("unknown schema missing-v1; expected one of:"));
         assert!(error.contains("configuration-v1"));
+    }
+
+    #[test]
+    fn doctor_schema_covers_the_serialized_global_report() {
+        fn assert_object_contract(value: &Value, schema: &Value) {
+            let object = value.as_object().unwrap();
+            let properties = schema["properties"].as_object().unwrap();
+            let required = schema["required"].as_array().unwrap();
+            assert_eq!(schema["additionalProperties"], false);
+            for field in object.keys() {
+                assert!(properties.contains_key(field), "schema omitted {field}");
+            }
+            for field in required {
+                let field = field.as_str().unwrap();
+                assert!(
+                    object.contains_key(field),
+                    "report omitted required {field}"
+                );
+            }
+        }
+
+        let root = std::env::temp_dir().join(format!(
+            "worklouderctl-doctor-schema-{}",
+            std::process::id()
+        ));
+        let device = root.join("devices/doctor-schema-fixture");
+        std::fs::create_dir_all(&device).unwrap();
+        std::fs::write(device.join("keymap.json"), b"{\"layers\":[]}").unwrap();
+        std::fs::write(device.join("smart_actions.json"), b"{}").unwrap();
+        std::fs::write(root.join("input_storage.json"), b"{}").unwrap();
+        let report =
+            crate::doctor::inspect_paths(&root.join("Codex.app"), &root.join("Input.app"), &root);
+        let report = serde_json::to_value(report).unwrap();
+        let schema = show("doctor-report-v1").unwrap();
+
+        assert_object_contract(&report, &schema);
+        for check in report["checks"].as_array().unwrap() {
+            assert_object_contract(check, &schema["$defs"]["check"]);
+            assert!(schema["$defs"]["status"]["enum"]
+                .as_array()
+                .unwrap()
+                .contains(&check["status"]));
+        }
+        for provider in report["providers"].as_array().unwrap() {
+            assert_object_contract(provider, &schema["$defs"]["provider"]);
+        }
+        for device in report["devices"].as_array().unwrap() {
+            assert_object_contract(device, &schema["$defs"]["device"]);
+        }
+        assert_eq!(report["devices"].as_array().unwrap().len(), 1);
+        assert!(schema["$defs"]["provider"]["properties"]
+            .as_object()
+            .unwrap()
+            .contains_key("version"));
+        assert!(schema["$defs"]["device"]["properties"]
+            .as_object()
+            .unwrap()
+            .contains_key("keymapSha256"));
+        assert!(schema["$defs"]["device"]["properties"]
+            .as_object()
+            .unwrap()
+            .contains_key("smartActionsSha256"));
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

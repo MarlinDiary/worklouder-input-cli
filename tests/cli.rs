@@ -203,6 +203,7 @@ fn schemas_are_discoverable_and_machine_readable() {
             "command-envelope-v1",
             "compatibility-matrix-v1",
             "configuration-v1",
+            "doctor-report-v1",
             "error-v1",
             "input-operations-v1",
             "release-archive-v1",
@@ -235,6 +236,21 @@ fn schemas_are_discoverable_and_machine_readable() {
     assert_eq!(
         document["$defs"]["inputHostSettings"]["properties"]["kind"]["const"],
         "worklouder-input-host-settings"
+    );
+
+    let doctor = binary()
+        .args(["--json", "schema", "show", "doctor-report-v1"])
+        .output()
+        .unwrap();
+    assert!(doctor.status.success());
+    let doctor: serde_json::Value = serde_json::from_slice(&doctor.stdout).unwrap();
+    assert_eq!(
+        doctor["properties"]["configurationReady"]["type"],
+        "boolean"
+    );
+    assert_eq!(
+        doctor["$defs"]["status"]["enum"],
+        serde_json::json!(["pass", "warn", "fail"])
     );
 }
 

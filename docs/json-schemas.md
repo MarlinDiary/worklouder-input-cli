@@ -10,6 +10,7 @@ worklouderctl --json schema show agent-execution-v1
 worklouderctl --json schema show backup-inspection-v1
 worklouderctl --json schema show command-envelope-v1
 worklouderctl --json schema show configuration-v1
+worklouderctl --json schema show doctor-report-v1
 worklouderctl --json schema show input-operations-v1
 worklouderctl --json schema show release-archive-v1
 worklouderctl --json schema show transaction-v1
@@ -26,6 +27,7 @@ use JSON Schema Draft 2020-12.
 | `backup-inspection-v1` | verified artifact kind, restore availability, and migration requirements |
 | `command-envelope-v1` | shell-free `argv`, output mode, and accepted exit statuses |
 | `configuration-v1` | Codex settings, Codex Agent Keys, Input device configuration, and Input host settings snapshots |
+| `doctor-report-v1` | global provider health, checks, discovered devices, and authenticated configuration readiness |
 | `transaction-v1` | coordinated plan, transaction receipt, and private backup catalog |
 | `error-v1` | typed JSON error written to stderr |
 | `input-operations-v1` | Input permission/firmware status, immutable firmware/reset/recovery plans, verified receipts, and sanitized diagnostic log bundle |
