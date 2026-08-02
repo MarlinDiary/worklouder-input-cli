@@ -1,0 +1,252 @@
+diff --git a/docs/json-schemas.md b/docs/json-schemas.md
+index f700d7d..cf30dbe 100644
+--- a/docs/json-schemas.md
++++ b/docs/json-schemas.md
+@@ -10,6 +10,7 @@ worklouderctl --json schema show agent-execution-v1
+ worklouderctl --json schema show backup-inspection-v1
+ worklouderctl --json schema show command-envelope-v1
+ worklouderctl --json schema show configuration-v1
++worklouderctl --json schema show doctor-report-v1
+ worklouderctl --json schema show input-operations-v1
+ worklouderctl --json schema show release-archive-v1
+ worklouderctl --json schema show transaction-v1
+@@ -26,6 +27,7 @@ use JSON Schema Draft 2020-12.
+ | `backup-inspection-v1` | verified artifact kind, restore availability, and migration requirements |
+ | `command-envelope-v1` | shell-free `argv`, output mode, and accepted exit statuses |
+ | `configuration-v1` | Codex settings, Codex Agent Keys, Input device configuration, and Input host settings snapshots |
++| `doctor-report-v1` | global provider health, checks, discovered devices, and authenticated configuration readiness |
+ | `transaction-v1` | coordinated plan, transaction receipt, and private backup catalog |
+ | `error-v1` | typed JSON error written to stderr |
+ | `input-operations-v1` | Input permission/firmware status, immutable firmware/reset/recovery plans, verified receipts, and sanitized diagnostic log bundle |
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index e851d62..9b51c72 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -13,7 +13,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Machine-readable capability registry
+ - [x] Full Codex + Input configuration parity contract
+ - [x] Publish deterministic sanitized Input 0.17.3/0.18.0 and firmware v0.6.0 fixtures with manifest verification
+-- [x] CLI command, configuration, transaction, and error JSON Schema registry
++- [x] CLI command, doctor, configuration, transaction, and error JSON Schema registry
+ 
+ ## M1 — Read-only alpha
+ 
+diff --git a/spec/schemas/doctor-report-v1.schema.json b/spec/schemas/doctor-report-v1.schema.json
+new file mode 100644
+index 0000000..1bee9e3
+--- /dev/null
++++ b/spec/schemas/doctor-report-v1.schema.json
+@@ -0,0 +1,75 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "https://worklouderctl.dev/schemas/doctor-report-v1.schema.json",
++  "title": "WorkLouderCTL global doctor report v1",
++  "type": "object",
++  "additionalProperties": false,
++  "required": [
++    "status",
++    "configurationReady",
++    "checks",
++    "providers",
++    "inputSupportRoot",
++    "devices"
++  ],
++  "properties": {
++    "status": { "$ref": "#/$defs/status" },
++    "configurationReady": { "type": "boolean" },
++    "checks": {
++      "type": "array",
++      "minItems": 1,
++      "items": { "$ref": "#/$defs/check" }
++    },
++    "providers": {
++      "type": "array",
++      "minItems": 2,
++      "items": { "$ref": "#/$defs/provider" }
++    },
++    "inputSupportRoot": { "type": "string", "minLength": 1 },
++    "devices": {
++      "type": "array",
++      "items": { "$ref": "#/$defs/device" }
++    }
++  },
++  "$defs": {
++    "status": {
++      "enum": ["pass", "warn", "fail"]
++    },
++    "check": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["id", "status", "summary"],
++      "properties": {
++        "id": {
++          "type": "string",
++          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
++        },
++        "status": { "$ref": "#/$defs/status" },
++        "summary": { "type": "string", "minLength": 1 }
++      }
++    },
++    "provider": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["name", "appPath", "installed", "running"],
++      "properties": {
++        "name": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "appPath": { "type": "string", "minLength": 1 },
++        "installed": { "type": "boolean" },
++        "running": { "type": "boolean" },
++        "version": { "type": "string", "minLength": 1, "maxLength": 128 }
++      }
++    },
++    "device": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["id", "directory"],
++      "properties": {
++        "id": { "type": "string", "minLength": 1, "maxLength": 256 },
++        "directory": { "type": "string", "minLength": 1 },
++        "keymapSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
++        "smartActionsSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
++      }
++    }
++  }
++}
+diff --git a/src/schema.rs b/src/schema.rs
+index 1edbd3f..fe05956 100644
+--- a/src/schema.rs
++++ b/src/schema.rs
+@@ -8,6 +8,7 @@ const COMMAND_ENVELOPE: &str = include_str!("../spec/schemas/command-envelope-v1
+ const COMPATIBILITY_MATRIX: &str =
+     include_str!("../spec/schemas/compatibility-matrix-v1.schema.json");
+ const CONFIGURATION: &str = include_str!("../spec/schemas/configuration-v1.schema.json");
++const DOCTOR_REPORT: &str = include_str!("../spec/schemas/doctor-report-v1.schema.json");
+ const ERROR: &str = include_str!("../spec/schemas/error-v1.schema.json");
+ const INPUT_OPERATIONS: &str = include_str!("../spec/schemas/input-operations-v1.schema.json");
+ const RELEASE_ARCHIVE: &str = include_str!("../spec/schemas/release-archive-v1.schema.json");
+@@ -67,6 +68,14 @@ const ENTRIES: &[SchemaEntry] = &[
+         },
+         source: CONFIGURATION,
+     },
++    SchemaEntry {
++        summary: SchemaSummary {
++            name: "doctor-report-v1",
++            id: "https://worklouderctl.dev/schemas/doctor-report-v1.schema.json",
++            description: "Global provider health and authenticated configuration readiness",
++        },
++        source: DOCTOR_REPORT,
++    },
+     SchemaEntry {
+         summary: SchemaSummary {
+             name: "error-v1",
+@@ -136,7 +145,7 @@ mod tests {
+     #[test]
+     fn registry_is_sorted_and_every_document_reopens() {
+         let summaries = list();
+-        assert_eq!(summaries.len(), 9);
++        assert_eq!(summaries.len(), 10);
+         let names = summaries
+             .iter()
+             .map(|summary| summary.name)
+@@ -161,4 +170,67 @@ mod tests {
+         assert!(error.starts_with("unknown schema missing-v1; expected one of:"));
+         assert!(error.contains("configuration-v1"));
+     }
++
++    #[test]
++    fn doctor_schema_covers_the_serialized_global_report() {
++        fn assert_object_contract(value: &Value, schema: &Value) {
++            let object = value.as_object().unwrap();
++            let properties = schema["properties"].as_object().unwrap();
++            let required = schema["required"].as_array().unwrap();
++            assert_eq!(schema["additionalProperties"], false);
++            for field in object.keys() {
++                assert!(properties.contains_key(field), "schema omitted {field}");
++            }
++            for field in required {
++                let field = field.as_str().unwrap();
++                assert!(
++                    object.contains_key(field),
++                    "report omitted required {field}"
++                );
++            }
++        }
++
++        let root = std::env::temp_dir().join(format!(
++            "worklouderctl-doctor-schema-{}",
++            std::process::id()
++        ));
++        let device = root.join("devices/doctor-schema-fixture");
++        std::fs::create_dir_all(&device).unwrap();
++        std::fs::write(device.join("keymap.json"), b"{\"layers\":[]}").unwrap();
++        std::fs::write(device.join("smart_actions.json"), b"{}").unwrap();
++        std::fs::write(root.join("input_storage.json"), b"{}").unwrap();
++        let report =
++            crate::doctor::inspect_paths(&root.join("Codex.app"), &root.join("Input.app"), &root);
++        let report = serde_json::to_value(report).unwrap();
++        let schema = show("doctor-report-v1").unwrap();
++
++        assert_object_contract(&report, &schema);
++        for check in report["checks"].as_array().unwrap() {
++            assert_object_contract(check, &schema["$defs"]["check"]);
++            assert!(schema["$defs"]["status"]["enum"]
++                .as_array()
++                .unwrap()
++                .contains(&check["status"]));
++        }
++        for provider in report["providers"].as_array().unwrap() {
++            assert_object_contract(provider, &schema["$defs"]["provider"]);
++        }
++        for device in report["devices"].as_array().unwrap() {
++            assert_object_contract(device, &schema["$defs"]["device"]);
++        }
++        assert_eq!(report["devices"].as_array().unwrap().len(), 1);
++        assert!(schema["$defs"]["provider"]["properties"]
++            .as_object()
++            .unwrap()
++            .contains_key("version"));
++        assert!(schema["$defs"]["device"]["properties"]
++            .as_object()
++            .unwrap()
++            .contains_key("keymapSha256"));
++        assert!(schema["$defs"]["device"]["properties"]
++            .as_object()
++            .unwrap()
++            .contains_key("smartActionsSha256"));
++        std::fs::remove_dir_all(root).unwrap();
++    }
+ }
+diff --git a/tests/cli.rs b/tests/cli.rs
+index 126c171..a8efbe1 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -203,6 +203,7 @@ fn schemas_are_discoverable_and_machine_readable() {
+             "command-envelope-v1",
+             "compatibility-matrix-v1",
+             "configuration-v1",
++            "doctor-report-v1",
+             "error-v1",
+             "input-operations-v1",
+             "release-archive-v1",
+@@ -236,6 +237,21 @@ fn schemas_are_discoverable_and_machine_readable() {
+         document["$defs"]["inputHostSettings"]["properties"]["kind"]["const"],
+         "worklouder-input-host-settings"
+     );
++
++    let doctor = binary()
++        .args(["--json", "schema", "show", "doctor-report-v1"])
++        .output()
++        .unwrap();
++    assert!(doctor.status.success());
++    let doctor: serde_json::Value = serde_json::from_slice(&doctor.stdout).unwrap();
++    assert_eq!(
++        doctor["properties"]["configurationReady"]["type"],
++        "boolean"
++    );
++    assert_eq!(
++        doctor["$defs"]["status"]["enum"],
++        serde_json::json!(["pass", "warn", "fail"])
++    );
+ }
+ 
+ #[test]

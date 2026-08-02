@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-error",
+  "code": "invalid-data",
+  "exitStatus": 4,
+  "message": "unknown schema doctor-report-v1; expected one of: agent-execution-v1, backup-inspection-v1, command-envelope-v1, compatibility-matrix-v1, configuration-v1, error-v1, input-operations-v1, release-archive-v1, transaction-v1",
+  "causes": []
+}

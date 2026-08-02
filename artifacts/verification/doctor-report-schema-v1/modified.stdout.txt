@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worklouderctl.dev/schemas/doctor-report-v1.schema.json",
+  "title": "WorkLouderCTL global doctor report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "configurationReady",
+    "checks",
+    "providers",
+    "inputSupportRoot",
+    "devices"
+  ],
+  "properties": {
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "configurationReady": {
+      "type": "boolean"
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/check"
+      }
+    },
+    "providers": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "$ref": "#/$defs/provider"
+      }
+    },
+    "inputSupportRoot": {
+      "type": "string",
+      "minLength": 1
+    },
+    "devices": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/device"
+      }
+    }
+  },
+  "$defs": {
+    "status": {
+      "enum": [
+        "pass",
+        "warn",
+        "fail"
+      ]
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "status",
+        "summary"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "appPath",
+        "installed",
+        "running"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "directory"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "directory": {
+          "type": "string",
+          "minLength": 1
+        },
+        "keymapSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "smartActionsSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

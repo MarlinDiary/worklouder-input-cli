@@ -1,0 +1,273 @@
+WorkLouderCTL global doctor report schema verification record
+================================================================
+
+Scope
+-----
+Base commit: a1c3e0d6c4a9d413f6ad60b67adc8c1191a22155
+Feature commit: 1668f349dc6f3097f2d7e831c51e757e4b059268
+Changed branch/field: embedded `doctor-report-v1` Draft 2020-12 contract for
+`worklouderctl --json doctor`, including `configurationReady`, check status,
+provider discovery, Input support root, and optional device SHA-256 fields
+Modified artifact: spec/schemas/doctor-report-v1.schema.json
+Modified artifact SHA-256 after reopen: eebdec7a7e0be37ad3f35648aa915df083cd4341d98e037b65b107c129d0a225
+Inputs: isolated missing-provider baseline for command discovery; synthetic
+Codex/Input app paths, support roots, cached device JSON, and authenticated
+reference bridges for serializer and readiness coverage
+Provider boundary: no GUI launch/focus/reopen, no physical device access, and no
+Codex/Input configuration mutation
+
+Preserved baseline-red
+----------------------
+Detached source path: /tmp/worklouderctl-doctor-schema-base.AZ5Ou2/repo
+Source commit: a1c3e0d6c4a9d413f6ad60b67adc8c1191a22155
+Build command:
+CARGO_TARGET_DIR=/tmp/worklouderctl-doctor-schema-base.AZ5Ou2/target \
+  cargo +1.61.0 build --offline --locked \
+  --manifest-path /tmp/worklouderctl-doctor-schema-base.AZ5Ou2/repo/Cargo.toml
+Build exit status: 0
+Exact command:
+/tmp/worklouderctl-doctor-schema-base.AZ5Ou2/target/debug/worklouderctl \
+  --json schema show doctor-report-v1
+Literal stdout (baseline.stdout.txt, SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855):
+```text
+
+```
+Literal stderr (baseline.stderr.txt, SHA-256 aaf5ab0eea30c358a1f3cb7ffc1ff180af5f903102fb66b47e3eb47dc9370e6d):
+```json
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-error",
+  "code": "invalid-data",
+  "exitStatus": 4,
+  "message": "unknown schema doctor-report-v1; expected one of: agent-execution-v1, backup-inspection-v1, command-envelope-v1, compatibility-matrix-v1, configuration-v1, error-v1, input-operations-v1, release-archive-v1, transaction-v1",
+  "causes": []
+}
+```
+Exit status: 4
+Baseline-red behavior: the global doctor report was serializable, but agents
+could not discover a versioned output contract from the embedded registry.
+
+Modified artifact and patch-green
+---------------------------------
+Exact command (working directory: repository root):
+./target/debug/worklouderctl --json schema show doctor-report-v1
+Literal stdout (modified.stdout.txt, SHA-256 9003dbf9f084455d55cf77049fc370f48621c261f5d9cf216e6d00428f54c9e6):
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worklouderctl.dev/schemas/doctor-report-v1.schema.json",
+  "title": "WorkLouderCTL global doctor report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "configurationReady",
+    "checks",
+    "providers",
+    "inputSupportRoot",
+    "devices"
+  ],
+  "properties": {
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "configurationReady": {
+      "type": "boolean"
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/check"
+      }
+    },
+    "providers": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "$ref": "#/$defs/provider"
+      }
+    },
+    "inputSupportRoot": {
+      "type": "string",
+      "minLength": 1
+    },
+    "devices": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/device"
+      }
+    }
+  },
+  "$defs": {
+    "status": {
+      "enum": [
+        "pass",
+        "warn",
+        "fail"
+      ]
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "status",
+        "summary"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "appPath",
+        "installed",
+        "running"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "appPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "directory"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "directory": {
+          "type": "string",
+          "minLength": 1
+        },
+        "keymapSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "smartActionsSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}
+```
+Literal stderr (modified.stderr.txt, SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855):
+```text
+
+```
+Exit status: 0
+Second identical execution exit status: 0
+Second stream comparison command:
+cmp artifacts/verification/doctor-report-schema-v1/modified.stdout.txt \
+  /tmp/worklouderctl-doctor-schema-evidence/modified-second.stdout.txt
+cmp artifacts/verification/doctor-report-schema-v1/modified.stderr.txt \
+  /tmp/worklouderctl-doctor-schema-evidence/modified-second.stderr.txt
+Literal stdout:
+```text
+
+```
+Literal stderr:
+```text
+
+```
+Exit status: 0
+Patch-green behavior: the registry returns the exact embedded schema; unit
+coverage compares the real global report serializer with top-level, check,
+provider, and populated device object contracts, including optional fields.
+
+Patch/diff
+----------
+Path: artifacts/verification/doctor-report-schema-v1/doctor-report-schema.patch
+Command:
+git diff --binary a1c3e0d6c4a9d413f6ad60b67adc8c1191a22155..1668f349dc6f3097f2d7e831c51e757e4b059268 -- . \
+  ':(exclude)artifacts/verification/doctor-report-schema-v1'
+SHA-256 after reopen: 8ae3b5621eb10e9da1a6e0787633347f59919ca32ff635f7bff85132ad23575d
+Command:
+git apply --check --reverse \
+  artifacts/verification/doctor-report-schema-v1/doctor-report-schema.patch
+Literal stdout:
+```text
+
+```
+Literal stderr:
+```text
+
+```
+Exit status: 0
+
+Verification gates
+------------------
+`cargo test --locked`: 81 unit + 32 CLI passed; exit 0
+`cargo clippy --locked --all-targets -- -D warnings`: exit 0
+`cargo +1.61.0 test --offline --locked`: 81 unit + 32 CLI passed; exit 0
+`npm test --prefix companion`: 23 passed, 0 failed; exit 0
+`./scripts/verify-json-contracts.py`: json_contracts=33,
+json_duplicate_keys=absent; exit 0
+`./scripts/verify-compatibility-matrix.sh`:
+compatibility_matrix=verified; exit 0
+`./scripts/verify-cli-assets.sh`: cli_assets=deterministic; exit 0
+`./scripts/test-doctor-readiness-e2e.sh`: provider health and both authenticated
+capability sets verified, configurationReady=true, strict exit=0, fixture
+configuration bytes preserved; exit 0
+
+Rollback
+--------
+Path: artifacts/verification/doctor-report-schema-v1/rollback.sh
+SHA-256 after reopen: 4a1c5aa4ceedda1c162d69795ff6c773807b37440b22949d99fec1fbc66024eb
+Exact verification command (working directory: repository root):
+/Users/marlin/Documents/Codex/2026-07-31/cod/worklouder-input-cli/artifacts/verification/doctor-report-schema-v1/rollback.sh \
+  /tmp/worklouderctl-doctor-schema-rollback.hHoRDI/repo \
+  /Users/marlin/Documents/Codex/2026-07-31/cod/worklouder-input-cli/artifacts/verification/doctor-report-schema-v1/doctor-report-schema.patch
+Literal stdout:
+```text
+rollback=verified
+base=a1c3e0d6c4a9d413f6ad60b67adc8c1191a22155
+feature=1668f349dc6f3097f2d7e831c51e757e4b059268
+```
+Literal stderr:
+```text
+
+```
+Exit status: 0
+Rollback behavior: reversing the patch in the detached feature worktree exactly
+matched the base commit, excluding this evidence directory.
