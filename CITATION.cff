@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use WorkLouderCTL in research or tooling, please cite this repository."
+title: "WorkLouderCTL: a companion CLI for Work Louder Input and Codex Micro"
+type: software
+authors:
+  - family-names: "Ni"
+    given-names: "Chenye"
+    alias: "MarlinDiary"
+repository-code: "https://github.com/MarlinDiary/worklouder-input-cli"
+url: "https://github.com/MarlinDiary/worklouder-input-cli"
+license: MIT
+keywords:
+  - Work Louder Input
+  - Codex Micro
+  - command-line interface
+  - keyboard configurator
+  - macropad
+  - AI agent

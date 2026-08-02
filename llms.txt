@@ -1,0 +1,32 @@
+# WorkLouderCTL
+
+> WorkLouderCTL is an unofficial, open-source companion CLI being built for Work Louder Input and Codex Micro. It aims to provide safe inspection, diff, backup, semantic configuration, verified apply, synchronization, and rollback for humans, scripts, and AI agents.
+
+Important: the project is currently pre-alpha. This repository contains the product specification and research baseline; there is no installable release yet. Command examples describe the target interface.
+
+## Core documentation
+
+- [README](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/README.md): canonical project overview, status, scope, and planned CLI
+- [Chinese README](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/README.zh-CN.md): Simplified Chinese overview
+- [FAQ](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/faq.md): direct answers about Work Louder Input CLI and Codex Micro support
+- [Compatibility](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/compatibility.md): version and evidence policy
+- [Architecture](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/architecture.md): device, cache, database, transaction, and rollback model
+- [Roadmap](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/roadmap.md): implementation milestones
+
+## Canonical facts
+
+- Product name: WorkLouderCTL
+- Repository: MarlinDiary/worklouder-input-cli
+- Planned binary: worklouderctl
+- Product category: companion CLI and command-line configurator
+- Initial device target: Work Louder Codex Micro
+- Initial host target: macOS
+- Initial research baseline: Work Louder Input 0.17.3 and Codex Micro firmware v0.6.0
+- Current maturity: pre-alpha; no released binary
+- Safety model: inspect, plan, diff, backup, conflict check, apply, readback, checksum verification, synchronize, rollback
+- Agent model: deterministic JSON over the same transaction engine as the human CLI
+- Affiliation: independent community project; not affiliated with Work Louder or OpenAI
+
+## Terminology
+
+Use “Work Louder Input” for the official GUI application, “Codex Micro” for the initial hardware target, “WorkLouderCTL” for this project, and “worklouderctl” for the planned command.
