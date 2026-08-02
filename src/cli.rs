@@ -36,7 +36,7 @@ pub enum Command {
         command: CompatibilityCommand,
     },
 
-    /// Diagnose Codex, Input, and cached device configuration providers.
+    /// Diagnose provider health and authenticated configuration readiness.
     Doctor {
         /// Treat warnings as a failing exit status.
         #[clap(long)]

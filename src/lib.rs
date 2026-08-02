@@ -897,7 +897,7 @@ fn run_appsense(command: AppSenseCommand, json: bool, mut out: impl Write) -> Re
             poll_ms,
         } => {
             anyhow::ensure!(
-                timeout_ms <= 300_000 && poll_ms >= 10 && poll_ms <= 10_000,
+                timeout_ms <= 300_000 && (10..=10_000).contains(&poll_ms),
                 "AppSense timeout or poll interval was invalid"
             );
             for (label, value) in [
@@ -3647,11 +3647,12 @@ fn run_doctor(strict: bool, json: bool, mut out: impl Write) -> Result<()> {
     } else {
         writeln!(
             out,
-            "doctor: {:?} ({} pass, {} warn, {} fail)",
+            "doctor: {:?} ({} pass, {} warn, {} fail, configuration ready: {})",
             report.status,
             report.pass_count(),
             report.warning_count(),
-            report.failure_count()
+            report.failure_count(),
+            report.configuration_ready
         )?;
         for check in &report.checks {
             writeln!(out, "{:?}\t{}\t{}", check.status, check.id, check.summary)?;

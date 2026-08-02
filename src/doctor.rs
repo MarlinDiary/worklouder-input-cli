@@ -1,4 +1,4 @@
-use crate::fsutil;
+use crate::{bridge, codex_bridge, fsutil};
 use serde::Serialize;
 use serde_json::Value;
 use std::env;
@@ -48,6 +48,7 @@ pub struct DeviceState {
 #[serde(rename_all = "camelCase")]
 pub struct DoctorReport {
     pub status: CheckStatus,
+    pub configuration_ready: bool,
     pub checks: Vec<Check>,
     pub providers: Vec<Provider>,
     pub input_support_root: PathBuf,
@@ -92,7 +93,10 @@ pub fn inspect() -> DoctorReport {
         .map(PathBuf::from)
         .unwrap_or_else(default_input_support_root);
 
-    inspect_paths(&codex_path, &input_path, &support_root)
+    let mut report = inspect_paths(&codex_path, &input_path, &support_root);
+    report.configuration_ready = inspect_configuration_bridges(&mut report.checks);
+    report.status = aggregate_status(&report.checks);
+    report
 }
 
 pub fn inspect_paths(codex_path: &Path, input_path: &Path, support_root: &Path) -> DoctorReport {
@@ -137,11 +141,121 @@ pub fn inspect_paths(codex_path: &Path, input_path: &Path, support_root: &Path) 
     let status = aggregate_status(&checks);
     DoctorReport {
         status,
+        configuration_ready: false,
         checks,
         providers: vec![codex, input],
         input_support_root: support_root.to_path_buf(),
         devices,
     }
+}
+
+const INPUT_CONFIGURATION_CAPABILITIES: &[&str] = &[
+    "device.config.apply.v1",
+    "device.config.restore.v1",
+    "input.host-settings.apply.v1",
+    "input.host-settings.restore.v1",
+];
+
+const CODEX_CONFIGURATION_CAPABILITIES: &[&str] = &[
+    "codex.settings.apply.v1",
+    "codex.settings.restore.v1",
+    "codex.agentKeys.apply.v1",
+    "codex.agentKeys.restore.v1",
+];
+
+fn inspect_configuration_bridges(checks: &mut Vec<Check>) -> bool {
+    let input_paths = bridge::paths(None, None);
+    let input_ready = inspect_bridge(
+        "input",
+        &input_paths.socket,
+        &input_paths.token,
+        INPUT_CONFIGURATION_CAPABILITIES,
+        || bridge::inspect(&input_paths).map(|inspection| inspection.capabilities),
+        checks,
+    );
+
+    let codex_paths = codex_bridge::paths(None, None);
+    let codex_ready = inspect_bridge(
+        "codex",
+        &codex_paths.socket,
+        &codex_paths.token,
+        CODEX_CONFIGURATION_CAPABILITIES,
+        || codex_bridge::inspect(&codex_paths).map(|inspection| inspection.capabilities),
+        checks,
+    );
+
+    input_ready && codex_ready
+}
+
+fn inspect_bridge<F>(
+    provider: &str,
+    socket: &Path,
+    token: &Path,
+    required: &[&str],
+    inspect: F,
+    checks: &mut Vec<Check>,
+) -> bool
+where
+    F: FnOnce() -> anyhow::Result<Vec<String>>,
+{
+    let id = format!("provider.{provider}.configuration-bridge");
+    if !socket.exists() || !token.is_file() {
+        checks.push(Check {
+            id,
+            status: CheckStatus::Warn,
+            summary: format!(
+                "{provider} configuration bridge is not discoverable at {} with token {}; provider health is read-only",
+                socket.display(),
+                token.display()
+            ),
+        });
+        return false;
+    }
+
+    let capabilities = match inspect() {
+        Ok(capabilities) => capabilities,
+        Err(error) => {
+            checks.push(Check {
+                id,
+                status: CheckStatus::Warn,
+                summary: format!(
+                    "{provider} configuration bridge handshake failed at {}: {error}",
+                    socket.display()
+                ),
+            });
+            return false;
+        }
+    };
+    let missing = missing_capabilities(&capabilities, required);
+    if missing.is_empty() {
+        checks.push(Check {
+            id,
+            status: CheckStatus::Pass,
+            summary: format!(
+                "{provider} configuration bridge is authenticated with all {} required mutation capabilities",
+                required.len()
+            ),
+        });
+        true
+    } else {
+        checks.push(Check {
+            id,
+            status: CheckStatus::Warn,
+            summary: format!(
+                "{provider} configuration bridge is missing required capabilities: {}",
+                missing.join(", ")
+            ),
+        });
+        false
+    }
+}
+
+fn missing_capabilities<'a>(available: &[String], required: &[&'a str]) -> Vec<&'a str> {
+    required
+        .iter()
+        .copied()
+        .filter(|required| !available.iter().any(|value| value == required))
+        .collect()
 }
 
 fn inspect_provider(name: &str, app_path: &Path, checks: &mut Vec<Check>) -> Provider {
@@ -427,6 +541,86 @@ mod tests {
 
         assert!(digest.is_none());
         assert_eq!(checks[0].status, CheckStatus::Fail);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn configuration_readiness_requires_every_mutation_capability() {
+        let available = vec![
+            "device.config.apply.v1".to_owned(),
+            "device.config.restore.v1".to_owned(),
+            "input.host-settings.apply.v1".to_owned(),
+        ];
+        assert_eq!(
+            missing_capabilities(&available, INPUT_CONFIGURATION_CAPABILITIES),
+            vec!["input.host-settings.restore.v1"]
+        );
+
+        let complete = INPUT_CONFIGURATION_CAPABILITIES
+            .iter()
+            .map(|value| (*value).to_owned())
+            .collect::<Vec<_>>();
+        assert!(missing_capabilities(&complete, INPUT_CONFIGURATION_CAPABILITIES).is_empty());
+    }
+
+    #[test]
+    fn missing_bridge_endpoints_are_read_only_without_connecting() {
+        let root = fixture_root();
+        let mut checks = Vec::new();
+        let ready = inspect_bridge(
+            "fixture",
+            &root.join("bridge.sock"),
+            &root.join("bridge.token"),
+            &["fixture.apply.v1"],
+            || panic!("missing endpoints must not trigger a handshake"),
+            &mut checks,
+        );
+
+        assert!(!ready);
+        assert_eq!(checks.len(), 1);
+        assert_eq!(checks[0].status, CheckStatus::Warn);
+        assert!(checks[0].summary.contains("provider health is read-only"));
+    }
+
+    #[test]
+    fn authenticated_bridge_must_advertise_every_required_capability() {
+        let root = fixture_root();
+        fs::create_dir_all(&root).unwrap();
+        let socket = root.join("bridge.sock");
+        let token = root.join("bridge.token");
+        fs::write(&socket, b"fixture").unwrap();
+        fs::write(&token, b"secret").unwrap();
+
+        let mut incomplete_checks = Vec::new();
+        let incomplete = inspect_bridge(
+            "fixture",
+            &socket,
+            &token,
+            &["fixture.apply.v1", "fixture.restore.v1"],
+            || Ok(vec!["fixture.apply.v1".to_owned()]),
+            &mut incomplete_checks,
+        );
+        assert!(!incomplete);
+        assert_eq!(incomplete_checks[0].status, CheckStatus::Warn);
+        assert!(incomplete_checks[0].summary.contains("fixture.restore.v1"));
+
+        let mut complete_checks = Vec::new();
+        let complete = inspect_bridge(
+            "fixture",
+            &socket,
+            &token,
+            &["fixture.apply.v1", "fixture.restore.v1"],
+            || {
+                Ok(vec![
+                    "fixture.apply.v1".to_owned(),
+                    "fixture.restore.v1".to_owned(),
+                ])
+            },
+            &mut complete_checks,
+        );
+        assert!(complete);
+        assert_eq!(complete_checks[0].status, CheckStatus::Pass);
+
         fs::remove_dir_all(root).unwrap();
     }
 }
