@@ -180,6 +180,12 @@
       "click",
       "longPress"
     ],
+    "analogDirections": [
+      "up",
+      "right",
+      "down",
+      "left"
+    ],
     "voiceButtonModes": [
       "push-to-talk",
       "realtime"

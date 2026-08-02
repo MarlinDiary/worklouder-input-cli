@@ -76,6 +76,17 @@
       "value": null,
       "requiresMode": "custom"
     },
+    "joystickGet": {
+      "command": "codex joystick get --input SNAPSHOT.json DIRECTION"
+    },
+    "joystickSet": {
+      "command": "codex joystick set --input SNAPSHOT.json DIRECTION [--command COMMAND_ID | --skill-name NAME --skill-path PATH] --output CANDIDATE.json",
+      "changedPathTemplate": "/settings/codex-micro-layout/analogStick/{direction}"
+    },
+    "joystickClear": {
+      "command": "codex joystick clear --input SNAPSHOT.json DIRECTION --output CANDIDATE.json",
+      "value": null
+    },
     "lightingBrightnessGet": {
       "command": "codex lighting brightness get --input SNAPSHOT.json",
       "type": "integer",
@@ -149,6 +160,21 @@
     ],
     "longPressUsesCustomActionOnlyInCustomMode": true,
     "nonCustomLongPressOpensCodexMicroSettings": true
+  },
+  "joystickRules": {
+    "directions": [
+      "up",
+      "right",
+      "down",
+      "left"
+    ],
+    "actionTypes": [
+      "command",
+      "skill",
+      "empty"
+    ],
+    "oneDirectionPerCandidate": true,
+    "preserveUntargetedDirections": true
   },
   "candidateBoundary": {
     "contactsCodex": false,
