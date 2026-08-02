@@ -222,6 +222,134 @@ test("Input adapter snapshots and validates a compare-and-swap revision", async 
   );
 });
 
+test("Input adapter applies, replays, rejects stale CAS, and restores", async () => {
+  const baselineBytes = new Map([
+    ["keymap.json", Buffer.from('{"version":1,"layer":"baseline"}')],
+    ["smart_actions.json", Buffer.from('{"smartActions":{}}')],
+  ]);
+  const files = cloneFileMap(baselineBytes);
+  const writerCalls = [];
+  const device = configDevice("device-transaction", files);
+  const adapter = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [device] },
+    deviceKitVersion: "0.1.29",
+    configurationWriter: {
+      async replaceConfiguration(request) {
+        writerCalls.push(request.operation);
+        replaceFileMap(files, request.files);
+      },
+    },
+  });
+  const baseline = await adapter.snapshotConfig({
+    deviceId: "device-transaction",
+  });
+  files.set(
+    "keymap.json",
+    Buffer.from('{"version":1,"layer":"candidate"}'),
+  );
+  const candidate = await adapter.snapshotConfig({
+    deviceId: "device-transaction",
+  });
+  replaceFileMap(
+    files,
+    [...baselineBytes].map(([relativePath, bytes]) => ({
+      relativePath,
+      bytes,
+    })),
+  );
+
+  const apply = await adapter.applyConfig({
+    deviceId: "device-transaction",
+    expectedRevision: baseline.revision,
+    idempotencyKey: "apply-transaction-1",
+    config: candidate,
+  });
+  assert.equal(apply.changed, true);
+  assert.equal(apply.idempotentReplay, false);
+  assert.equal(apply.beforeRevision, baseline.revision);
+  assert.equal(apply.afterRevision, candidate.revision);
+  assert.deepEqual(writerCalls, ["apply"]);
+
+  const replay = await adapter.applyConfig({
+    deviceId: "device-transaction",
+    expectedRevision: baseline.revision,
+    idempotencyKey: "apply-transaction-1",
+    config: candidate,
+  });
+  assert.equal(replay.idempotentReplay, true);
+  assert.deepEqual(writerCalls, ["apply"]);
+
+  await assert.rejects(
+    adapter.applyConfig({
+      deviceId: "device-transaction",
+      expectedRevision: baseline.revision,
+      idempotencyKey: "apply-stale-revision",
+      config: candidate,
+    }),
+    (error) => error.code === -32005,
+  );
+  const restore = await adapter.restoreConfig({
+    deviceId: "device-transaction",
+    expectedRevision: candidate.revision,
+    idempotencyKey: "restore-transaction-1",
+    snapshot: baseline,
+  });
+  assert.equal(restore.changed, true);
+  assert.equal(restore.afterRevision, baseline.revision);
+  assert.deepEqual(writerCalls, ["apply", "restore"]);
+  const restored = await adapter.snapshotConfig({
+    deviceId: "device-transaction",
+  });
+  assert.equal(restored.revision, baseline.revision);
+});
+
+test("Input adapter automatically restores the pre-mutation snapshot", async () => {
+  const files = new Map([
+    ["keymap.json", Buffer.from('{"version":1,"layer":"baseline"}')],
+    ["smart_actions.json", Buffer.from('{"smartActions":{}}')],
+  ]);
+  const device = configDevice("device-rollback", files);
+  const operations = [];
+  const adapter = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [device] },
+    deviceKitVersion: "0.1.29",
+    configurationWriter: {
+      async replaceConfiguration(request) {
+        operations.push(request.operation);
+        if (request.operation === "automatic-rollback") {
+          replaceFileMap(files, request.files);
+        } else {
+          files.set("keymap.json", Buffer.from("corrupt-readback"));
+        }
+      },
+    },
+  });
+  const baseline = await adapter.snapshotConfig({ deviceId: "device-rollback" });
+  files.set("keymap.json", Buffer.from('{"version":1,"layer":"target"}'));
+  const candidate = await adapter.snapshotConfig({ deviceId: "device-rollback" });
+  replaceFileMap(
+    files,
+    baseline.files.map((file) => ({
+      relativePath: file.relativePath,
+      bytes: Buffer.from(file.dataBase64, "base64"),
+    })),
+  );
+
+  await assert.rejects(
+    adapter.applyConfig({
+      deviceId: "device-rollback",
+      expectedRevision: baseline.revision,
+      idempotencyKey: "apply-auto-rollback",
+      config: candidate,
+    }),
+    (error) =>
+      error.code === -32008 && error.data?.rollbackPerformed === true,
+  );
+  assert.deepEqual(operations, ["apply", "automatic-rollback"]);
+  const restored = await adapter.snapshotConfig({ deviceId: "device-rollback" });
+  assert.equal(restored.revision, baseline.revision);
+});
+
 test("one-call Input integration owns discovery and lifecycle paths", async () => {
   const root = await mkdtemp("/tmp/wlb-integration-");
   class FixtureApp extends EventEmitter {
@@ -284,11 +412,58 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
   assert.equal((await stat(integration.tokenPath)).mode & 0o777, 0o600);
   assert.ok(integration.capabilities.includes("device.config.snapshot.v1"));
   assert.ok(integration.capabilities.includes("device.config.validate.v1"));
+  assert.ok(!integration.capabilities.includes("device.config.apply.v1"));
+  assert.ok(!integration.capabilities.includes("device.config.restore.v1"));
   assert.equal(app.listenerCount("before-quit"), 1);
   await integration.stop();
   assert.equal(app.listenerCount("before-quit"), 0);
   await assert.rejects(stat(integration.socketPath), { code: "ENOENT" });
 });
+
+function configDevice(id, files) {
+  return {
+    id,
+    info: {
+      devicePid: 33632,
+      deviceType: "codex_micro",
+      layoutType: "universal",
+      connectionType: 1,
+      isUsbConnection: false,
+    },
+    isConnected: () => true,
+    rpcService: {
+      async getFirmwareVersion() {
+        return "v0.6.0";
+      },
+      async getDeviceStatus() {
+        return { selectedProfileIndex: 0, selectedLayerIndex: 2 };
+      },
+      async getFileList() {
+        return [...files].map(([name, bytes]) => ({
+          name,
+          size: bytes.length,
+          checksum: createHash("sha1").update(bytes).digest("hex"),
+        }));
+      },
+      async readFileChunked(path) {
+        return files.get(path);
+      },
+    },
+  };
+}
+
+function cloneFileMap(files) {
+  return new Map(
+    [...files].map(([path, bytes]) => [path, Buffer.from(bytes)]),
+  );
+}
+
+function replaceFileMap(target, files) {
+  target.clear();
+  for (const file of files) {
+    target.set(file.relativePath, Buffer.from(file.bytes));
+  }
+}
 
 async function connect(socketPath) {
   const socket = createConnection(socketPath);

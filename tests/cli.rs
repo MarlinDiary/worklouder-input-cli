@@ -96,6 +96,8 @@ fn device_help_exposes_live_read_workflow() {
     assert!(config.status.success());
     assert!(config_stdout.contains("snapshot"));
     assert!(config_stdout.contains("validate"));
+    assert!(config_stdout.contains("apply"));
+    assert!(config_stdout.contains("restore"));
 }
 
 #[test]

@@ -63,6 +63,14 @@ const device = {
 const adapter = createInputMainAdapter({
   devicesCommManager: { getDevices: () => [device] },
   deviceKitVersion: "0.1.29-fixture",
+  configurationWriter: {
+    async replaceConfiguration({ files: replacement }) {
+      files.clear();
+      for (const file of replacement) {
+        files.set(file.relativePath, Buffer.from(file.bytes));
+      }
+    },
+  },
 });
 
 const bridge = await startInputCompanionBridge({

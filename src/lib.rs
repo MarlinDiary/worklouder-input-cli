@@ -235,8 +235,63 @@ fn run_device(
                         }
                     }
                 }
+                DeviceConfigCommand::Apply {
+                    input,
+                    backup,
+                    device,
+                    expected_revision,
+                    idempotency_key,
+                } => {
+                    let result = bridge::config_apply(
+                        &bridge_paths,
+                        device.as_deref(),
+                        &input,
+                        &backup,
+                        expected_revision.as_deref(),
+                        idempotency_key.as_deref(),
+                    )?;
+                    write_mutation_result(result, json, &mut out)?;
+                }
+                DeviceConfigCommand::Restore {
+                    input,
+                    backup,
+                    device,
+                    expected_revision,
+                    idempotency_key,
+                } => {
+                    let result = bridge::config_restore(
+                        &bridge_paths,
+                        device.as_deref(),
+                        &input,
+                        &backup,
+                        expected_revision.as_deref(),
+                        idempotency_key.as_deref(),
+                    )?;
+                    write_mutation_result(result, json, &mut out)?;
+                }
             }
         }
+    }
+    Ok(())
+}
+
+fn write_mutation_result(
+    result: bridge::ConfigMutationReceipt,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    if json {
+        write_json(&mut out, &result)?;
+    } else {
+        writeln!(
+            out,
+            "Configuration {} completed: changed={} replay={}",
+            result.operation, result.changed, result.idempotent_replay
+        )?;
+        writeln!(out, "backup={}", result.backup.display())?;
+        writeln!(out, "beforeRevision={}", result.before_revision)?;
+        writeln!(out, "afterRevision={}", result.after_revision)?;
+        writeln!(out, "idempotencyKey={}", result.idempotency_key)?;
     }
     Ok(())
 }

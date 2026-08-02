@@ -13,6 +13,7 @@ const MAX_CONFIG_TOTAL_BYTES = 32 * 1024 * 1024;
 export function createInputMainAdapter({
   devicesCommManager,
   deviceKitVersion,
+  configurationWriter,
 }) {
   if (
     !devicesCommManager ||
@@ -23,6 +24,16 @@ export function createInputMainAdapter({
   if (typeof deviceKitVersion !== "string" || deviceKitVersion.length === 0) {
     throw new TypeError("deviceKitVersion is required");
   }
+  if (
+    configurationWriter !== undefined &&
+    (!configurationWriter ||
+      typeof configurationWriter.replaceConfiguration !== "function")
+  ) {
+    throw new TypeError(
+      "configurationWriter.replaceConfiguration must be a function",
+    );
+  }
+  const idempotencyCache = new Map();
 
   const selectDevice = (deviceId) => {
     const devices = devicesCommManager
@@ -149,7 +160,124 @@ export function createInputMainAdapter({
     };
   };
 
-  return {
+  const runMutation = async ({
+    operation,
+    deviceId,
+    expectedRevision,
+    idempotencyKey,
+    candidate,
+  }) => {
+    const target = validateConfigSnapshot(candidate);
+    const expected = safeSha256(expectedRevision, "expected revision");
+    const device = selectDevice(deviceId);
+    if (String(device.id) !== target.deviceId) {
+      throw new BridgeError(-32602, "configuration deviceId did not match request");
+    }
+    const requestDigest = mutationRequestDigest({
+      operation,
+      deviceId: String(device.id),
+      expectedRevision: expected,
+      targetRevision: target.revision,
+    });
+    const cached = idempotencyCache.get(idempotencyKey);
+    if (cached) {
+      if (cached.requestDigest !== requestDigest) {
+        throw new BridgeError(
+          -32602,
+          "idempotency key was reused with a different mutation",
+        );
+      }
+      return { ...cached.result, idempotentReplay: true };
+    }
+
+    const before = await captureConfigSnapshot(device);
+    if (before.revision !== expected) {
+      throw new BridgeError(-32005, "device revision conflict", {
+        expectedRevision: expected,
+        liveRevision: before.revision,
+      });
+    }
+    if (before.revision === target.revision) {
+      const result = mutationResult({
+        operation,
+        idempotencyKey,
+        deviceId: String(device.id),
+        beforeRevision: before.revision,
+        afterRevision: before.revision,
+        target,
+        changed: false,
+      });
+      cacheMutation(idempotencyCache, idempotencyKey, requestDigest, result);
+      return result;
+    }
+
+    const backup = validateConfigSnapshot(before);
+    try {
+      await replaceConfiguration(configurationWriter, {
+        device,
+        files: target.files,
+        operation,
+        targetRevision: target.revision,
+      });
+      const after = await captureConfigSnapshot(device);
+      if (after.revision !== target.revision) {
+        throw new Error(
+          `configuration readback revision ${after.revision} did not match ${target.revision}`,
+        );
+      }
+      const result = mutationResult({
+        operation,
+        idempotencyKey,
+        deviceId: String(device.id),
+        beforeRevision: before.revision,
+        afterRevision: after.revision,
+        target,
+        changed: true,
+      });
+      cacheMutation(idempotencyCache, idempotencyKey, requestDigest, result);
+      return result;
+    } catch (mutationError) {
+      let rollbackRevision = null;
+      try {
+        await replaceConfiguration(configurationWriter, {
+          device,
+          files: backup.files,
+          operation: "automatic-rollback",
+          targetRevision: backup.revision,
+        });
+        const restored = await captureConfigSnapshot(device);
+        rollbackRevision = restored.revision;
+        if (rollbackRevision !== backup.revision) {
+          throw new Error(
+            `rollback readback revision ${rollbackRevision} did not match ${backup.revision}`,
+          );
+        }
+      } catch (rollbackError) {
+        throw new BridgeError(-32008, "configuration mutation and rollback failed", {
+          operation,
+          beforeRevision: before.revision,
+          targetRevision: target.revision,
+          rollbackRevision,
+          mutationError: errorMessage(mutationError),
+          rollbackError: errorMessage(rollbackError),
+        });
+      }
+      throw new BridgeError(
+        -32008,
+        "configuration mutation failed and was rolled back",
+        {
+          operation,
+          beforeRevision: before.revision,
+          targetRevision: target.revision,
+          rollbackRevision,
+          rollbackPerformed: true,
+          mutationError: errorMessage(mutationError),
+        },
+      );
+    }
+  };
+
+  const adapter = {
     async listDevices() {
       return {
         deviceKitVersion,
@@ -245,6 +373,104 @@ export function createInputMainAdapter({
       };
     },
   };
+  if (configurationWriter) {
+    adapter.applyConfig = async ({
+      deviceId,
+      expectedRevision,
+      idempotencyKey,
+      config,
+    }) =>
+      runMutation({
+        operation: "apply",
+        deviceId,
+        expectedRevision,
+        idempotencyKey,
+        candidate: config,
+      });
+    adapter.restoreConfig = async ({
+      deviceId,
+      expectedRevision,
+      idempotencyKey,
+      snapshot,
+    }) =>
+      runMutation({
+        operation: "restore",
+        deviceId,
+        expectedRevision,
+        idempotencyKey,
+        candidate: snapshot,
+      });
+  }
+  return adapter;
+}
+
+async function replaceConfiguration(
+  configurationWriter,
+  { device, files, operation, targetRevision },
+) {
+  await configurationWriter.replaceConfiguration({
+    device,
+    operation,
+    targetRevision,
+    files: files.map((file) => ({
+      relativePath: file.relativePath,
+      bytes: Buffer.from(file.bytes),
+    })),
+  });
+}
+
+function mutationResult({
+  operation,
+  idempotencyKey,
+  deviceId,
+  beforeRevision,
+  afterRevision,
+  target,
+  changed,
+}) {
+  return {
+    schemaVersion: 1,
+    kind: "worklouder-input-config-mutation",
+    operation,
+    idempotencyKey,
+    idempotentReplay: false,
+    changed,
+    rollbackPerformed: false,
+    deviceId,
+    beforeRevision,
+    afterRevision,
+    targetRevision: target.revision,
+    fileCount: target.fileCount,
+    totalBytes: target.totalBytes,
+  };
+}
+
+function mutationRequestDigest({
+  operation,
+  deviceId,
+  expectedRevision,
+  targetRevision,
+}) {
+  return createHash("sha256")
+    .update(operation, "utf8")
+    .update("\0")
+    .update(deviceId, "utf8")
+    .update("\0")
+    .update(expectedRevision, "utf8")
+    .update("\0")
+    .update(targetRevision, "utf8")
+    .digest("hex");
+}
+
+function cacheMutation(cache, idempotencyKey, requestDigest, result) {
+  cache.set(idempotencyKey, { requestDigest, result });
+  if (cache.size > 1024) {
+    cache.delete(cache.keys().next().value);
+  }
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function normalizeFileList(files) {
@@ -336,6 +562,7 @@ function validateConfigSnapshot(snapshot) {
     revision,
     fileCount: files.length,
     totalBytes,
+    files,
   };
 }
 

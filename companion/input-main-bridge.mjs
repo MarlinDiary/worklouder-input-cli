@@ -191,7 +191,7 @@ export async function startInputCompanionBridge({
 
       try {
         if (MUTATION_METHODS.has(request.method)) {
-          validateMutationParams(request.params);
+          validateMutationParams(request.method, request.params);
         }
         const result = await enqueue(() =>
           adapter[adapterMethod](request.params),
@@ -322,11 +322,36 @@ function constantTimeEqual(left, right) {
   );
 }
 
-function validateMutationParams(params) {
-  for (const field of ["deviceId", "expectedRevision", "idempotencyKey"]) {
-    if (typeof params[field] !== "string" || params[field].length === 0) {
-      throw new BridgeError(-32602, field + " is required");
-    }
+function validateMutationParams(method, params) {
+  if (
+    typeof params.deviceId !== "string" ||
+    params.deviceId.length === 0 ||
+    Buffer.byteLength(params.deviceId, "utf8") > 512 ||
+    params.deviceId.includes("\0")
+  ) {
+    throw new BridgeError(-32602, "deviceId is invalid");
+  }
+  if (
+    typeof params.expectedRevision !== "string" ||
+    !/^[0-9a-f]{64}$/i.test(params.expectedRevision)
+  ) {
+    throw new BridgeError(-32602, "expectedRevision is invalid");
+  }
+  if (
+    typeof params.idempotencyKey !== "string" ||
+    params.idempotencyKey.length === 0 ||
+    Buffer.byteLength(params.idempotencyKey, "utf8") > 256 ||
+    params.idempotencyKey.includes("\0")
+  ) {
+    throw new BridgeError(-32602, "idempotencyKey is invalid");
+  }
+  const payload = method === "device.config.apply" ? "config" : "snapshot";
+  if (
+    !params[payload] ||
+    typeof params[payload] !== "object" ||
+    Array.isArray(params[payload])
+  ) {
+    throw new BridgeError(-32602, payload + " is required");
   }
 }
 

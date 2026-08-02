@@ -210,6 +210,52 @@ pub enum DeviceConfigCommand {
         #[clap(long)]
         expected_revision: Option<String>,
     },
+
+    /// Apply a complete snapshot with backup, CAS, readback, and rollback.
+    Apply {
+        /// Candidate snapshot JSON to apply.
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        /// Immutable pre-apply snapshot; an existing file is reused for retry.
+        #[clap(long, value_parser)]
+        backup: PathBuf,
+
+        /// Select a connected device ID; defaults to the candidate device.
+        #[clap(long)]
+        device: Option<String>,
+
+        /// Require the live device to have this revision before the write.
+        #[clap(long)]
+        expected_revision: Option<String>,
+
+        /// Stable retry key; reuse it only with the exact same mutation.
+        #[clap(long)]
+        idempotency_key: Option<String>,
+    },
+
+    /// Restore a complete snapshot with a new pre-restore backup.
+    Restore {
+        /// Snapshot JSON to restore.
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        /// Immutable pre-restore snapshot; an existing file is reused for retry.
+        #[clap(long, value_parser)]
+        backup: PathBuf,
+
+        /// Select a connected device ID; defaults to the snapshot device.
+        #[clap(long)]
+        device: Option<String>,
+
+        /// Require the live device to have this revision before the write.
+        #[clap(long)]
+        expected_revision: Option<String>,
+
+        /// Stable retry key; reuse it only with the exact same mutation.
+        #[clap(long)]
+        idempotency_key: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]

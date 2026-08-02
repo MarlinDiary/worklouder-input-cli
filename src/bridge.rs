@@ -64,6 +64,43 @@ pub struct ConfigValidation {
     pub total_bytes: u64,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigMutationReceipt {
+    pub backup: PathBuf,
+    pub schema_version: u64,
+    pub kind: String,
+    pub operation: String,
+    pub idempotency_key: String,
+    pub idempotent_replay: bool,
+    pub changed: bool,
+    pub rollback_performed: bool,
+    pub device_id: String,
+    pub before_revision: String,
+    pub after_revision: String,
+    pub target_revision: String,
+    pub file_count: usize,
+    pub total_bytes: u64,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConfigMutationResponse {
+    schema_version: u64,
+    kind: String,
+    operation: String,
+    idempotency_key: String,
+    idempotent_replay: bool,
+    changed: bool,
+    rollback_performed: bool,
+    device_id: String,
+    before_revision: String,
+    after_revision: String,
+    target_revision: String,
+    file_count: usize,
+    total_bytes: u64,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Handshake {
@@ -353,11 +390,7 @@ pub fn config_validate(
     input: &Path,
     expected_revision: Option<&str>,
 ) -> Result<ConfigValidation> {
-    let bytes = fs::read(input)
-        .with_context(|| format!("failed to read config snapshot {}", input.display()))?;
-    let snapshot: Value = serde_json::from_slice(&bytes)
-        .with_context(|| format!("config snapshot was invalid JSON: {}", input.display()))?;
-    inspect_config_snapshot(&snapshot)?;
+    let (snapshot, _) = read_config_snapshot(input)?;
     if let Some(revision) = expected_revision {
         ensure!(
             is_sha256(revision),
@@ -397,6 +430,212 @@ pub fn config_validate(
         );
     }
     Ok(validation)
+}
+
+pub fn config_apply(
+    paths: &BridgePaths,
+    device_id: Option<&str>,
+    input: &Path,
+    backup: &Path,
+    expected_revision: Option<&str>,
+    idempotency_key: Option<&str>,
+) -> Result<ConfigMutationReceipt> {
+    config_mutate(
+        paths,
+        "apply",
+        "device.config.apply",
+        "device.config.apply.v1",
+        "config",
+        device_id,
+        input,
+        backup,
+        expected_revision,
+        idempotency_key,
+    )
+}
+
+pub fn config_restore(
+    paths: &BridgePaths,
+    device_id: Option<&str>,
+    input: &Path,
+    backup: &Path,
+    expected_revision: Option<&str>,
+    idempotency_key: Option<&str>,
+) -> Result<ConfigMutationReceipt> {
+    config_mutate(
+        paths,
+        "restore",
+        "device.config.restore",
+        "device.config.restore.v1",
+        "snapshot",
+        device_id,
+        input,
+        backup,
+        expected_revision,
+        idempotency_key,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn config_mutate(
+    paths: &BridgePaths,
+    operation: &str,
+    method: &str,
+    capability: &str,
+    payload_field: &str,
+    device_id: Option<&str>,
+    input: &Path,
+    backup: &Path,
+    expected_revision: Option<&str>,
+    idempotency_key: Option<&str>,
+) -> Result<ConfigMutationReceipt> {
+    ensure!(input != backup, "input and backup paths must differ");
+    let (candidate, candidate_metadata) = read_config_snapshot(input)?;
+    let selected_device = device_id
+        .unwrap_or(&candidate_metadata.device_id)
+        .to_owned();
+    ensure!(
+        selected_device == candidate_metadata.device_id,
+        "candidate deviceId did not match selected device"
+    );
+    let backup_receipt = prepare_mutation_backup(paths, &selected_device, backup)?;
+    let expected = expected_revision.unwrap_or(&backup_receipt.revision);
+    ensure!(
+        is_sha256(expected),
+        "expected revision must be a SHA-256 digest"
+    );
+    let key = idempotency_key
+        .map(str::to_owned)
+        .unwrap_or_else(|| generated_idempotency_key(operation, &candidate_metadata.revision));
+    ensure!(
+        !key.is_empty() && key.len() <= 256 && !key.contains('\0'),
+        "idempotency key was invalid"
+    );
+    let mut params = json!({
+        "deviceId": selected_device,
+        "expectedRevision": expected,
+        "idempotencyKey": key,
+    });
+    params
+        .as_object_mut()
+        .context("mutation params were not an object")?
+        .insert(payload_field.to_owned(), candidate);
+    let mut client = BridgeClient::connect(paths)?;
+    let response: ConfigMutationResponse = client.call(method, capability, params)?;
+    validate_mutation_response(
+        &response,
+        operation,
+        &key,
+        expected,
+        &selected_device,
+        &candidate_metadata,
+    )?;
+    Ok(ConfigMutationReceipt {
+        backup: backup.to_path_buf(),
+        schema_version: response.schema_version,
+        kind: response.kind,
+        operation: response.operation,
+        idempotency_key: response.idempotency_key,
+        idempotent_replay: response.idempotent_replay,
+        changed: response.changed,
+        rollback_performed: response.rollback_performed,
+        device_id: response.device_id,
+        before_revision: response.before_revision,
+        after_revision: response.after_revision,
+        target_revision: response.target_revision,
+        file_count: response.file_count,
+        total_bytes: response.total_bytes,
+    })
+}
+
+fn prepare_mutation_backup(
+    paths: &BridgePaths,
+    device_id: &str,
+    backup: &Path,
+) -> Result<ConfigSnapshotReceipt> {
+    if backup.exists() {
+        let (_, metadata) = read_config_snapshot(backup)?;
+        ensure!(
+            metadata.device_id == device_id,
+            "existing backup deviceId did not match selected device"
+        );
+        return Ok(ConfigSnapshotReceipt {
+            output: backup.to_path_buf(),
+            device_id: metadata.device_id,
+            revision: metadata.revision,
+            file_count: metadata.file_count,
+            total_bytes: metadata.total_bytes,
+        });
+    }
+    config_snapshot(paths, Some(device_id), backup)
+}
+
+fn validate_mutation_response(
+    response: &ConfigMutationResponse,
+    operation: &str,
+    idempotency_key: &str,
+    expected_revision: &str,
+    device_id: &str,
+    candidate: &ConfigSnapshotMetadata,
+) -> Result<()> {
+    ensure!(
+        response.schema_version == 1 && response.kind == "worklouder-input-config-mutation",
+        "bridge returned an unknown mutation result schema"
+    );
+    ensure!(
+        response.operation == operation,
+        "bridge returned the wrong operation"
+    );
+    ensure!(
+        response.idempotency_key == idempotency_key,
+        "bridge returned the wrong idempotency key"
+    );
+    ensure!(
+        response.device_id == device_id,
+        "bridge returned the wrong deviceId"
+    );
+    ensure!(
+        response
+            .before_revision
+            .eq_ignore_ascii_case(expected_revision),
+        "bridge mutation began from an unexpected revision"
+    );
+    ensure!(
+        response.target_revision == candidate.revision
+            && response.after_revision == candidate.revision,
+        "bridge mutation readback did not match the candidate revision"
+    );
+    ensure!(
+        response.file_count == candidate.file_count
+            && response.total_bytes == candidate.total_bytes,
+        "bridge mutation result did not match candidate metadata"
+    );
+    ensure!(
+        !response.rollback_performed,
+        "bridge reported rollback for a successful mutation"
+    );
+    Ok(())
+}
+
+fn read_config_snapshot(input: &Path) -> Result<(Value, ConfigSnapshotMetadata)> {
+    let bytes = fs::read(input)
+        .with_context(|| format!("failed to read config snapshot {}", input.display()))?;
+    let snapshot: Value = serde_json::from_slice(&bytes)
+        .with_context(|| format!("config snapshot was invalid JSON: {}", input.display()))?;
+    let metadata = inspect_config_snapshot(&snapshot)?;
+    Ok((snapshot, metadata))
+}
+
+fn generated_idempotency_key(operation: &str, target_revision: &str) -> String {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    format!(
+        "worklouderctl-{operation}-{}-{nonce}-{}",
+        std::process::id(),
+        &target_revision[..12]
+    )
 }
 
 struct ConfigSnapshotMetadata {
