@@ -21,8 +21,11 @@ const MAX_NAME_BYTES: usize = 64;
 const MAX_RGB: u64 = 0x00ff_ffff;
 const MAX_ACTION_EVENTS: usize = 1024;
 const MAX_ACTION_DELAY: u64 = 9999;
+const MAX_MULTI_ACTION_TAPPING_TERM: u64 = 60_000;
+const MAX_ICON_BYTES: usize = 128;
 const ASSIGNMENT_SPEC_JSON: &str = include_str!("../spec/input-assignment-tokens-0.18.0.json");
 const ACTION_SPEC_JSON: &str = include_str!("../spec/input-actions-0.18.0.json");
+const MULTI_ACTION_SPEC_JSON: &str = include_str!("../spec/input-multi-actions-0.18.0.json");
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize)]
@@ -172,6 +175,152 @@ pub struct ActionEventEntry {
     pub event_type: &'static str,
     pub event_type_value: u64,
     pub delay: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MultiActionList {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub multi_actions: Vec<MultiActionEntry>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MultiActionShow {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub multi_action: MultiActionEntry,
+    pub assignments: Vec<MultiActionAssignmentEntry>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MultiActionEntry {
+    pub id: u64,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    pub tapping_term: u64,
+    pub reference_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MultiActionAssignmentEntry {
+    pub gesture: &'static str,
+    pub field: &'static str,
+    pub assignment: String,
+    pub assignment_kind: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceGroupList {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub resource_kind: &'static str,
+    pub groups: Vec<ResourceGroupEntry>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceGroupShow {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub resource_kind: &'static str,
+    pub group: ResourceGroupEntry,
+    pub members: Vec<ResourceGroupMemberEntry>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceGroupEntry {
+    pub id: u64,
+    pub name: String,
+    pub tags: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    pub member_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceGroupMemberEntry {
+    pub index: usize,
+    pub id: u64,
+    pub name: String,
+}
+
+#[derive(Clone, Copy)]
+pub struct MultiActionUpdate<'a> {
+    pub name: Option<&'a str>,
+    pub color: Option<&'a str>,
+    pub clear_color: bool,
+    pub icon: Option<&'a str>,
+    pub clear_icon: bool,
+    pub tap: Option<&'a str>,
+    pub double_tap: Option<&'a str>,
+    pub hold: Option<&'a str>,
+    pub tap_hold: Option<&'a str>,
+    pub tapping_term: Option<u64>,
+}
+
+#[derive(Clone, Copy)]
+pub struct GroupUpdate<'a> {
+    pub name: Option<&'a str>,
+    pub color: Option<&'a str>,
+    pub clear_color: bool,
+    pub tags: Option<&'a [String]>,
+}
+
+#[derive(Clone, Copy)]
+enum ResourceKind {
+    Action,
+    MultiAction,
+}
+
+impl ResourceKind {
+    fn collection(self) -> &'static str {
+        match self {
+            Self::Action => "macros",
+            Self::MultiAction => "multiActions",
+        }
+    }
+
+    fn groups(self) -> &'static str {
+        match self {
+            Self::Action => "macrosGroups",
+            Self::MultiAction => "multiActionsGroups",
+        }
+    }
+
+    fn token_prefix(self) -> &'static str {
+        match self {
+            Self::Action => "KA_A",
+            Self::MultiAction => "KA_M",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Action => "Action",
+            Self::MultiAction => "Multi Action",
+        }
+    }
+
+    fn json_name(self) -> &'static str {
+        match self {
+            Self::Action => "action",
+            Self::MultiAction => "multiAction",
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -502,22 +651,14 @@ pub fn action_rename(input: &Path, id: u64, name: &str, output: &Path) -> Result
 
 pub fn action_delete(input: &Path, id: u64, output: &Path) -> Result<CandidateReceipt> {
     let mut snapshot = SemanticSnapshot::read(input)?;
-    let index = action_index(&snapshot.keymap, id)?;
-    let token = format!("KA_A{id}");
     let mut changed_paths = Vec::new();
-    replace_action_references(&mut snapshot.keymap, &token, &mut changed_paths)?;
-    remove_action_from_groups(&mut snapshot.keymap, id, &mut changed_paths)?;
-    snapshot
-        .keymap
-        .get_mut("macros")
-        .and_then(Value::as_array_mut)
-        .context("keymap.json macros was invalid")?
-        .remove(index);
-    changed_paths.push(format!("/keymap.json/macros/{index}"));
-    let profile_count = profiles(&snapshot.keymap)?.len();
-    for profile_index in 0..profile_count {
-        sync_profile_usage(&mut snapshot.keymap, profile_index, &mut changed_paths)?;
-    }
+    remove_resource(
+        &mut snapshot.keymap,
+        ResourceKind::Action,
+        id,
+        &mut changed_paths,
+    )?;
+    sync_all_profile_usage(&mut snapshot.keymap, &mut changed_paths)?;
     snapshot.publish(output, "action-delete", true, changed_paths)
 }
 
@@ -708,6 +849,371 @@ pub fn action_event_move(
             Vec::new()
         },
     )
+}
+
+pub fn multi_action_list(input: &Path) -> Result<MultiActionList> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let multi_actions = multi_actions(&snapshot.keymap)?
+        .iter()
+        .map(|item| multi_action_entry(&snapshot.keymap, item))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(MultiActionList {
+        schema_version: 1,
+        kind: "worklouderctl-multi-action-list",
+        revision: snapshot.revision,
+        multi_actions,
+    })
+}
+
+pub fn multi_action_show(input: &Path, id: u64) -> Result<MultiActionShow> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let item = find_multi_action(&snapshot.keymap, id)?;
+    let assignments = multi_action_gesture_fields()
+        .iter()
+        .map(|(gesture, field)| {
+            let assignment = object_string(item, field, "Multi Action")?;
+            Ok(MultiActionAssignmentEntry {
+                gesture,
+                field,
+                assignment: assignment.to_owned(),
+                assignment_kind: assignment_kind(assignment)?,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(MultiActionShow {
+        schema_version: 1,
+        kind: "worklouderctl-multi-action",
+        revision: snapshot.revision,
+        multi_action: multi_action_entry(&snapshot.keymap, item)?,
+        assignments,
+    })
+}
+
+pub fn multi_action_create(
+    input: &Path,
+    name: &str,
+    color: Option<&str>,
+    icon: Option<&str>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    validate_name(name)?;
+    let color = color.map(normalize_resource_color).transpose()?;
+    if let Some(icon) = icon {
+        validate_icon_input(icon)?;
+    }
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let items = snapshot
+        .keymap
+        .get_mut("multiActions")
+        .and_then(Value::as_array_mut)
+        .context("keymap.json multiActions was invalid")?;
+    let id = match items.last() {
+        Some(item) => object_u64(item, "id", "Multi Action")?
+            .checked_add(1)
+            .context("last Multi Action id overflowed")?,
+        None => 0,
+    };
+    ensure!(
+        !items
+            .iter()
+            .any(|item| matches!(object_u64(item, "id", "Multi Action"), Ok(value) if value == id)),
+        "Input last-id allocation produced duplicate Multi Action id {id}"
+    );
+    let index = items.len();
+    let mut item = serde_json::json!({
+        "id": id,
+        "name": name,
+        "color": color,
+        "kcOnTap": "KC_NONE",
+        "kcOnHold": "KC_NONE",
+        "kcOnDoubleTap": "KC_NONE",
+        "kcOnTapHold": "KC_NONE",
+        "tt": 250_u64
+    });
+    if let Some(icon) = icon {
+        item.as_object_mut()
+            .context("new Multi Action was not an object")?
+            .insert("icon".into(), Value::String(icon.to_owned()));
+    }
+    items.push(item);
+    let mut receipt = snapshot.publish(
+        output,
+        "multi-action-create",
+        true,
+        vec![format!("/keymap.json/multiActions/{index}")],
+    )?;
+    receipt.resource_id = Some(id);
+    Ok(receipt)
+}
+
+pub fn multi_action_set(
+    input: &Path,
+    id: u64,
+    update: MultiActionUpdate<'_>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    ensure!(
+        update.name.is_some()
+            || update.color.is_some()
+            || update.clear_color
+            || update.icon.is_some()
+            || update.clear_icon
+            || update.tap.is_some()
+            || update.double_tap.is_some()
+            || update.hold.is_some()
+            || update.tap_hold.is_some()
+            || update.tapping_term.is_some(),
+        "multi-action set requires at least one field"
+    );
+    if let Some(name) = update.name {
+        validate_name(name)?;
+    }
+    let color = update.color.map(normalize_resource_color).transpose()?;
+    if let Some(icon) = update.icon {
+        validate_icon_input(icon)?;
+    }
+    if let Some(term) = update.tapping_term {
+        ensure!(
+            term <= MAX_MULTI_ACTION_TAPPING_TERM,
+            "Multi Action tapping term exceeded 60000 ms"
+        );
+    }
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let index = multi_action_index(&snapshot.keymap, id)?;
+    for (_, field, assignment) in [
+        ("tap", "kcOnTap", update.tap),
+        ("double-tap", "kcOnDoubleTap", update.double_tap),
+        ("hold", "kcOnHold", update.hold),
+        ("tap-hold", "kcOnTapHold", update.tap_hold),
+    ] {
+        if let Some(assignment) = assignment {
+            let current = object_string(
+                multi_actions(&snapshot.keymap)?
+                    .get(index)
+                    .context("Multi Action disappeared during lookup")?,
+                field,
+                "Multi Action",
+            )?;
+            if current != assignment {
+                validate_multi_action_assignment(&snapshot.keymap, id, assignment)?;
+            }
+        }
+    }
+    let item = snapshot
+        .keymap
+        .get_mut("multiActions")
+        .and_then(Value::as_array_mut)
+        .and_then(|items| items.get_mut(index))
+        .and_then(Value::as_object_mut)
+        .context("Multi Action disappeared during candidate generation")?;
+    let prefix = format!("/keymap.json/multiActions/{index}");
+    let mut paths = Vec::new();
+    if let Some(name) = update.name {
+        if item.get("name").and_then(Value::as_str) != Some(name) {
+            item.insert("name".into(), Value::String(name.to_owned()));
+            paths.push(format!("{prefix}/name"));
+        }
+    }
+    if update.clear_color {
+        if item.get("color") != Some(&Value::Null) {
+            item.insert("color".into(), Value::Null);
+            paths.push(format!("{prefix}/color"));
+        }
+    } else if let Some(color) = color {
+        if normalized_color_value(item.get("color"))?.as_deref() != Some(color.as_str()) {
+            item.insert("color".into(), Value::String(color));
+            paths.push(format!("{prefix}/color"));
+        }
+    }
+    if update.clear_icon {
+        if item.remove("icon").is_some() {
+            paths.push(format!("{prefix}/icon"));
+        }
+    } else if let Some(icon) = update.icon {
+        if item.get("icon").and_then(Value::as_str) != Some(icon) {
+            item.insert("icon".into(), Value::String(icon.to_owned()));
+            paths.push(format!("{prefix}/icon"));
+        }
+    }
+    for (field, assignment) in [
+        ("kcOnTap", update.tap),
+        ("kcOnDoubleTap", update.double_tap),
+        ("kcOnHold", update.hold),
+        ("kcOnTapHold", update.tap_hold),
+    ] {
+        if let Some(assignment) = assignment {
+            if item.get(field).and_then(Value::as_str) != Some(assignment) {
+                item.insert(field.into(), Value::String(assignment.to_owned()));
+                paths.push(format!("{prefix}/{field}"));
+            }
+        }
+    }
+    if let Some(term) = update.tapping_term {
+        if item.get("tt").and_then(Value::as_u64) != Some(term) {
+            item.insert("tt".into(), Value::from(term));
+            paths.push(format!("{prefix}/tt"));
+        }
+    }
+    snapshot.publish(output, "multi-action-set", !paths.is_empty(), paths)
+}
+
+pub fn multi_action_delete(input: &Path, id: u64, output: &Path) -> Result<CandidateReceipt> {
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let mut changed_paths = Vec::new();
+    remove_resource(
+        &mut snapshot.keymap,
+        ResourceKind::MultiAction,
+        id,
+        &mut changed_paths,
+    )?;
+    sync_all_profile_usage(&mut snapshot.keymap, &mut changed_paths)?;
+    snapshot.publish(output, "multi-action-delete", true, changed_paths)
+}
+
+pub fn action_group_list(input: &Path) -> Result<ResourceGroupList> {
+    resource_group_list(input, ResourceKind::Action)
+}
+
+pub fn action_group_show(input: &Path, id: u64) -> Result<ResourceGroupShow> {
+    resource_group_show(input, ResourceKind::Action, id)
+}
+
+pub fn action_group_create(
+    input: &Path,
+    name: &str,
+    members: &[u64],
+    color: Option<&str>,
+    tags: &[String],
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    resource_group_create(
+        input,
+        ResourceKind::Action,
+        name,
+        members,
+        color,
+        tags,
+        output,
+    )
+}
+
+pub fn action_group_set(
+    input: &Path,
+    id: u64,
+    update: GroupUpdate<'_>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    resource_group_set(input, ResourceKind::Action, id, update, output)
+}
+
+pub fn action_group_member_add(
+    input: &Path,
+    id: u64,
+    action: u64,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    resource_group_member_add(input, ResourceKind::Action, id, action, output)
+}
+
+pub fn action_group_member_remove(
+    input: &Path,
+    id: u64,
+    action: u64,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    resource_group_member_remove(input, ResourceKind::Action, id, action, output)
+}
+
+pub fn action_group_member_move(
+    input: &Path,
+    id: u64,
+    from: usize,
+    to: usize,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    resource_group_member_move(input, ResourceKind::Action, id, from, to, output)
+}
+
+pub fn action_group_delete(
+    input: &Path,
+    id: u64,
+    keep_members: bool,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    resource_group_delete(input, ResourceKind::Action, id, keep_members, output)
+}
+
+pub fn multi_action_group_list(input: &Path) -> Result<ResourceGroupList> {
+    resource_group_list(input, ResourceKind::MultiAction)
+}
+
+pub fn multi_action_group_show(input: &Path, id: u64) -> Result<ResourceGroupShow> {
+    resource_group_show(input, ResourceKind::MultiAction, id)
+}
+
+pub fn multi_action_group_create(
+    input: &Path,
+    name: &str,
+    members: &[u64],
+    color: Option<&str>,
+    tags: &[String],
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    resource_group_create(
+        input,
+        ResourceKind::MultiAction,
+        name,
+        members,
+        color,
+        tags,
+        output,
+    )
+}
+
+pub fn multi_action_group_set(
+    input: &Path,
+    id: u64,
+    update: GroupUpdate<'_>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    resource_group_set(input, ResourceKind::MultiAction, id, update, output)
+}
+
+pub fn multi_action_group_member_add(
+    input: &Path,
+    id: u64,
+    multi_action: u64,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    resource_group_member_add(input, ResourceKind::MultiAction, id, multi_action, output)
+}
+
+pub fn multi_action_group_member_remove(
+    input: &Path,
+    id: u64,
+    multi_action: u64,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    resource_group_member_remove(input, ResourceKind::MultiAction, id, multi_action, output)
+}
+
+pub fn multi_action_group_member_move(
+    input: &Path,
+    id: u64,
+    from: usize,
+    to: usize,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    resource_group_member_move(input, ResourceKind::MultiAction, id, from, to, output)
+}
+
+pub fn multi_action_group_delete(
+    input: &Path,
+    id: u64,
+    keep_members: bool,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    resource_group_delete(input, ResourceKind::MultiAction, id, keep_members, output)
 }
 
 pub fn profile_select(input: &Path, id: u64, output: &Path) -> Result<CandidateReceipt> {
@@ -1041,6 +1547,20 @@ fn validate_action_model_spec() -> Result<()> {
                 == Some(true),
         "embedded Input Action model identity was invalid"
     );
+    let multi: Value = serde_json::from_str(MULTI_ACTION_SPEC_JSON)
+        .context("embedded Input Multi Action model was invalid")?;
+    ensure!(
+        multi.get("schemaVersion").and_then(Value::as_u64) == Some(1)
+            && multi.get("kind").and_then(Value::as_str)
+                == Some("worklouder-input-multi-action-model")
+            && multi.get("inputVersion").and_then(Value::as_str) == Some("0.18.0")
+            && multi
+                .get("sourceAsarSha256")
+                .and_then(Value::as_str)
+                .map(|value| is_digest(value, 64))
+                == Some(true),
+        "embedded Input Multi Action model identity was invalid"
+    );
     Ok(())
 }
 
@@ -1126,7 +1646,11 @@ fn validate_action_event_assignment(keymap: &Value, action_id: u64, token: &str)
 }
 
 fn count_action_references(keymap: &Value, id: u64) -> Result<usize> {
-    let token = format!("KA_A{id}");
+    count_resource_references(keymap, ResourceKind::Action, id)
+}
+
+fn count_resource_references(keymap: &Value, kind: ResourceKind, id: u64) -> Result<usize> {
+    let token = format!("{}{id}", kind.token_prefix());
     let mut count = 0_usize;
     for profile in profiles(keymap)? {
         for layer in profile_layers(profile)? {
@@ -1154,7 +1678,7 @@ fn count_action_references(keymap: &Value, id: u64) -> Result<usize> {
             }
         }
     }
-    if let Some(groups) = keymap.get("macrosGroups").and_then(Value::as_array) {
+    if let Some(groups) = keymap.get(kind.groups()).and_then(Value::as_array) {
         for group in groups {
             count += group
                 .get("actionIds")
@@ -1174,7 +1698,84 @@ fn multi_action_assignment_fields() -> [&'static str; 4] {
     ["kcOnTap", "kcOnHold", "kcOnDoubleTap", "kcOnTapHold"]
 }
 
-fn replace_action_references(
+fn multi_action_gesture_fields() -> [(&'static str, &'static str); 4] {
+    [
+        ("tap", "kcOnTap"),
+        ("double-tap", "kcOnDoubleTap"),
+        ("hold", "kcOnHold"),
+        ("tap-hold", "kcOnTapHold"),
+    ]
+}
+
+fn multi_actions(keymap: &Value) -> Result<&Vec<Value>> {
+    keymap
+        .get("multiActions")
+        .and_then(Value::as_array)
+        .context("keymap.json multiActions was invalid")
+}
+
+fn multi_action_index(keymap: &Value, id: u64) -> Result<usize> {
+    multi_actions(keymap)?
+        .iter()
+        .position(|item| matches!(object_u64(item, "id", "Multi Action"), Ok(value) if value == id))
+        .with_context(|| format!("Multi Action id {id} was not found"))
+}
+
+fn find_multi_action(keymap: &Value, id: u64) -> Result<&Value> {
+    multi_actions(keymap)?
+        .get(multi_action_index(keymap, id)?)
+        .context("Multi Action disappeared during lookup")
+}
+
+fn multi_action_entry(keymap: &Value, item: &Value) -> Result<MultiActionEntry> {
+    let id = object_u64(item, "id", "Multi Action")?;
+    Ok(MultiActionEntry {
+        id,
+        name: object_string(item, "name", "Multi Action")?.to_owned(),
+        color: normalized_color_value(item.get("color"))?,
+        icon: optional_string(item, "icon", "Multi Action")?.map(str::to_owned),
+        tapping_term: object_u64(item, "tt", "Multi Action")?,
+        reference_count: count_resource_references(keymap, ResourceKind::MultiAction, id)?,
+    })
+}
+
+fn validate_multi_action_assignment(keymap: &Value, id: u64, token: &str) -> Result<()> {
+    validate_writable_assignment(keymap, token)?;
+    ensure!(
+        reference_id(token, "KA_M")? != Some(id),
+        "Multi Action id {id} self-reference was invalid"
+    );
+    Ok(())
+}
+
+fn normalize_resource_color(color: &str) -> Result<String> {
+    Ok(format!("#{:06X}", parse_color(color)?))
+}
+
+fn normalized_color_value(color: Option<&Value>) -> Result<Option<String>> {
+    match color {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(value)) => {
+            let value = value.as_u64().context("resource color was invalid")?;
+            ensure!(value <= MAX_RGB, "resource color exceeded 24-bit RGB");
+            Ok(Some(format!("#{value:06X}")))
+        }
+        Some(Value::String(value)) => Ok(Some(normalize_resource_color(value)?)),
+        Some(_) => bail!("resource color was invalid"),
+    }
+}
+
+fn validate_icon_input(icon: &str) -> Result<()> {
+    ensure!(!icon.is_empty(), "icon must not be empty");
+    ensure!(icon.len() <= MAX_ICON_BYTES, "icon exceeded 128 bytes");
+    ensure!(
+        !icon.chars().any(char::is_control),
+        "icon contained a control character"
+    );
+    Ok(())
+}
+
+fn replace_assignment_references(
     keymap: &mut Value,
     token: &str,
     paths: &mut Vec<String>,
@@ -1290,8 +1891,13 @@ fn replace_token_value(
     Ok(())
 }
 
-fn remove_action_from_groups(keymap: &mut Value, id: u64, paths: &mut Vec<String>) -> Result<()> {
-    let groups = match keymap.get_mut("macrosGroups").and_then(Value::as_array_mut) {
+fn remove_resource_from_groups(
+    keymap: &mut Value,
+    kind: ResourceKind,
+    id: u64,
+    paths: &mut Vec<String>,
+) -> Result<()> {
+    let groups = match keymap.get_mut(kind.groups()).and_then(Value::as_array_mut) {
         Some(groups) => groups,
         None => return Ok(()),
     };
@@ -1304,7 +1910,10 @@ fn remove_action_from_groups(keymap: &mut Value, id: u64, paths: &mut Vec<String
         let old_len = ids.len();
         ids.retain(|value| value.as_u64() != Some(id));
         if ids.len() != old_len {
-            paths.push(format!("/keymap.json/macrosGroups/{group_index}/actionIds"));
+            paths.push(format!(
+                "/keymap.json/{}/{group_index}/actionIds",
+                kind.groups()
+            ));
         }
     }
     groups.retain(|group| {
@@ -1315,9 +1924,483 @@ fn remove_action_from_groups(keymap: &mut Value, id: u64, paths: &mut Vec<String
             .unwrap_or(true)
     });
     if groups.len() != before {
-        paths.push("/keymap.json/macrosGroups".into());
+        paths.push(format!("/keymap.json/{}", kind.groups()));
     }
     Ok(())
+}
+
+fn resource_index(keymap: &Value, kind: ResourceKind, id: u64) -> Result<usize> {
+    keymap
+        .get(kind.collection())
+        .and_then(Value::as_array)
+        .with_context(|| format!("keymap.json {} was invalid", kind.collection()))?
+        .iter()
+        .position(|item| matches!(object_u64(item, "id", kind.label()), Ok(value) if value == id))
+        .with_context(|| format!("{} id {id} was not found", kind.label()))
+}
+
+fn resource_name(keymap: &Value, kind: ResourceKind, id: u64) -> Result<String> {
+    let index = resource_index(keymap, kind, id)?;
+    let item = keymap
+        .get(kind.collection())
+        .and_then(Value::as_array)
+        .and_then(|items| items.get(index))
+        .with_context(|| format!("{} disappeared during lookup", kind.label()))?;
+    Ok(object_string(item, "name", kind.label())?.to_owned())
+}
+
+fn remove_resource(
+    keymap: &mut Value,
+    kind: ResourceKind,
+    id: u64,
+    paths: &mut Vec<String>,
+) -> Result<()> {
+    let index = resource_index(keymap, kind, id)?;
+    let token = format!("{}{id}", kind.token_prefix());
+    replace_assignment_references(keymap, &token, paths)?;
+    remove_resource_from_groups(keymap, kind, id, paths)?;
+    keymap
+        .get_mut(kind.collection())
+        .and_then(Value::as_array_mut)
+        .with_context(|| format!("keymap.json {} was invalid", kind.collection()))?
+        .remove(index);
+    paths.push(format!("/keymap.json/{}/{index}", kind.collection()));
+    Ok(())
+}
+
+fn sync_all_profile_usage(keymap: &mut Value, paths: &mut Vec<String>) -> Result<()> {
+    let profile_count = profiles(keymap)?.len();
+    for profile_index in 0..profile_count {
+        sync_profile_usage(keymap, profile_index, paths)?;
+    }
+    Ok(())
+}
+
+fn resource_groups(keymap: &Value, kind: ResourceKind) -> Result<&Vec<Value>> {
+    keymap
+        .get(kind.groups())
+        .and_then(Value::as_array)
+        .with_context(|| format!("keymap.json {} was invalid", kind.groups()))
+}
+
+fn resource_group_index(keymap: &Value, kind: ResourceKind, id: u64) -> Result<usize> {
+    resource_groups(keymap, kind)?
+        .iter()
+        .position(
+            |group| matches!(object_u64(group, "id", "Action group"), Ok(value) if value == id),
+        )
+        .with_context(|| format!("{} group id {id} was not found", kind.label()))
+}
+
+fn resource_group_member_ids(group: &Value) -> Result<Vec<u64>> {
+    group
+        .get("actionIds")
+        .and_then(Value::as_array)
+        .context("Action group actionIds was invalid")?
+        .iter()
+        .map(|value| {
+            value
+                .as_u64()
+                .context("Action group contained a non-integer action id")
+        })
+        .collect()
+}
+
+fn resource_group_tags(group: &Value) -> Result<Vec<String>> {
+    match group.get("tags") {
+        None => Ok(Vec::new()),
+        Some(tags) => tags
+            .as_array()
+            .context("Action group tags was not an array")?
+            .iter()
+            .map(|tag| {
+                tag.as_str()
+                    .context("Action group tag was not a string")
+                    .map(str::to_owned)
+            })
+            .collect(),
+    }
+}
+
+fn resource_group_entry(group: &Value) -> Result<ResourceGroupEntry> {
+    Ok(ResourceGroupEntry {
+        id: object_u64(group, "id", "Action group")?,
+        name: object_string(group, "name", "Action group")?.to_owned(),
+        tags: resource_group_tags(group)?,
+        color: normalized_color_value(group.get("color"))?,
+        member_count: resource_group_member_ids(group)?.len(),
+    })
+}
+
+fn resource_group_list(input: &Path, kind: ResourceKind) -> Result<ResourceGroupList> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let groups = resource_groups(&snapshot.keymap, kind)?
+        .iter()
+        .map(resource_group_entry)
+        .collect::<Result<Vec<_>>>()?;
+    Ok(ResourceGroupList {
+        schema_version: 1,
+        kind: match kind {
+            ResourceKind::Action => "worklouderctl-action-group-list",
+            ResourceKind::MultiAction => "worklouderctl-multi-action-group-list",
+        },
+        revision: snapshot.revision,
+        resource_kind: kind.json_name(),
+        groups,
+    })
+}
+
+fn resource_group_show(input: &Path, kind: ResourceKind, id: u64) -> Result<ResourceGroupShow> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let index = resource_group_index(&snapshot.keymap, kind, id)?;
+    let group = resource_groups(&snapshot.keymap, kind)?
+        .get(index)
+        .context("Action group disappeared during lookup")?;
+    let members = resource_group_member_ids(group)?
+        .into_iter()
+        .enumerate()
+        .map(|(index, id)| {
+            Ok(ResourceGroupMemberEntry {
+                index,
+                id,
+                name: resource_name(&snapshot.keymap, kind, id)?,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(ResourceGroupShow {
+        schema_version: 1,
+        kind: match kind {
+            ResourceKind::Action => "worklouderctl-action-group",
+            ResourceKind::MultiAction => "worklouderctl-multi-action-group",
+        },
+        revision: snapshot.revision,
+        resource_kind: kind.json_name(),
+        group: resource_group_entry(group)?,
+        members,
+    })
+}
+
+fn validate_group_tags(tags: &[String]) -> Result<()> {
+    let mut seen = HashSet::new();
+    for tag in tags {
+        validate_name(tag)?;
+        ensure!(
+            seen.insert(tag),
+            "Action group contained duplicate tag {tag}"
+        );
+    }
+    Ok(())
+}
+
+fn validate_group_members(keymap: &Value, kind: ResourceKind, members: &[u64]) -> Result<()> {
+    ensure!(
+        !members.is_empty(),
+        "Action group requires at least one member"
+    );
+    let mut seen = HashSet::new();
+    for id in members {
+        ensure!(
+            seen.insert(*id),
+            "Action group contained duplicate {} id {id}",
+            kind.label()
+        );
+        resource_index(keymap, kind, *id)?;
+    }
+    Ok(())
+}
+
+fn resource_group_create(
+    input: &Path,
+    kind: ResourceKind,
+    name: &str,
+    members: &[u64],
+    color: Option<&str>,
+    tags: &[String],
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    validate_name(name)?;
+    validate_group_tags(tags)?;
+    let color = color.map(normalize_resource_color).transpose()?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    validate_group_members(&snapshot.keymap, kind, members)?;
+    let id = resource_groups(&snapshot.keymap, kind)?
+        .iter()
+        .map(|group| object_u64(group, "id", "Action group"))
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .max()
+        .map(|id| {
+            id.checked_add(1)
+                .context("maximum Action group id overflowed")
+        })
+        .transpose()?
+        .unwrap_or(0);
+    let groups = snapshot
+        .keymap
+        .get_mut(kind.groups())
+        .and_then(Value::as_array_mut)
+        .with_context(|| format!("keymap.json {} was invalid", kind.groups()))?;
+    let index = groups.len();
+    groups.push(serde_json::json!({
+        "id": id,
+        "name": name,
+        "tags": tags,
+        "color": color,
+        "actionIds": members
+    }));
+    let mut receipt = snapshot.publish(
+        output,
+        match kind {
+            ResourceKind::Action => "action-group-create",
+            ResourceKind::MultiAction => "multi-action-group-create",
+        },
+        true,
+        vec![format!("/keymap.json/{}/{index}", kind.groups())],
+    )?;
+    receipt.resource_id = Some(id);
+    Ok(receipt)
+}
+
+fn resource_group_set(
+    input: &Path,
+    kind: ResourceKind,
+    id: u64,
+    update: GroupUpdate<'_>,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    ensure!(
+        update.name.is_some()
+            || update.color.is_some()
+            || update.clear_color
+            || update.tags.is_some(),
+        "group set requires name, color, clear-color, tags, or clear-tags"
+    );
+    if let Some(name) = update.name {
+        validate_name(name)?;
+    }
+    let color = update.color.map(normalize_resource_color).transpose()?;
+    if let Some(tags) = update.tags {
+        validate_group_tags(tags)?;
+    }
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let index = resource_group_index(&snapshot.keymap, kind, id)?;
+    let group = snapshot
+        .keymap
+        .get_mut(kind.groups())
+        .and_then(Value::as_array_mut)
+        .and_then(|groups| groups.get_mut(index))
+        .and_then(Value::as_object_mut)
+        .context("Action group disappeared during candidate generation")?;
+    let prefix = format!("/keymap.json/{}/{index}", kind.groups());
+    let mut paths = Vec::new();
+    if let Some(name) = update.name {
+        if group.get("name").and_then(Value::as_str) != Some(name) {
+            group.insert("name".into(), Value::String(name.to_owned()));
+            paths.push(format!("{prefix}/name"));
+        }
+    }
+    if update.clear_color {
+        if group.get("color") != Some(&Value::Null) {
+            group.insert("color".into(), Value::Null);
+            paths.push(format!("{prefix}/color"));
+        }
+    } else if let Some(color) = color {
+        if normalized_color_value(group.get("color"))?.as_deref() != Some(color.as_str()) {
+            group.insert("color".into(), Value::String(color));
+            paths.push(format!("{prefix}/color"));
+        }
+    }
+    if let Some(tags) = update.tags {
+        let value = Value::Array(tags.iter().cloned().map(Value::String).collect());
+        if group.get("tags") != Some(&value) {
+            group.insert("tags".into(), value);
+            paths.push(format!("{prefix}/tags"));
+        }
+    }
+    snapshot.publish(
+        output,
+        match kind {
+            ResourceKind::Action => "action-group-set",
+            ResourceKind::MultiAction => "multi-action-group-set",
+        },
+        !paths.is_empty(),
+        paths,
+    )
+}
+
+fn resource_group_member_add(
+    input: &Path,
+    kind: ResourceKind,
+    id: u64,
+    member: u64,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    resource_index(&snapshot.keymap, kind, member)?;
+    let index = resource_group_index(&snapshot.keymap, kind, id)?;
+    let ids = snapshot
+        .keymap
+        .get_mut(kind.groups())
+        .and_then(Value::as_array_mut)
+        .and_then(|groups| groups.get_mut(index))
+        .and_then(|group| group.get_mut("actionIds"))
+        .and_then(Value::as_array_mut)
+        .context("Action group actionIds was invalid")?;
+    let changed = !ids.iter().any(|value| value.as_u64() == Some(member));
+    if changed {
+        ids.push(Value::from(member));
+    }
+    let member_index = ids.len().saturating_sub(1);
+    snapshot.publish(
+        output,
+        match kind {
+            ResourceKind::Action => "action-group-member-add",
+            ResourceKind::MultiAction => "multi-action-group-member-add",
+        },
+        changed,
+        if changed {
+            vec![format!(
+                "/keymap.json/{}/{index}/actionIds/{}",
+                kind.groups(),
+                member_index
+            )]
+        } else {
+            Vec::new()
+        },
+    )
+}
+
+fn resource_group_member_remove(
+    input: &Path,
+    kind: ResourceKind,
+    id: u64,
+    member: u64,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let index = resource_group_index(&snapshot.keymap, kind, id)?;
+    let ids = snapshot
+        .keymap
+        .get_mut(kind.groups())
+        .and_then(Value::as_array_mut)
+        .and_then(|groups| groups.get_mut(index))
+        .and_then(|group| group.get_mut("actionIds"))
+        .and_then(Value::as_array_mut)
+        .context("Action group actionIds was invalid")?;
+    let member_index = ids
+        .iter()
+        .position(|value| value.as_u64() == Some(member))
+        .with_context(|| format!("{} id {member} was not in group {id}", kind.label()))?;
+    ensure!(ids.len() > 1, "removing the member would empty group {id}");
+    ids.remove(member_index);
+    snapshot.publish(
+        output,
+        match kind {
+            ResourceKind::Action => "action-group-member-remove",
+            ResourceKind::MultiAction => "multi-action-group-member-remove",
+        },
+        true,
+        vec![format!(
+            "/keymap.json/{}/{index}/actionIds/{member_index}",
+            kind.groups()
+        )],
+    )
+}
+
+fn resource_group_member_move(
+    input: &Path,
+    kind: ResourceKind,
+    id: u64,
+    from: usize,
+    to: usize,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let index = resource_group_index(&snapshot.keymap, kind, id)?;
+    let ids = snapshot
+        .keymap
+        .get_mut(kind.groups())
+        .and_then(Value::as_array_mut)
+        .and_then(|groups| groups.get_mut(index))
+        .and_then(|group| group.get_mut("actionIds"))
+        .and_then(Value::as_array_mut)
+        .context("Action group actionIds was invalid")?;
+    ensure!(from < ids.len(), "group member index {from} was not found");
+    ensure!(to < ids.len(), "group member index {to} was not found");
+    let changed = from != to;
+    if changed {
+        let member = ids.remove(from);
+        ids.insert(to, member);
+    }
+    snapshot.publish(
+        output,
+        match kind {
+            ResourceKind::Action => "action-group-member-move",
+            ResourceKind::MultiAction => "multi-action-group-member-move",
+        },
+        changed,
+        if changed {
+            vec![format!("/keymap.json/{}/{index}/actionIds", kind.groups())]
+        } else {
+            Vec::new()
+        },
+    )
+}
+
+fn resource_membership_count(keymap: &Value, kind: ResourceKind, id: u64) -> Result<usize> {
+    Ok(resource_groups(keymap, kind)?
+        .iter()
+        .map(|group| {
+            resource_group_member_ids(group)
+                .map(|ids| ids.into_iter().filter(|member| *member == id).count())
+        })
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .sum())
+}
+
+fn resource_group_delete(
+    input: &Path,
+    kind: ResourceKind,
+    id: u64,
+    keep_members: bool,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let index = resource_group_index(&snapshot.keymap, kind, id)?;
+    let members = resource_group_member_ids(
+        resource_groups(&snapshot.keymap, kind)?
+            .get(index)
+            .context("Action group disappeared during lookup")?,
+    )?;
+    let mut orphaned = Vec::new();
+    if !keep_members {
+        for member in &members {
+            if resource_membership_count(&snapshot.keymap, kind, *member)? <= 1 {
+                orphaned.push(*member);
+            }
+        }
+    }
+    snapshot
+        .keymap
+        .get_mut(kind.groups())
+        .and_then(Value::as_array_mut)
+        .with_context(|| format!("keymap.json {} was invalid", kind.groups()))?
+        .remove(index);
+    let mut paths = vec![format!("/keymap.json/{}/{index}", kind.groups())];
+    for member in orphaned {
+        remove_resource(&mut snapshot.keymap, kind, member, &mut paths)?;
+    }
+    sync_all_profile_usage(&mut snapshot.keymap, &mut paths)?;
+    snapshot.publish(
+        output,
+        match kind {
+            ResourceKind::Action => "action-group-delete",
+            ResourceKind::MultiAction => "multi-action-group-delete",
+        },
+        true,
+        paths,
+    )
 }
 
 fn assignment_spec() -> Result<AssignmentSpec> {
@@ -1890,7 +2973,7 @@ fn validate_multi_actions(
         validate_optional_icon(item, "Multi Action")?;
         let tapping_terms = object_u64(item, "tt", "Multi Action")?;
         ensure!(
-            tapping_terms <= 60_000,
+            tapping_terms <= MAX_MULTI_ACTION_TAPPING_TERM,
             "Multi Action id {id} tapping term exceeded 60000 ms"
         );
         for field in multi_action_assignment_fields() {
@@ -2133,6 +3216,16 @@ fn object_string<'a>(value: &'a Value, field: &str, kind: &str) -> Result<&'a st
         .with_context(|| format!("{kind} {field} was invalid"))
 }
 
+fn optional_string<'a>(value: &'a Value, field: &str, kind: &str) -> Result<Option<&'a str>> {
+    match value.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => value
+            .as_str()
+            .map(Some)
+            .with_context(|| format!("{kind} {field} was invalid")),
+    }
+}
+
 fn validate_name(name: &str) -> Result<()> {
     ensure!(
         !name.trim().is_empty() && name.len() <= MAX_NAME_BYTES,
@@ -2359,18 +3452,32 @@ mod tests {
                 {"id": 0, "name": "Primary", "tags": ["fixture"], "color": null, "actionIds": [3, 4]},
                 {"id": 1, "name": "Single", "tags": [], "color": null, "actionIds": [3]}
             ],
-            "multiActions": [{
-                "id": 1,
-                "name": "Fixture Multi",
-                "color": null,
-                "kcOnTap": "KA_A3",
-                "kcOnHold": "KC_NONE",
-                "kcOnDoubleTap": "KC_NONE",
-                "kcOnTapHold": "KC_NONE",
-                "tt": 250
-            }],
+            "multiActions": [
+                {
+                    "id": 1,
+                    "name": "Fixture Multi",
+                    "color": null,
+                    "kcOnTap": "KA_A3",
+                    "kcOnHold": "KC_NONE",
+                    "kcOnDoubleTap": "KC_NONE",
+                    "kcOnTapHold": "KC_NONE",
+                    "tt": 250
+                },
+                {
+                    "id": 2,
+                    "name": "Dependent Multi",
+                    "color": "#123456",
+                    "icon": "icon-fixture",
+                    "kcOnTap": "KC_NONE",
+                    "kcOnHold": "KA_M1",
+                    "kcOnDoubleTap": "KC_NONE",
+                    "kcOnTapHold": "KC_NONE",
+                    "tt": 300
+                }
+            ],
             "multiActionsGroups": [
-                {"id": 0, "name": "Multi", "tags": [], "color": null, "actionIds": [1]}
+                {"id": 0, "name": "Multi", "tags": [], "color": null, "actionIds": [1, 2]},
+                {"id": 4, "name": "Shared", "tags": ["fixture"], "color": "#ABCDEF", "actionIds": [1]}
             ],
             "profiles": [
                 {"id": 0, "name": "Alpha", "macrosUsed": [10, 3], "multiActionsUsed": [1], "layers": [
@@ -2817,6 +3924,359 @@ mod tests {
         let output = root("action-invalid-name");
         assert!(action_create(&source, "\n", &output).is_err());
         assert!(!output.exists());
+        fs::remove_file(source).unwrap();
+    }
+
+    #[test]
+    fn multi_actions_are_listed_shown_created_and_fully_updated() {
+        let source = root("multi-action-source");
+        let created = root("multi-action-created");
+        let updated = root("multi-action-updated");
+        write_fixture(&source);
+        let original = SemanticSnapshot::read(&source).unwrap();
+        let smart_before = original.file_bytes[1].clone();
+
+        let listed = multi_action_list(&source).unwrap();
+        assert_eq!(
+            listed
+                .multi_actions
+                .iter()
+                .map(|item| item.id)
+                .collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+        assert_eq!(listed.multi_actions[0].reference_count, 4);
+        assert_eq!(listed.multi_actions[1].color.as_deref(), Some("#123456"));
+        assert_eq!(
+            listed.multi_actions[1].icon.as_deref(),
+            Some("icon-fixture")
+        );
+        let shown = multi_action_show(&source, 2).unwrap();
+        assert_eq!(shown.assignments[0].gesture, "tap");
+        assert_eq!(shown.assignments[1].gesture, "double-tap");
+        assert_eq!(shown.assignments[2].gesture, "hold");
+        assert_eq!(shown.assignments[2].assignment, "KA_M1");
+        assert_eq!(shown.multi_action.tapping_term, 300);
+
+        let receipt = multi_action_create(
+            &source,
+            "New Multi",
+            Some("#EDF6FF"),
+            Some("icon-new"),
+            &created,
+        )
+        .unwrap();
+        assert_eq!(receipt.resource_id, Some(3));
+        assert_eq!(receipt.changed_paths, vec!["/keymap.json/multiActions/2"]);
+        let candidate = SemanticSnapshot::read(&created).unwrap();
+        assert_eq!(candidate.file_bytes[1], smart_before);
+        assert_eq!(candidate.keymap["multiActions"][2]["id"], 3);
+        assert_eq!(candidate.keymap["multiActions"][2]["color"], "#EDF6FF");
+        assert_eq!(candidate.keymap["multiActions"][2]["icon"], "icon-new");
+        for field in multi_action_assignment_fields() {
+            assert_eq!(candidate.keymap["multiActions"][2][field], "KC_NONE");
+        }
+        assert_eq!(candidate.keymap["multiActions"][2]["tt"], 250);
+
+        let receipt = multi_action_set(
+            &source,
+            2,
+            MultiActionUpdate {
+                name: Some("Updated Multi"),
+                color: Some("0xA1B2C3"),
+                clear_color: false,
+                icon: Some("icon-updated"),
+                clear_icon: false,
+                tap: Some("KC_X"),
+                double_tap: Some("KA_A4"),
+                hold: Some("KC_Y"),
+                tap_hold: Some("KA_M1"),
+                tapping_term: Some(999),
+            },
+            &updated,
+        )
+        .unwrap();
+        assert_eq!(receipt.changed_paths.len(), 8);
+        let candidate = SemanticSnapshot::read(&updated).unwrap();
+        let item = &candidate.keymap["multiActions"][1];
+        assert_eq!(item["name"], "Updated Multi");
+        assert_eq!(item["color"], "#A1B2C3");
+        assert_eq!(item["icon"], "icon-updated");
+        assert_eq!(item["kcOnTap"], "KC_X");
+        assert_eq!(item["kcOnDoubleTap"], "KA_A4");
+        assert_eq!(item["kcOnHold"], "KC_Y");
+        assert_eq!(item["kcOnTapHold"], "KA_M1");
+        assert_eq!(item["tt"], 999);
+        assert_eq!(candidate.file_bytes[1], smart_before);
+
+        for path in [&source, &created, &updated] {
+            fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn multi_action_delete_cascades_references_groups_and_profile_usage() {
+        let source = root("multi-action-delete-source");
+        let output = root("multi-action-delete-output");
+        write_fixture(&source);
+        let smart_before = SemanticSnapshot::read(&source).unwrap().file_bytes[1].clone();
+        let receipt = multi_action_delete(&source, 1, &output).unwrap();
+        let candidate = SemanticSnapshot::read(&output).unwrap();
+
+        assert_eq!(
+            candidate.keymap["multiActions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| item["id"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
+            vec![2]
+        );
+        assert_eq!(
+            candidate.keymap["profiles"][0]["layers"][0]["layout"]["joystick"]["sectors"][1]["k"],
+            "KC_NONE"
+        );
+        assert_eq!(candidate.keymap["multiActions"][0]["kcOnHold"], "KC_NONE");
+        assert_eq!(
+            candidate.keymap["multiActionsGroups"],
+            json!([{"id": 0, "name": "Multi", "tags": [], "color": null, "actionIds": [2]}])
+        );
+        assert_eq!(
+            candidate.keymap["profiles"][0]["multiActionsUsed"],
+            json!([])
+        );
+        assert_eq!(candidate.file_bytes[1], smart_before);
+        for path in [
+            "/keymap.json/profiles/0/layers/0/layout/joystick/sectors/1/k",
+            "/keymap.json/multiActions/1/kcOnHold",
+            "/keymap.json/multiActionsGroups",
+            "/keymap.json/multiActions/0",
+            "/keymap.json/profiles/0/multiActionsUsed",
+        ] {
+            assert!(receipt.changed_paths.iter().any(|changed| changed == path));
+        }
+
+        fs::remove_file(source).unwrap();
+        fs::remove_file(output).unwrap();
+    }
+
+    #[test]
+    fn action_and_multi_action_groups_support_metadata_and_member_crud() {
+        let source = root("group-source");
+        let created = root("group-created");
+        let updated = root("group-updated");
+        let added = root("group-added");
+        let moved = root("group-moved");
+        let removed = root("group-removed");
+        let multi_created = root("multi-group-created");
+        write_fixture(&source);
+
+        let listed = action_group_list(&source).unwrap();
+        assert_eq!(listed.groups.len(), 2);
+        assert_eq!(listed.groups[0].member_count, 2);
+        let shown = action_group_show(&source, 0).unwrap();
+        assert_eq!(shown.resource_kind, "action");
+        assert_eq!(shown.members[0].id, 3);
+        assert_eq!(shown.members[1].name, "Dependent Action");
+
+        let receipt = action_group_create(
+            &source,
+            "CLI Group",
+            &[4, 10],
+            Some("#EDF6FF"),
+            &["cli".into(), "fixture".into()],
+            &created,
+        )
+        .unwrap();
+        assert_eq!(receipt.resource_id, Some(2));
+        let candidate = SemanticSnapshot::read(&created).unwrap();
+        assert_eq!(
+            candidate.keymap["macrosGroups"][2]["actionIds"],
+            json!([4, 10])
+        );
+        assert_eq!(candidate.keymap["macrosGroups"][2]["color"], "#EDF6FF");
+
+        action_group_set(
+            &source,
+            0,
+            GroupUpdate {
+                name: Some("Renamed Group"),
+                color: Some("#AABBCC"),
+                clear_color: false,
+                tags: Some(&["one".into(), "two".into()]),
+            },
+            &updated,
+        )
+        .unwrap();
+        let candidate = SemanticSnapshot::read(&updated).unwrap();
+        assert_eq!(candidate.keymap["macrosGroups"][0]["name"], "Renamed Group");
+        assert_eq!(candidate.keymap["macrosGroups"][0]["color"], "#AABBCC");
+        assert_eq!(
+            candidate.keymap["macrosGroups"][0]["tags"],
+            json!(["one", "two"])
+        );
+
+        action_group_member_add(&source, 1, 4, &added).unwrap();
+        assert_eq!(
+            SemanticSnapshot::read(&added).unwrap().keymap["macrosGroups"][1]["actionIds"],
+            json!([3, 4])
+        );
+        action_group_member_move(&added, 1, 1, 0, &moved).unwrap();
+        assert_eq!(
+            SemanticSnapshot::read(&moved).unwrap().keymap["macrosGroups"][1]["actionIds"],
+            json!([4, 3])
+        );
+        action_group_member_remove(&moved, 1, 4, &removed).unwrap();
+        assert_eq!(
+            SemanticSnapshot::read(&removed).unwrap().keymap["macrosGroups"][1]["actionIds"],
+            json!([3])
+        );
+
+        let receipt =
+            multi_action_group_create(&source, "CLI Multi Group", &[2], None, &[], &multi_created)
+                .unwrap();
+        assert_eq!(receipt.resource_id, Some(5));
+        assert_eq!(
+            SemanticSnapshot::read(&multi_created).unwrap().keymap["multiActionsGroups"][2]
+                ["actionIds"],
+            json!([2])
+        );
+
+        for path in [
+            &source,
+            &created,
+            &updated,
+            &added,
+            &moved,
+            &removed,
+            &multi_created,
+        ] {
+            fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn group_delete_matches_input_orphan_cascade_and_supports_keep_members() {
+        let source = root("group-delete-source");
+        let action_deleted = root("group-action-deleted");
+        let action_kept = root("group-action-kept");
+        let multi_deleted = root("group-multi-deleted");
+        write_fixture(&source);
+
+        action_group_delete(&source, 0, false, &action_deleted).unwrap();
+        let candidate = SemanticSnapshot::read(&action_deleted).unwrap();
+        assert_eq!(
+            candidate.keymap["macrosGroups"].as_array().unwrap().len(),
+            1
+        );
+        assert_eq!(candidate.keymap["macrosGroups"][0]["actionIds"], json!([3]));
+        assert_eq!(
+            candidate.keymap["macros"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| item["id"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
+            vec![3, 10]
+        );
+
+        action_group_delete(&source, 0, true, &action_kept).unwrap();
+        let candidate = SemanticSnapshot::read(&action_kept).unwrap();
+        assert_eq!(
+            candidate.keymap["macrosGroups"].as_array().unwrap().len(),
+            1
+        );
+        assert_eq!(candidate.keymap["macros"].as_array().unwrap().len(), 3);
+
+        multi_action_group_delete(&source, 0, false, &multi_deleted).unwrap();
+        let candidate = SemanticSnapshot::read(&multi_deleted).unwrap();
+        assert_eq!(
+            candidate.keymap["multiActionsGroups"],
+            json!([{"id": 4, "name": "Shared", "tags": ["fixture"], "color": "#ABCDEF", "actionIds": [1]}])
+        );
+        assert_eq!(
+            candidate.keymap["multiActions"].as_array().unwrap().len(),
+            1
+        );
+        assert_eq!(candidate.keymap["multiActions"][0]["id"], 1);
+
+        for path in [&source, &action_deleted, &action_kept, &multi_deleted] {
+            fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn multi_action_and_group_mutations_reject_invalid_references() {
+        let source = root("multi-group-invalid-source");
+        write_fixture(&source);
+        for (update, needle) in [
+            (
+                MultiActionUpdate {
+                    name: None,
+                    color: None,
+                    clear_color: false,
+                    icon: None,
+                    clear_icon: false,
+                    tap: Some("KA_M2"),
+                    double_tap: None,
+                    hold: None,
+                    tap_hold: None,
+                    tapping_term: None,
+                },
+                "self-reference",
+            ),
+            (
+                MultiActionUpdate {
+                    name: None,
+                    color: None,
+                    clear_color: false,
+                    icon: None,
+                    clear_icon: false,
+                    tap: Some("KA_M99"),
+                    double_tap: None,
+                    hold: None,
+                    tap_hold: None,
+                    tapping_term: None,
+                },
+                "missing Multi Action",
+            ),
+            (
+                MultiActionUpdate {
+                    name: None,
+                    color: None,
+                    clear_color: false,
+                    icon: None,
+                    clear_icon: false,
+                    tap: None,
+                    double_tap: None,
+                    hold: None,
+                    tap_hold: None,
+                    tapping_term: Some(60_001),
+                },
+                "60000",
+            ),
+        ] {
+            let output = root("multi-invalid-output");
+            let error = multi_action_set(&source, 2, update, &output)
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains(needle), "unexpected error: {error}");
+            assert!(!output.exists());
+        }
+
+        let output = root("group-invalid-missing");
+        assert!(action_group_create(&source, "Missing", &[99], None, &[], &output).is_err());
+        assert!(!output.exists());
+        let output = root("group-invalid-duplicate");
+        assert!(action_group_create(&source, "Duplicate", &[3, 3], None, &[], &output).is_err());
+        assert!(!output.exists());
+        let output = root("group-invalid-empty");
+        assert!(action_group_member_remove(&source, 1, 3, &output)
+            .unwrap_err()
+            .to_string()
+            .contains("empty"));
+        assert!(!output.exists());
+
         fs::remove_file(source).unwrap();
     }
 

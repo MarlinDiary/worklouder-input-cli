@@ -41,6 +41,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("layer"));
     assert!(stdout.contains("control"));
     assert!(stdout.contains("action"));
+    assert!(stdout.contains("multi-action"));
     assert!(stdout.contains("completion"));
 }
 
@@ -72,7 +73,9 @@ fn semantic_help_exposes_offline_candidate_workflow() {
     let action = binary().args(["action", "--help"]).output().unwrap();
     let action_stdout = String::from_utf8(action.stdout).unwrap();
     assert!(action.status.success());
-    for command in ["list", "show", "create", "rename", "delete", "event"] {
+    for command in [
+        "list", "show", "create", "rename", "delete", "event", "group",
+    ] {
         assert!(action_stdout.contains(command));
     }
 
@@ -84,6 +87,33 @@ fn semantic_help_exposes_offline_candidate_workflow() {
     assert!(event.status.success());
     for command in ["add", "set", "delete", "move"] {
         assert!(event_stdout.contains(command));
+    }
+
+    let action_group = binary()
+        .args(["action", "group", "--help"])
+        .output()
+        .unwrap();
+    let action_group_stdout = String::from_utf8(action_group.stdout).unwrap();
+    assert!(action_group.status.success());
+    for command in ["list", "show", "create", "set", "member", "delete"] {
+        assert!(action_group_stdout.contains(command));
+    }
+
+    let multi = binary().args(["multi-action", "--help"]).output().unwrap();
+    let multi_stdout = String::from_utf8(multi.stdout).unwrap();
+    assert!(multi.status.success());
+    for command in ["list", "show", "create", "set", "delete", "group"] {
+        assert!(multi_stdout.contains(command));
+    }
+
+    let multi_group = binary()
+        .args(["multi-action", "group", "--help"])
+        .output()
+        .unwrap();
+    let multi_group_stdout = String::from_utf8(multi_group.stdout).unwrap();
+    assert!(multi_group.status.success());
+    for command in ["list", "show", "create", "set", "member", "delete"] {
+        assert!(multi_group_stdout.contains(command));
     }
 }
 

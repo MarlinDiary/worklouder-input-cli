@@ -12,9 +12,11 @@ pub mod semantic;
 use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
-    ActionCommand, ActionEventCommand, BridgeCommand, CapabilityCommand, Cli, CodexCommand,
-    Command, CompletionShell, ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand,
-    DeviceTransport, InputCommand, LayerCommand, ProfileCommand, TierCommand,
+    ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand, BridgeCommand,
+    CapabilityCommand, Cli, CodexCommand, Command, CompletionShell, ConfigCommand, ControlCommand,
+    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, LayerCommand,
+    MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand,
+    TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -74,6 +76,7 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Layer { command } => run_layer(command, cli.json, &mut out)?,
         Command::Control { command } => run_control(command, cli.json, &mut out)?,
         Command::Action { command } => run_action(command, cli.json, &mut out)?,
+        Command::MultiAction { command } => run_multi_action(command, cli.json, &mut out)?,
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
@@ -397,6 +400,367 @@ fn run_action(command: ActionCommand, json: bool, mut out: impl Write) -> Result
                 write_candidate_result(result, json, &mut out)?;
             }
         },
+        ActionCommand::Group { command } => run_action_group(command, json, &mut out)?,
+    }
+    Ok(())
+}
+
+fn run_action_group(command: ActionGroupCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        ActionGroupCommand::List { input } => {
+            write_group_list(semantic::action_group_list(&input)?, json, &mut out)?;
+        }
+        ActionGroupCommand::Show { input, id } => {
+            write_group_show(semantic::action_group_show(&input, id)?, json, &mut out)?;
+        }
+        ActionGroupCommand::Create {
+            input,
+            name,
+            action,
+            color,
+            tag,
+            output,
+        } => {
+            let result = semantic::action_group_create(
+                &input,
+                &name,
+                &action,
+                color.as_deref(),
+                &tag,
+                &output,
+            )?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        ActionGroupCommand::Set {
+            input,
+            id,
+            name,
+            color,
+            clear_color,
+            tag,
+            clear_tags,
+            output,
+        } => {
+            let tags = if clear_tags {
+                Some(Vec::new())
+            } else if tag.is_empty() {
+                None
+            } else {
+                Some(tag)
+            };
+            let result = semantic::action_group_set(
+                &input,
+                id,
+                semantic::GroupUpdate {
+                    name: name.as_deref(),
+                    color: color.as_deref(),
+                    clear_color,
+                    tags: tags.as_deref(),
+                },
+                &output,
+            )?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        ActionGroupCommand::Member { command } => match command {
+            ActionGroupMemberCommand::Add {
+                input,
+                id,
+                action,
+                output,
+            } => write_candidate_result(
+                semantic::action_group_member_add(&input, id, action, &output)?,
+                json,
+                &mut out,
+            )?,
+            ActionGroupMemberCommand::Remove {
+                input,
+                id,
+                action,
+                output,
+            } => write_candidate_result(
+                semantic::action_group_member_remove(&input, id, action, &output)?,
+                json,
+                &mut out,
+            )?,
+            ActionGroupMemberCommand::Move {
+                input,
+                id,
+                from,
+                to,
+                output,
+            } => write_candidate_result(
+                semantic::action_group_member_move(&input, id, from, to, &output)?,
+                json,
+                &mut out,
+            )?,
+        },
+        ActionGroupCommand::Delete {
+            input,
+            id,
+            keep_members,
+            output,
+        } => write_candidate_result(
+            semantic::action_group_delete(&input, id, keep_members, &output)?,
+            json,
+            &mut out,
+        )?,
+    }
+    Ok(())
+}
+
+fn run_multi_action(command: MultiActionCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        MultiActionCommand::List { input } => {
+            let result = semantic::multi_action_list(&input)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                for item in result.multi_actions {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}ms\t{} reference(s)",
+                        item.id, item.name, item.tapping_term, item.reference_count
+                    )?;
+                }
+            }
+        }
+        MultiActionCommand::Show { input, id } => {
+            let result = semantic::multi_action_show(&input, id)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "multi-action={}\t{}\t{}ms\t{} reference(s)",
+                    result.multi_action.id,
+                    result.multi_action.name,
+                    result.multi_action.tapping_term,
+                    result.multi_action.reference_count
+                )?;
+                for assignment in result.assignments {
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}",
+                        assignment.gesture, assignment.assignment_kind, assignment.assignment
+                    )?;
+                }
+            }
+        }
+        MultiActionCommand::Create {
+            input,
+            name,
+            color,
+            icon,
+            output,
+        } => write_candidate_result(
+            semantic::multi_action_create(
+                &input,
+                &name,
+                color.as_deref(),
+                icon.as_deref(),
+                &output,
+            )?,
+            json,
+            &mut out,
+        )?,
+        MultiActionCommand::Set {
+            input,
+            id,
+            name,
+            color,
+            clear_color,
+            icon,
+            clear_icon,
+            tap,
+            double_tap,
+            hold,
+            tap_hold,
+            tapping_term,
+            output,
+        } => write_candidate_result(
+            semantic::multi_action_set(
+                &input,
+                id,
+                semantic::MultiActionUpdate {
+                    name: name.as_deref(),
+                    color: color.as_deref(),
+                    clear_color,
+                    icon: icon.as_deref(),
+                    clear_icon,
+                    tap: tap.as_deref(),
+                    double_tap: double_tap.as_deref(),
+                    hold: hold.as_deref(),
+                    tap_hold: tap_hold.as_deref(),
+                    tapping_term,
+                },
+                &output,
+            )?,
+            json,
+            &mut out,
+        )?,
+        MultiActionCommand::Delete { input, id, output } => write_candidate_result(
+            semantic::multi_action_delete(&input, id, &output)?,
+            json,
+            &mut out,
+        )?,
+        MultiActionCommand::Group { command } => run_multi_action_group(command, json, &mut out)?,
+    }
+    Ok(())
+}
+
+fn run_multi_action_group(
+    command: MultiActionGroupCommand,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    match command {
+        MultiActionGroupCommand::List { input } => {
+            write_group_list(semantic::multi_action_group_list(&input)?, json, &mut out)?;
+        }
+        MultiActionGroupCommand::Show { input, id } => {
+            write_group_show(
+                semantic::multi_action_group_show(&input, id)?,
+                json,
+                &mut out,
+            )?;
+        }
+        MultiActionGroupCommand::Create {
+            input,
+            name,
+            multi_action,
+            color,
+            tag,
+            output,
+        } => write_candidate_result(
+            semantic::multi_action_group_create(
+                &input,
+                &name,
+                &multi_action,
+                color.as_deref(),
+                &tag,
+                &output,
+            )?,
+            json,
+            &mut out,
+        )?,
+        MultiActionGroupCommand::Set {
+            input,
+            id,
+            name,
+            color,
+            clear_color,
+            tag,
+            clear_tags,
+            output,
+        } => {
+            let tags = if clear_tags {
+                Some(Vec::new())
+            } else if tag.is_empty() {
+                None
+            } else {
+                Some(tag)
+            };
+            write_candidate_result(
+                semantic::multi_action_group_set(
+                    &input,
+                    id,
+                    semantic::GroupUpdate {
+                        name: name.as_deref(),
+                        color: color.as_deref(),
+                        clear_color,
+                        tags: tags.as_deref(),
+                    },
+                    &output,
+                )?,
+                json,
+                &mut out,
+            )?;
+        }
+        MultiActionGroupCommand::Member { command } => match command {
+            MultiActionGroupMemberCommand::Add {
+                input,
+                id,
+                multi_action,
+                output,
+            } => write_candidate_result(
+                semantic::multi_action_group_member_add(&input, id, multi_action, &output)?,
+                json,
+                &mut out,
+            )?,
+            MultiActionGroupMemberCommand::Remove {
+                input,
+                id,
+                multi_action,
+                output,
+            } => write_candidate_result(
+                semantic::multi_action_group_member_remove(&input, id, multi_action, &output)?,
+                json,
+                &mut out,
+            )?,
+            MultiActionGroupMemberCommand::Move {
+                input,
+                id,
+                from,
+                to,
+                output,
+            } => write_candidate_result(
+                semantic::multi_action_group_member_move(&input, id, from, to, &output)?,
+                json,
+                &mut out,
+            )?,
+        },
+        MultiActionGroupCommand::Delete {
+            input,
+            id,
+            keep_members,
+            output,
+        } => write_candidate_result(
+            semantic::multi_action_group_delete(&input, id, keep_members, &output)?,
+            json,
+            &mut out,
+        )?,
+    }
+    Ok(())
+}
+
+fn write_group_list(
+    result: semantic::ResourceGroupList,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    if json {
+        write_json(&mut out, &result)?;
+    } else {
+        for group in result.groups {
+            writeln!(
+                out,
+                "{}\t{}\t{} member(s)\t{}",
+                group.id,
+                group.name,
+                group.member_count,
+                group.tags.join(",")
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn write_group_show(
+    result: semantic::ResourceGroupShow,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    if json {
+        write_json(&mut out, &result)?;
+    } else {
+        writeln!(
+            out,
+            "group={}\t{}\t{} member(s)",
+            result.group.id, result.group.name, result.group.member_count
+        )?;
+        for member in result.members {
+            writeln!(out, "{}\t{}\t{}", member.index, member.id, member.name)?;
+        }
     }
     Ok(())
 }

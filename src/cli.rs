@@ -119,6 +119,12 @@ pub enum Command {
         command: ActionCommand,
     },
 
+    /// Inspect or edit Multi Actions in an offline configuration snapshot.
+    MultiAction {
+        #[clap(subcommand)]
+        command: MultiActionCommand,
+    },
+
     /// Generate a shell completion script on standard output.
     Completion {
         #[clap(value_enum)]
@@ -556,6 +562,315 @@ pub enum ActionCommand {
     Event {
         #[clap(subcommand)]
         command: ActionEventCommand,
+    },
+
+    /// Inspect or edit stored Action groups.
+    Group {
+        #[clap(subcommand)]
+        command: ActionGroupCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ActionGroupCommand {
+    /// List stored Action groups.
+    List {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Show one Action group and its ordered members.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+    },
+
+    /// Create an Action group containing one or more existing Actions.
+    Create {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        name: String,
+        #[clap(long, required = true)]
+        action: Vec<u64>,
+        #[clap(long)]
+        color: Option<String>,
+        #[clap(long)]
+        tag: Vec<String>,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Update Action group name, color, or tags.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        name: Option<String>,
+        #[clap(long, conflicts_with = "clear-color")]
+        color: Option<String>,
+        #[clap(long)]
+        clear_color: bool,
+        #[clap(long, conflicts_with = "clear-tags")]
+        tag: Vec<String>,
+        #[clap(long)]
+        clear_tags: bool,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Add, remove, or reorder Action group members.
+    Member {
+        #[clap(subcommand)]
+        command: ActionGroupMemberCommand,
+    },
+
+    /// Delete a group using Input's orphan-member cascade.
+    Delete {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        /// Keep every member resource and remove only the group container.
+        #[clap(long)]
+        keep_members: bool,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ActionGroupMemberCommand {
+    /// Append an existing Action to a group.
+    Add {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        action: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Remove an Action from a group while keeping the Action itself.
+    Remove {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        action: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Move one member by zero-based index.
+    Move {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        from: usize,
+        #[clap(long)]
+        to: usize,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum MultiActionCommand {
+    /// List Multi Actions and their reference counts.
+    List {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Show one Multi Action and all four gesture assignments.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+    },
+
+    /// Create a Multi Action with four KC_NONE assignments and a 250ms term.
+    Create {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long, default_value = "My Multiaction")]
+        name: String,
+        #[clap(long)]
+        color: Option<String>,
+        #[clap(long)]
+        icon: Option<String>,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Update Multi Action metadata, assignments, or tapping term.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        name: Option<String>,
+        #[clap(long, conflicts_with = "clear-color")]
+        color: Option<String>,
+        #[clap(long)]
+        clear_color: bool,
+        #[clap(long, conflicts_with = "clear-icon")]
+        icon: Option<String>,
+        #[clap(long)]
+        clear_icon: bool,
+        #[clap(long)]
+        tap: Option<String>,
+        #[clap(long)]
+        double_tap: Option<String>,
+        #[clap(long)]
+        hold: Option<String>,
+        #[clap(long)]
+        tap_hold: Option<String>,
+        #[clap(long)]
+        tapping_term: Option<u64>,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Delete a Multi Action and replace every live reference with KC_NONE.
+    Delete {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Inspect or edit stored Multi Action groups.
+    Group {
+        #[clap(subcommand)]
+        command: MultiActionGroupCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum MultiActionGroupCommand {
+    /// List stored Multi Action groups.
+    List {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Show one Multi Action group and its ordered members.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+    },
+
+    /// Create a group containing one or more existing Multi Actions.
+    Create {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        name: String,
+        #[clap(long, required = true)]
+        multi_action: Vec<u64>,
+        #[clap(long)]
+        color: Option<String>,
+        #[clap(long)]
+        tag: Vec<String>,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Update Multi Action group name, color, or tags.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        name: Option<String>,
+        #[clap(long, conflicts_with = "clear-color")]
+        color: Option<String>,
+        #[clap(long)]
+        clear_color: bool,
+        #[clap(long, conflicts_with = "clear-tags")]
+        tag: Vec<String>,
+        #[clap(long)]
+        clear_tags: bool,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Add, remove, or reorder Multi Action group members.
+    Member {
+        #[clap(subcommand)]
+        command: MultiActionGroupMemberCommand,
+    },
+
+    /// Delete a group using Input's orphan-member cascade.
+    Delete {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        /// Keep every member resource and remove only the group container.
+        #[clap(long)]
+        keep_members: bool,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum MultiActionGroupMemberCommand {
+    /// Append an existing Multi Action to a group.
+    Add {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        multi_action: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Remove a Multi Action from a group while keeping the resource itself.
+    Remove {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        multi_action: u64,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Move one member by zero-based index.
+    Move {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+        #[clap(long)]
+        from: usize,
+        #[clap(long)]
+        to: usize,
+        #[clap(long, value_parser)]
+        output: PathBuf,
     },
 }
 
