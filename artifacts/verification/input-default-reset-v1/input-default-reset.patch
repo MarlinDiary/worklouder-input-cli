@@ -1,0 +1,2179 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 3173ae4..d512414 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -49,6 +49,8 @@ jobs:
+         run: ./scripts/test-bridge-e2e.sh
+       - name: Test delegated firmware update end to end
+         run: ./scripts/test-firmware-update-e2e.sh
++      - name: Test Input-owned default reset and exact rollback
++        run: ./scripts/test-reset-e2e.sh
+       - name: Test Codex bridge CLI end to end
+         run: ./scripts/test-codex-bridge-e2e.sh
+       - name: Test four-authority transactions and rollback
+diff --git a/README.md b/README.md
+index d5d32ae..5ab5b0c 100644
+--- a/README.md
++++ b/README.md
+@@ -140,6 +140,8 @@ worklouderctl input permissions [--device DEVICE_ID]
+ worklouderctl input firmware check [--device DEVICE_ID]
+ worklouderctl input firmware plan --output FIRMWARE_PLAN.json [--device DEVICE_ID]
+ worklouderctl input firmware update --plan FIRMWARE_PLAN.json --backup FIRMWARE_CONFIG_BEFORE.json --receipt FIRMWARE_UPDATE.json --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
++worklouderctl input reset plan --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json
++worklouderctl input reset apply --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json --backup RESET_BEFORE.json --receipt RESET_RECEIPT.json --expected-revision CONFIG_REVISION --idempotency-key RESET_KEY
+ worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
+ worklouderctl input preset snapshot --output PRESET_CATALOG.json
+ worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
+@@ -495,6 +497,16 @@ bounded suffix of Input's 5,000-entry in-memory log ring, redacts home paths,
+ emails, and credential-shaped values inside Input, then atomically publishes
+ and reopens a `0700` bundle of `0600` JSON/text files with SHA-256 records.
+ 
++`input reset plan` asks an injected Input-owned authority to build the exact default
++configuration for the current app/device/device-kit/firmware/layout tuple; the
++CLI does not freeze its own keymap. `input reset apply` binds that candidate to
++the source revision, rechecks the Input version immediately before writing,
++captures or reuses a complete backup, executes the existing
++authenticated configuration transaction, verifies exact readback, supports
++idempotent retry, and leaves an inspectable receipt plus the normal exact
++`device config restore` rollback path. See the
++[Input-owned reset guide](docs/input-default-reset.md).
++
+ `transaction plan/show/apply/restore` now coordinates Codex settings, Codex
+ Agent Keys, Input device configuration, and Input host settings behind one
+ canonical revision and rollback boundary. It preflights all authorities before
+@@ -618,6 +630,7 @@ CLI semantic parser.
+ | Input presets | Catalog snapshot/list/show/preview plus exact offline install remapping; all 17 bundled defaults candidate-verified and fixture apply/readback/restore verified |
+ | Input radial menu | Sector/angle inspection and referenced resource resolution verified; edits reuse joystick/control transactions and the overlay remains Input-owned |
+ | Tier 4 permissions, firmware check, and diagnostic logs | Exact Input 0.18.0 authority paths frozen; bridge/CLI fixture verified with private sanitized bundle |
++| Input-owned reset | Complete per-version/device/layout default candidate, immutable plan, CAS apply, exact readback, idempotent replay, and rollback fixture verified |
+ | Real-device mutation and rollback | Planned |
+ | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
+ | Input cache read adapter | Complete; byte-exact bridge-equivalent semantic snapshot |
+@@ -666,6 +679,7 @@ Read the complete [FAQ](docs/faq.md).
+ - [Shell-free agent JSON protocol](docs/agent-protocol.md)
+ - [Generated command reference](docs/command-reference.md)
+ - [Delegated firmware update](docs/delegated-firmware-update.md)
++- [Input-owned default reset](docs/input-default-reset.md)
+ - [Configuration parity matrix](docs/configuration-parity.md)
+ - [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
+ - [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 5f54eab..f11ef90 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -109,6 +109,8 @@ worklouderctl input permissions [--device DEVICE_ID]
+ worklouderctl input firmware check [--device DEVICE_ID]
+ worklouderctl input firmware plan --output FIRMWARE_PLAN.json [--device DEVICE_ID]
+ worklouderctl input firmware update --plan FIRMWARE_PLAN.json --backup FIRMWARE_CONFIG_BEFORE.json --receipt FIRMWARE_UPDATE.json --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
++worklouderctl input reset plan --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json [--device DEVICE_ID]
++worklouderctl input reset apply --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json --backup RESET_BEFORE.json --receipt RESET_RECEIPT.json --expected-revision CONFIG_REVISION --idempotency-key RESET_KEY
+ worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
+ worklouderctl input preset snapshot --output PRESET_CATALOG.json
+ worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
+@@ -413,6 +415,13 @@ recovery-required error，但不实现 programmer 或 firmware downgrade。`inpu
+ 值，再原子发布并 reopen 一个 `0700` bundle；其中 JSON/text 与 SHA-256 manifest 均为
+ `0600`。
+ 
++`input reset plan` 只在 Input 注入自己的精确 device/layout/version default factory 时
++出现；它冻结当前 Input version、device identity、layout version、firmware、source
++revision 和完整 candidate。`input reset apply` 会在写入前再次核对 Input version，随后
++完全复用现有 configuration CAS/backup/readback/automatic-rollback transaction。receipt
++与原始 backup 都会严格 reopen；精确回滚继续使用普通的 `device config restore`。CLI
++不会复制 Input renderer 的 reset flow。
++
+ 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
+ adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
+ 
+diff --git a/companion/README.md b/companion/README.md
+index b139231..9350999 100644
+--- a/companion/README.md
++++ b/companion/README.md
+@@ -103,6 +103,15 @@ the verified receipt. An ambiguous provider error is accepted only when this
+ same postflight proves completion; every other ambiguous state returns
+ `recoveryRequired` rather than attempting a CLI-owned downgrade.
+ 
++When `resetAuthority.buildDefaultConfiguration()` is injected, the adapter
++advertises `input.reset.plan.v1`. Planning captures the current complete
++configuration and asks Input for the exact app/device/device-kit/firmware/layout
++default without mutating state. The CLI publishes the versioned plan and
++candidate separately, then applies the candidate through the existing
++`device.config.apply.v1` transaction with source CAS, complete backup,
++idempotency, exact readback, immutable receipt, and standard restore. The CLI
++rechecks the exact Input version immediately before the transaction.
++
+ The reference adapter owns the surrounding transaction: validate every byte
+ and digest, capture a pre-mutation snapshot, compare the live revision, invoke
+ the writer, read back the complete revision, and automatically restore and
+@@ -129,6 +138,7 @@ node companion/conformance.mjs \
+   --require input.firmware.status.v1 \
+   --require input.firmware.plan.v1 \
+   --require input.firmware.update.v1 \
++  --require input.reset.plan.v1 \
+   --require input.logs.snapshot.v1
+ ```
+ 
+@@ -142,6 +152,7 @@ Run the full reference suite before each Input release:
+ npm --prefix companion test
+ ./scripts/test-bridge-e2e.sh
+ ./scripts/test-firmware-update-e2e.sh
++./scripts/test-reset-e2e.sh
+ ```
+ 
+ The first command checks server, adapter, lifecycle, authentication, and path
+diff --git a/companion/fixture-server.mjs b/companion/fixture-server.mjs
+index ef5a7fe..a709826 100644
+--- a/companion/fixture-server.mjs
++++ b/companion/fixture-server.mjs
+@@ -178,6 +178,49 @@ const files = new Map([
+   ],
+ ]);
+ 
++const defaultFiles = new Map([
++  [
++    "keymap.json",
++    Buffer.from(
++      JSON.stringify({
++        version: 1,
++        activeProfileId: 0,
++        linkedApps: [],
++        macros: [],
++        macrosGroups: [],
++        multiActions: [],
++        multiActionsGroups: [],
++        profiles: [
++          {
++            id: 0,
++            name: "Default",
++            macrosUsed: [],
++            multiActionsUsed: [],
++            layers: [
++              {
++                id: 0,
++                name: "Layer 1",
++                color: 0xffffff,
++                layout: {
++                  keymap: [["KC_NONE", "KC_NONE"]],
++                  encoders: [["KC_NONE", "KC_NONE", "KC_NONE"]],
++                  joystick: { type: "VENDOR", sectors: [] },
++                },
++              },
++            ],
++          },
++        ],
++      }),
++    ),
++  ],
++  [
++    "smart_actions.json",
++    Buffer.from(
++      JSON.stringify({ version: 1, smartActions: {}, smartActionGroups: [] }),
++    ),
++  ],
++]);
++
+ let hostSettings = {
+   showedAnalyticsPopUp: true,
+   analyticsConsented: false,
+@@ -225,6 +268,7 @@ const device = {
+ const adapter = createInputMainAdapter({
+   devicesCommManager: { getDevices: () => [device] },
+   deviceKitVersion: "0.1.29-fixture",
++  inputVersion: "0.18.0-fixture",
+   configurationWriter: {
+     async replaceConfiguration({ files: replacement }) {
+       const injectFailure =
+@@ -368,6 +412,23 @@ const adapter = createInputMainAdapter({
+       };
+     },
+   },
++  resetAuthority: {
++    async buildDefaultConfiguration({ device: selected }) {
++      if (
++        selected.info.deviceType !== "codex_micro" ||
++        selected.info.layoutType !== "universal"
++      ) {
++        throw new Error("fixture reset authority received the wrong device/layout");
++      }
++      return {
++        layoutVersion: "codex_micro/universal/input-0.18.0-fixture/v1",
++        files: [...defaultFiles].map(([relativePath, bytes]) => ({
++          relativePath,
++          bytes: Buffer.from(bytes),
++        })),
++      };
++    },
++  },
+   logsAuthority: {
+     async readLogs() {
+       return [
+diff --git a/companion/input-main-adapter.mjs b/companion/input-main-adapter.mjs
+index 364a6d2..d528691 100644
+--- a/companion/input-main-adapter.mjs
++++ b/companion/input-main-adapter.mjs
+@@ -17,6 +17,10 @@ export const FIRMWARE_PLAN_SCHEMA_VERSION = 1;
+ export const FIRMWARE_PLAN_KIND = "worklouder-input-firmware-plan";
+ export const FIRMWARE_PLAN_REVISION_ALGORITHM =
+   "sha256:recursive-key-sorted-firmware-plan-body-v1";
++export const RESET_PLAN_SCHEMA_VERSION = 1;
++export const RESET_PLAN_KIND = "worklouder-input-reset-plan";
++export const RESET_PLAN_REVISION_ALGORITHM =
++  "sha256:recursive-key-sorted-reset-plan-body-v1";
+ 
+ const MAX_CONFIG_FILES = 4096;
+ const MAX_CONFIG_FILE_BYTES = 16 * 1024 * 1024;
+@@ -38,6 +42,7 @@ const FIRMWARE_PHASES = [
+ export function createInputMainAdapter({
+   devicesCommManager,
+   deviceKitVersion,
++  inputVersion,
+   configurationWriter,
+   hostSettingsAuthority,
+   presetCatalogAuthority,
+@@ -45,6 +50,7 @@ export function createInputMainAdapter({
+   permissionsAuthority,
+   firmwareAuthority,
+   firmwareOperationsAuthority,
++  resetAuthority,
+   logsAuthority,
+ }) {
+   if (
+@@ -116,6 +122,21 @@ export function createInputMainAdapter({
+       "firmwareOperationsAuthority requires firmwareAuthority.readStatus",
+     );
+   }
++  if (
++    resetAuthority !== undefined &&
++    (!resetAuthority ||
++      typeof resetAuthority.buildDefaultConfiguration !== "function")
++  ) {
++    throw new TypeError(
++      "resetAuthority.buildDefaultConfiguration must be a function",
++    );
++  }
++  if (
++    resetAuthority &&
++    (typeof inputVersion !== "string" || inputVersion.length === 0)
++  ) {
++    throw new TypeError("inputVersion is required with resetAuthority");
++  }
+   if (
+     logsAuthority !== undefined &&
+     (!logsAuthority || typeof logsAuthority.readLogs !== "function")
+@@ -271,6 +292,52 @@ export function createInputMainAdapter({
+     };
+   };
+ 
++  const captureResetPlan = async (device) => {
++    const current = await captureConfigSnapshot(device);
++    const generated = await resetAuthority.buildDefaultConfiguration({
++      device,
++      currentConfiguration: current,
++    });
++    if (!generated || typeof generated !== "object" || Array.isArray(generated)) {
++      throw new BridgeError(-32008, "Input reset authority returned no candidate");
++    }
++    const layoutVersion = safeBoundedString(
++      generated.layoutVersion,
++      "reset layout version",
++      128,
++    );
++    const candidate = defaultConfigSnapshot(current, generated.files);
++    const body = {
++      inputAppVersion: inputVersion,
++      deviceId: current.deviceId,
++      deviceKitVersion: current.deviceKitVersion,
++      device: current.device,
++      firmwareVersion: safeBoundedString(
++        current.status.firmwareVersion,
++        "reset firmware version",
++        128,
++      ),
++      layoutVersion,
++      strategy: "input-default-layout",
++      sourceRevision: current.revision,
++      candidateRevision: candidate.revision,
++      candidateFileCount: candidate.files.length,
++    };
++    const plan = {
++      schemaVersion: RESET_PLAN_SCHEMA_VERSION,
++      kind: RESET_PLAN_KIND,
++      revisionAlgorithm: RESET_PLAN_REVISION_ALGORITHM,
++      revision: resetPlanRevision(body),
++      ...body,
++    };
++    return {
++      schemaVersion: 1,
++      kind: "worklouder-input-reset-plan-bundle",
++      plan,
++      candidate,
++    };
++  };
++
+   const runMutation = async ({
+     operation,
+     deviceId,
+@@ -841,6 +908,10 @@ export function createInputMainAdapter({
+   if (firmwareOperationsAuthority) {
+     adapter.updateFirmware = runFirmwareUpdate;
+   }
++  if (resetAuthority) {
++    adapter.getResetPlan = async ({ deviceId = null }) =>
++      captureResetPlan(selectDevice(deviceId));
++  }
+   if (logsAuthority) {
+     adapter.snapshotLogs = async ({ maxEntries = MAX_LOG_ENTRIES }) => {
+       const limit = safeInteger(maxEntries, "maxEntries", 1, MAX_LOG_ENTRIES);
+@@ -851,6 +922,67 @@ export function createInputMainAdapter({
+   return adapter;
+ }
+ 
++function defaultConfigSnapshot(current, suppliedFiles) {
++  if (
++    !Array.isArray(suppliedFiles) ||
++    suppliedFiles.length === 0 ||
++    suppliedFiles.length > MAX_CONFIG_FILES
++  ) {
++    throw new BridgeError(-32008, "Input reset authority returned invalid files");
++  }
++  const seen = new Set();
++  let totalBytes = 0;
++  const files = suppliedFiles.map((file) => {
++    if (!file || typeof file !== "object" || Array.isArray(file)) {
++      throw new BridgeError(-32008, "Input reset file was invalid");
++    }
++    const relativePath = safeRelativePath(file.relativePath);
++    if (seen.has(relativePath)) {
++      throw new BridgeError(-32008, "Input reset files contained duplicate paths");
++    }
++    seen.add(relativePath);
++    const bytes = Buffer.isBuffer(file.bytes)
++      ? Buffer.from(file.bytes)
++      : file.bytes instanceof Uint8Array
++        ? Buffer.from(file.bytes)
++        : null;
++    if (!bytes) {
++      throw new BridgeError(-32008, "Input reset file contained no bytes");
++    }
++    totalBytes += bytes.length;
++    if (
++      bytes.length > MAX_CONFIG_FILE_BYTES ||
++      totalBytes > MAX_CONFIG_TOTAL_BYTES
++    ) {
++      throw new BridgeError(-32008, "Input reset files exceeded snapshot limits");
++    }
++    return {
++      relativePath,
++      size: bytes.length,
++      deviceChecksumSha1: createHash("sha1").update(bytes).digest("hex"),
++      sha256: createHash("sha256").update(bytes).digest("hex"),
++      dataBase64: bytes.toString("base64"),
++      bytes,
++    };
++  });
++  files.sort((left, right) => comparePaths(left.relativePath, right.relativePath));
++  const serializable = files.map(({ bytes: _bytes, ...file }) => file);
++  const candidate = {
++    ...current,
++    revision: configRevision(files),
++    files: serializable,
++  };
++  validateConfigSnapshot(candidate);
++  return candidate;
++}
++
++export function resetPlanRevision(body) {
++  return createHash("sha256")
++    .update("worklouder-input-reset-plan-revision-v1\0", "utf8")
++    .update(canonicalJson(body), "utf8")
++    .digest("hex");
++}
++
+ function normalizePermissionsStatus(status) {
+   if (!status || typeof status !== "object" || Array.isArray(status)) {
+     throw new BridgeError(-32008, "Input permission status was invalid");
+diff --git a/companion/input-main-bridge.mjs b/companion/input-main-bridge.mjs
+index fd4a37b..05504e2 100644
+--- a/companion/input-main-bridge.mjs
++++ b/companion/input-main-bridge.mjs
+@@ -49,6 +49,7 @@ const METHOD_DEFINITIONS = new Map([
+     ["input.firmware.status.v1", "getFirmwareStatus"],
+   ],
+   ["input.firmware.plan", ["input.firmware.plan.v1", "getFirmwarePlan"]],
++  ["input.reset.plan", ["input.reset.plan.v1", "getResetPlan"]],
+   [
+     "input.firmware.update",
+     ["input.firmware.update.v1", "updateFirmware"],
+diff --git a/companion/input-main-bridge.test.mjs b/companion/input-main-bridge.test.mjs
+index 155485a..ec89a91 100644
+--- a/companion/input-main-bridge.test.mjs
++++ b/companion/input-main-bridge.test.mjs
+@@ -709,6 +709,45 @@ test("Input adapter delegates firmware update and verifies config-preserving pos
+   assert.equal(replay.afterFirmwareVersion, "v0.7.0");
+ });
+ 
++test("Input adapter builds a versioned default candidate without mutating configuration", async () => {
++  const files = new Map([
++    ["keymap.json", Buffer.from('{"layout":"custom"}')],
++    ["smart_actions.json", Buffer.from('{"smartActions":{"1":{}}}')],
++  ]);
++  const device = configDevice("reset-device", files);
++  let authorityCalls = 0;
++  const adapter = createInputMainAdapter({
++    devicesCommManager: { getDevices: () => [device] },
++    deviceKitVersion: "0.1.29",
++    inputVersion: "0.18.0",
++    resetAuthority: {
++      async buildDefaultConfiguration({ device: selected, currentConfiguration }) {
++        authorityCalls += 1;
++        assert.equal(selected, device);
++        assert.equal(currentConfiguration.deviceId, "reset-device");
++        return {
++          layoutVersion: "codex_micro/universal/input-0.18.0/v1",
++          files: [
++            { relativePath: "keymap.json", bytes: Buffer.from('{"layout":"default"}') },
++            { relativePath: "smart_actions.json", bytes: Buffer.from('{"smartActions":{}}') },
++          ],
++        };
++      },
++    },
++  });
++
++  const bundle = await adapter.getResetPlan({ deviceId: "reset-device" });
++  assert.equal(bundle.kind, "worklouder-input-reset-plan-bundle");
++  assert.equal(bundle.plan.inputAppVersion, "0.18.0");
++  assert.equal(bundle.plan.device.layoutType, "universal");
++  assert.equal(bundle.plan.sourceRevision.length, 64);
++  assert.equal(bundle.plan.candidateRevision, bundle.candidate.revision);
++  assert.notEqual(bundle.plan.sourceRevision, bundle.plan.candidateRevision);
++  assert.equal(bundle.plan.candidateFileCount, 2);
++  assert.equal(authorityCalls, 1);
++  assert.equal(files.get("keymap.json").toString(), '{"layout":"custom"}');
++});
++
+ test("one-call Input integration owns discovery and lifecycle paths", async () => {
+   const root = await mkdtemp("/tmp/wlb-integration-");
+   class FixtureApp extends EventEmitter {
+@@ -824,6 +863,7 @@ test("one-call Input integration owns discovery and lifecycle paths", async () =
+   assert.ok(integration.capabilities.includes("input.firmware.status.v1"));
+   assert.ok(integration.capabilities.includes("input.firmware.plan.v1"));
+   assert.ok(!integration.capabilities.includes("input.firmware.update.v1"));
++  assert.ok(!integration.capabilities.includes("input.reset.plan.v1"));
+   assert.ok(integration.capabilities.includes("input.logs.snapshot.v1"));
+   assert.equal(app.listenerCount("before-quit"), 1);
+   await integration.stop();
+diff --git a/companion/input-main-integration.mjs b/companion/input-main-integration.mjs
+index f13d2b2..a67329c 100644
+--- a/companion/input-main-integration.mjs
++++ b/companion/input-main-integration.mjs
+@@ -55,6 +55,7 @@ export async function installInputCompanionBridge({
+   const adapter = createInputMainAdapter({
+     devicesCommManager: services.devicesCommManager,
+     deviceKitVersion,
++    inputVersion: app.getVersion(),
+     configurationWriter: services.configurationWriter,
+     hostSettingsAuthority,
+     presetCatalogAuthority: services.presetCatalogAuthority,
+@@ -62,6 +63,7 @@ export async function installInputCompanionBridge({
+     permissionsAuthority,
+     firmwareAuthority,
+     firmwareOperationsAuthority: services.firmwareOperationsAuthority,
++    resetAuthority: services.resetAuthority,
+     logsAuthority,
+   });
+   const bridge = await startInputCompanionBridge({
+diff --git a/completions/_worklouderctl b/completions/_worklouderctl
+index afdb2ef..b7cd85b 100644
+--- a/completions/_worklouderctl
++++ b/completions/_worklouderctl
+@@ -1380,6 +1380,60 @@ _arguments "${_arguments_options[@]}" \
+     ;;
+ esac
+ ;;
++(reset)
++_arguments "${_arguments_options[@]}" \
++'-h[Print help information]' \
++'--help[Print help information]' \
++'-V[Print version information]' \
++'--version[Print version information]' \
++'--json[Emit machine-readable JSON when the command supports it]' \
++":: :_worklouderctl__input__reset_commands" \
++"*::: :->reset" \
++&& ret=0
++
++    case $state in
++    (reset)
++        words=($line[1] "${words[@]}")
++        (( CURRENT += 1 ))
++        curcontext="${curcontext%:*:*}:worklouderctl-input-reset-command-$line[1]:"
++        case $line[1] in
++            (plan)
++_arguments "${_arguments_options[@]}" \
++'*--plan=[Destination for the immutable reset plan]:PLAN:_files' \
++'*--candidate=[Destination for the complete default configuration snapshot]:CANDIDATE:_files' \
++'--device=[Select a connected device ID; defaults to the single Codex Micro]:DEVICE: ' \
++'-h[Print help information]' \
++'--help[Print help information]' \
++'-V[Print version information]' \
++'--version[Print version information]' \
++'--json[Emit machine-readable JSON when the command supports it]' \
++&& ret=0
++;;
++(apply)
++_arguments "${_arguments_options[@]}" \
++'*--plan=[Immutable plan produced by `input reset plan`]:PLAN:_files' \
++'*--candidate=[Complete default candidate produced with the plan]:CANDIDATE:_files' \
++'*--backup=[Immutable complete pre-reset configuration snapshot]:BACKUP:_files' \
++'*--receipt=[Destination for the verified reset receipt]:RECEIPT:_files' \
++'--expected-revision=[Require the live configuration to have this exact revision]:EXPECTED_REVISION: ' \
++'--idempotency-key=[Stable retry key; reuse it only with the same plan and candidate]:IDEMPOTENCY_KEY: ' \
++'-h[Print help information]' \
++'--help[Print help information]' \
++'-V[Print version information]' \
++'--version[Print version information]' \
++'--json[Emit machine-readable JSON when the command supports it]' \
++&& ret=0
++;;
++(help)
++_arguments "${_arguments_options[@]}" \
++'--json[Emit machine-readable JSON when the command supports it]' \
++'*::subcommand -- The subcommand whose help message to display:' \
++&& ret=0
++;;
++        esac
++    ;;
++esac
++;;
+ (logs)
+ _arguments "${_arguments_options[@]}" \
+ '-h[Print help information]' \
+@@ -3712,6 +3766,11 @@ _worklouderctl__input__permission__command__apply_commands() {
+     local commands; commands=()
+     _describe -t commands 'worklouderctl input permission command apply commands' commands "$@"
+ }
++(( $+functions[_worklouderctl__input__reset__apply_commands] )) ||
++_worklouderctl__input__reset__apply_commands() {
++    local commands; commands=()
++    _describe -t commands 'worklouderctl input reset apply commands' commands "$@"
++}
+ (( $+functions[_worklouderctl__transaction__apply_commands] )) ||
+ _worklouderctl__transaction__apply_commands() {
+     local commands; commands=()
+@@ -4443,6 +4502,11 @@ _worklouderctl__input__preset__help_commands() {
+     local commands; commands=()
+     _describe -t commands 'worklouderctl input preset help commands' commands "$@"
+ }
++(( $+functions[_worklouderctl__input__reset__help_commands] )) ||
++_worklouderctl__input__reset__help_commands() {
++    local commands; commands=()
++    _describe -t commands 'worklouderctl input reset help commands' commands "$@"
++}
+ (( $+functions[_worklouderctl__layer__help_commands] )) ||
+ _worklouderctl__layer__help_commands() {
+     local commands; commands=()
+@@ -4537,6 +4601,7 @@ _worklouderctl__input_commands() {
+ 'permission:Inspect or change Input-owned host permission settings' \
+ 'permissions:Check the Input-owned OS permission required for device access' \
+ 'firmware:Inspect firmware availability through Input'\''s released update service' \
++'reset:Plan and apply an Input-owned complete default configuration' \
+ 'logs:Collect a bounded, sanitized diagnostic log bundle from Input' \
+ 'preset:Snapshot the Input-owned preset catalog through the companion bridge' \
+ 'help:Print this message or the help of the given subcommand(s)' \
+@@ -4824,6 +4889,11 @@ _worklouderctl__input__firmware__plan_commands() {
+     local commands; commands=()
+     _describe -t commands 'worklouderctl input firmware plan commands' commands "$@"
+ }
++(( $+functions[_worklouderctl__input__reset__plan_commands] )) ||
++_worklouderctl__input__reset__plan_commands() {
++    local commands; commands=()
++    _describe -t commands 'worklouderctl input reset plan commands' commands "$@"
++}
+ (( $+functions[_worklouderctl__transaction__plan_commands] )) ||
+ _worklouderctl__transaction__plan_commands() {
+     local commands; commands=()
+@@ -4923,6 +4993,15 @@ _worklouderctl__codex__reset_commands() {
+     )
+     _describe -t commands 'worklouderctl codex reset commands' commands "$@"
+ }
++(( $+functions[_worklouderctl__input__reset_commands] )) ||
++_worklouderctl__input__reset_commands() {
++    local commands; commands=(
++'plan:Freeze the live revision and an Input-generated default candidate' \
++'apply:Apply the frozen candidate through the existing config transaction' \
++'help:Print this message or the help of the given subcommand(s)' \
++    )
++    _describe -t commands 'worklouderctl input reset commands' commands "$@"
++}
+ (( $+functions[_worklouderctl__codex__agent-key__restore_commands] )) ||
+ _worklouderctl__codex__agent-key__restore_commands() {
+     local commands; commands=()
+diff --git a/completions/worklouderctl.bash b/completions/worklouderctl.bash
+index 19a8232..ca64eb3 100644
+--- a/completions/worklouderctl.bash
++++ b/completions/worklouderctl.bash
+@@ -3432,7 +3432,7 @@ _worklouderctl() {
+             return 0
+             ;;
+         worklouderctl__input)
+-            opts="-h -V --bridge-socket --bridge-token --help --version --json inspect export config permission permissions firmware logs preset help"
++            opts="-h -V --bridge-socket --bridge-token --help --version --json inspect export config permission permissions firmware reset logs preset help"
+             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                 return 0
+@@ -3959,6 +3959,98 @@ _worklouderctl() {
+             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+             return 0
+             ;;
++        worklouderctl__input__reset)
++            opts="-h -V --help --version --json plan apply help"
++            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
++                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++                return 0
++            fi
++            case "${prev}" in
++                *)
++                    COMPREPLY=()
++                    ;;
++            esac
++            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++            return 0
++            ;;
++        worklouderctl__input__reset__apply)
++            opts="-h -V --plan --candidate --backup --receipt --expected-revision --idempotency-key --help --version --json"
++            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
++                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++                return 0
++            fi
++            case "${prev}" in
++                --plan)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                --candidate)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                --backup)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                --receipt)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                --expected-revision)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                --idempotency-key)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                *)
++                    COMPREPLY=()
++                    ;;
++            esac
++            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++            return 0
++            ;;
++        worklouderctl__input__reset__help)
++            opts="--json <SUBCOMMAND>..."
++            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
++                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++                return 0
++            fi
++            case "${prev}" in
++                *)
++                    COMPREPLY=()
++                    ;;
++            esac
++            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++            return 0
++            ;;
++        worklouderctl__input__reset__plan)
++            opts="-h -V --plan --candidate --device --help --version --json"
++            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
++                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++                return 0
++            fi
++            case "${prev}" in
++                --plan)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                --candidate)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                --device)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                *)
++                    COMPREPLY=()
++                    ;;
++            esac
++            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++            return 0
++            ;;
+         worklouderctl__layer)
+             opts="-h -V --help --version --json list show create duplicate delete move rename color lighting joystick help"
+             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+diff --git a/completions/worklouderctl.fish b/completions/worklouderctl.fish
+index 5af2b99..0c89f11 100644
+--- a/completions/worklouderctl.fish
++++ b/completions/worklouderctl.fish
+@@ -432,20 +432,21 @@ complete -c worklouderctl -n "__fish_seen_subcommand_from codex; and __fish_seen
+ complete -c worklouderctl -n "__fish_seen_subcommand_from codex; and __fish_seen_subcommand_from voice; and __fish_seen_subcommand_from set" -l json -d 'Emit machine-readable JSON when the command supports it'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from codex; and __fish_seen_subcommand_from voice; and __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from codex; and __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -l bridge-socket -d 'Override the Input Companion Bridge Unix socket path' -r -F
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -l bridge-token -d 'Override the Input Companion Bridge token file path' -r -F
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -s h -l help -d 'Print help information'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -s V -l version -d 'Print version information'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "inspect" -d 'Inspect cached Input configuration without changing it'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "export" -d 'Export exact Input configuration bytes into an atomic bundle'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "config" -d 'Build standard semantic snapshots from Input\'s cached device files'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "permission" -d 'Inspect or change Input-owned host permission settings'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "permissions" -d 'Check the Input-owned OS permission required for device access'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "firmware" -d 'Inspect firmware availability through Input\'s released update service'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "logs" -d 'Collect a bounded, sanitized diagnostic log bundle from Input'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "preset" -d 'Snapshot the Input-owned preset catalog through the companion bridge'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -l bridge-socket -d 'Override the Input Companion Bridge Unix socket path' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -l bridge-token -d 'Override the Input Companion Bridge token file path' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -s h -l help -d 'Print help information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -s V -l version -d 'Print version information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "inspect" -d 'Inspect cached Input configuration without changing it'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "export" -d 'Export exact Input configuration bytes into an atomic bundle'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "config" -d 'Build standard semantic snapshots from Input\'s cached device files'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "permission" -d 'Inspect or change Input-owned host permission settings'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "permissions" -d 'Check the Input-owned OS permission required for device access'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "firmware" -d 'Inspect firmware availability through Input\'s released update service'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "reset" -d 'Plan and apply an Input-owned complete default configuration'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "logs" -d 'Collect a bounded, sanitized diagnostic log bundle from Input'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "preset" -d 'Snapshot the Input-owned preset catalog through the companion bridge'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from inspect" -l device -d 'Select a cached device ID. Required when multiple devices exist' -r
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from inspect" -l support-root -d 'Override Input\'s application support directory' -r -F
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from inspect" -s h -l help -d 'Print help information'
+@@ -541,6 +542,28 @@ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from firmware; and __fish_seen_subcommand_from update" -s V -l version -d 'Print version information'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from firmware; and __fish_seen_subcommand_from update" -l json -d 'Emit machine-readable JSON when the command supports it'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from firmware; and __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from plan; and not __fish_seen_subcommand_from apply; and not __fish_seen_subcommand_from help" -s h -l help -d 'Print help information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from plan; and not __fish_seen_subcommand_from apply; and not __fish_seen_subcommand_from help" -s V -l version -d 'Print version information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from plan; and not __fish_seen_subcommand_from apply; and not __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from plan; and not __fish_seen_subcommand_from apply; and not __fish_seen_subcommand_from help" -f -a "plan" -d 'Freeze the live revision and an Input-generated default candidate'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from plan; and not __fish_seen_subcommand_from apply; and not __fish_seen_subcommand_from help" -f -a "apply" -d 'Apply the frozen candidate through the existing config transaction'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from plan; and not __fish_seen_subcommand_from apply; and not __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from plan" -l plan -d 'Destination for the immutable reset plan' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from plan" -l candidate -d 'Destination for the complete default configuration snapshot' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from plan" -l device -d 'Select a connected device ID; defaults to the single Codex Micro' -r
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from plan" -s h -l help -d 'Print help information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from plan" -s V -l version -d 'Print version information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from plan" -l json -d 'Emit machine-readable JSON when the command supports it'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from apply" -l plan -d 'Immutable plan produced by `input reset plan`' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from apply" -l candidate -d 'Complete default candidate produced with the plan' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from apply" -l backup -d 'Immutable complete pre-reset configuration snapshot' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from apply" -l receipt -d 'Destination for the verified reset receipt' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from apply" -l expected-revision -d 'Require the live configuration to have this exact revision' -r
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from apply" -l idempotency-key -d 'Stable retry key; reuse it only with the same plan and candidate' -r
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from apply" -s h -l help -d 'Print help information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from apply" -s V -l version -d 'Print version information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from apply" -l json -d 'Emit machine-readable JSON when the command supports it'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from collect; and not __fish_seen_subcommand_from help" -s h -l help -d 'Print help information'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from collect; and not __fish_seen_subcommand_from help" -s V -l version -d 'Print version information'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from collect; and not __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
+diff --git a/docs/command-reference.md b/docs/command-reference.md
+index 78b79a9..49768da 100644
+--- a/docs/command-reference.md
++++ b/docs/command-reference.md
+@@ -1,7 +1,7 @@
+ <!-- Generated by scripts/render-cli-assets.py; do not edit by hand. -->
+ # WorkLouderCTL command reference
+ 
+-Generated from `worklouderctl 0.1.0`. This document contains 220 command paths.
++Generated from `worklouderctl 0.1.0`. This document contains 223 command paths.
+ 
+ ## `worklouderctl`
+ 
+@@ -394,6 +394,7 @@ SUBCOMMANDS:
+     permission     Inspect or change Input-owned host permission settings
+     permissions    Check the Input-owned OS permission required for device access
+     preset         Snapshot the Input-owned preset catalog through the companion bridge
++    reset          Plan and apply an Input-owned complete default configuration
+ ```
+ 
+ ## `worklouderctl layer`
+@@ -1716,6 +1717,26 @@ SUBCOMMANDS:
+     snapshot    Save the merged saved/default preset catalog without editing Input storage
+ ```
+ 
++## `worklouderctl input reset`
++
++```text
++worklouderctl-input-reset 0.1.0
++Plan and apply an Input-owned complete default configuration
++
++USAGE:
++    worklouderctl input reset [OPTIONS] <SUBCOMMAND>
++
++OPTIONS:
++    -h, --help       Print help information
++        --json       Emit machine-readable JSON when the command supports it
++    -V, --version    Print version information
++
++SUBCOMMANDS:
++    apply    Apply the frozen candidate through the existing config transaction
++    help     Print this message or the help of the given subcommand(s)
++    plan     Freeze the live revision and an Input-generated default candidate
++```
++
+ ## `worklouderctl layer color`
+ 
+ ```text
+@@ -3718,6 +3739,62 @@ OPTIONS:
+     -V, --version            Print version information
+ ```
+ 
++## `worklouderctl input reset apply`
++
++```text
++worklouderctl-input-reset-apply 0.1.0
++Apply the frozen candidate through the existing config transaction
++
++USAGE:
++    worklouderctl input reset apply [OPTIONS] --plan <PLAN> --candidate <CANDIDATE> --backup <BACKUP> --receipt <RECEIPT>
++
++OPTIONS:
++        --backup <BACKUP>
++            Immutable complete pre-reset configuration snapshot
++
++        --candidate <CANDIDATE>
++            Complete default candidate produced with the plan
++
++        --expected-revision <EXPECTED_REVISION>
++            Require the live configuration to have this exact revision
++
++    -h, --help
++            Print help information
++
++        --idempotency-key <IDEMPOTENCY_KEY>
++            Stable retry key; reuse it only with the same plan and candidate
++
++        --json
++            Emit machine-readable JSON when the command supports it
++
++        --plan <PLAN>
++            Immutable plan produced by `input reset plan`
++
++        --receipt <RECEIPT>
++            Destination for the verified reset receipt
++
++    -V, --version
++            Print version information
++```
++
++## `worklouderctl input reset plan`
++
++```text
++worklouderctl-input-reset-plan 0.1.0
++Freeze the live revision and an Input-generated default candidate
++
++USAGE:
++    worklouderctl input reset plan [OPTIONS] --plan <PLAN> --candidate <CANDIDATE>
++
++OPTIONS:
++        --candidate <CANDIDATE>    Destination for the complete default configuration snapshot
++        --device <DEVICE>          Select a connected device ID; defaults to the single Codex Micro
++    -h, --help                     Print help information
++        --json                     Emit machine-readable JSON when the command supports it
++        --plan <PLAN>              Destination for the immutable reset plan
++    -V, --version                  Print version information
++```
++
+ ## `worklouderctl layer joystick mode`
+ 
+ ```text
+diff --git a/docs/companion-bridge.md b/docs/companion-bridge.md
+index 85a828c..c008a5b 100644
+--- a/docs/companion-bridge.md
++++ b/docs/companion-bridge.md
+@@ -144,6 +144,16 @@ newest in-memory renderer entries, with home paths, email addresses, and common
+ credential forms redacted before bridge transport. Each capability is advertised
+ only when its matching Input-owned authority is available.
+ 
++`input.reset.plan` calls an injected Input-owned default-configuration builder.
++It freezes the Input version, connected device identity, device-kit and firmware
++versions, layout version, exact source revision, and the complete candidate
++revision. The read-only plan does not change renderer or device state. Applying
++the plan reuses `device.config.apply`: WorkLouderCTL captures a complete backup,
++enforces source CAS, sends the exact Input-produced candidate, verifies readback,
++publishes an immutable receipt, and supports exact restore through the normal
++configuration transaction. The CLI rechecks the exact Input version immediately
++before apply. No default keymap is duplicated in the CLI.
++
+ ```sh
+ worklouderctl input config snapshot --output config-snapshot.json
+ worklouderctl device config snapshot --output config-snapshot.json
+@@ -156,6 +166,12 @@ worklouderctl input firmware plan --output firmware-plan.json
+ worklouderctl input firmware update --plan firmware-plan.json \
+   --backup firmware-config-before.json --receipt firmware-update.json \
+   --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
++worklouderctl input reset plan --plan reset-plan.json \
++  --candidate reset-candidate.json
++worklouderctl input reset apply --plan reset-plan.json \
++  --candidate reset-candidate.json --backup reset-before.json \
++  --receipt reset-receipt.json --expected-revision CONFIG_REVISION \
++  --idempotency-key RESET_KEY
+ worklouderctl input logs collect --output input-log-bundle
+ ```
+ 
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index bc92bc2..491b60c 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -94,7 +94,7 @@ Promises as failures even when the USB interface still enumerates.
+ | Firmware check | compatible release and Input-selected `.bin` metadata | `input firmware check` | Input authority/bridge/CLI fixture-verified; read-only |
+ | Firmware plan | release, exact config revision, USB readiness, ordered update/reconnect/restore phases | `input firmware plan` | deterministic bridge/CLI plan plus USB blocked/ready fixtures verified |
+ | Firmware update | immutable plan, complete configuration backup, Input-owned download/USB flash/reconnect/restore, idempotent retry, exact postflight | `input firmware update` | high-level authority/bridge/CLI fixture-verified; driver and programmer remain Input-owned |
+-| Reset settings | full backup, complete default candidate, post-state | `device reset` | renderer-only GUI flow classified; transaction adapter pending |
++| Reset settings | Input-selected complete default candidate, immutable plan, full backup, idempotent apply, exact post-state and rollback | `input reset plan/apply` | high-level Input authority/bridge/CLI fixture-verified; default layout remains version/device/layout-owned by Input |
+ | Logs | collect and sanitize diagnostic bundle | `input logs collect` | private `0700`/`0600` bundle and SHA-256 readback fixture-verified |
+ | Recovery | restore files or firmware recovery | `device recover` | adapter-pending |
+ 
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index 55e2693..c9dc1e1 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -741,7 +741,25 @@ configuration revision, USB blocker, and seven Input-owned update phases without
+ flashing. When Input injects the complete high-level update authority, the CLI
+ adds immutable backup, plan/config CAS, idempotent delegation, exact firmware
+ and configuration postflight, and an inspectable receipt around that provider.
+-Reset and bootloader recovery remain separate Input-owned mutation authorities.
++Reset and bootloader recovery use separate Input-owned authorities.
++The reset authority is implemented as a read-only, versioned default candidate
++builder plus the existing configuration transaction:
++
++```sh
++worklouderctl input reset plan --plan RESET_PLAN.json \
++  --candidate RESET_CANDIDATE.json
++worklouderctl input reset apply --plan RESET_PLAN.json \
++  --candidate RESET_CANDIDATE.json --backup RESET_BEFORE.json \
++  --receipt RESET_RECEIPT.json --expected-revision CONFIG_REVISION \
++  --idempotency-key RESET_KEY
++```
++
++Input owns the exact default layout for the connected
++app/device/device-kit/firmware/layout tuple. The CLI freezes its revision,
++captures a complete backup, applies it through `device.config.apply`, verifies
++the exact Input version immediately before mutation, performs exact readback,
++and restores through `device config restore`. Bootloader
++recovery remains the next distinct high-level authority.
+ 
+ ## Verification levels
+ 
+diff --git a/docs/input-default-reset.md b/docs/input-default-reset.md
+new file mode 100644
+index 0000000..3c5557d
+--- /dev/null
++++ b/docs/input-default-reset.md
+@@ -0,0 +1,75 @@
++# Input-owned default reset
++
++WorkLouderCTL coordinates a complete reset while Input remains authoritative
++for the default configuration. The CLI does not embed a device keymap, call a
++programmer, or edit Input's renderer state.
++
++## Plan
++
++```sh
++worklouderctl --json input reset plan \
++  --plan reset-plan.json \
++  --candidate reset-candidate.json
++```
++
++The authenticated bridge asks Input's injected default-configuration builder
++for the exact connected device/layout default. It captures the current complete
++configuration separately, verifies both snapshots, and freezes:
++
++- Input app, device-kit, firmware, and layout versions;
++- connected device identity and type;
++- exact source and candidate revisions;
++- candidate file count; and
++- a canonical plan revision.
++
++Planning is read-only. Both output files are atomically published and reopened
++before success is reported.
++
++## Apply and verify
++
++```sh
++worklouderctl --json input reset apply \
++  --plan reset-plan.json \
++  --candidate reset-candidate.json \
++  --backup reset-before.json \
++  --receipt reset-receipt.json \
++  --expected-revision SOURCE_REVISION \
++  --idempotency-key reset-2026-08-02-01
++
++worklouderctl --json backup inspect --input reset-receipt.json
++```
++
++Apply reopens and validates the plan and candidate, checks the live revision
++and rechecks the exact Input version immediately before the mutation,
++captures a complete backup when one does not already exist, and reuses the
++existing `device.config.apply` transaction. The bridge verifies exact candidate
++readback. WorkLouderCTL then atomically publishes and reopens an immutable
++receipt binding the plan, candidate, backup, source, target, device, layout,
++Input version, and idempotency key.
++
++A repeated request with the same idempotency key returns the same transaction
++outcome. A stale source revision or any identity/version mismatch is rejected
++before mutation.
++
++## Rollback
++
++The reset backup is a standard complete configuration snapshot:
++
++```sh
++worklouderctl --json device --transport bridge config restore \
++  --input reset-before.json \
++  --backup config-after-reset.json \
++  --expected-revision RESET_TARGET_REVISION \
++  --idempotency-key reset-rollback-01
++```
++
++Restore uses the same authenticated CAS transaction and exact readback as every
++other configuration restore. The reset receipt's backup inspection includes
++the runnable restore command and marks the artifact restorable.
++
++## Verification boundary
++
++`./scripts/test-reset-e2e.sh` starts only an isolated synthetic Input bridge. It
++proves Input-owned candidate generation, source/candidate CAS, reuse of the
++configuration transaction, idempotent replay, exact rollback to the source
++revision, and receipt readback. It never opens, focuses, or automates the GUI.
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index edc84bc..5f5dc14 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -110,7 +110,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Hash-pinned Input 0.18.0 permission, firmware-read, log, reset, and update-flow inventory
+ - [x] Optional permission, firmware status/plan, and sanitized log bridge authorities
+ - [x] Input-owned high-level firmware update authority with backup, USB/bootloader flash, reconnect, restore, and postflight
+-- [ ] Complete default/reset candidate per device/layout/version through the existing configuration transaction
++- [x] Input-owned complete default/reset candidate per device/layout/version through the existing configuration transaction, with immutable plan, idempotent apply, readback, and exact rollback
+ - [ ] Bootloader recovery authority and exact post-recovery configuration restore
+ 
+ ## Later tracks
+diff --git a/llms.txt b/llms.txt
+index 6b7337f..707182d 100644
+--- a/llms.txt
++++ b/llms.txt
+@@ -20,6 +20,7 @@ Important: the project is currently a source alpha. The repository builds a work
+ - [Agent protocol](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/agent-protocol.md): shell-free JSON command envelopes over the same parser and transaction core
+ - [Command reference](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/command-reference.md): generated help for every CLI command path
+ - [Delegated firmware update](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/delegated-firmware-update.md): Input-owned flash workflow with immutable plan, complete backup, CAS, receipt, and postflight
++- [Input-owned default reset](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/input-default-reset.md): version/device/layout-owned default candidate with immutable plan, CAS apply, exact readback, and rollback
+ - [Roadmap](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/roadmap.md): implementation milestones
+ - [Sanitized fixtures](https://github.com/MarlinDiary/worklouder-input-cli/tree/main/fixtures): deterministic Input 0.17.3/0.18.0 and Codex Micro firmware v0.6.0 schema fixtures
+ 
+diff --git a/scripts/test-reset-e2e.sh b/scripts/test-reset-e2e.sh
+new file mode 100755
+index 0000000..19dbedd
+--- /dev/null
++++ b/scripts/test-reset-e2e.sh
+@@ -0,0 +1,119 @@
++#!/bin/sh
++set -eu
++
++repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
++root=$(mktemp -d /tmp/wlb-reset-e2e.XXXXXX)
++socket=$root/bridge.sock
++token=$root/bridge.token
++server_log=$root/server.log
++server_pid=
++
++cleanup() {
++  if [ -n "$server_pid" ] && kill -0 "$server_pid" 2>/dev/null; then
++    kill -TERM "$server_pid"
++    wait "$server_pid"
++  fi
++  rm -rf "$root"
++}
++trap cleanup EXIT INT TERM
++
++cargo build --locked --manifest-path "$repo/Cargo.toml"
++node "$repo/companion/fixture-server.mjs" "$socket" "$token" \
++  >"$server_log" 2>&1 &
++server_pid=$!
++attempt=0
++while [ ! -S "$socket" ] || [ ! -f "$token" ]; do
++  attempt=$((attempt + 1))
++  if [ "$attempt" -ge 100 ]; then
++    cat "$server_log" >&2
++    echo "reset fixture did not start" >&2
++    exit 1
++  fi
++  sleep 0.05
++done
++
++bin=$repo/target/debug/worklouderctl
++node "$repo/companion/conformance.mjs" \
++  --socket "$socket" --token "$token" \
++  --require input.reset.plan.v1 \
++  --require device.config.apply.v1 \
++  --require device.config.restore.v1 >"$root/conformance.json"
++
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  reset plan --device fixture-device --plan "$root/plan.json" \
++  --candidate "$root/candidate.json" >"$root/plan-stdout.json"
++"$bin" --json backup inspect --input "$root/plan.json" \
++  >"$root/plan-inspection.json"
++source_revision=$(python3 -c \
++  'import json,sys; print(json.load(open(sys.argv[1]))["sourceRevision"])' \
++  "$root/plan.json")
++candidate_revision=$(python3 -c \
++  'import json,sys; print(json.load(open(sys.argv[1]))["candidateRevision"])' \
++  "$root/plan.json")
++
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  reset apply --plan "$root/plan.json" --candidate "$root/candidate.json" \
++  --backup "$root/source.json" --receipt "$root/apply.json" \
++  --expected-revision "$source_revision" --idempotency-key reset-e2e-1 \
++  >"$root/apply-stdout.json"
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  reset apply --plan "$root/plan.json" --candidate "$root/candidate.json" \
++  --backup "$root/source.json" --receipt "$root/replay.json" \
++  --expected-revision "$source_revision" --idempotency-key reset-e2e-1 \
++  >"$root/replay-stdout.json"
++"$bin" --json backup inspect --input "$root/apply.json" \
++  >"$root/apply-inspection.json"
++"$bin" --json device --transport bridge --bridge-socket "$socket" \
++  --bridge-token "$token" config snapshot --output "$root/post-reset.json" \
++  >"$root/post-reset-stdout.json"
++
++"$bin" --json device --transport bridge --bridge-socket "$socket" \
++  --bridge-token "$token" config restore --input "$root/source.json" \
++  --backup "$root/pre-restore.json" --expected-revision "$candidate_revision" \
++  --idempotency-key reset-rollback-1 >"$root/restore.json"
++"$bin" --json device --transport bridge --bridge-socket "$socket" \
++  --bridge-token "$token" config snapshot --output "$root/restored.json" \
++  >"$root/restored-stdout.json"
++
++python3 - "$root" <<'PY'
++import json
++from pathlib import Path
++import sys
++
++root = Path(sys.argv[1])
++load = lambda name: json.loads((root / name).read_text())
++plan = load("plan.json")
++plan_stdout = load("plan-stdout.json")
++candidate = load("candidate.json")
++source = load("source.json")
++apply = load("apply.json")
++apply_stdout = load("apply-stdout.json")
++replay = load("replay.json")
++post_reset = load("post-reset.json")
++restored = load("restored.json")
++plan_inspection = load("plan-inspection.json")
++apply_inspection = load("apply-inspection.json")
++
++assert plan_stdout["revision"] == plan["revision"]
++assert plan["strategy"] == "input-default-layout"
++assert plan["device"]["deviceType"] == "codex_micro"
++assert plan["device"]["layoutType"] == "universal"
++assert plan["candidateRevision"] == candidate["revision"]
++assert plan["sourceRevision"] != plan["candidateRevision"]
++assert apply == apply_stdout
++assert apply["kind"] == "worklouderctl-input-reset-receipt"
++assert apply["sourceRevision"] == source["revision"]
++assert apply["candidateRevision"] == candidate["revision"]
++assert apply["changed"] is True and apply["rollbackPerformed"] is False
++assert replay["idempotentReplay"] is True
++assert post_reset["revision"] == candidate["revision"]
++assert restored["revision"] == source["revision"]
++assert plan_inspection["artifactKind"] == plan["kind"]
++assert apply_inspection["artifactKind"] == apply["kind"]
++print("reset_input_default_authority=verified")
++print("reset_plan_candidate_cas=verified")
++print("reset_existing_transaction=verified")
++print("reset_idempotent_replay=verified")
++print("reset_exact_rollback=verified")
++print("reset_receipt_readback=verified")
++PY
+diff --git a/spec/compatibility-matrix-v1.json b/spec/compatibility-matrix-v1.json
+index fd4a159..659347b 100644
+--- a/spec/compatibility-matrix-v1.json
++++ b/spec/compatibility-matrix-v1.json
+@@ -45,7 +45,7 @@
+           "version": "1",
+           "state": "experimental",
+           "tiers": [2, 3, 4],
+-          "evidence": ["authenticated-cas", "firmware-delegation", "transaction-rollback"],
++          "evidence": ["authenticated-cas", "firmware-delegation", "input-default-reset", "transaction-rollback"],
+           "boundary": "Reference adapter and synthetic end-to-end fixtures are verified."
+         },
+         {
+@@ -64,6 +64,7 @@
+         "./scripts/verify-cli-assets.sh",
+         "./scripts/test-bridge-e2e.sh",
+         "./scripts/test-firmware-update-e2e.sh",
++        "./scripts/test-reset-e2e.sh",
+         "./scripts/test-codex-bridge-e2e.sh",
+         "./scripts/test-transaction-e2e.sh",
+         "./scripts/test-transaction-rollback-e2e.sh"
+diff --git a/spec/input-companion-bridge-v1.json b/spec/input-companion-bridge-v1.json
+index 6bc908c..d7b5cea 100644
+--- a/spec/input-companion-bridge-v1.json
++++ b/spec/input-companion-bridge-v1.json
+@@ -188,6 +188,15 @@
+       ],
+       "resultKind": "worklouder-input-firmware-plan"
+     },
++    {
++      "name": "input.reset.plan",
++      "capability": "input.reset.plan.v1",
++      "mutation": false,
++      "optionalParams": [
++        "deviceId"
++      ],
++      "resultKind": "worklouder-input-reset-plan-bundle"
++    },
+     {
+       "name": "input.firmware.update",
+       "capability": "input.firmware.update.v1",
+@@ -371,6 +380,13 @@
+       "updateTimeoutSeconds": 900,
+       "capabilityAdvertisement": "status and plan require firmwareAuthority.readStatus; update additionally requires firmwareOperationsAuthority.updateFirmware"
+     },
++    "reset": {
++      "authority": "Input-owned device/layout/version default configuration factory",
++      "planMutation": false,
++      "applyAuthority": "existing device.config.apply transaction",
++      "rollbackAuthority": "existing device.config.restore transaction",
++      "capabilityAdvertisement": "advertised only when resetAuthority.buildDefaultConfiguration supplies complete default files"
++    },
+     "logs": {
+       "authority": "Input WindowService in-memory renderer log ring",
+       "maximumEntries": 5000,
+diff --git a/spec/input-operations-0.18.0.json b/spec/input-operations-0.18.0.json
+index c1e4166..df7b811 100644
+--- a/spec/input-operations-0.18.0.json
++++ b/spec/input-operations-0.18.0.json
+@@ -71,6 +71,11 @@
+   "reset": {
+     "rendererResetHookOffset": 10224466,
+     "classification": "renderer state/default-layout flow rather than a standalone main-process reset service",
+-    "highLevelMainServiceMethodFound": false
++    "highLevelMainServiceMethodFound": false,
++    "offlineTemplate": "input-default-config-0.18.0-codex-micro.json",
++    "planCapability": "input.reset.plan.v1 only when an injected Input-owned default factory is available",
++    "candidateBoundary": "complete device/layout/version-specific configuration snapshot",
++    "applyBoundary": "device.config.apply.v1 with exact source CAS, complete backup, readback, and automatic rollback",
++    "restoreBoundary": "device.config.restore.v1 with the pre-reset backup"
+   }
+ }
+diff --git a/spec/schemas/input-operations-v1.schema.json b/spec/schemas/input-operations-v1.schema.json
+index 03482de..f16a915 100644
+--- a/spec/schemas/input-operations-v1.schema.json
++++ b/spec/schemas/input-operations-v1.schema.json
+@@ -7,6 +7,8 @@
+     { "$ref": "#/$defs/firmware" },
+     { "$ref": "#/$defs/firmwarePlan" },
+     { "$ref": "#/$defs/firmwareUpdateReceipt" },
++    { "$ref": "#/$defs/resetPlan" },
++    { "$ref": "#/$defs/resetReceipt" },
+     { "$ref": "#/$defs/logBundle" }
+   ],
+   "$defs": {
+@@ -226,6 +228,90 @@
+         }
+       }
+     },
++    "resetPlan": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": [
++        "schemaVersion",
++        "kind",
++        "revisionAlgorithm",
++        "revision",
++        "inputAppVersion",
++        "deviceId",
++        "deviceKitVersion",
++        "device",
++        "firmwareVersion",
++        "layoutVersion",
++        "strategy",
++        "sourceRevision",
++        "candidateRevision",
++        "candidateFileCount"
++      ],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouder-input-reset-plan" },
++        "revisionAlgorithm": { "const": "sha256:recursive-key-sorted-reset-plan-body-v1" },
++        "revision": { "$ref": "#/$defs/sha256" },
++        "inputAppVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "deviceId": { "type": "string", "minLength": 1, "maxLength": 512 },
++        "deviceKitVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "device": { "$ref": "#/$defs/device" },
++        "firmwareVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "layoutVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "strategy": { "const": "input-default-layout" },
++        "sourceRevision": { "$ref": "#/$defs/sha256" },
++        "candidateRevision": { "$ref": "#/$defs/sha256" },
++        "candidateFileCount": { "type": "integer", "minimum": 1, "maximum": 4096 }
++      }
++    },
++    "resetReceipt": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": [
++        "schemaVersion",
++        "kind",
++        "adapter",
++        "plan",
++        "candidate",
++        "backup",
++        "receipt",
++        "planRevision",
++        "inputAppVersion",
++        "deviceId",
++        "deviceType",
++        "layoutVersion",
++        "sourceRevision",
++        "candidateRevision",
++        "idempotencyKey",
++        "idempotentReplay",
++        "changed",
++        "rollbackPerformed",
++        "fileCount",
++        "totalBytes"
++      ],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouderctl-input-reset-receipt" },
++        "adapter": { "const": "input-companion-bridge-v1" },
++        "plan": { "type": "string", "minLength": 1 },
++        "candidate": { "type": "string", "minLength": 1 },
++        "backup": { "type": "string", "minLength": 1 },
++        "receipt": { "type": "string", "minLength": 1 },
++        "planRevision": { "$ref": "#/$defs/sha256" },
++        "inputAppVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "deviceId": { "type": "string", "minLength": 1, "maxLength": 512 },
++        "deviceType": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "layoutVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "sourceRevision": { "$ref": "#/$defs/sha256" },
++        "candidateRevision": { "$ref": "#/$defs/sha256" },
++        "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 256 },
++        "idempotentReplay": { "type": "boolean" },
++        "changed": { "type": "boolean" },
++        "rollbackPerformed": { "const": false },
++        "fileCount": { "type": "integer", "minimum": 1, "maximum": 4096 },
++        "totalBytes": { "type": "integer", "minimum": 0, "maximum": 33554432 }
++      }
++    },
+     "logBundleFile": {
+       "type": "object",
+       "additionalProperties": false,
+diff --git a/src/backup.rs b/src/backup.rs
+index 0db784b..36bcc80 100644
+--- a/src/backup.rs
++++ b/src/backup.rs
+@@ -214,6 +214,33 @@ fn inspect_file(input: &Path) -> Result<BackupInspection> {
+                 None,
+             ))
+         }
++        "worklouder-input-reset-plan" => {
++            let plan = bridge::read_reset_plan(input)?;
++            Ok(report(
++                kind,
++                input,
++                plan.schema_version,
++                Some(plan.revision),
++                plan.candidate_file_count,
++                false,
++                None,
++            ))
++        }
++        "worklouderctl-input-reset-receipt" => {
++            let receipt = bridge::read_reset_apply_receipt(input)?;
++            Ok(report(
++                kind,
++                input,
++                receipt.schema_version,
++                Some(receipt.plan_revision),
++                receipt.file_count,
++                true,
++                Some(format!(
++                    "worklouderctl device --transport bridge config restore --input {} --backup CURRENT_BACKUP --expected-revision {} --idempotency-key IDEMPOTENCY_KEY",
++                    receipt.backup.display(), receipt.candidate_revision
++                )),
++            ))
++        }
+         "worklouder-input-preset-catalog" => {
+             let snapshot = bridge::read_preset_catalog_snapshot(input)?;
+             Ok(report(
+diff --git a/src/bridge.rs b/src/bridge.rs
+index 5a6a7e6..b2d6a98 100644
+--- a/src/bridge.rs
++++ b/src/bridge.rs
+@@ -28,6 +28,8 @@ const HOST_SETTINGS_KIND: &str = "worklouder-input-host-settings";
+ const HOST_SETTINGS_REVISION_ALGORITHM: &str = "sha256:input-host-settings-three-booleans-v1";
+ const PRESET_CATALOG_KIND: &str = "worklouder-input-preset-catalog";
+ const PRESET_CATALOG_REVISION_ALGORITHM: &str = "sha256:recursive-key-sorted-presets-json-v1";
++const RESET_PLAN_KIND: &str = "worklouder-input-reset-plan";
++const RESET_PLAN_REVISION_ALGORITHM: &str = "sha256:recursive-key-sorted-reset-plan-body-v1";
+ const MAX_PRESET_CATALOG_BYTES: usize = 32 * 1024 * 1024;
+ static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
+ 
+@@ -70,8 +72,8 @@ pub struct ConfigValidation {
+     pub total_bytes: u64,
+ }
+ 
+-#[derive(Clone, Debug, Serialize)]
+-#[serde(rename_all = "camelCase")]
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
+ pub struct ConfigMutationReceipt {
+     pub backup: PathBuf,
+     pub schema_version: u64,
+@@ -89,6 +91,74 @@ pub struct ConfigMutationReceipt {
+     pub total_bytes: u64,
+ }
+ 
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++pub struct ResetPlan {
++    pub schema_version: u64,
++    pub kind: String,
++    pub revision_algorithm: String,
++    pub revision: String,
++    pub input_app_version: String,
++    pub device_id: String,
++    pub device_kit_version: String,
++    pub device: DeviceInfo,
++    pub firmware_version: String,
++    pub layout_version: String,
++    pub strategy: String,
++    pub source_revision: String,
++    pub candidate_revision: String,
++    pub candidate_file_count: usize,
++}
++
++#[derive(Clone, Debug, Deserialize)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++struct BridgeResetPlanBundle {
++    schema_version: u64,
++    kind: String,
++    plan: ResetPlan,
++    candidate: Value,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct ResetPlanReceipt {
++    pub plan: PathBuf,
++    pub candidate: PathBuf,
++    pub revision: String,
++    pub input_app_version: String,
++    pub device_id: String,
++    pub device_type: String,
++    pub layout_version: String,
++    pub source_revision: String,
++    pub candidate_revision: String,
++    pub candidate_file_count: usize,
++}
++
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++pub struct ResetApplyReceipt {
++    pub schema_version: u64,
++    pub kind: String,
++    pub adapter: String,
++    pub plan: PathBuf,
++    pub candidate: PathBuf,
++    pub backup: PathBuf,
++    pub receipt: PathBuf,
++    pub plan_revision: String,
++    pub input_app_version: String,
++    pub device_id: String,
++    pub device_type: String,
++    pub layout_version: String,
++    pub source_revision: String,
++    pub candidate_revision: String,
++    pub idempotency_key: String,
++    pub idempotent_replay: bool,
++    pub changed: bool,
++    pub rollback_performed: bool,
++    pub file_count: usize,
++    pub total_bytes: u64,
++}
++
+ #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+ #[serde(rename_all = "camelCase")]
+ pub struct HostSettings {
+@@ -779,6 +849,251 @@ pub fn firmware_update(
+     Ok(receipt)
+ }
+ 
++pub fn reset_plan(
++    paths: &BridgePaths,
++    device_id: Option<&str>,
++    plan_path: &Path,
++    candidate_path: &Path,
++) -> Result<ResetPlanReceipt> {
++    ensure!(
++        plan_path != candidate_path,
++        "reset plan and candidate paths must differ"
++    );
++    ensure!(
++        !plan_path.exists() && !candidate_path.exists(),
++        "reset plan and candidate destinations must not already exist"
++    );
++    let mut client = BridgeClient::connect(paths)?;
++    let input_version = client.handshake.input_version.clone();
++    let bundle: BridgeResetPlanBundle = client.call(
++        "input.reset.plan",
++        "input.reset.plan.v1",
++        json!({ "deviceId": device_id }),
++    )?;
++    ensure!(
++        bundle.schema_version == 1 && bundle.kind == "worklouder-input-reset-plan-bundle",
++        "Input reset plan bundle header was invalid"
++    );
++    validate_reset_plan(&bundle.plan)?;
++    ensure!(
++        bundle.plan.input_app_version == input_version,
++        "Input reset plan version differed from the bridge handshake"
++    );
++    validate_reset_candidate(&bundle.plan, &bundle.candidate)?;
++
++    let mut candidate_published = false;
++    let mut plan_published = false;
++    let publish = (|| -> Result<()> {
++        write_atomic_json(candidate_path, &bundle.candidate)?;
++        candidate_published = true;
++        write_atomic_json(plan_path, &serde_json::to_value(&bundle.plan)?)?;
++        plan_published = true;
++        Ok(())
++    })();
++    if publish.is_err() {
++        if plan_published {
++            let _ = fs::remove_file(plan_path);
++        }
++        if candidate_published {
++            let _ = fs::remove_file(candidate_path);
++        }
++        publish?;
++    }
++    let reopened_plan = read_reset_plan(plan_path)?;
++    let (reopened_candidate, _) = read_config_snapshot(candidate_path)?;
++    validate_reset_candidate(&reopened_plan, &reopened_candidate)?;
++    ensure!(
++        reopened_plan == bundle.plan && reopened_candidate == bundle.candidate,
++        "published reset plan/candidate readback differed"
++    );
++    Ok(ResetPlanReceipt {
++        plan: plan_path.to_path_buf(),
++        candidate: candidate_path.to_path_buf(),
++        revision: bundle.plan.revision,
++        input_app_version: bundle.plan.input_app_version,
++        device_id: bundle.plan.device_id,
++        device_type: bundle.plan.device.device_type,
++        layout_version: bundle.plan.layout_version,
++        source_revision: bundle.plan.source_revision,
++        candidate_revision: bundle.plan.candidate_revision,
++        candidate_file_count: bundle.plan.candidate_file_count,
++    })
++}
++
++#[allow(clippy::too_many_arguments)]
++pub fn reset_apply(
++    paths: &BridgePaths,
++    plan_path: &Path,
++    candidate_path: &Path,
++    backup_path: &Path,
++    receipt_path: &Path,
++    expected_revision: Option<&str>,
++    idempotency_key: Option<&str>,
++) -> Result<ResetApplyReceipt> {
++    let distinct = [plan_path, candidate_path, backup_path, receipt_path];
++    for (index, path) in distinct.iter().enumerate() {
++        ensure!(
++            distinct.iter().skip(index + 1).all(|other| path != other),
++            "reset plan, candidate, backup, and receipt paths must differ"
++        );
++    }
++    ensure!(
++        !receipt_path.exists(),
++        "reset receipt destination already exists: {}",
++        receipt_path.display()
++    );
++    let plan = read_reset_plan(plan_path)?;
++    let (candidate, candidate_metadata) = read_config_snapshot(candidate_path)?;
++    validate_reset_candidate(&plan, &candidate)?;
++    let expected = expected_revision.unwrap_or(&plan.source_revision);
++    ensure!(
++        expected.eq_ignore_ascii_case(&plan.source_revision),
++        "reset expected revision differed from the frozen source revision"
++    );
++    if backup_path.exists() {
++        let (_, backup_metadata) = read_config_snapshot(backup_path)?;
++        ensure!(
++            backup_metadata.device_id == plan.device_id
++                && backup_metadata.revision.eq_ignore_ascii_case(expected),
++            "existing reset backup did not match the frozen source revision"
++        );
++    }
++    let mutation = config_apply_versioned(
++        paths,
++        Some(&plan.device_id),
++        candidate_path,
++        backup_path,
++        Some(expected),
++        idempotency_key,
++        Some(&plan.input_app_version),
++    )?;
++    let (_, backup_metadata) = read_config_snapshot(backup_path)?;
++    ensure!(
++        backup_metadata.device_id == plan.device_id
++            && backup_metadata
++                .revision
++                .eq_ignore_ascii_case(&plan.source_revision),
++        "reset backup readback did not match the frozen source revision"
++    );
++    ensure!(
++        mutation
++            .before_revision
++            .eq_ignore_ascii_case(&plan.source_revision)
++            && mutation.after_revision == plan.candidate_revision
++            && mutation.target_revision == candidate_metadata.revision
++            && !mutation.rollback_performed,
++        "reset config transaction did not match the frozen plan"
++    );
++    let receipt = ResetApplyReceipt {
++        schema_version: 1,
++        kind: "worklouderctl-input-reset-receipt".into(),
++        adapter: ADAPTER.into(),
++        plan: plan_path.to_path_buf(),
++        candidate: candidate_path.to_path_buf(),
++        backup: backup_path.to_path_buf(),
++        receipt: receipt_path.to_path_buf(),
++        plan_revision: plan.revision,
++        input_app_version: plan.input_app_version,
++        device_id: plan.device_id,
++        device_type: plan.device.device_type,
++        layout_version: plan.layout_version,
++        source_revision: plan.source_revision,
++        candidate_revision: plan.candidate_revision,
++        idempotency_key: mutation.idempotency_key,
++        idempotent_replay: mutation.idempotent_replay,
++        changed: mutation.changed,
++        rollback_performed: mutation.rollback_performed,
++        file_count: mutation.file_count,
++        total_bytes: mutation.total_bytes,
++    };
++    write_atomic_json(receipt_path, &serde_json::to_value(&receipt)?)?;
++    let reopened = read_reset_apply_receipt(receipt_path)?;
++    ensure!(
++        reopened == receipt,
++        "published reset receipt readback differed"
++    );
++    Ok(receipt)
++}
++
++pub fn read_reset_plan(input: &Path) -> Result<ResetPlan> {
++    let metadata = fs::symlink_metadata(input)
++        .with_context(|| format!("failed to inspect reset plan {}", input.display()))?;
++    ensure!(
++        metadata.file_type().is_file(),
++        "reset plan must be a regular file"
++    );
++    ensure!(
++        metadata.len() <= 2 * 1024 * 1024,
++        "reset plan exceeded 2 MiB"
++    );
++    let plan: ResetPlan = serde_json::from_slice(
++        &fs::read(input)
++            .with_context(|| format!("failed to read reset plan {}", input.display()))?,
++    )
++    .with_context(|| format!("reset plan was invalid JSON: {}", input.display()))?;
++    validate_reset_plan(&plan)?;
++    Ok(plan)
++}
++
++pub fn read_reset_apply_receipt(input: &Path) -> Result<ResetApplyReceipt> {
++    let metadata = fs::symlink_metadata(input)
++        .with_context(|| format!("failed to inspect reset receipt {}", input.display()))?;
++    ensure!(
++        metadata.file_type().is_file(),
++        "reset receipt must be a regular file"
++    );
++    ensure!(
++        metadata.len() <= 4 * 1024 * 1024,
++        "reset receipt exceeded 4 MiB"
++    );
++    let receipt: ResetApplyReceipt = serde_json::from_slice(
++        &fs::read(input)
++            .with_context(|| format!("failed to read reset receipt {}", input.display()))?,
++    )
++    .with_context(|| format!("reset receipt was invalid JSON: {}", input.display()))?;
++    ensure!(
++        receipt.schema_version == 1
++            && receipt.kind == "worklouderctl-input-reset-receipt"
++            && receipt.adapter == ADAPTER
++            && receipt.receipt == input
++            && is_sha256(&receipt.plan_revision)
++            && is_sha256(&receipt.source_revision)
++            && is_sha256(&receipt.candidate_revision)
++            && !receipt.input_app_version.is_empty()
++            && !receipt.device_id.is_empty()
++            && !receipt.device_type.is_empty()
++            && !receipt.layout_version.is_empty()
++            && !receipt.idempotency_key.is_empty()
++            && receipt.idempotency_key.len() <= 256
++            && !receipt.rollback_performed
++            && receipt.changed
++                != receipt
++                    .source_revision
++                    .eq_ignore_ascii_case(&receipt.candidate_revision),
++        "reset receipt header or outcome was invalid"
++    );
++    let plan = read_reset_plan(&receipt.plan)?;
++    let (candidate, candidate_metadata) = read_config_snapshot(&receipt.candidate)?;
++    validate_reset_candidate(&plan, &candidate)?;
++    let (_, backup_metadata) = read_config_snapshot(&receipt.backup)?;
++    ensure!(
++        receipt.plan_revision == plan.revision
++            && receipt.input_app_version == plan.input_app_version
++            && receipt.device_id == plan.device_id
++            && receipt.device_type == plan.device.device_type
++            && receipt.layout_version == plan.layout_version
++            && receipt.source_revision == plan.source_revision
++            && receipt.candidate_revision == plan.candidate_revision
++            && candidate_metadata.revision == plan.candidate_revision
++            && backup_metadata.device_id == plan.device_id
++            && backup_metadata.revision == plan.source_revision
++            && receipt.file_count == candidate_metadata.file_count
++            && receipt.total_bytes == candidate_metadata.total_bytes,
++        "reset receipt did not match its plan, candidate, or backup"
++    );
++    Ok(receipt)
++}
++
+ pub fn collect_logs(
+     paths: &BridgePaths,
+     output: &Path,
+@@ -1193,6 +1508,94 @@ fn firmware_plan_revision(plan: &FirmwarePlan) -> Result<String> {
+     fsutil::sha256_bytes(&bytes)
+ }
+ 
++fn validate_reset_plan(plan: &ResetPlan) -> Result<()> {
++    ensure!(
++        plan.schema_version == 1
++            && plan.kind == RESET_PLAN_KIND
++            && plan.revision_algorithm == RESET_PLAN_REVISION_ALGORITHM,
++        "Input reset plan header was invalid"
++    );
++    ensure!(
++        !plan.input_app_version.is_empty()
++            && plan.input_app_version.len() <= 128
++            && !plan.input_app_version.contains('\0')
++            && !plan.device_id.is_empty()
++            && plan.device_id.len() <= 512
++            && !plan.device_id.contains('\0')
++            && !plan.device_kit_version.is_empty()
++            && plan.device_kit_version.len() <= 128
++            && !plan.device_kit_version.contains('\0')
++            && !plan.firmware_version.is_empty()
++            && plan.firmware_version.len() <= 128
++            && !plan.firmware_version.contains('\0')
++            && !plan.layout_version.is_empty()
++            && plan.layout_version.len() <= 128
++            && !plan.layout_version.contains('\0')
++            && !plan.device.device_pid.is_empty()
++            && !plan.device.device_type.is_empty()
++            && !plan.device.layout_type.is_empty()
++            && !plan.device.connection_type.is_empty()
++            && plan.strategy == "input-default-layout"
++            && is_sha256(&plan.source_revision)
++            && is_sha256(&plan.candidate_revision)
++            && (1..=4096).contains(&plan.candidate_file_count),
++        "Input reset plan identity or revisions were invalid"
++    );
++    ensure!(
++        plan.revision == reset_plan_revision(plan)?,
++        "Input reset plan revision did not match content"
++    );
++    Ok(())
++}
++
++fn validate_reset_candidate(plan: &ResetPlan, candidate: &Value) -> Result<()> {
++    let metadata = inspect_config_snapshot(candidate)?;
++    let object = candidate
++        .as_object()
++        .context("reset candidate was not an object")?;
++    let device_kit_version = object
++        .get("deviceKitVersion")
++        .and_then(Value::as_str)
++        .context("reset candidate omitted deviceKitVersion")?;
++    let device: DeviceInfo = serde_json::from_value(
++        object
++            .get("device")
++            .cloned()
++            .context("reset candidate omitted device")?,
++    )
++    .context("reset candidate device was invalid")?;
++    let status: DeviceStatus = serde_json::from_value(
++        object
++            .get("status")
++            .cloned()
++            .context("reset candidate omitted status")?,
++    )
++    .context("reset candidate status was invalid")?;
++    ensure!(
++        metadata.device_id == plan.device_id
++            && metadata.revision == plan.candidate_revision
++            && metadata.file_count == plan.candidate_file_count
++            && device_kit_version == plan.device_kit_version
++            && device == plan.device
++            && status.firmware_version.as_deref() == Some(plan.firmware_version.as_str()),
++        "reset candidate identity did not match the plan"
++    );
++    Ok(())
++}
++
++fn reset_plan_revision(plan: &ResetPlan) -> Result<String> {
++    let mut body = serde_json::to_value(plan)?;
++    let object = body
++        .as_object_mut()
++        .context("reset plan body was not an object")?;
++    for field in ["schemaVersion", "kind", "revisionAlgorithm", "revision"] {
++        object.remove(field);
++    }
++    let mut bytes = b"worklouder-input-reset-plan-revision-v1\0".to_vec();
++    bytes.extend(serde_json::to_vec(&canonical_json(&body))?);
++    fsutil::sha256_bytes(&bytes)
++}
++
+ fn validate_log_snapshot(snapshot: &InputLogSnapshot, limit: usize) -> Result<()> {
+     ensure!(
+         snapshot.schema_version == 1
+@@ -1543,6 +1946,27 @@ pub fn config_apply(
+     backup: &Path,
+     expected_revision: Option<&str>,
+     idempotency_key: Option<&str>,
++) -> Result<ConfigMutationReceipt> {
++    config_apply_versioned(
++        paths,
++        device_id,
++        input,
++        backup,
++        expected_revision,
++        idempotency_key,
++        None,
++    )
++}
++
++#[allow(clippy::too_many_arguments)]
++fn config_apply_versioned(
++    paths: &BridgePaths,
++    device_id: Option<&str>,
++    input: &Path,
++    backup: &Path,
++    expected_revision: Option<&str>,
++    idempotency_key: Option<&str>,
++    expected_input_version: Option<&str>,
+ ) -> Result<ConfigMutationReceipt> {
+     config_mutate(
+         paths,
+@@ -1555,6 +1979,7 @@ pub fn config_apply(
+         backup,
+         expected_revision,
+         idempotency_key,
++        expected_input_version,
+     )
+ }
+ 
+@@ -1577,6 +2002,7 @@ pub fn config_restore(
+         backup,
+         expected_revision,
+         idempotency_key,
++        None,
+     )
+ }
+ 
+@@ -1788,6 +2214,7 @@ fn config_mutate(
+     backup: &Path,
+     expected_revision: Option<&str>,
+     idempotency_key: Option<&str>,
++    expected_input_version: Option<&str>,
+ ) -> Result<ConfigMutationReceipt> {
+     ensure!(input != backup, "input and backup paths must differ");
+     let (candidate, candidate_metadata) = read_config_snapshot(input)?;
+@@ -1821,6 +2248,12 @@ fn config_mutate(
+         .context("mutation params were not an object")?
+         .insert(payload_field.to_owned(), candidate);
+     let mut client = BridgeClient::connect(paths)?;
++    if let Some(version) = expected_input_version {
++        ensure!(
++            client.handshake.input_version == version,
++            "Input version differed from the frozen configuration plan"
++        );
++    }
+     let response: ConfigMutationResponse = client.call(method, capability, params)?;
+     validate_mutation_response(
+         &response,
+diff --git a/src/cli.rs b/src/cli.rs
+index 75fa772..5c796f9 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -291,6 +291,12 @@ pub enum InputCommand {
+         command: InputFirmwareCommand,
+     },
+ 
++    /// Plan and apply an Input-owned complete default configuration.
++    Reset {
++        #[clap(subcommand)]
++        command: InputResetCommand,
++    },
++
+     /// Collect a bounded, sanitized diagnostic log bundle from Input.
+     Logs {
+         #[clap(subcommand)]
+@@ -348,6 +354,51 @@ pub enum InputFirmwareCommand {
+     },
+ }
+ 
++#[derive(Debug, Subcommand)]
++pub enum InputResetCommand {
++    /// Freeze the live revision and an Input-generated default candidate.
++    Plan {
++        /// Destination for the immutable reset plan.
++        #[clap(long, value_parser)]
++        plan: PathBuf,
++
++        /// Destination for the complete default configuration snapshot.
++        #[clap(long, value_parser)]
++        candidate: PathBuf,
++
++        /// Select a connected device ID; defaults to the single Codex Micro.
++        #[clap(long)]
++        device: Option<String>,
++    },
++
++    /// Apply the frozen candidate through the existing config transaction.
++    Apply {
++        /// Immutable plan produced by `input reset plan`.
++        #[clap(long, value_parser)]
++        plan: PathBuf,
++
++        /// Complete default candidate produced with the plan.
++        #[clap(long, value_parser)]
++        candidate: PathBuf,
++
++        /// Immutable complete pre-reset configuration snapshot.
++        #[clap(long, value_parser)]
++        backup: PathBuf,
++
++        /// Destination for the verified reset receipt.
++        #[clap(long, value_parser)]
++        receipt: PathBuf,
++
++        /// Require the live configuration to have this exact revision.
++        #[clap(long)]
++        expected_revision: Option<String>,
++
++        /// Stable retry key; reuse it only with the same plan and candidate.
++        #[clap(long)]
++        idempotency_key: Option<String>,
++    },
++}
++
+ #[derive(Debug, Subcommand)]
+ pub enum InputLogsCommand {
+     /// Write sanitized JSON/text logs and a checksum manifest atomically.
+diff --git a/src/lib.rs b/src/lib.rs
+index 8ce8f7d..6aa6f97 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -33,12 +33,12 @@ use cli::{
+     ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
+     InputCommand, InputCommandPermissionCommand, InputCommandPermissionValue, InputConfigCommand,
+     InputFirmwareCommand, InputLogsCommand, InputPermissionCommand, InputPresetCommand,
+-    LayerCommand, LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand,
+-    LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect, LightingZone,
+-    MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, PresetCommand,
+-    ProfileCommand, RadialCommand, SchemaCommand, SmartActionCommand, SmartActionGroupCommand,
+-    SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType, TierCommand,
+-    TransactionCommand,
++    InputResetCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
++    LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect,
++    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
++    PresetCommand, ProfileCommand, RadialCommand, SchemaCommand, SmartActionCommand,
++    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
++    TierCommand, TransactionCommand,
+ };
+ use serde::Serialize;
+ use std::io::Write;
+@@ -3420,6 +3420,64 @@ fn run_input(
+                 }
+             }
+         },
++        InputCommand::Reset { command } => match command {
++            InputResetCommand::Plan {
++                plan,
++                candidate,
++                device,
++            } => {
++                let result =
++                    bridge::reset_plan(&bridge_paths, device.as_deref(), &plan, &candidate)?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "Reset plan {}: {} / {} / {}",
++                        result.revision,
++                        result.input_app_version,
++                        result.device_type,
++                        result.layout_version
++                    )?;
++                    writeln!(out, "sourceRevision={}", result.source_revision)?;
++                    writeln!(out, "candidateRevision={}", result.candidate_revision)?;
++                    writeln!(out, "plan={}", result.plan.display())?;
++                    writeln!(out, "candidate={}", result.candidate.display())?;
++                }
++            }
++            InputResetCommand::Apply {
++                plan,
++                candidate,
++                backup,
++                receipt,
++                expected_revision,
++                idempotency_key,
++            } => {
++                let result = bridge::reset_apply(
++                    &bridge_paths,
++                    &plan,
++                    &candidate,
++                    &backup,
++                    &receipt,
++                    expected_revision.as_deref(),
++                    idempotency_key.as_deref(),
++                )?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "Reset {} -> {}: changed={} replay={}",
++                        result.source_revision,
++                        result.candidate_revision,
++                        result.changed,
++                        result.idempotent_replay
++                    )?;
++                    writeln!(out, "backup={}", result.backup.display())?;
++                    writeln!(out, "receipt={}", result.receipt.display())?;
++                }
++            }
++        },
+         InputCommand::Logs { command } => match command {
+             InputLogsCommand::Collect {
+                 output,
+diff --git a/tests/cli.rs b/tests/cli.rs
+index 7956ef7..ea48c01 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -189,10 +189,25 @@ fn schemas_are_discoverable_and_machine_readable() {
+         .unwrap();
+     assert!(list.status.success());
+     let summaries: serde_json::Value = serde_json::from_slice(&list.stdout).unwrap();
+-    assert_eq!(summaries.as_array().unwrap().len(), 7);
+-    assert_eq!(summaries[0]["name"], "agent-execution-v1");
+-    assert_eq!(summaries[1]["name"], "backup-inspection-v1");
+-    assert_eq!(summaries[3]["name"], "configuration-v1");
++    let names = summaries
++        .as_array()
++        .unwrap()
++        .iter()
++        .map(|summary| summary["name"].as_str().unwrap())
++        .collect::<Vec<_>>();
++    assert_eq!(
++        names,
++        vec![
++            "agent-execution-v1",
++            "backup-inspection-v1",
++            "command-envelope-v1",
++            "compatibility-matrix-v1",
++            "configuration-v1",
++            "error-v1",
++            "input-operations-v1",
++            "transaction-v1",
++        ]
++    );
+ 
+     let backup = binary()
+         .args(["--json", "schema", "show", "backup-inspection-v1"])
+@@ -429,6 +444,7 @@ fn input_and_config_help_expose_read_only_workflow() {
+     assert!(input_stdout.contains("permission"));
+     assert!(input_stdout.contains("permissions"));
+     assert!(input_stdout.contains("firmware"));
++    assert!(input_stdout.contains("reset"));
+     assert!(input_stdout.contains("logs"));
+     assert!(input_stdout.contains("preset"));
+ 
+@@ -519,6 +535,45 @@ fn firmware_help_exposes_plan_before_delegated_update() {
+     }
+ }
+ 
++#[test]
++fn reset_help_exposes_plan_and_transactional_apply() {
++    let output = binary()
++        .args(["input", "reset", "--help"])
++        .output()
++        .unwrap();
++    let stdout = String::from_utf8(output.stdout).unwrap();
++    assert!(output.status.success());
++    assert!(stdout.contains("plan"));
++    assert!(stdout.contains("apply"));
++
++    let plan = binary()
++        .args(["input", "reset", "plan", "--help"])
++        .output()
++        .unwrap();
++    let plan_stdout = String::from_utf8(plan.stdout).unwrap();
++    assert!(plan.status.success());
++    for option in ["--plan", "--candidate", "--device"] {
++        assert!(plan_stdout.contains(option));
++    }
++
++    let apply = binary()
++        .args(["input", "reset", "apply", "--help"])
++        .output()
++        .unwrap();
++    let apply_stdout = String::from_utf8(apply.stdout).unwrap();
++    assert!(apply.status.success());
++    for option in [
++        "--plan",
++        "--candidate",
++        "--backup",
++        "--receipt",
++        "--expected-revision",
++        "--idempotency-key",
++    ] {
++        assert!(apply_stdout.contains(option));
++    }
++}
++
+ #[test]
+ fn preset_help_exposes_catalog_and_offline_install_workflow() {
+     let output = binary().args(["preset", "--help"]).output().unwrap();
