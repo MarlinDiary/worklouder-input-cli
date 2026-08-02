@@ -186,3 +186,33 @@ Syntax command:
   sh -n artifacts/verification/input-tier4-read-v1/rollback.sh
 Exit status: 0
 The isolated rollback execution is appended after the artifact commit.
+Isolated rollback execution
+---------------------------
+Artifact commit:
+  f159c5e
+Command:
+  artifacts/verification/input-tier4-read-v1/rollback.sh \
+    /tmp/worklouderctl-input-tier4-read-v1.58ylS9/rollback-worktree.xtvmoS
+Literal output:
+  rollback=verified
+  base=51610680ce7b6ba86d9dafe60135e0be42cb0630
+Literal stderr: (empty)
+Exit status: 0
+Postcondition:
+  worktree equals base outside artifacts/verification/input-tier4-read-v1
+Exit status: 0
+Rolled-back behavior command:
+  CARGO_TARGET_DIR=/tmp/worklouderctl-input-tier4-read-v1.58ylS9/rollback-target cargo run --quiet --locked --manifest-path ROLLBACK_WORKTREE/Cargo.toml -- input permissions --help
+Literal stdout: (empty)
+Literal stderr:
+  error: The subcommand 'permissions' wasn't recognized
+
+          Did you mean 'permission'?
+
+  If you believe you received this message in error, try re-running with 'worklouderctl input -- permissions'
+
+  USAGE:
+      worklouderctl input [OPTIONS] <SUBCOMMAND>
+
+  For more information try --help
+Exit status: 2
