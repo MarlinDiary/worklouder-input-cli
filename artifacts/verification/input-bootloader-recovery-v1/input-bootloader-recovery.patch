@@ -1,0 +1,2734 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index d512414..d918ca8 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -41,6 +41,8 @@ jobs:
+         run: npm test --prefix companion
+       - name: Verify deterministic sanitized fixtures
+         run: ./scripts/verify-sanitized-fixtures.sh
++      - name: Verify JSON contracts and unique object keys
++        run: ./scripts/verify-json-contracts.py
+       - name: Verify per-release compatibility matrix
+         run: ./scripts/verify-compatibility-matrix.sh
+       - name: Verify generated completions and command reference
+@@ -51,6 +53,8 @@ jobs:
+         run: ./scripts/test-firmware-update-e2e.sh
+       - name: Test Input-owned default reset and exact rollback
+         run: ./scripts/test-reset-e2e.sh
++      - name: Test delegated bootloader recovery and exact config restore
++        run: ./scripts/test-recovery-e2e.sh
+       - name: Test Codex bridge CLI end to end
+         run: ./scripts/test-codex-bridge-e2e.sh
+       - name: Test four-authority transactions and rollback
+diff --git a/README.md b/README.md
+index 5ab5b0c..93e8b4a 100644
+--- a/README.md
++++ b/README.md
+@@ -142,6 +142,8 @@ worklouderctl input firmware plan --output FIRMWARE_PLAN.json [--device DEVICE_I
+ worklouderctl input firmware update --plan FIRMWARE_PLAN.json --backup FIRMWARE_CONFIG_BEFORE.json --receipt FIRMWARE_UPDATE.json --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
+ worklouderctl input reset plan --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json
+ worklouderctl input reset apply --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json --backup RESET_BEFORE.json --receipt RESET_RECEIPT.json --expected-revision CONFIG_REVISION --idempotency-key RESET_KEY
++worklouderctl input recovery plan --backup CONFIG_BEFORE_RECOVERY.json --plan RECOVERY_PLAN.json
++worklouderctl input recovery apply --plan RECOVERY_PLAN.json --backup CONFIG_BEFORE_RECOVERY.json --receipt RECOVERY_RECEIPT.json --idempotency-key RECOVERY_KEY
+ worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
+ worklouderctl input preset snapshot --output PRESET_CATALOG.json
+ worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
+@@ -507,6 +509,19 @@ idempotent retry, and leaves an inspectable receipt plus the normal exact
+ `device config restore` rollback path. See the
+ [Input-owned reset guide](docs/input-default-reset.md).
+ 
++`input recovery plan` accepts a complete configuration snapshot captured before
++the normal device entered bootloader mode. It asks an injected Input-owned
++authority for the live bootloader identity and Input-selected release, then
++binds them to the exact Input/device-kit versions and backup revision without
++flashing. `input recovery apply` delegates programming and reconnection to that
++same Input authority, restores the exact backup through the existing complete
++configuration transaction, and requires exact target-firmware plus
++configuration-revision postflight. Same-key retries replay the verified result;
++the atomically reopened receipt remains inspectable with `backup inspect`. The
++CLI does not implement a driver, bootloader transport, programmer, or firmware
++downgrade. See the
++[Input-owned bootloader recovery guide](docs/input-bootloader-recovery.md).
++
+ `transaction plan/show/apply/restore` now coordinates Codex settings, Codex
+ Agent Keys, Input device configuration, and Input host settings behind one
+ canonical revision and rollback boundary. It preflights all authorities before
+@@ -631,6 +646,7 @@ CLI semantic parser.
+ | Input radial menu | Sector/angle inspection and referenced resource resolution verified; edits reuse joystick/control transactions and the overlay remains Input-owned |
+ | Tier 4 permissions, firmware check, and diagnostic logs | Exact Input 0.18.0 authority paths frozen; bridge/CLI fixture verified with private sanitized bundle |
+ | Input-owned reset | Complete per-version/device/layout default candidate, immutable plan, CAS apply, exact readback, idempotent replay, and rollback fixture verified |
++| Input-owned bootloader recovery | Backup-bound bootloader/release plan, delegated programmer/reconnect, exact configuration restore, postflight, receipt inspection, and idempotent replay fixture verified |
+ | Real-device mutation and rollback | Planned |
+ | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
+ | Input cache read adapter | Complete; byte-exact bridge-equivalent semantic snapshot |
+@@ -680,6 +696,7 @@ Read the complete [FAQ](docs/faq.md).
+ - [Generated command reference](docs/command-reference.md)
+ - [Delegated firmware update](docs/delegated-firmware-update.md)
+ - [Input-owned default reset](docs/input-default-reset.md)
++- [Input-owned bootloader recovery](docs/input-bootloader-recovery.md)
+ - [Configuration parity matrix](docs/configuration-parity.md)
+ - [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
+ - [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index f11ef90..fe3c42c 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -111,6 +111,8 @@ worklouderctl input firmware plan --output FIRMWARE_PLAN.json [--device DEVICE_I
+ worklouderctl input firmware update --plan FIRMWARE_PLAN.json --backup FIRMWARE_CONFIG_BEFORE.json --receipt FIRMWARE_UPDATE.json --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
+ worklouderctl input reset plan --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json [--device DEVICE_ID]
+ worklouderctl input reset apply --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json --backup RESET_BEFORE.json --receipt RESET_RECEIPT.json --expected-revision CONFIG_REVISION --idempotency-key RESET_KEY
++worklouderctl input recovery plan --backup CONFIG_BEFORE_RECOVERY.json --plan RECOVERY_PLAN.json
++worklouderctl input recovery apply --plan RECOVERY_PLAN.json --backup CONFIG_BEFORE_RECOVERY.json --receipt RECOVERY_RECEIPT.json --idempotency-key RECOVERY_KEY
+ worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
+ worklouderctl input preset snapshot --output PRESET_CATALOG.json
+ worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
+@@ -422,6 +424,16 @@ revision 和完整 candidate。`input reset apply` 会在写入前再次核对 I
+ 与原始 backup 都会严格 reopen；精确回滚继续使用普通的 `device config restore`。CLI
+ 不会复制 Input renderer 的 reset flow。
+ 
++`input recovery plan` 使用正常 device 进入 bootloader 之前保存的完整 configuration
++snapshot，并让 Input-owned authority 提供当前 bootloader identity 与 Input-selected
++release。plan 会冻结 Input/device-kit version、device identity、release 和完整 backup
++revision，但不会执行 flash。`input recovery apply` 把 programmer 与 reconnect 整体委派
++给 Input，再通过既有完整 configuration transaction 精确恢复 backup；成功必须同时满足
++target firmware 和原 configuration revision 的 exact postflight。相同 idempotency key
++可以重放已验证结果，原子写入并 reopen 的 receipt 可由 `backup inspect` 再次检查。CLI
++不实现 driver、bootloader transport、programmer 或 firmware downgrade。详见
++[Input-owned bootloader recovery guide](docs/input-bootloader-recovery.md)。
++
+ 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
+ adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
+ 
+diff --git a/companion/README.md b/companion/README.md
+index 9350999..fcece47 100644
+--- a/companion/README.md
++++ b/companion/README.md
+@@ -36,6 +36,14 @@ const companionBridge = await installInputCompanionBridge({
+         // all seven completed phases after reconnect and config restore.
+       },
+     },
++    recoveryAuthority: {
++      async readStatus({ configurationSnapshot }) {
++        // Return Input's detected bootloader identity and selected release.
++      },
++      async recoverFirmware({ release, bootloader, plan }) {
++        // Run Input's existing programmer and reconnect the original device.
++      },
++    },
+   },
+   deviceKitVersion: DEVICE_KIT_VERSION,
+   bridgeVersion: "0.1.0",
+@@ -112,6 +120,15 @@ candidate separately, then applies the candidate through the existing
+ idempotency, exact readback, immutable receipt, and standard restore. The CLI
+ rechecks the exact Input version immediately before the transaction.
+ 
++When `recoveryAuthority.readStatus()` and `recoverFirmware()` are injected, the
++adapter advertises `input.recovery.plan.v1` and `input.recovery.apply.v1`. The
++plan binds a complete caller-supplied pre-recovery snapshot to the current
++Input/device-kit versions, detected bootloader, and Input-selected release.
++Input owns programming and reconnection. After reconnect, the adapter restores
++the exact snapshot through the existing configuration writer, requires exact
++target-firmware plus configuration-revision postflight, and supports same-key
++receipt replay. No CLI-owned programmer or firmware downgrade is added.
++
+ The reference adapter owns the surrounding transaction: validate every byte
+ and digest, capture a pre-mutation snapshot, compare the live revision, invoke
+ the writer, read back the complete revision, and automatically restore and
+@@ -139,6 +156,8 @@ node companion/conformance.mjs \
+   --require input.firmware.plan.v1 \
+   --require input.firmware.update.v1 \
+   --require input.reset.plan.v1 \
++  --require input.recovery.plan.v1 \
++  --require input.recovery.apply.v1 \
+   --require input.logs.snapshot.v1
+ ```
+ 
+@@ -153,6 +172,7 @@ npm --prefix companion test
+ ./scripts/test-bridge-e2e.sh
+ ./scripts/test-firmware-update-e2e.sh
+ ./scripts/test-reset-e2e.sh
++./scripts/test-recovery-e2e.sh
+ ```
+ 
+ The first command checks server, adapter, lifecycle, authentication, and path
+diff --git a/companion/fixture-server.mjs b/companion/fixture-server.mjs
+index a709826..8cda836 100644
+--- a/companion/fixture-server.mjs
++++ b/companion/fixture-server.mjs
+@@ -227,6 +227,8 @@ let hostSettings = {
+   smartActionCmdEnabled: false,
+ };
+ let firmwareVersion = "v0.6.0-fixture";
++let recoveryBootloaderDetected =
++  process.env.WORKLOUDERCTL_FIXTURE_RECOVERY === "1";
+ const configurationWriteFailure =
+   process.env.WORKLOUDERCTL_FIXTURE_CONFIG_WRITE_FAILURE ?? "";
+ let configurationWriteFailureUsed = false;
+@@ -429,6 +431,57 @@ const adapter = createInputMainAdapter({
+       };
+     },
+   },
++  recoveryAuthority: {
++    async readStatus({ configurationSnapshot }) {
++      if (
++        configurationSnapshot.deviceId !== "fixture-device" ||
++        configurationSnapshot.files.length !== files.size
++      ) {
++        throw new Error("fixture recovery backup was incomplete");
++      }
++      return {
++        bootloaderDetected: recoveryBootloaderDetected,
++        bootloader: recoveryBootloaderDetected
++          ? {
++              transport: "usb-bootloader",
++              identifier: "fixture-bootloader",
++              deviceType: "codex_micro",
++            }
++          : null,
++        targetRelease: recoveryBootloaderDetected
++          ? {
++              version: "v0.8.0-recovery-fixture",
++              fetchedAt: 1785681000000,
++              changeLog: "Fixture recovery release",
++              downloadUrl: "https://example.test/codex-micro-v0.8.0-recovery.bin",
++            }
++          : null,
++      };
++    },
++    async recoverFirmware({ release, bootloader }) {
++      if (
++        !recoveryBootloaderDetected ||
++        bootloader.identifier !== "fixture-bootloader"
++      ) {
++        throw new Error("fixture bootloader disappeared");
++      }
++      firmwareVersion = release.version;
++      files.clear();
++      for (const [relativePath, bytes] of defaultFiles) {
++        files.set(relativePath, Buffer.from(bytes));
++      }
++      recoveryBootloaderDetected = false;
++      return {
++        targetVersion: release.version,
++        completedPhases: [
++          "detect-input-bootloader",
++          "validate-input-selected-release",
++          "recover-with-input-device-programmer",
++          "reconnect-original-device",
++        ],
++      };
++    },
++  },
+   logsAuthority: {
+     async readLogs() {
+       return [
+diff --git a/companion/input-main-adapter.mjs b/companion/input-main-adapter.mjs
+index d528691..097878c 100644
+--- a/companion/input-main-adapter.mjs
++++ b/companion/input-main-adapter.mjs
+@@ -21,6 +21,10 @@ export const RESET_PLAN_SCHEMA_VERSION = 1;
+ export const RESET_PLAN_KIND = "worklouder-input-reset-plan";
+ export const RESET_PLAN_REVISION_ALGORITHM =
+   "sha256:recursive-key-sorted-reset-plan-body-v1";
++export const RECOVERY_PLAN_SCHEMA_VERSION = 1;
++export const RECOVERY_PLAN_KIND = "worklouder-input-recovery-plan";
++export const RECOVERY_PLAN_REVISION_ALGORITHM =
++  "sha256:recursive-key-sorted-recovery-plan-body-v1";
+ 
+ const MAX_CONFIG_FILES = 4096;
+ const MAX_CONFIG_FILE_BYTES = 16 * 1024 * 1024;
+@@ -38,6 +42,15 @@ const FIRMWARE_PHASES = [
+   "restore-changed-configuration",
+   "verify-firmware-and-configuration",
+ ];
++const RECOVERY_PHASES = [
++  "detect-input-bootloader",
++  "validate-input-selected-release",
++  "recover-with-input-device-programmer",
++  "reconnect-original-device",
++  "restore-exact-configuration",
++  "verify-firmware-and-configuration",
++];
++const RECOVERY_PROVIDER_PHASES = RECOVERY_PHASES.slice(0, 4);
+ 
+ export function createInputMainAdapter({
+   devicesCommManager,
+@@ -51,6 +64,7 @@ export function createInputMainAdapter({
+   firmwareAuthority,
+   firmwareOperationsAuthority,
+   resetAuthority,
++  recoveryAuthority,
+   logsAuthority,
+ }) {
+   if (
+@@ -137,6 +151,22 @@ export function createInputMainAdapter({
+   ) {
+     throw new TypeError("inputVersion is required with resetAuthority");
+   }
++  if (
++    recoveryAuthority !== undefined &&
++    (!recoveryAuthority ||
++      typeof recoveryAuthority.readStatus !== "function" ||
++      typeof recoveryAuthority.recoverFirmware !== "function")
++  ) {
++    throw new TypeError(
++      "recoveryAuthority must provide readStatus and recoverFirmware",
++    );
++  }
++  if (
++    recoveryAuthority &&
++    (typeof inputVersion !== "string" || inputVersion.length === 0)
++  ) {
++    throw new TypeError("inputVersion is required with recoveryAuthority");
++  }
+   if (
+     logsAuthority !== undefined &&
+     (!logsAuthority || typeof logsAuthority.readLogs !== "function")
+@@ -146,6 +176,7 @@ export function createInputMainAdapter({
+   const idempotencyCache = new Map();
+   const hostSettingsIdempotencyCache = new Map();
+   const firmwareIdempotencyCache = new Map();
++  const recoveryIdempotencyCache = new Map();
+ 
+   const selectDevice = (deviceId) => {
+     const devices = devicesCommManager
+@@ -338,6 +369,60 @@ export function createInputMainAdapter({
+     };
+   };
+ 
++  const captureRecoveryPlan = async (suppliedConfiguration) => {
++    const configuration = validateConfigSnapshot(suppliedConfiguration);
++    const device = normalizeFirmwarePlanDevice(suppliedConfiguration.device);
++    const backupDeviceKitVersion = safeBoundedString(
++      suppliedConfiguration.deviceKitVersion,
++      "recovery device kit version",
++      128,
++    );
++    if (backupDeviceKitVersion !== deviceKitVersion) {
++      throw new BridgeError(-32005, "recovery backup device kit version differed", {
++        backupDeviceKitVersion,
++        inputDeviceKitVersion: deviceKitVersion,
++      });
++    }
++    const previousFirmwareVersion = safeBoundedString(
++      suppliedConfiguration.status?.firmwareVersion,
++      "recovery previous firmware version",
++      128,
++    );
++    const status = normalizeRecoveryStatus(
++      await recoveryAuthority.readStatus({
++        configurationSnapshot: suppliedConfiguration,
++      }),
++    );
++    const blockers = [];
++    if (!status.bootloaderDetected) {
++      blockers.push("input-bootloader-not-detected");
++    }
++    if (!status.targetRelease) {
++      blockers.push("input-selected-release-unavailable");
++    }
++    const body = {
++      inputAppVersion: inputVersion,
++      deviceId: configuration.deviceId,
++      deviceKitVersion: backupDeviceKitVersion,
++      device,
++      previousFirmwareVersion,
++      targetRelease: status.targetRelease,
++      bootloader: status.bootloader,
++      configurationRevision: configuration.revision,
++      configurationFileCount: configuration.files.length,
++      phases: [...RECOVERY_PHASES],
++      blockers,
++      ready: blockers.length === 0,
++    };
++    return {
++      schemaVersion: RECOVERY_PLAN_SCHEMA_VERSION,
++      kind: RECOVERY_PLAN_KIND,
++      revisionAlgorithm: RECOVERY_PLAN_REVISION_ALGORITHM,
++      revision: recoveryPlanRevision(body),
++      ...body,
++    };
++  };
++
+   const runMutation = async ({
+     operation,
+     deviceId,
+@@ -697,6 +782,151 @@ export function createInputMainAdapter({
+     return result;
+   };
+ 
++  const runFirmwareRecovery = async ({
++    expectedPlanRevision,
++    idempotencyKey,
++    plan: suppliedPlan,
++    configuration: suppliedConfiguration,
++  }) => {
++    const plan = normalizeRecoveryPlan(suppliedPlan);
++    const configuration = validateConfigSnapshot(suppliedConfiguration);
++    const expectedPlan = safeSha256(
++      expectedPlanRevision,
++      "expected recovery plan revision",
++    );
++    if (
++      plan.revision !== expectedPlan ||
++      plan.inputAppVersion !== inputVersion ||
++      plan.configurationRevision !== configuration.revision ||
++      plan.deviceId !== configuration.deviceId
++    ) {
++      throw new BridgeError(-32602, "recovery plan expectations differed");
++    }
++    const targetVersion = plan.targetRelease?.version ?? "";
++    const requestDigest = mutationRequestDigest({
++      operation: "firmware-recovery",
++      deviceId: plan.deviceId,
++        expectedRevision: configuration.revision,
++      targetRevision: plan.revision,
++    });
++    const cached = recoveryIdempotencyCache.get(idempotencyKey);
++    if (cached) {
++      if (cached.requestDigest !== requestDigest) {
++        throw new BridgeError(
++          -32602,
++          "idempotency key was reused with a different firmware recovery",
++        );
++      }
++      return { ...cached.result, idempotentReplay: true };
++    }
++
++    const livePlan = await captureRecoveryPlan(suppliedConfiguration);
++    if (livePlan.revision !== expectedPlan) {
++      throw new BridgeError(-32005, "recovery plan revision conflict", {
++        expectedPlanRevision: expectedPlan,
++        livePlanRevision: livePlan.revision,
++      });
++    }
++    if (!livePlan.ready || targetVersion.length === 0) {
++      throw new BridgeError(-32007, "firmware recovery was not ready", {
++        blockers: livePlan.blockers,
++      });
++    }
++
++    let providerOutcome = "completed";
++    try {
++      const providerResult = await recoveryAuthority.recoverFirmware({
++        operation: "recover",
++        plan: livePlan,
++        release: livePlan.targetRelease,
++        bootloader: livePlan.bootloader,
++      });
++      validateRecoveryOperationResult(providerResult, targetVersion);
++    } catch (providerError) {
++      providerOutcome = "postflight-confirmed";
++      try {
++        const observed = await captureConfigSnapshot(selectDevice(plan.deviceId));
++        if (observed.status.firmwareVersion !== targetVersion) {
++          throw new Error("postflight did not find recovered target firmware");
++        }
++      } catch (postflightError) {
++        throw new BridgeError(-32008, "firmware recovery required intervention", {
++          recoveryRequired: true,
++          deviceId: plan.deviceId,
++          planRevision: plan.revision,
++          targetFirmwareVersion: targetVersion,
++          configurationRevision: configuration.revision,
++          providerError: errorMessage(providerError),
++          postflightError: errorMessage(postflightError),
++        });
++      }
++    }
++
++    const recovered = await captureConfigSnapshot(selectDevice(plan.deviceId));
++    if (recovered.status.firmwareVersion !== targetVersion) {
++      throw new BridgeError(-32008, "firmware recovery postflight failed", {
++        recoveryRequired: true,
++        targetFirmwareVersion: targetVersion,
++        afterFirmwareVersion: recovered.status.firmwareVersion ?? null,
++      });
++    }
++    let restore;
++    try {
++      restore = await runMutation({
++        operation: "recovery-restore",
++        deviceId: plan.deviceId,
++        expectedRevision: recovered.revision,
++        idempotencyKey: idempotencyKey + ":configuration",
++        candidate: suppliedConfiguration,
++      });
++    } catch (restoreError) {
++      throw new BridgeError(-32008, "firmware recovered but configuration restore failed", {
++        recoveryRequired: true,
++        deviceId: plan.deviceId,
++        planRevision: plan.revision,
++        targetFirmwareVersion: targetVersion,
++        recoveredConfigRevision: recovered.revision,
++        targetConfigRevision: configuration.revision,
++        restoreError: errorMessage(restoreError),
++      });
++    }
++    const after = await captureConfigSnapshot(selectDevice(plan.deviceId));
++    if (
++      after.status.firmwareVersion !== targetVersion ||
++      after.revision !== configuration.revision
++    ) {
++      throw new BridgeError(-32008, "recovery configuration postflight failed", {
++        recoveryRequired: true,
++        targetFirmwareVersion: targetVersion,
++        afterFirmwareVersion: after.status.firmwareVersion ?? null,
++        targetConfigRevision: configuration.revision,
++        afterConfigRevision: after.revision,
++      });
++    }
++    const result = {
++      schemaVersion: 1,
++      kind: "worklouder-input-recovery-mutation",
++      operation: "recover",
++      idempotencyKey,
++      idempotentReplay: false,
++      changed: true,
++      providerOutcome,
++      recoveryRequired: false,
++      planRevision: plan.revision,
++      deviceId: plan.deviceId,
++      beforeFirmwareVersion: plan.previousFirmwareVersion,
++      afterFirmwareVersion: after.status.firmwareVersion,
++      targetFirmwareVersion: targetVersion,
++      beforeConfigRevision: configuration.revision,
++      recoveredConfigRevision: recovered.revision,
++      afterConfigRevision: after.revision,
++      configurationRestored: restore.afterRevision === configuration.revision,
++      phases: RECOVERY_PHASES.map((name) => ({ name, status: "completed" })),
++    };
++    cacheMutation(recoveryIdempotencyCache, idempotencyKey, requestDigest, result);
++    return result;
++  };
++
+   const adapter = {
+     async listDevices() {
+       return {
+@@ -912,6 +1142,11 @@ export function createInputMainAdapter({
+     adapter.getResetPlan = async ({ deviceId = null }) =>
+       captureResetPlan(selectDevice(deviceId));
+   }
++  if (recoveryAuthority) {
++    adapter.getRecoveryPlan = async ({ configuration }) =>
++      captureRecoveryPlan(configuration);
++    adapter.recoverFirmware = runFirmwareRecovery;
++  }
+   if (logsAuthority) {
+     adapter.snapshotLogs = async ({ maxEntries = MAX_LOG_ENTRIES }) => {
+       const limit = safeInteger(maxEntries, "maxEntries", 1, MAX_LOG_ENTRIES);
+@@ -983,6 +1218,195 @@ export function resetPlanRevision(body) {
+     .digest("hex");
+ }
+ 
++function normalizeRecoveryStatus(status) {
++  if (!status || typeof status !== "object" || Array.isArray(status)) {
++    throw new BridgeError(-32008, "Input recovery status was invalid");
++  }
++  exactKeys(
++    status,
++    ["bootloaderDetected", "bootloader", "targetRelease"],
++    "recovery status",
++  );
++  if (typeof status.bootloaderDetected !== "boolean") {
++    throw new BridgeError(-32008, "Input bootloader detection was invalid");
++  }
++  let bootloader = null;
++  if (status.bootloader !== null && status.bootloader !== undefined) {
++    if (typeof status.bootloader !== "object" || Array.isArray(status.bootloader)) {
++      throw new BridgeError(-32008, "Input bootloader identity was invalid");
++    }
++    exactKeys(
++      status.bootloader,
++      ["transport", "identifier", "deviceType"],
++      "bootloader identity",
++    );
++    bootloader = {
++      transport: safeBoundedString(
++        status.bootloader.transport,
++        "bootloader transport",
++        64,
++      ),
++      identifier: safeBoundedString(
++        status.bootloader.identifier,
++        "bootloader identifier",
++        512,
++      ),
++      deviceType: safeBoundedString(
++        status.bootloader.deviceType,
++        "bootloader device type",
++        128,
++      ),
++    };
++  }
++  if (status.bootloaderDetected !== (bootloader !== null)) {
++    throw new BridgeError(-32008, "Input bootloader identity was inconsistent");
++  }
++  const targetRelease = normalizeFirmwareStatus({
++    updateAvailable: status.targetRelease === null ? false : true,
++    release: status.targetRelease,
++  }).release;
++  return {
++    bootloaderDetected: status.bootloaderDetected,
++    bootloader,
++    targetRelease,
++  };
++}
++
++export function recoveryPlanRevision(body) {
++  return createHash("sha256")
++    .update("worklouder-input-recovery-plan-revision-v1\0", "utf8")
++    .update(canonicalJson(body), "utf8")
++    .digest("hex");
++}
++
++function normalizeRecoveryPlan(plan) {
++  if (!plan || typeof plan !== "object" || Array.isArray(plan)) {
++    throw new BridgeError(-32602, "recovery plan must be an object");
++  }
++  exactKeys(
++    plan,
++    [
++      "schemaVersion",
++      "kind",
++      "revisionAlgorithm",
++      "revision",
++      "inputAppVersion",
++      "deviceId",
++      "deviceKitVersion",
++      "device",
++      "previousFirmwareVersion",
++      "targetRelease",
++      "bootloader",
++      "configurationRevision",
++      "configurationFileCount",
++      "phases",
++      "blockers",
++      "ready",
++    ],
++    "recovery plan",
++  );
++  if (
++    plan.schemaVersion !== RECOVERY_PLAN_SCHEMA_VERSION ||
++    plan.kind !== RECOVERY_PLAN_KIND ||
++    plan.revisionAlgorithm !== RECOVERY_PLAN_REVISION_ALGORITHM
++  ) {
++    throw new BridgeError(-32602, "recovery plan header was invalid");
++  }
++  const status = normalizeRecoveryStatus({
++    bootloaderDetected: plan.bootloader !== null,
++    bootloader: plan.bootloader,
++    targetRelease: plan.targetRelease,
++  });
++  const blockers = normalizeRecoveryBlockers(plan.blockers);
++  if (
++    typeof plan.ready !== "boolean" ||
++    plan.ready !== (blockers.length === 0) ||
++    (status.bootloader === null) !==
++      blockers.includes("input-bootloader-not-detected") ||
++    (status.targetRelease === null) !==
++      blockers.includes("input-selected-release-unavailable") ||
++    !Array.isArray(plan.phases) ||
++    canonicalJson(plan.phases) !== canonicalJson(RECOVERY_PHASES)
++  ) {
++    throw new BridgeError(-32602, "recovery plan readiness was inconsistent");
++  }
++  const body = {
++    inputAppVersion: safeBoundedString(
++      plan.inputAppVersion,
++      "recovery Input version",
++      128,
++    ),
++    deviceId: safeBoundedString(plan.deviceId, "recovery deviceId", 512),
++    deviceKitVersion: safeBoundedString(
++      plan.deviceKitVersion,
++      "recovery device kit version",
++      128,
++    ),
++    device: normalizeFirmwarePlanDevice(plan.device),
++    previousFirmwareVersion: safeBoundedString(
++      plan.previousFirmwareVersion,
++      "recovery previous firmware version",
++      128,
++    ),
++    targetRelease: status.targetRelease,
++    bootloader: status.bootloader,
++    configurationRevision: safeSha256(
++      plan.configurationRevision,
++      "recovery configuration revision",
++    ),
++    configurationFileCount: safeInteger(
++      plan.configurationFileCount,
++      "recovery configuration file count",
++      1,
++      MAX_CONFIG_FILES,
++    ),
++    phases: [...RECOVERY_PHASES],
++    blockers,
++    ready: plan.ready,
++  };
++  const revision = safeSha256(plan.revision, "recovery plan revision");
++  if (revision !== recoveryPlanRevision(body)) {
++    throw new BridgeError(-32602, "recovery plan revision did not match content");
++  }
++  return {
++    schemaVersion: RECOVERY_PLAN_SCHEMA_VERSION,
++    kind: RECOVERY_PLAN_KIND,
++    revisionAlgorithm: RECOVERY_PLAN_REVISION_ALGORITHM,
++    revision,
++    ...body,
++  };
++}
++
++function normalizeRecoveryBlockers(blockers) {
++  const known = new Set([
++    "input-bootloader-not-detected",
++    "input-selected-release-unavailable",
++  ]);
++  if (
++    !Array.isArray(blockers) ||
++    blockers.length > known.size ||
++    new Set(blockers).size !== blockers.length ||
++    blockers.some((blocker) => !known.has(blocker))
++  ) {
++    throw new BridgeError(-32602, "recovery blockers were invalid");
++  }
++  return [...blockers];
++}
++
++function validateRecoveryOperationResult(result, targetVersion) {
++  if (!result || typeof result !== "object" || Array.isArray(result)) {
++    throw new Error("firmware recovery authority returned no result");
++  }
++  if (
++    result.targetVersion !== targetVersion ||
++    !Array.isArray(result.completedPhases) ||
++    canonicalJson(result.completedPhases) !==
++      canonicalJson(RECOVERY_PROVIDER_PHASES)
++  ) {
++    throw new Error("firmware recovery authority returned an invalid result");
++  }
++}
++
+ function normalizePermissionsStatus(status) {
+   if (!status || typeof status !== "object" || Array.isArray(status)) {
+     throw new BridgeError(-32008, "Input permission status was invalid");
+diff --git a/companion/input-main-bridge.mjs b/companion/input-main-bridge.mjs
+index 05504e2..73c5e12 100644
+--- a/companion/input-main-bridge.mjs
++++ b/companion/input-main-bridge.mjs
+@@ -50,6 +50,11 @@ const METHOD_DEFINITIONS = new Map([
+   ],
+   ["input.firmware.plan", ["input.firmware.plan.v1", "getFirmwarePlan"]],
+   ["input.reset.plan", ["input.reset.plan.v1", "getResetPlan"]],
++  ["input.recovery.plan", ["input.recovery.plan.v1", "getRecoveryPlan"]],
++  [
++    "input.recovery.apply",
++    ["input.recovery.apply.v1", "recoverFirmware"],
++  ],
+   [
+     "input.firmware.update",
+     ["input.firmware.update.v1", "updateFirmware"],
+@@ -63,6 +68,7 @@ const MUTATION_METHODS = new Set([
+   "input.host-settings.apply",
+   "input.host-settings.restore",
+   "input.firmware.update",
++  "input.recovery.apply",
+ ]);
+ 
+ export class BridgeError extends Error {
+@@ -381,6 +387,32 @@ function validateMutationParams(method, params) {
+     }
+     return;
+   }
++  if (method === "input.recovery.apply") {
++    if (
++      typeof params.expectedPlanRevision !== "string" ||
++      !/^[0-9a-f]{64}$/i.test(params.expectedPlanRevision)
++    ) {
++      throw new BridgeError(-32602, "expectedPlanRevision is invalid");
++    }
++    if (
++      typeof params.idempotencyKey !== "string" ||
++      params.idempotencyKey.length === 0 ||
++      Buffer.byteLength(params.idempotencyKey, "utf8") > 256 ||
++      params.idempotencyKey.includes("\0")
++    ) {
++      throw new BridgeError(-32602, "idempotencyKey is invalid");
++    }
++    for (const payload of ["plan", "configuration"]) {
++      if (
++        !params[payload] ||
++        typeof params[payload] !== "object" ||
++        Array.isArray(params[payload])
++      ) {
++        throw new BridgeError(-32602, payload + " is required");
++      }
++    }
++    return;
++  }
+   validateDeviceId(params.deviceId);
+   validateRevisionAndIdempotency(params);
+   const payload = method === "device.config.apply" ? "config" : "snapshot";
+diff --git a/companion/input-main-bridge.test.mjs b/companion/input-main-bridge.test.mjs
+index ec89a91..aa011d8 100644
+--- a/companion/input-main-bridge.test.mjs
++++ b/companion/input-main-bridge.test.mjs
+@@ -748,6 +748,99 @@ test("Input adapter builds a versioned default candidate without mutating config
+   assert.equal(files.get("keymap.json").toString(), '{"layout":"custom"}');
+ });
+ 
++test("Input adapter delegates bootloader recovery and restores the exact configuration", async () => {
++  const files = new Map([
++    ["keymap.json", Buffer.from('{"layout":"custom"}')],
++    ["smart_actions.json", Buffer.from('{"smartActions":{"1":{}}}')],
++  ]);
++  const original = new Map(
++    [...files].map(([path, bytes]) => [path, Buffer.from(bytes)]),
++  );
++  const device = configDevice("recovery-device", files);
++  let firmwareVersion = "v0.5.0-broken";
++  let bootloaderDetected = true;
++  device.rpcService.getFirmwareVersion = async () => firmwareVersion;
++  const adapter = createInputMainAdapter({
++    devicesCommManager: { getDevices: () => [device] },
++    deviceKitVersion: "0.1.29",
++    inputVersion: "0.18.0",
++    configurationWriter: {
++      async replaceConfiguration({ files: replacement }) {
++        files.clear();
++        for (const file of replacement) {
++          files.set(file.relativePath, Buffer.from(file.bytes));
++        }
++      },
++    },
++    recoveryAuthority: {
++      async readStatus({ configurationSnapshot }) {
++        assert.equal(configurationSnapshot.deviceId, "recovery-device");
++        return {
++          bootloaderDetected,
++          bootloader: bootloaderDetected
++            ? {
++                transport: "usb-bootloader",
++                identifier: "recovery-fixture",
++                deviceType: "codex_micro",
++              }
++            : null,
++          targetRelease: bootloaderDetected
++            ? {
++                version: "v0.7.0",
++                fetchedAt: 1234,
++                changeLog: "Recovery fixture",
++                downloadUrl: "https://example.test/recovery.bin",
++              }
++            : null,
++        };
++      },
++      async recoverFirmware({ release, bootloader }) {
++        assert.equal(bootloader.identifier, "recovery-fixture");
++        firmwareVersion = release.version;
++        files.clear();
++        files.set("keymap.json", Buffer.from('{"layout":"factory"}'));
++        bootloaderDetected = false;
++        return {
++          targetVersion: release.version,
++          completedPhases: [
++            "detect-input-bootloader",
++            "validate-input-selected-release",
++            "recover-with-input-device-programmer",
++            "reconnect-original-device",
++          ],
++        };
++      },
++    },
++  });
++
++  const configuration = await adapter.snapshotConfig({
++    deviceId: "recovery-device",
++  });
++  const plan = await adapter.getRecoveryPlan({ configuration });
++  assert.equal(plan.ready, true);
++  assert.equal(plan.configurationRevision, configuration.revision);
++  assert.equal(plan.bootloader.identifier, "recovery-fixture");
++  const request = {
++    expectedPlanRevision: plan.revision,
++    idempotencyKey: "recovery-1",
++    plan,
++    configuration,
++  };
++  const recovered = await adapter.recoverFirmware(request);
++  assert.equal(recovered.afterFirmwareVersion, "v0.7.0");
++  assert.equal(recovered.afterConfigRevision, configuration.revision);
++  assert.notEqual(recovered.recoveredConfigRevision, configuration.revision);
++  assert.equal(recovered.configurationRestored, true);
++  assert.equal(recovered.recoveryRequired, false);
++  assert.deepEqual(
++    [...files].map(([path, bytes]) => [path, bytes.toString()]),
++    [...original].map(([path, bytes]) => [path, bytes.toString()]),
++  );
++  const replay = await adapter.recoverFirmware(request);
++  assert.equal(replay.idempotentReplay, true);
++  assert.equal(replay.afterConfigRevision, configuration.revision);
++});
++
+ test("one-call Input integration owns discovery and lifecycle paths", async () => {
+   const root = await mkdtemp("/tmp/wlb-integration-");
+   class FixtureApp extends EventEmitter {
+diff --git a/companion/input-main-integration.mjs b/companion/input-main-integration.mjs
+index a67329c..a493c0e 100644
+--- a/companion/input-main-integration.mjs
++++ b/companion/input-main-integration.mjs
+@@ -64,6 +64,7 @@ export async function installInputCompanionBridge({
+     firmwareAuthority,
+     firmwareOperationsAuthority: services.firmwareOperationsAuthority,
+     resetAuthority: services.resetAuthority,
++    recoveryAuthority: services.recoveryAuthority,
+     logsAuthority,
+   });
+   const bridge = await startInputCompanionBridge({
+diff --git a/completions/_worklouderctl b/completions/_worklouderctl
+index b7cd85b..4912592 100644
+--- a/completions/_worklouderctl
++++ b/completions/_worklouderctl
+@@ -1434,6 +1434,57 @@ _arguments "${_arguments_options[@]}" \
+     ;;
+ esac
+ ;;
++(recovery)
++_arguments "${_arguments_options[@]}" \
++'-h[Print help information]' \
++'--help[Print help information]' \
++'-V[Print version information]' \
++'--version[Print version information]' \
++'--json[Emit machine-readable JSON when the command supports it]' \
++":: :_worklouderctl__input__recovery_commands" \
++"*::: :->recovery" \
++&& ret=0
++
++    case $state in
++    (recovery)
++        words=($line[1] "${words[@]}")
++        (( CURRENT += 1 ))
++        curcontext="${curcontext%:*:*}:worklouderctl-input-recovery-command-$line[1]:"
++        case $line[1] in
++            (plan)
++_arguments "${_arguments_options[@]}" \
++'*--backup=[Complete configuration snapshot captured before entering recovery]:BACKUP:_files' \
++'*--plan=[Destination for the immutable recovery plan]:PLAN:_files' \
++'-h[Print help information]' \
++'--help[Print help information]' \
++'-V[Print version information]' \
++'--version[Print version information]' \
++'--json[Emit machine-readable JSON when the command supports it]' \
++&& ret=0
++;;
++(apply)
++_arguments "${_arguments_options[@]}" \
++'*--plan=[Immutable plan produced by `input recovery plan`]:PLAN:_files' \
++'*--backup=[Exact complete pre-recovery configuration snapshot]:BACKUP:_files' \
++'*--receipt=[Destination for the verified recovery receipt]:RECEIPT:_files' \
++'--idempotency-key=[Stable retry key; reuse it only with the same plan and backup]:IDEMPOTENCY_KEY: ' \
++'-h[Print help information]' \
++'--help[Print help information]' \
++'-V[Print version information]' \
++'--version[Print version information]' \
++'--json[Emit machine-readable JSON when the command supports it]' \
++&& ret=0
++;;
++(help)
++_arguments "${_arguments_options[@]}" \
++'--json[Emit machine-readable JSON when the command supports it]' \
++'*::subcommand -- The subcommand whose help message to display:' \
++&& ret=0
++;;
++        esac
++    ;;
++esac
++;;
+ (logs)
+ _arguments "${_arguments_options[@]}" \
+ '-h[Print help information]' \
+@@ -3766,6 +3817,11 @@ _worklouderctl__input__permission__command__apply_commands() {
+     local commands; commands=()
+     _describe -t commands 'worklouderctl input permission command apply commands' commands "$@"
+ }
++(( $+functions[_worklouderctl__input__recovery__apply_commands] )) ||
++_worklouderctl__input__recovery__apply_commands() {
++    local commands; commands=()
++    _describe -t commands 'worklouderctl input recovery apply commands' commands "$@"
++}
+ (( $+functions[_worklouderctl__input__reset__apply_commands] )) ||
+ _worklouderctl__input__reset__apply_commands() {
+     local commands; commands=()
+@@ -4502,6 +4558,11 @@ _worklouderctl__input__preset__help_commands() {
+     local commands; commands=()
+     _describe -t commands 'worklouderctl input preset help commands' commands "$@"
+ }
++(( $+functions[_worklouderctl__input__recovery__help_commands] )) ||
++_worklouderctl__input__recovery__help_commands() {
++    local commands; commands=()
++    _describe -t commands 'worklouderctl input recovery help commands' commands "$@"
++}
+ (( $+functions[_worklouderctl__input__reset__help_commands] )) ||
+ _worklouderctl__input__reset__help_commands() {
+     local commands; commands=()
+@@ -4602,6 +4663,7 @@ _worklouderctl__input_commands() {
+ 'permissions:Check the Input-owned OS permission required for device access' \
+ 'firmware:Inspect firmware availability through Input'\''s released update service' \
+ 'reset:Plan and apply an Input-owned complete default configuration' \
++'recovery:Recover firmware through Input and restore an exact complete configuration' \
+ 'logs:Collect a bounded, sanitized diagnostic log bundle from Input' \
+ 'preset:Snapshot the Input-owned preset catalog through the companion bridge' \
+ 'help:Print this message or the help of the given subcommand(s)' \
+@@ -4889,6 +4951,11 @@ _worklouderctl__input__firmware__plan_commands() {
+     local commands; commands=()
+     _describe -t commands 'worklouderctl input firmware plan commands' commands "$@"
+ }
++(( $+functions[_worklouderctl__input__recovery__plan_commands] )) ||
++_worklouderctl__input__recovery__plan_commands() {
++    local commands; commands=()
++    _describe -t commands 'worklouderctl input recovery plan commands' commands "$@"
++}
+ (( $+functions[_worklouderctl__input__reset__plan_commands] )) ||
+ _worklouderctl__input__reset__plan_commands() {
+     local commands; commands=()
+@@ -4950,6 +5017,15 @@ _worklouderctl__codex__runtime__recover_commands() {
+     local commands; commands=()
+     _describe -t commands 'worklouderctl codex runtime recover commands' commands "$@"
+ }
++(( $+functions[_worklouderctl__input__recovery_commands] )) ||
++_worklouderctl__input__recovery_commands() {
++    local commands; commands=(
++'plan:Freeze Input'\''s bootloader identity, selected release, and backup revision' \
++'apply:Delegate recovery to Input, reconnect, and restore the exact backup' \
++'help:Print this message or the help of the given subcommand(s)' \
++    )
++    _describe -t commands 'worklouderctl input recovery commands' commands "$@"
++}
+ (( $+functions[_worklouderctl__action__group__member__remove_commands] )) ||
+ _worklouderctl__action__group__member__remove_commands() {
+     local commands; commands=()
+diff --git a/completions/worklouderctl.bash b/completions/worklouderctl.bash
+index ca64eb3..8e87f6f 100644
+--- a/completions/worklouderctl.bash
++++ b/completions/worklouderctl.bash
+@@ -216,6 +216,9 @@ _worklouderctl() {
+             recover)
+                 cmd+="__recover"
+                 ;;
++            recovery)
++                cmd+="__recovery"
++                ;;
+             remove)
+                 cmd+="__remove"
+                 ;;
+@@ -3432,7 +3435,7 @@ _worklouderctl() {
+             return 0
+             ;;
+         worklouderctl__input)
+-            opts="-h -V --bridge-socket --bridge-token --help --version --json inspect export config permission permissions firmware reset logs preset help"
++            opts="-h -V --bridge-socket --bridge-token --help --version --json inspect export config permission permissions firmware reset recovery logs preset help"
+             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                 return 0
+@@ -3959,6 +3962,86 @@ _worklouderctl() {
+             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+             return 0
+             ;;
++        worklouderctl__input__recovery)
++            opts="-h -V --help --version --json plan apply help"
++            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
++                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++                return 0
++            fi
++            case "${prev}" in
++                *)
++                    COMPREPLY=()
++                    ;;
++            esac
++            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++            return 0
++            ;;
++        worklouderctl__input__recovery__apply)
++            opts="-h -V --plan --backup --receipt --idempotency-key --help --version --json"
++            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
++                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++                return 0
++            fi
++            case "${prev}" in
++                --plan)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                --backup)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                --receipt)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                --idempotency-key)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                *)
++                    COMPREPLY=()
++                    ;;
++            esac
++            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++            return 0
++            ;;
++        worklouderctl__input__recovery__help)
++            opts="--json <SUBCOMMAND>..."
++            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
++                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++                return 0
++            fi
++            case "${prev}" in
++                *)
++                    COMPREPLY=()
++                    ;;
++            esac
++            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++            return 0
++            ;;
++        worklouderctl__input__recovery__plan)
++            opts="-h -V --backup --plan --help --version --json"
++            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
++                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++                return 0
++            fi
++            case "${prev}" in
++                --backup)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                --plan)
++                    COMPREPLY=($(compgen -f "${cur}"))
++                    return 0
++                    ;;
++                *)
++                    COMPREPLY=()
++                    ;;
++            esac
++            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
++            return 0
++            ;;
+         worklouderctl__input__reset)
+             opts="-h -V --help --version --json plan apply help"
+             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+diff --git a/completions/worklouderctl.fish b/completions/worklouderctl.fish
+index 0c89f11..1dd2153 100644
+--- a/completions/worklouderctl.fish
++++ b/completions/worklouderctl.fish
+@@ -432,21 +432,22 @@ complete -c worklouderctl -n "__fish_seen_subcommand_from codex; and __fish_seen
+ complete -c worklouderctl -n "__fish_seen_subcommand_from codex; and __fish_seen_subcommand_from voice; and __fish_seen_subcommand_from set" -l json -d 'Emit machine-readable JSON when the command supports it'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from codex; and __fish_seen_subcommand_from voice; and __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from codex; and __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -l bridge-socket -d 'Override the Input Companion Bridge Unix socket path' -r -F
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -l bridge-token -d 'Override the Input Companion Bridge token file path' -r -F
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -s h -l help -d 'Print help information'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -s V -l version -d 'Print version information'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "inspect" -d 'Inspect cached Input configuration without changing it'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "export" -d 'Export exact Input configuration bytes into an atomic bundle'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "config" -d 'Build standard semantic snapshots from Input\'s cached device files'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "permission" -d 'Inspect or change Input-owned host permission settings'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "permissions" -d 'Check the Input-owned OS permission required for device access'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "firmware" -d 'Inspect firmware availability through Input\'s released update service'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "reset" -d 'Plan and apply an Input-owned complete default configuration'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "logs" -d 'Collect a bounded, sanitized diagnostic log bundle from Input'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "preset" -d 'Snapshot the Input-owned preset catalog through the companion bridge'
+-complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -l bridge-socket -d 'Override the Input Companion Bridge Unix socket path' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -l bridge-token -d 'Override the Input Companion Bridge token file path' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -s h -l help -d 'Print help information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -s V -l version -d 'Print version information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "inspect" -d 'Inspect cached Input configuration without changing it'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "export" -d 'Export exact Input configuration bytes into an atomic bundle'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "config" -d 'Build standard semantic snapshots from Input\'s cached device files'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "permission" -d 'Inspect or change Input-owned host permission settings'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "permissions" -d 'Check the Input-owned OS permission required for device access'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "firmware" -d 'Inspect firmware availability through Input\'s released update service'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "reset" -d 'Plan and apply an Input-owned complete default configuration'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "recovery" -d 'Recover firmware through Input and restore an exact complete configuration'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "logs" -d 'Collect a bounded, sanitized diagnostic log bundle from Input'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "preset" -d 'Snapshot the Input-owned preset catalog through the companion bridge'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and not __fish_seen_subcommand_from inspect; and not __fish_seen_subcommand_from export; and not __fish_seen_subcommand_from config; and not __fish_seen_subcommand_from permission; and not __fish_seen_subcommand_from permissions; and not __fish_seen_subcommand_from firmware; and not __fish_seen_subcommand_from reset; and not __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from preset; and not __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from inspect" -l device -d 'Select a cached device ID. Required when multiple devices exist' -r
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from inspect" -l support-root -d 'Override Input\'s application support directory' -r -F
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from inspect" -s h -l help -d 'Print help information'
+@@ -564,6 +565,25 @@ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from apply" -s V -l version -d 'Print version information'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from apply" -l json -d 'Emit machine-readable JSON when the command supports it'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from reset; and __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from plan; and not __fish_seen_subcommand_from apply; and not __fish_seen_subcommand_from help" -s h -l help -d 'Print help information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from plan; and not __fish_seen_subcommand_from apply; and not __fish_seen_subcommand_from help" -s V -l version -d 'Print version information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from plan; and not __fish_seen_subcommand_from apply; and not __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from plan; and not __fish_seen_subcommand_from apply; and not __fish_seen_subcommand_from help" -f -a "plan" -d 'Freeze Input\'s bootloader identity, selected release, and backup revision'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from plan; and not __fish_seen_subcommand_from apply; and not __fish_seen_subcommand_from help" -f -a "apply" -d 'Delegate recovery to Input, reconnect, and restore the exact backup'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and not __fish_seen_subcommand_from plan; and not __fish_seen_subcommand_from apply; and not __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and __fish_seen_subcommand_from plan" -l backup -d 'Complete configuration snapshot captured before entering recovery' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and __fish_seen_subcommand_from plan" -l plan -d 'Destination for the immutable recovery plan' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and __fish_seen_subcommand_from plan" -s h -l help -d 'Print help information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and __fish_seen_subcommand_from plan" -s V -l version -d 'Print version information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and __fish_seen_subcommand_from plan" -l json -d 'Emit machine-readable JSON when the command supports it'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and __fish_seen_subcommand_from apply" -l plan -d 'Immutable plan produced by `input recovery plan`' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and __fish_seen_subcommand_from apply" -l backup -d 'Exact complete pre-recovery configuration snapshot' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and __fish_seen_subcommand_from apply" -l receipt -d 'Destination for the verified recovery receipt' -r -F
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and __fish_seen_subcommand_from apply" -l idempotency-key -d 'Stable retry key; reuse it only with the same plan and backup' -r
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and __fish_seen_subcommand_from apply" -s h -l help -d 'Print help information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and __fish_seen_subcommand_from apply" -s V -l version -d 'Print version information'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and __fish_seen_subcommand_from apply" -l json -d 'Emit machine-readable JSON when the command supports it'
++complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from recovery; and __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from collect; and not __fish_seen_subcommand_from help" -s h -l help -d 'Print help information'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from collect; and not __fish_seen_subcommand_from help" -s V -l version -d 'Print version information'
+ complete -c worklouderctl -n "__fish_seen_subcommand_from input; and __fish_seen_subcommand_from logs; and not __fish_seen_subcommand_from collect; and not __fish_seen_subcommand_from help" -l json -d 'Emit machine-readable JSON when the command supports it'
+diff --git a/docs/backups-and-migrations.md b/docs/backups-and-migrations.md
+index f4ce805..3b1e738 100644
+--- a/docs/backups-and-migrations.md
++++ b/docs/backups-and-migrations.md
+@@ -16,6 +16,7 @@ Supported inputs are:
+ - Codex settings and Codex Agent Key snapshots;
+ - Input configuration and host-settings snapshots;
+ - Input preset catalogs;
++- Input firmware/reset/recovery plans and verified mutation receipts;
+ - Input and device export bundles; and
+ - private sanitized Input log bundles.
+ 
+diff --git a/docs/command-reference.md b/docs/command-reference.md
+index 49768da..927dd4c 100644
+--- a/docs/command-reference.md
++++ b/docs/command-reference.md
+@@ -1,7 +1,7 @@
+ <!-- Generated by scripts/render-cli-assets.py; do not edit by hand. -->
+ # WorkLouderCTL command reference
+ 
+-Generated from `worklouderctl 0.1.0`. This document contains 223 command paths.
++Generated from `worklouderctl 0.1.0`. This document contains 226 command paths.
+ 
+ ## `worklouderctl`
+ 
+@@ -394,6 +394,7 @@ SUBCOMMANDS:
+     permission     Inspect or change Input-owned host permission settings
+     permissions    Check the Input-owned OS permission required for device access
+     preset         Snapshot the Input-owned preset catalog through the companion bridge
++    recovery       Recover firmware through Input and restore an exact complete configuration
+     reset          Plan and apply an Input-owned complete default configuration
+ ```
+ 
+@@ -1717,6 +1718,26 @@ SUBCOMMANDS:
+     snapshot    Save the merged saved/default preset catalog without editing Input storage
+ ```
+ 
++## `worklouderctl input recovery`
++
++```text
++worklouderctl-input-recovery 0.1.0
++Recover firmware through Input and restore an exact complete configuration
++
++USAGE:
++    worklouderctl input recovery [OPTIONS] <SUBCOMMAND>
++
++OPTIONS:
++    -h, --help       Print help information
++        --json       Emit machine-readable JSON when the command supports it
++    -V, --version    Print version information
++
++SUBCOMMANDS:
++    apply    Delegate recovery to Input, reconnect, and restore the exact backup
++    help     Print this message or the help of the given subcommand(s)
++    plan     Freeze Input's bootloader identity, selected release, and backup revision
++```
++
+ ## `worklouderctl input reset`
+ 
+ ```text
+@@ -3739,6 +3760,55 @@ OPTIONS:
+     -V, --version            Print version information
+ ```
+ 
++## `worklouderctl input recovery apply`
++
++```text
++worklouderctl-input-recovery-apply 0.1.0
++Delegate recovery to Input, reconnect, and restore the exact backup
++
++USAGE:
++    worklouderctl input recovery apply [OPTIONS] --plan <PLAN> --backup <BACKUP> --receipt <RECEIPT>
++
++OPTIONS:
++        --backup <BACKUP>
++            Exact complete pre-recovery configuration snapshot
++
++    -h, --help
++            Print help information
++
++        --idempotency-key <IDEMPOTENCY_KEY>
++            Stable retry key; reuse it only with the same plan and backup
++
++        --json
++            Emit machine-readable JSON when the command supports it
++
++        --plan <PLAN>
++            Immutable plan produced by `input recovery plan`
++
++        --receipt <RECEIPT>
++            Destination for the verified recovery receipt
++
++    -V, --version
++            Print version information
++```
++
++## `worklouderctl input recovery plan`
++
++```text
++worklouderctl-input-recovery-plan 0.1.0
++Freeze Input's bootloader identity, selected release, and backup revision
++
++USAGE:
++    worklouderctl input recovery plan [OPTIONS] --backup <BACKUP> --plan <PLAN>
++
++OPTIONS:
++        --backup <BACKUP>    Complete configuration snapshot captured before entering recovery
++    -h, --help               Print help information
++        --json               Emit machine-readable JSON when the command supports it
++        --plan <PLAN>        Destination for the immutable recovery plan
++    -V, --version            Print version information
++```
++
+ ## `worklouderctl input reset apply`
+ 
+ ```text
+diff --git a/docs/companion-bridge.md b/docs/companion-bridge.md
+index c008a5b..241091f 100644
+--- a/docs/companion-bridge.md
++++ b/docs/companion-bridge.md
+@@ -154,6 +154,16 @@ publishes an immutable receipt, and supports exact restore through the normal
+ configuration transaction. The CLI rechecks the exact Input version immediately
+ before apply. No default keymap is duplicated in the CLI.
+ 
++`input.recovery.plan` and `input.recovery.apply` appear only when Input injects
++`recoveryAuthority.readStatus()` and `recoveryAuthority.recoverFirmware()`.
++Planning accepts a previously captured complete configuration snapshot and
++freezes its revision together with the exact Input/device-kit versions,
++Input-detected bootloader identity, and Input-selected release. Apply rechecks
++that plan, delegates programmer and reconnect to Input, then restores the exact
++snapshot through `device.config.apply.v1`. Final firmware and configuration
++revisions must match the frozen targets. The bridge does not expose a second
++driver, bootloader transport, programmer, or firmware downgrade path.
++
+ ```sh
+ worklouderctl input config snapshot --output config-snapshot.json
+ worklouderctl device config snapshot --output config-snapshot.json
+@@ -172,6 +182,11 @@ worklouderctl input reset apply --plan reset-plan.json \
+   --candidate reset-candidate.json --backup reset-before.json \
+   --receipt reset-receipt.json --expected-revision CONFIG_REVISION \
+   --idempotency-key RESET_KEY
++worklouderctl input recovery plan --backup config-before-recovery.json \
++  --plan recovery-plan.json
++worklouderctl input recovery apply --plan recovery-plan.json \
++  --backup config-before-recovery.json --receipt recovery-receipt.json \
++  --idempotency-key RECOVERY_KEY
+ worklouderctl input logs collect --output input-log-bundle
+ ```
+ 
+@@ -366,6 +381,9 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
+   apply/readback, idempotent retry, stale-CAS rejection, restore, host command
+   permission `false -> true -> false`, preset catalog/list/show/preview/install,
+   preset apply/readback/restore, and dual-hash conformance test.
++- `scripts/test-recovery-e2e.sh` — backup-bound bootloader plan, delegated
++  programmer/reconnect, exact configuration restore, receipt inspection, and
++  idempotent replay fixture.
+ 
+ Input maintains only the small adapter from stable bridge method names to its
+ current service container. Integration creates the adapter after Input's
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index 491b60c..4648c6e 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -96,7 +96,7 @@ Promises as failures even when the USB interface still enumerates.
+ | Firmware update | immutable plan, complete configuration backup, Input-owned download/USB flash/reconnect/restore, idempotent retry, exact postflight | `input firmware update` | high-level authority/bridge/CLI fixture-verified; driver and programmer remain Input-owned |
+ | Reset settings | Input-selected complete default candidate, immutable plan, full backup, idempotent apply, exact post-state and rollback | `input reset plan/apply` | high-level Input authority/bridge/CLI fixture-verified; default layout remains version/device/layout-owned by Input |
+ | Logs | collect and sanitize diagnostic bundle | `input logs collect` | private `0700`/`0600` bundle and SHA-256 readback fixture-verified |
+-| Recovery | restore files or firmware recovery | `device recover` | adapter-pending |
++| Recovery | Input-detected bootloader/release plan, delegated programmer/reconnect, exact pre-recovery configuration restore, firmware/config postflight | `input recovery plan/apply` | high-level Input authority/bridge/CLI fixture-verified; driver, transport, programmer, and firmware downgrade remain Input-owned |
+ 
+ ## Cross-authority acceptance test
+ 
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index c9dc1e1..82fd3d5 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -752,14 +752,27 @@ worklouderctl input reset apply --plan RESET_PLAN.json \
+   --candidate RESET_CANDIDATE.json --backup RESET_BEFORE.json \
+   --receipt RESET_RECEIPT.json --expected-revision CONFIG_REVISION \
+   --idempotency-key RESET_KEY
++worklouderctl input recovery plan --backup CONFIG_BEFORE_RECOVERY.json \
++  --plan RECOVERY_PLAN.json
++worklouderctl input recovery apply --plan RECOVERY_PLAN.json \
++  --backup CONFIG_BEFORE_RECOVERY.json --receipt RECOVERY_RECEIPT.json \
++  --idempotency-key RECOVERY_KEY
+ ```
+ 
+ Input owns the exact default layout for the connected
+ app/device/device-kit/firmware/layout tuple. The CLI freezes its revision,
+ captures a complete backup, applies it through `device.config.apply`, verifies
+ the exact Input version immediately before mutation, performs exact readback,
+-and restores through `device config restore`. Bootloader
+-recovery remains the next distinct high-level authority.
++and restores through `device config restore`.
++
++Bootloader recovery is a separate Input-owned authority. Its read-only plan
++binds the exact Input/device-kit versions, original device and firmware,
++Input-detected bootloader identity, Input-selected release, and complete
++pre-recovery configuration revision. Apply delegates programmer and reconnect
++to Input, then reuses the existing complete configuration transaction to
++restore that exact backup. Success requires exact target-firmware and original
++configuration-revision postflight; the CLI does not implement the programmer,
++transport, or a firmware downgrade.
+ 
+ ## Verification levels
+ 
+diff --git a/docs/input-bootloader-recovery.md b/docs/input-bootloader-recovery.md
+new file mode 100644
+index 0000000..4829f95
+--- /dev/null
++++ b/docs/input-bootloader-recovery.md
+@@ -0,0 +1,97 @@
++# Input-owned bootloader recovery
++
++`worklouderctl input recovery` restores a Codex Micro that Input has detected in
++bootloader mode. WorkLouderCTL does not implement a driver, bootloader
++transport, release parser, or device programmer. The installed Input process
++supplies one high-level `recoveryAuthority`; the CLI adds an immutable plan,
++complete configuration backup binding, authenticated delegation, exact
++postflight, receipt inspection, and retry semantics around it.
++
++## Preserve configuration before recovery
++
++Capture a complete snapshot while the normal device is still readable:
++
++```sh
++worklouderctl --json device --transport bridge config snapshot \
++  --output configuration-before-recovery.json
++```
++
++Keep this file if a firmware operation reports `recoveryRequired`. A device
++already exposed only as a bootloader may no longer provide the ordinary file
++RPC needed to create a new complete snapshot.
++
++## Freeze and apply recovery
++
++```sh
++worklouderctl --json input recovery plan \
++  --backup configuration-before-recovery.json \
++  --plan recovery-plan.json
++
++worklouderctl --json input recovery apply \
++  --plan recovery-plan.json \
++  --backup configuration-before-recovery.json \
++  --receipt recovery-receipt.json \
++  --idempotency-key RECOVERY_KEY
++```
++
++The plan binds all of the following:
++
++- exact Input app and device-kit versions;
++- original device ID, model, layout, connection identity, and prior firmware;
++- Input-detected bootloader transport and identifier;
++- Input-selected compatible firmware release;
++- complete backup revision and file count;
++- the six ordered recovery phases.
++
++Planning is read-only. `ready` is false when Input cannot currently identify the
++bootloader or select a release. Apply reconnects to the bridge and rejects Input
++version drift, plan edits, backup edits, a reused idempotency key with different
++content, and a changed bootloader/release plan before invoking the provider.
++
++## Authority and verification
++
++Input owns the first four phases:
++
++1. `detect-input-bootloader`
++2. `validate-input-selected-release`
++3. `recover-with-input-device-programmer`
++4. `reconnect-original-device`
++
++After the normal device returns, WorkLouderCTL uses the existing complete
++configuration transaction for:
++
++5. `restore-exact-configuration`
++6. `verify-firmware-and-configuration`
++
++Success requires the recovered firmware to equal the frozen target and the
++post-restore configuration revision to equal the original backup revision. An
++ambiguous provider error may be accepted only when postflight independently
++confirms the target firmware; configuration restore and exact final readback
++still have to pass. Otherwise the bridge returns a typed recovery-required
++failure and does not claim completion.
++
++The success receipt is written atomically, reopened, and verified against its
++plan and backup. Inspect either artifact with:
++
++```sh
++worklouderctl --json backup inspect --input recovery-plan.json
++worklouderctl --json backup inspect --input recovery-receipt.json
++```
++
++## Rollback boundary
++
++Recovery does not perform an automatic firmware downgrade. The preserved
++configuration remains independently restorable through the normal transaction:
++
++```sh
++worklouderctl --json device --transport bridge config restore \
++  --input configuration-before-recovery.json \
++  --backup configuration-before-rollback.json \
++  --expected-revision CURRENT_REVISION \
++  --idempotency-key ROLLBACK_KEY
++```
++
++`./scripts/test-recovery-e2e.sh` proves plan/backup binding, Input programmer
++delegation, post-reconnect exact configuration restore, same-key replay,
++receipt inspection, and final firmware/config readback against an isolated
++synthetic bridge fixture. It does not open or control the Input GUI.
+diff --git a/docs/json-schemas.md b/docs/json-schemas.md
+index 7a9f35b..763d24c 100644
+--- a/docs/json-schemas.md
++++ b/docs/json-schemas.md
+@@ -27,7 +27,7 @@ use JSON Schema Draft 2020-12.
+ | `configuration-v1` | Codex settings, Codex Agent Keys, Input device configuration, and Input host settings snapshots |
+ | `transaction-v1` | coordinated plan, transaction receipt, and private backup catalog |
+ | `error-v1` | typed JSON error written to stderr |
+-| `input-operations-v1` | Input permission/firmware status, immutable firmware plan, and sanitized diagnostic log bundle |
++| `input-operations-v1` | Input permission/firmware status, immutable firmware/reset/recovery plans, verified receipts, and sanitized diagnostic log bundle |
+ 
+ Schemas are additive within a version. A field removal, changed meaning, or
+ stricter accepted value creates a new registry name and `$id`. Unknown
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 5f5dc14..8d52806 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -111,7 +111,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Optional permission, firmware status/plan, and sanitized log bridge authorities
+ - [x] Input-owned high-level firmware update authority with backup, USB/bootloader flash, reconnect, restore, and postflight
+ - [x] Input-owned complete default/reset candidate per device/layout/version through the existing configuration transaction, with immutable plan, idempotent apply, readback, and exact rollback
+-- [ ] Bootloader recovery authority and exact post-recovery configuration restore
++- [x] Bootloader recovery authority and exact post-recovery configuration restore, with immutable backup-bound plan, Input programmer delegation, receipt inspection, and idempotent replay
+ 
+ ## Later tracks
+ 
+diff --git a/docs/tier-model.md b/docs/tier-model.md
+index ca6f3c3..2a72f6f 100644
+--- a/docs/tier-model.md
++++ b/docs/tier-model.md
+@@ -127,8 +127,9 @@ configuration apply. They always require a fresh backup and explicit target
+ version.
+ 
+ Firmware and recovery commands delegate to the installed Input updater/flasher;
+-the CLI adds planning, artifact verification, logging, and post-state readback.
+-It does not reimplement the firmware or transport protocol.
++the CLI adds immutable backup-bound planning, artifact verification,
++idempotency, exact configuration restore, and firmware/config post-state
++readback. It does not reimplement the firmware or transport protocol.
+ 
+ ## Cross-tier conflict rule
+ 
+diff --git a/llms.txt b/llms.txt
+index 707182d..b1763c4 100644
+--- a/llms.txt
++++ b/llms.txt
+@@ -21,6 +21,7 @@ Important: the project is currently a source alpha. The repository builds a work
+ - [Command reference](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/command-reference.md): generated help for every CLI command path
+ - [Delegated firmware update](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/delegated-firmware-update.md): Input-owned flash workflow with immutable plan, complete backup, CAS, receipt, and postflight
+ - [Input-owned default reset](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/input-default-reset.md): version/device/layout-owned default candidate with immutable plan, CAS apply, exact readback, and rollback
++- [Input-owned bootloader recovery](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/input-bootloader-recovery.md): complete-backup-bound bootloader/release plan with Input programmer delegation, exact configuration restore, postflight, and idempotent receipt
+ - [Roadmap](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/roadmap.md): implementation milestones
+ - [Sanitized fixtures](https://github.com/MarlinDiary/worklouder-input-cli/tree/main/fixtures): deterministic Input 0.17.3/0.18.0 and Codex Micro firmware v0.6.0 schema fixtures
+ 
+@@ -44,6 +45,7 @@ Important: the project is currently a source alpha. The repository builds a work
+ - Input cache command: `input config snapshot` captures `keymap.json` plus optional `smart_actions.json` byte-for-byte, excludes host-only state, and emits a bridge-revision-equivalent semantic snapshot without controlling the Input GUI or device transport
+ - Primary device transport: authenticated Input Companion Bridge v1 over a private Unix socket; Rust client, one-call Input-main integration, release conformance command, and cross-language tests are implemented
+ - Bridge config commands: deterministic byte-exact snapshot/validate plus capability-gated apply/restore with immutable CLI backup, CAS, session idempotency, full readback, and automatic rollback
++- Input recovery commands: `input recovery plan/apply` bind a complete pre-recovery snapshot to Input/device-kit versions, bootloader identity, and Input-selected release; Input owns programming/reconnect, while the CLI enforces exact firmware/config postflight, receipt inspection, and idempotent replay
+ - Released Input integration: pending; Input 0.18.0 has no external bridge transport
+ - Released Codex integration: pending; Codex 26.727.51351 has internal settings/global-state handlers but no external bridge listener
+ - Direct compatibility transport: `device status`, `device files`, and dual-hash atomic `device export` through Input 0.18.0's bundled device kit with `require-closed` or explicit `restart`
+diff --git a/scripts/test-recovery-e2e.sh b/scripts/test-recovery-e2e.sh
+new file mode 100755
+index 0000000..6cdf0d3
+--- /dev/null
++++ b/scripts/test-recovery-e2e.sh
+@@ -0,0 +1,113 @@
++#!/bin/sh
++set -eu
++
++repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
++root=$(mktemp -d /tmp/wlb-recovery-e2e.XXXXXX)
++socket=$root/bridge.sock
++token=$root/bridge.token
++server_log=$root/server.log
++server_pid=
++
++cleanup() {
++  if [ -n "$server_pid" ] && kill -0 "$server_pid" 2>/dev/null; then
++    kill -TERM "$server_pid"
++    wait "$server_pid"
++  fi
++  rm -rf "$root"
++}
++trap cleanup EXIT INT TERM
++
++if [ -n "${WORKLOUDERCTL_BIN:-}" ]; then
++  bin=$WORKLOUDERCTL_BIN
++else
++  cargo build --locked --manifest-path "$repo/Cargo.toml"
++  bin=$repo/target/debug/worklouderctl
++fi
++test -x "$bin"
++WORKLOUDERCTL_FIXTURE_RECOVERY=1 \
++  node "$repo/companion/fixture-server.mjs" "$socket" "$token" \
++  >"$server_log" 2>&1 &
++server_pid=$!
++attempt=0
++while [ ! -S "$socket" ] || [ ! -f "$token" ]; do
++  attempt=$((attempt + 1))
++  if [ "$attempt" -ge 100 ]; then
++    cat "$server_log" >&2
++    echo "recovery fixture did not start" >&2
++    exit 1
++  fi
++  sleep 0.05
++done
++
++node "$repo/companion/conformance.mjs" \
++  --socket "$socket" --token "$token" \
++  --require input.recovery.plan.v1 \
++  --require input.recovery.apply.v1 \
++  --require device.config.apply.v1 >"$root/conformance.json"
++
++"$bin" --json device --transport bridge --bridge-socket "$socket" \
++  --bridge-token "$token" config snapshot --output "$root/before.json" \
++  >"$root/before-stdout.json"
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  recovery plan --backup "$root/before.json" --plan "$root/plan.json" \
++  >"$root/plan-stdout.json"
++"$bin" --json backup inspect --input "$root/plan.json" \
++  >"$root/plan-inspection.json"
++
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  recovery apply --plan "$root/plan.json" --backup "$root/before.json" \
++  --receipt "$root/apply.json" --idempotency-key recovery-e2e-1 \
++  >"$root/apply-stdout.json"
++"$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
++  recovery apply --plan "$root/plan.json" --backup "$root/before.json" \
++  --receipt "$root/replay.json" --idempotency-key recovery-e2e-1 \
++  >"$root/replay-stdout.json"
++"$bin" --json backup inspect --input "$root/apply.json" \
++  >"$root/apply-inspection.json"
++"$bin" --json device --transport bridge --bridge-socket "$socket" \
++  --bridge-token "$token" config snapshot --output "$root/after.json" \
++  >"$root/after-stdout.json"
++
++python3 - "$root" <<'PY'
++import json
++from pathlib import Path
++import sys
++
++root = Path(sys.argv[1])
++load = lambda name: json.loads((root / name).read_text())
++before = load("before.json")
++plan = load("plan.json")
++plan_stdout = load("plan-stdout.json")
++apply = load("apply.json")
++apply_stdout = load("apply-stdout.json")
++replay = load("replay.json")
++after = load("after.json")
++plan_inspection = load("plan-inspection.json")
++apply_inspection = load("apply-inspection.json")
++
++assert plan_stdout["revision"] == plan["revision"]
++assert plan["ready"] is True and plan["blockers"] == []
++assert plan["bootloader"]["transport"] == "usb-bootloader"
++assert plan["configurationRevision"] == before["revision"]
++assert apply == apply_stdout
++assert apply["kind"] == "worklouderctl-input-recovery-receipt"
++assert apply["targetFirmwareVersion"] == "v0.8.0-recovery-fixture"
++assert apply["afterFirmwareVersion"] == apply["targetFirmwareVersion"]
++assert apply["beforeConfigRevision"] == before["revision"]
++assert apply["recoveredConfigRevision"] != before["revision"]
++assert apply["afterConfigRevision"] == before["revision"]
++assert apply["configurationRestored"] is True
++assert apply["recoveryRequired"] is False
++assert replay["idempotentReplay"] is True
++assert after["revision"] == before["revision"]
++assert after["status"]["firmwareVersion"] == apply["targetFirmwareVersion"]
++assert plan_inspection["artifactKind"] == plan["kind"]
++assert apply_inspection["artifactKind"] == apply["kind"]
++assert apply_inspection["restoreAvailable"] is True
++print("recovery_input_bootloader_authority=verified")
++print("recovery_plan_backup_binding=verified")
++print("recovery_input_programmer_delegation=verified")
++print("recovery_exact_configuration_restore=verified")
++print("recovery_idempotent_replay=verified")
++print("recovery_receipt_readback=verified")
++PY
+diff --git a/scripts/verify-json-contracts.py b/scripts/verify-json-contracts.py
+new file mode 100755
+index 0000000..e49aa64
+--- /dev/null
++++ b/scripts/verify-json-contracts.py
+@@ -0,0 +1,33 @@
++#!/usr/bin/env python3
++"""Reject invalid JSON and duplicate object keys in checked-in contracts."""
++
++import json
++from pathlib import Path
++
++
++def unique_object(pairs):
++    result = {}
++    for key, value in pairs:
++        if key in result:
++            raise ValueError(f"duplicate object key {key!r}")
++        result[key] = value
++    return result
++
++
++def main():
++    repo = Path(__file__).resolve().parent.parent
++    paths = sorted((repo / "spec").rglob("*.json"))
++    if not paths:
++        raise SystemExit("no JSON contracts found")
++    for path in paths:
++        try:
++            json.loads(path.read_text(), object_pairs_hook=unique_object)
++        except (json.JSONDecodeError, ValueError) as error:
++            relative = path.relative_to(repo)
++            raise SystemExit(f"{relative}: {error}") from error
++    print(f"json_contracts={len(paths)}")
++    print("json_duplicate_keys=absent")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/spec/compatibility-matrix-v1.json b/spec/compatibility-matrix-v1.json
+index 659347b..cf3e6e6 100644
+--- a/spec/compatibility-matrix-v1.json
++++ b/spec/compatibility-matrix-v1.json
+@@ -45,7 +45,7 @@
+           "version": "1",
+           "state": "experimental",
+           "tiers": [2, 3, 4],
+-          "evidence": ["authenticated-cas", "firmware-delegation", "input-default-reset", "transaction-rollback"],
++          "evidence": ["authenticated-cas", "firmware-delegation", "bootloader-recovery", "input-default-reset", "transaction-rollback"],
+           "boundary": "Reference adapter and synthetic end-to-end fixtures are verified."
+         },
+         {
+@@ -64,6 +64,7 @@
+         "./scripts/verify-cli-assets.sh",
+         "./scripts/test-bridge-e2e.sh",
+         "./scripts/test-firmware-update-e2e.sh",
++        "./scripts/test-recovery-e2e.sh",
+         "./scripts/test-reset-e2e.sh",
+         "./scripts/test-codex-bridge-e2e.sh",
+         "./scripts/test-transaction-e2e.sh",
+diff --git a/spec/input-companion-bridge-v1.json b/spec/input-companion-bridge-v1.json
+index d7b5cea..818897f 100644
+--- a/spec/input-companion-bridge-v1.json
++++ b/spec/input-companion-bridge-v1.json
+@@ -210,6 +210,27 @@
+       ],
+       "resultKind": "worklouder-input-firmware-mutation"
+     },
++    {
++      "name": "input.recovery.plan",
++      "capability": "input.recovery.plan.v1",
++      "mutation": false,
++      "requiredParams": [
++        "configuration"
++      ],
++      "resultKind": "worklouder-input-recovery-plan"
++    },
++    {
++      "name": "input.recovery.apply",
++      "capability": "input.recovery.apply.v1",
++      "mutation": true,
++      "requiredParams": [
++        "expectedPlanRevision",
++        "idempotencyKey",
++        "plan",
++        "configuration"
++      ],
++      "resultKind": "worklouder-input-recovery-mutation"
++    },
+     {
+       "name": "input.logs.snapshot",
+       "capability": "input.logs.snapshot.v1",
+@@ -387,6 +408,16 @@
+       "rollbackAuthority": "existing device.config.restore transaction",
+       "capabilityAdvertisement": "advertised only when resetAuthority.buildDefaultConfiguration supplies complete default files"
+     },
++    "recovery": {
++      "authority": "injected Input-owned bootloader detection, release selection, and recovery programmer workflow",
++      "planMutation": false,
++      "configurationBackup": "caller-supplied complete configuration snapshot bound by revision and file count",
++      "applyAuthority": "recoveryAuthority.recoverFirmware owns bootloader programming and normal-device reconnection",
++      "restoreAuthority": "existing configurationWriter/device.config.apply transaction restores the exact backup after reconnect",
++      "postflight": "target firmware exact and original configuration revision exact",
++      "firmwareRollback": false,
++      "capabilityAdvertisement": "plan and apply are advertised only when recoveryAuthority supplies readStatus and recoverFirmware"
++    },
+     "logs": {
+       "authority": "Input WindowService in-memory renderer log ring",
+       "maximumEntries": 5000,
+diff --git a/spec/input-operations-0.18.0.json b/spec/input-operations-0.18.0.json
+index df7b811..0b40210 100644
+--- a/spec/input-operations-0.18.0.json
++++ b/spec/input-operations-0.18.0.json
+@@ -72,10 +72,20 @@
+     "rendererResetHookOffset": 10224466,
+     "classification": "renderer state/default-layout flow rather than a standalone main-process reset service",
+     "highLevelMainServiceMethodFound": false,
+-    "offlineTemplate": "input-default-config-0.18.0-codex-micro.json",
++    "cliEmbeddedTemplate": false,
+     "planCapability": "input.reset.plan.v1 only when an injected Input-owned default factory is available",
+     "candidateBoundary": "complete device/layout/version-specific configuration snapshot",
+     "applyBoundary": "device.config.apply.v1 with exact source CAS, complete backup, readback, and automatic rollback",
+     "restoreBoundary": "device.config.restore.v1 with the pre-reset backup"
++  },
++  "firmwareRecovery": {
++    "classification": "separate high-level Input-owned bootloader recovery authority",
++    "highLevelMainServiceMethodFound": false,
++    "planCapability": "input.recovery.plan.v1 only when an injected Input-owned recovery authority is available",
++    "applyCapability": "input.recovery.apply.v1 only when the same authority owns bootloader programming and reconnection",
++    "planBoundary": "binds exact Input app/device-kit versions, Input-selected release, detected bootloader identity, and complete pre-recovery configuration revision",
++    "applyBoundary": "Input owns recovery programming; existing configuration transaction restores and reads back the exact supplied backup after reconnect",
++    "rollbackBoundary": "no CLI-driven firmware downgrade; the complete configuration backup remains independently restorable",
++    "cliMutationBoundary": "no duplicated driver, bootloader transport, release parser, or programmer"
+   }
+ }
+diff --git a/spec/schemas/input-operations-v1.schema.json b/spec/schemas/input-operations-v1.schema.json
+index f16a915..6db4bb7 100644
+--- a/spec/schemas/input-operations-v1.schema.json
++++ b/spec/schemas/input-operations-v1.schema.json
+@@ -7,6 +7,8 @@
+     { "$ref": "#/$defs/firmware" },
+     { "$ref": "#/$defs/firmwarePlan" },
+     { "$ref": "#/$defs/firmwareUpdateReceipt" },
++    { "$ref": "#/$defs/recoveryPlan" },
++    { "$ref": "#/$defs/recoveryReceipt" },
+     { "$ref": "#/$defs/resetPlan" },
+     { "$ref": "#/$defs/resetReceipt" },
+     { "$ref": "#/$defs/logBundle" }
+@@ -228,6 +230,172 @@
+         }
+       }
+     },
++    "recoveryBootloader": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["transport", "identifier", "deviceType"],
++      "properties": {
++        "transport": { "type": "string", "minLength": 1, "maxLength": 64 },
++        "identifier": { "type": "string", "minLength": 1, "maxLength": 512 },
++        "deviceType": { "type": "string", "minLength": 1, "maxLength": 128 }
++      }
++    },
++    "recoveryPlan": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": [
++        "schemaVersion",
++        "kind",
++        "revisionAlgorithm",
++        "revision",
++        "inputAppVersion",
++        "deviceId",
++        "deviceKitVersion",
++        "device",
++        "previousFirmwareVersion",
++        "targetRelease",
++        "bootloader",
++        "configurationRevision",
++        "configurationFileCount",
++        "phases",
++        "blockers",
++        "ready"
++      ],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouder-input-recovery-plan" },
++        "revisionAlgorithm": { "const": "sha256:recursive-key-sorted-recovery-plan-body-v1" },
++        "revision": { "$ref": "#/$defs/sha256" },
++        "inputAppVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "deviceId": { "type": "string", "minLength": 1, "maxLength": 512 },
++        "deviceKitVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "device": { "$ref": "#/$defs/device" },
++        "previousFirmwareVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "targetRelease": {
++          "oneOf": [
++            { "type": "null" },
++            { "$ref": "#/$defs/release" }
++          ]
++        },
++        "bootloader": {
++          "oneOf": [
++            { "type": "null" },
++            { "$ref": "#/$defs/recoveryBootloader" }
++          ]
++        },
++        "configurationRevision": { "$ref": "#/$defs/sha256" },
++        "configurationFileCount": { "type": "integer", "minimum": 1, "maximum": 4096 },
++        "phases": {
++          "const": [
++            "detect-input-bootloader",
++            "validate-input-selected-release",
++            "recover-with-input-device-programmer",
++            "reconnect-original-device",
++            "restore-exact-configuration",
++            "verify-firmware-and-configuration"
++          ]
++        },
++        "blockers": {
++          "type": "array",
++          "uniqueItems": true,
++          "maxItems": 2,
++          "items": {
++            "enum": [
++              "input-bootloader-not-detected",
++              "input-selected-release-unavailable"
++            ]
++          }
++        },
++        "ready": { "type": "boolean" }
++      }
++    },
++    "recoveryPhase": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["name", "status"],
++      "properties": {
++        "name": {
++          "enum": [
++            "detect-input-bootloader",
++            "validate-input-selected-release",
++            "recover-with-input-device-programmer",
++            "reconnect-original-device",
++            "restore-exact-configuration",
++            "verify-firmware-and-configuration"
++          ]
++        },
++        "status": { "const": "completed" }
++      }
++    },
++    "recoveryReceipt": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": [
++        "schemaVersion",
++        "kind",
++        "adapter",
++        "inputAppVersion",
++        "deviceKitVersion",
++        "plan",
++        "backup",
++        "receipt",
++        "operation",
++        "idempotencyKey",
++        "idempotentReplay",
++        "changed",
++        "deviceId",
++        "planRevision",
++        "beforeFirmwareVersion",
++        "afterFirmwareVersion",
++        "targetFirmwareVersion",
++        "beforeConfigRevision",
++        "recoveredConfigRevision",
++        "afterConfigRevision",
++        "configurationRestored",
++        "providerOutcome",
++        "recoveryRequired",
++        "phases"
++      ],
++      "properties": {
++        "schemaVersion": { "const": 1 },
++        "kind": { "const": "worklouderctl-input-recovery-receipt" },
++        "adapter": { "const": "input-companion-bridge-v1" },
++        "inputAppVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "deviceKitVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "plan": { "type": "string", "minLength": 1 },
++        "backup": { "type": "string", "minLength": 1 },
++        "receipt": { "type": "string", "minLength": 1 },
++        "operation": { "const": "recover" },
++        "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 256 },
++        "idempotentReplay": { "type": "boolean" },
++        "changed": { "const": true },
++        "deviceId": { "type": "string", "minLength": 1, "maxLength": 512 },
++        "planRevision": { "$ref": "#/$defs/sha256" },
++        "beforeFirmwareVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "afterFirmwareVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "targetFirmwareVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
++        "beforeConfigRevision": { "$ref": "#/$defs/sha256" },
++        "recoveredConfigRevision": { "$ref": "#/$defs/sha256" },
++        "afterConfigRevision": { "$ref": "#/$defs/sha256" },
++        "configurationRestored": { "const": true },
++        "providerOutcome": { "enum": ["completed", "postflight-confirmed"] },
++        "recoveryRequired": { "const": false },
++        "phases": {
++          "type": "array",
++          "prefixItems": [
++            { "allOf": [{ "$ref": "#/$defs/recoveryPhase" }, { "properties": { "name": { "const": "detect-input-bootloader" } } }] },
++            { "allOf": [{ "$ref": "#/$defs/recoveryPhase" }, { "properties": { "name": { "const": "validate-input-selected-release" } } }] },
++            { "allOf": [{ "$ref": "#/$defs/recoveryPhase" }, { "properties": { "name": { "const": "recover-with-input-device-programmer" } } }] },
++            { "allOf": [{ "$ref": "#/$defs/recoveryPhase" }, { "properties": { "name": { "const": "reconnect-original-device" } } }] },
++            { "allOf": [{ "$ref": "#/$defs/recoveryPhase" }, { "properties": { "name": { "const": "restore-exact-configuration" } } }] },
++            { "allOf": [{ "$ref": "#/$defs/recoveryPhase" }, { "properties": { "name": { "const": "verify-firmware-and-configuration" } } }] }
++          ],
++          "items": false,
++          "minItems": 6,
++          "maxItems": 6
++        }
++      }
++    },
+     "resetPlan": {
+       "type": "object",
+       "additionalProperties": false,
+diff --git a/src/backup.rs b/src/backup.rs
+index 36bcc80..33802ae 100644
+--- a/src/backup.rs
++++ b/src/backup.rs
+@@ -241,6 +241,33 @@ fn inspect_file(input: &Path) -> Result<BackupInspection> {
+                 )),
+             ))
+         }
++        "worklouder-input-recovery-plan" => {
++            let plan = bridge::read_recovery_plan(input)?;
++            Ok(report(
++                kind,
++                input,
++                plan.schema_version,
++                Some(plan.revision),
++                plan.phases.len(),
++                false,
++                None,
++            ))
++        }
++        "worklouderctl-input-recovery-receipt" => {
++            let receipt = bridge::read_recovery_apply_receipt(input)?;
++            Ok(report(
++                kind,
++                input,
++                receipt.schema_version,
++                Some(receipt.plan_revision),
++                receipt.phases.len(),
++                true,
++                Some(format!(
++                    "worklouderctl device --transport bridge config restore --input {} --backup CURRENT_BACKUP --expected-revision CURRENT_REVISION --idempotency-key IDEMPOTENCY_KEY",
++                    receipt.backup.display()
++                )),
++            ))
++        }
+         "worklouder-input-preset-catalog" => {
+             let snapshot = bridge::read_preset_catalog_snapshot(input)?;
+             Ok(report(
+diff --git a/src/bridge.rs b/src/bridge.rs
+index b2d6a98..070f73a 100644
+--- a/src/bridge.rs
++++ b/src/bridge.rs
+@@ -30,6 +30,8 @@ const PRESET_CATALOG_KIND: &str = "worklouder-input-preset-catalog";
+ const PRESET_CATALOG_REVISION_ALGORITHM: &str = "sha256:recursive-key-sorted-presets-json-v1";
+ const RESET_PLAN_KIND: &str = "worklouder-input-reset-plan";
+ const RESET_PLAN_REVISION_ALGORITHM: &str = "sha256:recursive-key-sorted-reset-plan-body-v1";
++const RECOVERY_PLAN_KIND: &str = "worklouder-input-recovery-plan";
++const RECOVERY_PLAN_REVISION_ALGORITHM: &str = "sha256:recursive-key-sorted-recovery-plan-body-v1";
+ const MAX_PRESET_CATALOG_BYTES: usize = 32 * 1024 * 1024;
+ static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
+ 
+@@ -159,6 +161,79 @@ pub struct ResetApplyReceipt {
+     pub total_bytes: u64,
+ }
+ 
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++pub struct RecoveryBootloader {
++    pub transport: String,
++    pub identifier: String,
++    pub device_type: String,
++}
++
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++pub struct RecoveryPlan {
++    pub schema_version: u64,
++    pub kind: String,
++    pub revision_algorithm: String,
++    pub revision: String,
++    pub input_app_version: String,
++    pub device_id: String,
++    pub device_kit_version: String,
++    pub device: DeviceInfo,
++    pub previous_firmware_version: String,
++    pub target_release: Option<FirmwareRelease>,
++    pub bootloader: Option<RecoveryBootloader>,
++    pub configuration_revision: String,
++    pub configuration_file_count: usize,
++    pub phases: Vec<String>,
++    pub blockers: Vec<String>,
++    pub ready: bool,
++}
++
++#[derive(Clone, Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct RecoveryPlanReceipt {
++    pub plan: PathBuf,
++    pub backup: PathBuf,
++    pub revision: String,
++    pub input_app_version: String,
++    pub device_id: String,
++    pub device_type: String,
++    pub configuration_revision: String,
++    pub target_firmware_version: Option<String>,
++    pub ready: bool,
++    pub blockers: Vec<String>,
++}
++
++#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++pub struct RecoveryApplyReceipt {
++    pub schema_version: u64,
++    pub kind: String,
++    pub adapter: String,
++    pub input_app_version: String,
++    pub device_kit_version: String,
++    pub plan: PathBuf,
++    pub backup: PathBuf,
++    pub receipt: PathBuf,
++    pub operation: String,
++    pub idempotency_key: String,
++    pub idempotent_replay: bool,
++    pub changed: bool,
++    pub device_id: String,
++    pub plan_revision: String,
++    pub before_firmware_version: String,
++    pub after_firmware_version: String,
++    pub target_firmware_version: String,
++    pub before_config_revision: String,
++    pub recovered_config_revision: String,
++    pub after_config_revision: String,
++    pub configuration_restored: bool,
++    pub provider_outcome: String,
++    pub recovery_required: bool,
++    pub phases: Vec<FirmwarePhaseReceipt>,
++}
++
+ #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+ #[serde(rename_all = "camelCase")]
+ pub struct HostSettings {
+@@ -543,6 +618,29 @@ struct BridgeFirmwareMutationResponse {
+     phases: Vec<FirmwarePhaseReceipt>,
+ }
+ 
++#[derive(Debug, Deserialize)]
++#[serde(deny_unknown_fields, rename_all = "camelCase")]
++struct BridgeRecoveryMutationResponse {
++    schema_version: u64,
++    kind: String,
++    operation: String,
++    idempotency_key: String,
++    idempotent_replay: bool,
++    changed: bool,
++    provider_outcome: String,
++    recovery_required: bool,
++    plan_revision: String,
++    device_id: String,
++    before_firmware_version: String,
++    after_firmware_version: String,
++    target_firmware_version: String,
++    before_config_revision: String,
++    recovered_config_revision: String,
++    after_config_revision: String,
++    configuration_restored: bool,
++    phases: Vec<FirmwarePhaseReceipt>,
++}
++
+ #[derive(Debug, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ struct BridgeFileList {
+@@ -820,7 +918,7 @@ pub fn firmware_update(
+         kind: "worklouderctl-input-firmware-update-receipt".into(),
+         adapter: ADAPTER.into(),
+         input_app_version: client.handshake.input_version.clone(),
+-        device_kit_version: plan.device_kit_version.clone(),
++        device_kit_version: plan.device_kit_version,
+         plan: plan_path.to_path_buf(),
+         backup: backup.to_path_buf(),
+         receipt: receipt_path.to_path_buf(),
+@@ -849,6 +947,146 @@ pub fn firmware_update(
+     Ok(receipt)
+ }
+ 
++pub fn recovery_plan(
++    paths: &BridgePaths,
++    backup_path: &Path,
++    plan_path: &Path,
++) -> Result<RecoveryPlanReceipt> {
++    ensure!(
++        backup_path != plan_path,
++        "recovery backup and plan paths must differ"
++    );
++    ensure!(
++        !plan_path.exists(),
++        "recovery plan destination already exists: {}",
++        plan_path.display()
++    );
++    let (configuration, metadata) = read_config_snapshot(backup_path)?;
++    let mut client = BridgeClient::connect(paths)?;
++    let plan: RecoveryPlan = client.call(
++        "input.recovery.plan",
++        "input.recovery.plan.v1",
++        json!({ "configuration": configuration }),
++    )?;
++    validate_recovery_plan(&plan)?;
++    ensure!(
++        plan.input_app_version == client.handshake.input_version,
++        "Input recovery plan version differed from the bridge handshake"
++    );
++    ensure!(
++        plan.device_id == metadata.device_id
++            && plan.configuration_revision == metadata.revision
++            && plan.configuration_file_count == metadata.file_count,
++        "Input recovery plan did not match the complete backup"
++    );
++    write_atomic_json(plan_path, &serde_json::to_value(&plan)?)?;
++    let reopened = read_recovery_plan(plan_path)?;
++    ensure!(
++        reopened == plan,
++        "published recovery plan readback differed"
++    );
++    Ok(RecoveryPlanReceipt {
++        plan: plan_path.to_path_buf(),
++        backup: backup_path.to_path_buf(),
++        revision: plan.revision,
++        input_app_version: plan.input_app_version,
++        device_id: plan.device_id,
++        device_type: plan.device.device_type,
++        configuration_revision: plan.configuration_revision,
++        target_firmware_version: plan.target_release.map(|release| release.version),
++        ready: plan.ready,
++        blockers: plan.blockers,
++    })
++}
++
++pub fn recovery_apply(
++    paths: &BridgePaths,
++    plan_path: &Path,
++    backup_path: &Path,
++    receipt_path: &Path,
++    idempotency_key: Option<&str>,
++) -> Result<RecoveryApplyReceipt> {
++    ensure!(
++        plan_path != backup_path && plan_path != receipt_path && backup_path != receipt_path,
++        "recovery plan, backup, and receipt paths must differ"
++    );
++    ensure!(
++        !receipt_path.exists(),
++        "recovery receipt destination already exists: {}",
++        receipt_path.display()
++    );
++    let plan = read_recovery_plan(plan_path)?;
++    ensure!(plan.ready, "firmware recovery plan was not ready");
++    ensure!(
++        plan.target_release.is_some() && plan.bootloader.is_some(),
++        "firmware recovery plan omitted its target or bootloader"
++    );
++    let (configuration, metadata) = read_config_snapshot(backup_path)?;
++    ensure!(
++        metadata.device_id == plan.device_id
++            && metadata.revision == plan.configuration_revision
++            && metadata.file_count == plan.configuration_file_count,
++        "recovery backup did not match the frozen plan"
++    );
++    let key = idempotency_key
++        .map(str::to_owned)
++        .unwrap_or_else(|| generated_idempotency_key("firmware-recovery", &plan.revision));
++    ensure!(
++        !key.is_empty() && key.len() <= 256 && !key.contains('\0'),
++        "idempotency key was invalid"
++    );
++    let mut client = BridgeClient::connect(paths)?;
++    ensure!(
++        client.handshake.input_version == plan.input_app_version,
++        "Input version changed after the recovery plan was captured"
++    );
++    client.set_timeout(FIRMWARE_UPDATE_TIMEOUT)?;
++    let response: BridgeRecoveryMutationResponse = client.call(
++        "input.recovery.apply",
++        "input.recovery.apply.v1",
++        json!({
++            "expectedPlanRevision": plan.revision,
++            "idempotencyKey": key,
++            "plan": plan,
++            "configuration": configuration,
++        }),
++    )?;
++    validate_recovery_mutation_response(&response, &plan, &key)?;
++    let receipt = RecoveryApplyReceipt {
++        schema_version: 1,
++        kind: "worklouderctl-input-recovery-receipt".into(),
++        adapter: ADAPTER.into(),
++        input_app_version: plan.input_app_version,
++        device_kit_version: plan.device_kit_version,
++        plan: plan_path.to_path_buf(),
++        backup: backup_path.to_path_buf(),
++        receipt: receipt_path.to_path_buf(),
++        operation: response.operation,
++        idempotency_key: response.idempotency_key,
++        idempotent_replay: response.idempotent_replay,
++        changed: response.changed,
++        device_id: response.device_id,
++        plan_revision: response.plan_revision,
++        before_firmware_version: response.before_firmware_version,
++        after_firmware_version: response.after_firmware_version,
++        target_firmware_version: response.target_firmware_version,
++        before_config_revision: response.before_config_revision,
++        recovered_config_revision: response.recovered_config_revision,
++        after_config_revision: response.after_config_revision,
++        configuration_restored: response.configuration_restored,
++        provider_outcome: response.provider_outcome,
++        recovery_required: response.recovery_required,
++        phases: response.phases,
++    };
++    write_atomic_json(receipt_path, &serde_json::to_value(&receipt)?)?;
++    let reopened = read_recovery_apply_receipt(receipt_path)?;
++    ensure!(
++        reopened == receipt,
++        "published recovery receipt readback differed"
++    );
++    Ok(receipt)
++}
++
+ pub fn reset_plan(
+     paths: &BridgePaths,
+     device_id: Option<&str>,
+@@ -1094,6 +1332,84 @@ pub fn read_reset_apply_receipt(input: &Path) -> Result<ResetApplyReceipt> {
+     Ok(receipt)
+ }
+ 
++pub fn read_recovery_plan(input: &Path) -> Result<RecoveryPlan> {
++    let metadata = fs::symlink_metadata(input)
++        .with_context(|| format!("failed to inspect recovery plan {}", input.display()))?;
++    ensure!(
++        metadata.file_type().is_file() && !metadata.file_type().is_symlink(),
++        "recovery plan must be a regular file"
++    );
++    ensure!(
++        metadata.len() <= 2 * 1024 * 1024,
++        "recovery plan exceeded 2 MiB"
++    );
++    let plan: RecoveryPlan = serde_json::from_slice(
++        &fs::read(input)
++            .with_context(|| format!("failed to read recovery plan {}", input.display()))?,
++    )
++    .with_context(|| format!("recovery plan was invalid JSON: {}", input.display()))?;
++    validate_recovery_plan(&plan)?;
++    Ok(plan)
++}
++
++pub fn read_recovery_apply_receipt(input: &Path) -> Result<RecoveryApplyReceipt> {
++    let metadata = fs::symlink_metadata(input)
++        .with_context(|| format!("failed to inspect recovery receipt {}", input.display()))?;
++    ensure!(
++        metadata.file_type().is_file() && !metadata.file_type().is_symlink(),
++        "recovery receipt must be a regular file"
++    );
++    ensure!(
++        metadata.len() <= 2 * 1024 * 1024,
++        "recovery receipt exceeded 2 MiB"
++    );
++    let receipt: RecoveryApplyReceipt = serde_json::from_slice(
++        &fs::read(input)
++            .with_context(|| format!("failed to read recovery receipt {}", input.display()))?,
++    )
++    .with_context(|| format!("recovery receipt was invalid JSON: {}", input.display()))?;
++    ensure!(
++        receipt.schema_version == 1
++            && receipt.kind == "worklouderctl-input-recovery-receipt"
++            && receipt.adapter == ADAPTER
++            && receipt.operation == "recover"
++            && receipt.receipt == input
++            && receipt.configuration_restored
++            && !receipt.recovery_required
++            && !receipt.idempotency_key.is_empty()
++            && receipt.idempotency_key.len() <= 256
++            && !receipt.idempotency_key.contains('\0'),
++        "recovery receipt header was invalid"
++    );
++    let plan = read_recovery_plan(&receipt.plan)?;
++    let (_, backup) = read_config_snapshot(&receipt.backup)?;
++    ensure!(
++        receipt.input_app_version == plan.input_app_version
++            && receipt.device_kit_version == plan.device_kit_version
++            && receipt.device_id == plan.device_id
++            && receipt.plan_revision == plan.revision
++            && receipt.before_firmware_version == plan.previous_firmware_version
++            && plan
++                .target_release
++                .as_ref()
++                .map(|release| release.version.as_str())
++                == Some(receipt.target_firmware_version.as_str())
++            && receipt.after_firmware_version == receipt.target_firmware_version
++            && receipt.before_config_revision == plan.configuration_revision
++            && receipt.after_config_revision == plan.configuration_revision
++            && backup.device_id == plan.device_id
++            && backup.revision == plan.configuration_revision
++            && receipt.changed
++            && matches!(
++                receipt.provider_outcome.as_str(),
++                "completed" | "postflight-confirmed"
++            ),
++        "recovery receipt did not match its plan, backup, or postflight"
++    );
++    validate_recovery_phase_receipts(&receipt.phases)?;
++    Ok(receipt)
++}
++
+ pub fn collect_logs(
+     paths: &BridgePaths,
+     output: &Path,
+@@ -1508,6 +1824,156 @@ fn firmware_plan_revision(plan: &FirmwarePlan) -> Result<String> {
+     fsutil::sha256_bytes(&bytes)
+ }
+ 
++fn validate_recovery_plan(plan: &RecoveryPlan) -> Result<()> {
++    ensure!(
++        plan.schema_version == 1
++            && plan.kind == RECOVERY_PLAN_KIND
++            && plan.revision_algorithm == RECOVERY_PLAN_REVISION_ALGORITHM,
++        "Input recovery plan header was invalid"
++    );
++    ensure!(
++        !plan.input_app_version.is_empty()
++            && plan.input_app_version.len() <= 128
++            && !plan.input_app_version.contains('\0')
++            && !plan.device_id.is_empty()
++            && plan.device_id.len() <= 512
++            && !plan.device_id.contains('\0')
++            && !plan.device_kit_version.is_empty()
++            && plan.device_kit_version.len() <= 128
++            && !plan.device_kit_version.contains('\0')
++            && !plan.previous_firmware_version.is_empty()
++            && plan.previous_firmware_version.len() <= 128
++            && !plan.previous_firmware_version.contains('\0')
++            && is_sha256(&plan.configuration_revision)
++            && (1..=4096).contains(&plan.configuration_file_count),
++        "Input recovery plan identity or configuration metadata was invalid"
++    );
++    validate_firmware_update(&FirmwareUpdateState {
++        update_available: plan.target_release.as_ref().map(|_| true),
++        release: plan.target_release.clone(),
++    })?;
++    if let Some(bootloader) = &plan.bootloader {
++        ensure!(
++            !bootloader.transport.is_empty()
++                && bootloader.transport.len() <= 64
++                && !bootloader.transport.contains('\0')
++                && !bootloader.identifier.is_empty()
++                && bootloader.identifier.len() <= 512
++                && !bootloader.identifier.contains('\0')
++                && !bootloader.device_type.is_empty()
++                && bootloader.device_type.len() <= 128
++                && !bootloader.device_type.contains('\0')
++                && bootloader.device_type == plan.device.device_type,
++            "Input recovery bootloader identity was invalid"
++        );
++    }
++    let expected_blockers = [
++        ("input-bootloader-not-detected", plan.bootloader.is_none()),
++        (
++            "input-selected-release-unavailable",
++            plan.target_release.is_none(),
++        ),
++    ];
++    ensure!(
++        plan.blockers.len() <= expected_blockers.len()
++            && plan.blockers.iter().enumerate().all(|(index, blocker)| {
++                expected_blockers
++                    .iter()
++                    .any(|(known, expected)| blocker == known && *expected)
++                    && !plan.blockers[..index].contains(blocker)
++            })
++            && expected_blockers.iter().all(|(blocker, expected)| {
++                plan.blockers.iter().any(|value| value == blocker) == *expected
++            })
++            && plan.ready == plan.blockers.is_empty(),
++        "Input recovery plan blockers were inconsistent"
++    );
++    let expected_phases = recovery_phase_names();
++    ensure!(
++        plan.phases == expected_phases,
++        "Input recovery plan phases differed from the delegated workflow"
++    );
++    ensure!(
++        plan.revision == recovery_plan_revision(plan)?,
++        "Input recovery plan revision did not match content"
++    );
++    Ok(())
++}
++
++fn validate_recovery_mutation_response(
++    response: &BridgeRecoveryMutationResponse,
++    plan: &RecoveryPlan,
++    idempotency_key: &str,
++) -> Result<()> {
++    let target = plan
++        .target_release
++        .as_ref()
++        .context("recovery plan omitted target release")?;
++    ensure!(
++        response.schema_version == 1
++            && response.kind == "worklouder-input-recovery-mutation"
++            && response.operation == "recover"
++            && response.idempotency_key == idempotency_key
++            && response.device_id == plan.device_id
++            && response.plan_revision == plan.revision
++            && response.before_firmware_version == plan.previous_firmware_version
++            && response.after_firmware_version == target.version
++            && response.target_firmware_version == target.version
++            && response.before_config_revision == plan.configuration_revision
++            && response.after_config_revision == plan.configuration_revision
++            && is_sha256(&response.recovered_config_revision)
++            && response.configuration_restored
++            && !response.recovery_required
++            && response.changed
++            && matches!(
++                response.provider_outcome.as_str(),
++                "completed" | "postflight-confirmed"
++            ),
++        "Input firmware recovery response did not match the plan or postflight"
++    );
++    validate_recovery_phase_receipts(&response.phases)
++}
++
++fn validate_recovery_phase_receipts(phases: &[FirmwarePhaseReceipt]) -> Result<()> {
++    let expected = recovery_phase_names();
++    ensure!(
++        phases.len() == expected.len()
++            && phases
++                .iter()
++                .zip(expected)
++                .all(|(phase, name)| phase.name == name && phase.status == "completed"),
++        "Input firmware recovery phases were incomplete or reordered"
++    );
++    Ok(())
++}
++
++fn recovery_phase_names() -> Vec<String> {
++    [
++        "detect-input-bootloader",
++        "validate-input-selected-release",
++        "recover-with-input-device-programmer",
++        "reconnect-original-device",
++        "restore-exact-configuration",
++        "verify-firmware-and-configuration",
++    ]
++    .iter()
++    .map(|phase| (*phase).to_owned())
++    .collect()
++}
++
++fn recovery_plan_revision(plan: &RecoveryPlan) -> Result<String> {
++    let mut body = serde_json::to_value(plan)?;
++    let object = body
++        .as_object_mut()
++        .context("recovery plan body was not an object")?;
++    for field in ["schemaVersion", "kind", "revisionAlgorithm", "revision"] {
++        object.remove(field);
++    }
++    let mut bytes = b"worklouder-input-recovery-plan-revision-v1\0".to_vec();
++    bytes.extend(serde_json::to_vec(&canonical_json(&body))?);
++    fsutil::sha256_bytes(&bytes)
++}
++
+ fn validate_reset_plan(plan: &ResetPlan) -> Result<()> {
+     ensure!(
+         plan.schema_version == 1
+diff --git a/src/cli.rs b/src/cli.rs
+index 5c796f9..7a41adc 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -297,6 +297,12 @@ pub enum InputCommand {
+         command: InputResetCommand,
+     },
+ 
++    /// Recover firmware through Input and restore an exact complete configuration.
++    Recovery {
++        #[clap(subcommand)]
++        command: InputRecoveryCommand,
++    },
++
+     /// Collect a bounded, sanitized diagnostic log bundle from Input.
+     Logs {
+         #[clap(subcommand)]
+@@ -399,6 +405,39 @@ pub enum InputResetCommand {
+     },
+ }
+ 
++#[derive(Debug, Subcommand)]
++pub enum InputRecoveryCommand {
++    /// Freeze Input's bootloader identity, selected release, and backup revision.
++    Plan {
++        /// Complete configuration snapshot captured before entering recovery.
++        #[clap(long, value_parser)]
++        backup: PathBuf,
++
++        /// Destination for the immutable recovery plan.
++        #[clap(long, value_parser)]
++        plan: PathBuf,
++    },
++
++    /// Delegate recovery to Input, reconnect, and restore the exact backup.
++    Apply {
++        /// Immutable plan produced by `input recovery plan`.
++        #[clap(long, value_parser)]
++        plan: PathBuf,
++
++        /// Exact complete pre-recovery configuration snapshot.
++        #[clap(long, value_parser)]
++        backup: PathBuf,
++
++        /// Destination for the verified recovery receipt.
++        #[clap(long, value_parser)]
++        receipt: PathBuf,
++
++        /// Stable retry key; reuse it only with the same plan and backup.
++        #[clap(long)]
++        idempotency_key: Option<String>,
++    },
++}
++
+ #[derive(Debug, Subcommand)]
+ pub enum InputLogsCommand {
+     /// Write sanitized JSON/text logs and a checksum manifest atomically.
+diff --git a/src/lib.rs b/src/lib.rs
+index 6aa6f97..fa9b5f0 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -33,7 +33,7 @@ use cli::{
+     ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
+     InputCommand, InputCommandPermissionCommand, InputCommandPermissionValue, InputConfigCommand,
+     InputFirmwareCommand, InputLogsCommand, InputPermissionCommand, InputPresetCommand,
+-    InputResetCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
++    InputRecoveryCommand, InputResetCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
+     LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect,
+     LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
+     PresetCommand, ProfileCommand, RadialCommand, SchemaCommand, SmartActionCommand,
+@@ -3478,6 +3478,62 @@ fn run_input(
+                 }
+             }
+         },
++        InputCommand::Recovery { command } => match command {
++            InputRecoveryCommand::Plan { backup, plan } => {
++                let result = bridge::recovery_plan(&bridge_paths, &backup, &plan)?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "Recovery plan {}: ready={} device={}",
++                        result.revision, result.ready, result.device_type
++                    )?;
++                    writeln!(out, "backup={}", result.backup.display())?;
++                    writeln!(out, "plan={}", result.plan.display())?;
++                    writeln!(
++                        out,
++                        "targetFirmware={}",
++                        result
++                            .target_firmware_version
++                            .as_deref()
++                            .unwrap_or("unavailable")
++                    )?;
++                    for blocker in result.blockers {
++                        writeln!(out, "BLOCKER\t{blocker}")?;
++                    }
++                }
++            }
++            InputRecoveryCommand::Apply {
++                plan,
++                backup,
++                receipt,
++                idempotency_key,
++            } => {
++                let result = bridge::recovery_apply(
++                    &bridge_paths,
++                    &plan,
++                    &backup,
++                    &receipt,
++                    idempotency_key.as_deref(),
++                )?;
++                if json {
++                    write_json(&mut out, &result)?;
++                } else {
++                    writeln!(
++                        out,
++                        "Recovered firmware {} -> {}: configRestored={} replay={}",
++                        result.before_firmware_version,
++                        result.after_firmware_version,
++                        result.configuration_restored,
++                        result.idempotent_replay
++                    )?;
++                    writeln!(out, "backup={}", result.backup.display())?;
++                    writeln!(out, "receipt={}", result.receipt.display())?;
++                    writeln!(out, "providerOutcome={}", result.provider_outcome)?;
++                }
++            }
++        },
+         InputCommand::Logs { command } => match command {
+             InputLogsCommand::Collect {
+                 output,
+diff --git a/tests/cli.rs b/tests/cli.rs
+index ea48c01..2c46244 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -574,6 +574,38 @@ fn reset_help_exposes_plan_and_transactional_apply() {
+     }
+ }
+ 
++#[test]
++fn recovery_help_requires_backup_bound_plan_and_receipt() {
++    let output = binary()
++        .args(["input", "recovery", "--help"])
++        .output()
++        .unwrap();
++    let stdout = String::from_utf8(output.stdout).unwrap();
++    assert!(output.status.success());
++    assert!(stdout.contains("plan"));
++    assert!(stdout.contains("apply"));
++
++    let plan = binary()
++        .args(["input", "recovery", "plan", "--help"])
++        .output()
++        .unwrap();
++    let plan_stdout = String::from_utf8(plan.stdout).unwrap();
++    assert!(plan.status.success());
++    for option in ["--backup", "--plan"] {
++        assert!(plan_stdout.contains(option));
++    }
++
++    let apply = binary()
++        .args(["input", "recovery", "apply", "--help"])
++        .output()
++        .unwrap();
++    let apply_stdout = String::from_utf8(apply.stdout).unwrap();
++    assert!(apply.status.success());
++    for option in ["--plan", "--backup", "--receipt", "--idempotency-key"] {
++        assert!(apply_stdout.contains(option));
++    }
++}
++
+ #[test]
+ fn preset_help_exposes_catalog_and_offline_install_workflow() {
+     let output = binary().args(["preset", "--help"]).output().unwrap();

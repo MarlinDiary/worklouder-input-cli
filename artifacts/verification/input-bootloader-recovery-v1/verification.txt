@@ -1,0 +1,88 @@
+WorkLouderCTL delegated Input bootloader recovery v1 verification record
+=======================================================================
+
+Scope
+-----
+Base commit: 405202d
+Feature commit: 11494f5
+Changed bridge capabilities/methods:
+  input.recovery.plan.v1 / input.recovery.plan
+  input.recovery.apply.v1 / input.recovery.apply
+New CLI branch: worklouderctl input recovery plan|apply
+Input-owned behavior: bootloader detection, release selection, programmer, reconnect
+CLI transaction behavior: immutable backup-bound plan, exact configuration restore, firmware/config postflight, receipt, idempotency
+CLI-owned driver, bootloader transport, release parser, programmer, GUI control, firmware downgrade: none
+
+Modified artifact
+-----------------
+Path: target/release/worklouderctl
+Build command: cargo build --release --locked
+SHA-256 after reopen/execute: 12eb1d5cc437e0a643ac277ed0dccbbac7ac3b08c7e3f3e4c72ec7491b9a086f
+Command: target/release/worklouderctl input recovery --help
+Literal stdout:
+worklouderctl-input-recovery 0.1.0
+Recover firmware through Input and restore an exact complete configuration
+
+USAGE:
+    worklouderctl input recovery [OPTIONS] <SUBCOMMAND>
+
+OPTIONS:
+    -h, --help       Print help information
+        --json       Emit machine-readable JSON when the command supports it
+    -V, --version    Print version information
+
+SUBCOMMANDS:
+    apply    Delegate recovery to Input, reconnect, and restore the exact backup
+    help     Print this message or the help of the given subcommand(s)
+    plan     Freeze Input's bootloader identity, selected release, and backup revision
+Literal stderr:
+
+Exit status: 0
+
+Preserved original and baseline-red
+-----------------------------------
+Path: /tmp/worklouderctl-input-recovery-v1.EOZlNV/original-worklouderctl
+Source commit: 405202d
+Build command: CARGO_TARGET_DIR=/tmp/worklouderctl-input-recovery-v1.EOZlNV/base-target cargo build --release --locked --manifest-path /tmp/worklouderctl-input-recovery-v1.EOZlNV/base-worktree/Cargo.toml
+SHA-256 after reopen/execute: bc4d3f0e8a927497b2943447f92483dbe74b3c43eea33f24b89f7757d70f45f2
+Command: /tmp/worklouderctl-input-recovery-v1.EOZlNV/original-worklouderctl input recovery --help
+Literal stdout:
+
+Literal stderr:
+error: Found argument 'recovery' which wasn't expected, or isn't valid in this context
+
+USAGE:
+    original-worklouderctl input [OPTIONS] <SUBCOMMAND>
+
+For more information try --help
+Exit status: 2
+Baseline behavior: the Input recovery command family is absent.
+
+Patch/diff
+----------
+Path: artifacts/verification/input-bootloader-recovery-v1/input-bootloader-recovery.patch
+Command: git diff --binary 405202d..11494f5 -- . ':(exclude)artifacts/verification/input-bootloader-recovery-v1'
+SHA-256 after reopen: 72d8c3766226e6b443a5a2c2705b26ce5936460197c92452fe1dbc83c9df03c8
+
+Modified isolated bridge E2E
+----------------------------
+Command: WORKLOUDERCTL_BIN=target/release/worklouderctl ./scripts/test-recovery-e2e.sh
+Literal stdout:
+recovery_input_bootloader_authority=verified
+recovery_plan_backup_binding=verified
+recovery_input_programmer_delegation=verified
+recovery_exact_configuration_restore=verified
+recovery_idempotent_replay=verified
+recovery_receipt_readback=verified
+Literal stderr:
+Exit status: 0
+Verified behavior: Input bootloader authority; plan/backup binding; programmer delegation; exact post-reconnect configuration restore; idempotent replay; receipt readback.
+
+Rollback
+--------
+Path: artifacts/verification/input-bootloader-recovery-v1/rollback.sh
+Verification command: execute rollback.sh against a detached copy of feature commit and compare it to base commit, excluding this artifact directory.
+rollback=verified
+base=405202d
+
+Exit status: 0
