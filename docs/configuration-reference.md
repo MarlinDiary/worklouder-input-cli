@@ -677,8 +677,10 @@ readback, and rollback as other physical-control assignments.
 The radial menu has no separate persisted settings in Input 0.18.0.
 `radial show` reads the selected layer's ordered joystick sectors and resolves
 Action, Multi Action, and Smart Action names, colors, and icons from the same
-complete snapshot that Input supplies to its overlay. Sector count, angles,
-and assignments remain editable through `layer joystick` and `control set`.
+complete snapshot that Input supplies to its overlay. `KC_*` and `KI_*` labels
+come from the exact macOS HID primary-label map for the snapshot language;
+`KV_*` retains Input's literal `1` placeholder. Sector count, angles, and
+assignments remain editable through `layer joystick` and `control set`.
 Input remains responsible for `kb.radial` notifications, animation, and the
 three-second auto-close; inspection does not open the overlay window.
 

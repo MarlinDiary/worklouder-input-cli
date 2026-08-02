@@ -51,7 +51,20 @@
       "color",
       "icon"
     ],
-    "basicAndInternal": "Input HID map for the current host operating system",
+    "basicAndInternal": "Input macOS HID primary-label map for keymap.json language, default us",
+    "macLanguages": [
+      "us",
+      "uk",
+      "it",
+      "es",
+      "de",
+      "nr",
+      "fr"
+    ],
+    "legacyDeviceRemap": {
+      "KC_FUNC": "KI_FP"
+    },
+    "embeddedMacLabelSpec": "spec/input-hid-labels-mac-0.18.0.json",
     "vendor": "literal 1"
   },
   "configurationAuthority": {

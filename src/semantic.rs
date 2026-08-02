@@ -2,7 +2,7 @@ use crate::{bridge, device, fsutil};
 use anyhow::{bail, ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -32,6 +32,7 @@ const APPSENSE_SPEC_JSON: &str = include_str!("../spec/input-appsense-0.18.0.jso
 const SMART_ACTION_SPEC_JSON: &str = include_str!("../spec/input-smart-actions-0.18.0.json");
 const JOYSTICK_SECTOR_SPEC_JSON: &str = include_str!("../spec/input-joystick-sectors-0.18.0.json");
 const CHEAT_SHEET_SPEC_JSON: &str = include_str!("../spec/input-cheat-sheet-0.18.0.json");
+const MAC_HID_LABEL_SPEC_JSON: &str = include_str!("../spec/input-hid-labels-mac-0.18.0.json");
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize)]
@@ -154,6 +155,18 @@ pub struct RadialMenuSectorEntry {
     pub icon: Option<String>,
     pub a1: f64,
     pub a2: f64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct HidPrimaryLabelSpec {
+    schema_version: u64,
+    kind: String,
+    input_version: String,
+    host: String,
+    renderer_chunk_sha256: String,
+    default_language: String,
+    languages: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -919,9 +932,16 @@ pub fn radial_menu_show(
         .get(layer_index)
         .context("layer disappeared during radial-menu lookup")?;
     let joystick = layer_joystick(layer)?;
+    let language = match snapshot.keymap.get("language") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(value)) => Some(value.as_str()),
+        Some(_) => bail!("keymap.json language was not a string"),
+    };
+    let labels = radial_hid_primary_labels(language)?;
     let mut sectors = Vec::new();
     for sector in joystick_sector_entries(joystick)? {
-        let (label, color, icon) = radial_assignment_display(&snapshot, &sector.assignment)?;
+        let (label, color, icon) =
+            radial_assignment_display(&snapshot, &sector.assignment, &labels)?;
         sectors.push(RadialMenuSectorEntry {
             index: sector.index,
             assignment: sector.assignment,
@@ -6139,6 +6159,7 @@ fn assignment_kind(token: &str) -> Result<&'static str> {
 fn radial_assignment_display(
     snapshot: &SemanticSnapshot,
     token: &str,
+    hid_labels: &BTreeMap<String, String>,
 ) -> Result<(String, Option<String>, Option<String>)> {
     match assignment_kind(token)? {
         "action" => {
@@ -6157,9 +6178,56 @@ fn radial_assignment_display(
             )
         }
         "vendor" => Ok(("1".into(), None, None)),
-        "basic" | "internal" => Ok((token.to_owned(), None, None)),
+        "basic" | "internal" => {
+            let lookup = if token == "KC_FUNC" { "KI_FP" } else { token };
+            Ok((
+                hid_labels.get(lookup).cloned().unwrap_or_default(),
+                None,
+                None,
+            ))
+        }
         kind => bail!("radial assignment kind {kind} was not supported"),
     }
+}
+
+fn radial_hid_primary_labels(language: Option<&str>) -> Result<BTreeMap<String, String>> {
+    let spec: HidPrimaryLabelSpec = serde_json::from_str(MAC_HID_LABEL_SPEC_JSON)
+        .context("embedded Input macOS HID label map was invalid")?;
+    ensure!(
+        spec.schema_version == 1
+            && spec.kind == "worklouder-input-hid-primary-labels"
+            && spec.input_version == "0.18.0"
+            && spec.host == "mac"
+            && spec.default_language == "us"
+            && spec.renderer_chunk_sha256
+                == "c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e",
+        "embedded Input macOS HID label map identity was invalid"
+    );
+    let default_labels = spec
+        .languages
+        .get(&spec.default_language)
+        .context("embedded Input macOS default HID labels were missing")?;
+    ensure!(
+        spec.languages
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            == vec!["de", "es", "fr", "it", "nr", "uk", "us"]
+            && default_labels.len() == 226
+            && spec.languages.values().all(|labels| {
+                labels.len() == default_labels.len()
+                    && labels.keys().eq(default_labels.keys())
+                    && labels
+                        .values()
+                        .all(|label| label.len() <= 64 && !label.contains('\0'))
+            }),
+        "embedded Input macOS HID label map content was invalid"
+    );
+    let language = language.unwrap_or(&spec.default_language);
+    spec.languages
+        .get(language)
+        .cloned()
+        .with_context(|| format!("Input macOS HID language {language} was not supported"))
 }
 
 fn radial_resource_display(
@@ -8000,6 +8068,14 @@ mod tests {
         assert_eq!(seeded_view.sectors.len(), 2);
         assert_eq!(seeded_view.sectors[0].assignment, "KI_X");
         assert_eq!(seeded_view.sectors[1].assignment, "KC_NONE");
+        let seeded_radial = radial_menu_show(&seeded, None, 1).unwrap();
+        assert_eq!(seeded_radial.sectors[0].label, "Close");
+        assert_eq!(seeded_radial.sectors[1].label, "blank");
+        let mac_us = radial_hid_primary_labels(Some("us")).unwrap();
+        let mac_fr = radial_hid_primary_labels(Some("fr")).unwrap();
+        assert_eq!(mac_us.get("KC_A").map(String::as_str), Some("A"));
+        assert_eq!(mac_fr.get("KC_A").map(String::as_str), Some("Q"));
+        assert!(radial_hid_primary_labels(Some("missing")).is_err());
 
         let noop_receipt = layer_joystick_mode_set(&seeded, None, 1, "RADIAL", &noop).unwrap();
         assert!(!noop_receipt.changed);

@@ -17,7 +17,8 @@ The renderer resolves a sector's display identity as follows:
 - `KA_A<ID>`: Action `name`, optional `color`, and optional `icon`;
 - `KA_M<ID>`: Multi Action `name`, optional `color`, and optional `icon`;
 - `SA_<ID>`: Smart Action `name`, optional `color`, and optional `icon`;
-- `KC_*` / `KI_*`: the host-OS HID label map;
+- `KC_*` / `KI_*`: the host-OS HID primary-label map (`KC_FUNC` first follows
+  Input's legacy device-to-renderer remap to `KI_FP`);
 - `KV_*`: the released vendor placeholder label `1`.
 
 WorkLouderCTL exposes the configuration result without opening Input's window:
@@ -32,6 +33,12 @@ through `layer joystick sector add/delete` and `control set --control
 joystick:SECTOR`; deployment continues through the complete Input bridge
 apply/readback/restore transaction. This keeps configuration parity separate
 from reimplementing Input's overlay runtime.
+
+The current macOS adapter embeds the exact 226-entry effective label map for
+each released Input language (`us`, `uk`, `it`, `es`, `de`, `nr`, `fr`). A
+missing language or malformed map stops inspection rather than returning token
+names that differ from the overlay. Windows label parity remains a separate
+host adapter.
 
 Frozen bundle names and SHA-256 values are recorded in
 [`spec/input-radial-menu-0.18.0.json`](../../spec/input-radial-menu-0.18.0.json).

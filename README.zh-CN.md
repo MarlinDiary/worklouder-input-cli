@@ -382,8 +382,10 @@ Action/Multi Action/group 去重、ID 分配、`KA_`/`KM_` 引用重映射、pre
 仍属于 Input renderer/runtime state，不会被虚构成持久化字段。
 
 `radial show` 会解析 Input radial overlay 使用的有序 joystick sector，以及所引用
-Action/Multi Action/Smart Action 的名称、颜色和图标。overlay runtime 继续由 Input
-负责；sector 修改复用已验证的 `layer joystick`、`control set` 和完整 transaction。
+Action/Multi Action/Smart Action 的名称、颜色和图标，并按全部 released Input
+language 使用精确的 macOS HID primary label 解析 `KC_*`/`KI_*`。overlay runtime
+继续由 Input 负责；sector 修改复用已验证的 `layer joystick`、`control set` 和完整
+transaction。
 
 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
 adapter、认证测试，以及 Rust CLI 跨语言 conformance test：

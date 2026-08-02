@@ -448,9 +448,10 @@ candidates; fixture apply/readback/restore also passed. Live selected-layer UI
 state remains Input-owned and is not invented as a persisted field.
 
 `radial show` resolves the same ordered joystick sectors and referenced
-Action/Multi Action/Smart Action labels that Input passes to its radial overlay.
-The overlay stays Input-owned; sector edits use the verified `layer joystick`
-and `control set` candidate/apply/rollback path.
+Action/Multi Action/Smart Action labels that Input passes to its radial overlay,
+plus the exact macOS HID primary label for `KC_*`/`KI_*` under every released
+Input language. The overlay stays Input-owned; sector edits use the verified
+`layer joystick` and `control set` candidate/apply/rollback path.
 
 The repository includes an executable Input-main reference server, a service
 adapter for the Input 0.18.0 service shape, authentication tests, and a
