@@ -433,10 +433,15 @@ export function createInputMainAdapter({
     const target = validateConfigSnapshot(candidate);
     const expected = safeSha256(expectedRevision, "expected revision");
     const device = selectDevice(deviceId);
-    if (String(device.id) !== target.deviceId) {
+    const liveDevice = publicDevice(device.info);
+    if (
+      liveDevice.devicePid !== target.device.devicePid ||
+      liveDevice.deviceType !== target.device.deviceType ||
+      liveDevice.layoutType !== target.device.layoutType
+    ) {
       throw new BridgeError(
         -32602,
-        "configuration deviceId did not match request",
+        "configuration device identity did not match request",
       );
     }
     const requestDigest = mutationRequestDigest({
@@ -2172,6 +2177,7 @@ function validateConfigSnapshot(snapshot) {
   }
   return {
     deviceId: snapshot.deviceId,
+    device: normalizeFirmwarePlanDevice(snapshot.device),
     revision,
     fileCount: files.length,
     totalBytes,

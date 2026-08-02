@@ -667,7 +667,7 @@ CLI semantic parser.
 | Bridge apply/restore transaction and automatic rollback fixture | Complete |
 | Four-authority plan/apply/postflight/manual restore transaction | Complete in isolated Codex + Input fixtures; released bridges pending |
 | Companion Bridge integration in a released Input build | Upstream integration pending |
-| Codex Companion Bridge client/reference integration | Complete; released Codex integration pending |
+| Codex Companion Bridge client/reference integration | Complete; exact-release Codex overlay installed and live-validated |
 | Semantic profile/layer candidates | Full lifecycle, selection, ordering, color, and lighting candidate-verified; combined profile-create/layer-create/lighting apply/readback/restore fixture-verified |
 | Semantic physical controls | List/show/set for keys and encoder gestures; joystick mode, 2–8-sector lifecycle, assignments, and exact angle rebalance; candidate-verified with Input cache hashes unchanged |
 | Semantic Actions | List/show/create/rename/delete and event add/set/delete/move; cascade/apply/restore fixture-verified |
@@ -676,10 +676,10 @@ CLI semantic parser.
 | Tier 4 permissions, firmware check, and diagnostic logs | Exact Input 0.18.0 authority paths frozen; bridge/CLI fixture verified with private sanitized bundle |
 | Input-owned reset | Complete per-version/device/layout default candidate, immutable plan, CAS apply, exact readback, idempotent replay, and rollback fixture verified |
 | Input-owned bootloader recovery | Backup-bound bootloader/release plan, delegated programmer/reconnect, exact configuration restore, postflight, receipt inspection, and idempotent replay fixture verified |
-| Official-provider real-device mutation and rollback | Released Codex/Input bridge integration and USB writer evidence pending upstream |
-| Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
+| Official-provider real-device mutation and rollback | Complete for Codex `26.727.51351` and Input `0.18.0`; apply/readback/restore plus bidirectional handoff live-validated |
+| Smart Action definitions, groups, bindings, and cascade | Candidate-verified against Input 0.18.0 cache bytes; released Input writer live-validated through complete configuration transactions |
 | Input cache read adapter | Complete; byte-exact bridge-equivalent semantic snapshot |
-| Input database synchronization | Provider-owned reference adapter and rollback fixture complete; released Input integration pending |
+| Input database synchronization | Provider-owned adapter, host settings transaction, rollback, and released Input integration live-validated |
 | Deterministic macOS archives and signature-state verification | Complete; unsigned and ad-hoc builds locally executed |
 | Developer ID signing/notarization and Homebrew formula pipeline | Complete and fail-closed; tagged publication credentials pending |
 | Deterministic provider integration kit | Complete; exact `.tgz` inventory, install/import, conformance executable, checksum, and provenance gates verified |

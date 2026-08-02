@@ -25,8 +25,10 @@ EXPECTED_FILES = {
     "package/input-main-adapter.mjs": 0o644,
     "package/input-main-bridge.mjs": 0o644,
     "package/input-main-integration.mjs": 0o644,
+    "package/input-main-integration-v3.mjs": 0o644,
     "package/input-live-overlay.mjs": 0o644,
     "package/input-live-overlay-v2.mjs": 0o644,
+    "package/input-live-overlay-v3.mjs": 0o644,
     "package/package.json": 0o644,
 }
 

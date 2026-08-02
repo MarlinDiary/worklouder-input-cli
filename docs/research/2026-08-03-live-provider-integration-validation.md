@@ -43,6 +43,15 @@ idempotency key, an immutable pre-operation backup, and a new live snapshot.
 All four restore comparisons were exact. The final Codex settings source bytes
 also reproduced the baseline SHA-256 exactly.
 
+Input assigns a session-local `deviceId` after discovery. A second full
+mutation proved reconnect portability: a snapshot captured as device `1` was
+applied to live session `3`, read back as `#FE0000`, and restored from the old
+baseline to `#FF0000`. The CLI resolves the current destination from a fresh
+pre-mutation backup, while the bridge checks stable PID, device type, and layout
+before accepting a snapshot from an earlier session. Overlay revision 3 hot-
+replaced the adapter in the running Input process without restarting or
+focusing the GUI.
+
 ## Read-only live coverage
 
 The live Input bridge advertised and exercised 18 capabilities:
@@ -91,11 +100,8 @@ paused until `provider-handoff.mjs input` is called.
 
 ## Regression and packaging boundary
 
-```text
-cargo test --all-targets: 81 library + 32 CLI tests passed
-npm test --prefix companion: 30 tests passed
-scripts/test-companion-package.py: deterministic inventory/import/conformance passed
-```
+The final counts and package hashes are recorded in the private machine-readable
+verification record generated after the complete test and packaging pass.
 
 The exact private evidence bundle contains the source snapshots, mutation
 receipts, pre-apply/pre-restore backups, post-state snapshots, capability-gate

@@ -28,7 +28,7 @@ const EXPECTED_MAIN_SHA256 =
 const CAPTURE_LOCATION = { lineNumber: 40, columnNumber: 51665 };
 const PORT = 9229;
 const OVERLAY_PATH = fileURLToPath(
-  new URL("../companion/input-live-overlay-v2.mjs", import.meta.url),
+  new URL("../companion/input-live-overlay-v3.mjs", import.meta.url),
 );
 
 const action = process.argv.includes("--remove") ? "remove" : "install";

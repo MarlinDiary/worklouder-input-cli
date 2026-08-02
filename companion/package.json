@@ -32,6 +32,7 @@
     "input-main-adapter.mjs",
     "input-main-bridge.mjs",
     "input-main-integration.mjs",
+    "input-main-integration-v3.mjs",
     "codex-main-adapter.mjs",
     "codex-main-bridge.mjs",
     "codex-main-integration.mjs",
@@ -39,6 +40,7 @@
     "codex-live-overlay-v2.mjs",
     "input-live-overlay.mjs",
     "input-live-overlay-v2.mjs",
+    "input-live-overlay-v3.mjs",
     "conformance.mjs"
   ],
   "exports": {

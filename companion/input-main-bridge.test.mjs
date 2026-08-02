@@ -377,6 +377,65 @@ test("Input adapter automatically restores the pre-mutation snapshot", async () 
   assert.equal(restored.revision, baseline.revision);
 });
 
+test("Input adapter restores a compatible snapshot after deviceId changes", async () => {
+  const files = new Map([
+    ["keymap.json", Buffer.from('{"version":1,"layer":"baseline"}')],
+    ["smart_actions.json", Buffer.from('{"smartActions":{}}')],
+  ]);
+  const device = configDevice("device-session-1", files);
+  const operations = [];
+  const adapter = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [device] },
+    deviceKitVersion: "0.1.29",
+    configurationWriter: {
+      async replaceConfiguration(request) {
+        operations.push(request.operation);
+        replaceFileMap(files, request.files);
+      },
+    },
+  });
+  const baseline = await adapter.snapshotConfig({ deviceId: "device-session-1" });
+  files.set("keymap.json", Buffer.from('{"version":1,"layer":"changed"}'));
+  const changed = await adapter.snapshotConfig({ deviceId: "device-session-1" });
+
+  device.id = "device-session-2";
+  const restored = await adapter.restoreConfig({
+    deviceId: "device-session-2",
+    expectedRevision: changed.revision,
+    idempotencyKey: "restore-after-reconnect",
+    snapshot: baseline,
+  });
+
+  assert.equal(restored.deviceId, "device-session-2");
+  assert.equal(restored.afterRevision, baseline.revision);
+  assert.deepEqual(operations, ["restore"]);
+});
+
+test("Input adapter rejects a snapshot for a different physical model", async () => {
+  const files = new Map([["keymap.json", Buffer.from('{"version":1}')]]);
+  const source = configDevice("source-session", files);
+  const adapter = createInputMainAdapter({
+    devicesCommManager: { getDevices: () => [source] },
+    deviceKitVersion: "0.1.29",
+    configurationWriter: { replaceConfiguration: async () => {} },
+  });
+  const snapshot = await adapter.snapshotConfig({ deviceId: "source-session" });
+  source.id = "target-session";
+  source.info.devicePid = 99999;
+
+  await assert.rejects(
+    adapter.restoreConfig({
+      deviceId: "target-session",
+      expectedRevision: snapshot.revision,
+      idempotencyKey: "reject-other-model",
+      snapshot,
+    }),
+    (error) =>
+      error.code === -32602 &&
+      error.message === "configuration device identity did not match request",
+  );
+});
+
 test("Input adapter applies, replays, rejects stale CAS, and restores host settings", async () => {
   let settings = {
     showedAnalyticsPopUp: true,

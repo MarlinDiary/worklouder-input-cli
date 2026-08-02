@@ -52,6 +52,12 @@ checks the exact release identity, and closes the inspector afterward. See the
 [live validation record](research/2026-08-03-live-provider-integration-validation.md)
 for reversible mutation and bidirectional handoff evidence.
 
+Input `deviceId` values are discovery-session identifiers, not physical
+identities. Apply and restore therefore select the current live destination
+from the pre-mutation backup and accept older snapshots only when the bridge
+matches their stable PID, device type, and layout. This permits verified
+restore after a provider handoff without weakening the physical-model gate.
+
 ## Input 0.18.0 evidence
 
 Static inspection of the installed Input 0.18.0 main process found existing

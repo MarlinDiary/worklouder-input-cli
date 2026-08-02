@@ -2684,14 +2684,28 @@ fn config_mutate(
 ) -> Result<ConfigMutationReceipt> {
     ensure!(input != backup, "input and backup paths must differ");
     let (candidate, candidate_metadata) = read_config_snapshot(input)?;
-    let selected_device = device_id
-        .unwrap_or(&candidate_metadata.device_id)
-        .to_owned();
-    ensure!(
-        selected_device == candidate_metadata.device_id,
-        "candidate deviceId did not match selected device"
-    );
-    let backup_receipt = prepare_mutation_backup(paths, &selected_device, backup)?;
+    // Input assigns a new session-local deviceId after every reconnect. Resolve
+    // the destination from the live provider before applying an older snapshot;
+    // the provider validates the snapshot's stable device descriptor.
+    let backup_receipt = if backup.exists() {
+        let (_, metadata) = read_config_snapshot(backup)?;
+        if let Some(device_id) = device_id {
+            ensure!(
+                metadata.device_id == device_id,
+                "existing backup deviceId did not match selected device"
+            );
+        }
+        ConfigSnapshotReceipt {
+            output: backup.to_path_buf(),
+            device_id: metadata.device_id,
+            revision: metadata.revision,
+            file_count: metadata.file_count,
+            total_bytes: metadata.total_bytes,
+        }
+    } else {
+        config_snapshot(paths, device_id, backup)?
+    };
+    let selected_device = backup_receipt.device_id.clone();
     let expected = expected_revision.unwrap_or(&backup_receipt.revision);
     ensure!(
         is_sha256(expected),
@@ -3441,6 +3455,20 @@ mod tests {
         })
     }
 
+    fn config_restore_hello() -> Value {
+        json!({
+            "protocolVersion": 1,
+            "bridgeVersion": "0.1.0-test",
+            "inputVersion": "0.18.0-test",
+            "sessionId": "fixture-session",
+            "capabilities": [
+                "bridge.handshake.v1",
+                "bridge.health.v1",
+                "device.config.restore.v1"
+            ]
+        })
+    }
+
     #[test]
     fn bridge_handshake_is_authenticated_and_typed() {
         let (paths, server) = fixture(|method, _| match method {
@@ -3591,6 +3619,80 @@ mod tests {
         )
         .unwrap();
         assert!(host_settings_show(&root.join("tampered.json")).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn config_restore_uses_live_backup_device_id_after_reconnect() {
+        let root = PathBuf::from("/tmp").join(format!(
+            "wlb-config-reconnect-{}-{}",
+            std::process::id(),
+            NEXT_TEST.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&root).unwrap();
+        let candidate_path = root.join("candidate.json");
+        let backup_path = root.join("backup.json");
+        let before_revision = "a".repeat(64);
+        let target_revision = "b".repeat(64);
+        let snapshot = |device_id: &str, revision: &str| {
+            json!({
+                "schemaVersion": 1,
+                "kind": CONFIG_SNAPSHOT_KIND,
+                "revisionAlgorithm": CONFIG_REVISION_ALGORITHM,
+                "revision": revision,
+                "deviceId": device_id,
+                "files": [{ "relativePath": "keymap.json", "size": 2 }]
+            })
+        };
+        fs::write(
+            &candidate_path,
+            serde_json::to_vec(&snapshot("device-session-1", &target_revision)).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            &backup_path,
+            serde_json::to_vec(&snapshot("device-session-3", &before_revision)).unwrap(),
+        )
+        .unwrap();
+
+        let before_for_handler = before_revision.clone();
+        let target_for_handler = target_revision.clone();
+        let (paths, server) = fixture(move |method, params| match method {
+            "bridge.hello" => config_restore_hello(),
+            "device.config.restore" => {
+                assert_eq!(params["deviceId"], "device-session-3");
+                assert_eq!(params["snapshot"]["deviceId"], "device-session-1");
+                json!({
+                    "schemaVersion": 1,
+                    "kind": "worklouder-input-config-mutation",
+                    "operation": "restore",
+                    "idempotencyKey": "fixture-reconnect-restore",
+                    "idempotentReplay": false,
+                    "changed": true,
+                    "rollbackPerformed": false,
+                    "deviceId": "device-session-3",
+                    "beforeRevision": before_for_handler,
+                    "afterRevision": target_for_handler,
+                    "targetRevision": target_for_handler,
+                    "fileCount": 1,
+                    "totalBytes": 2
+                })
+            }
+            other => panic!("unexpected method {other}"),
+        });
+        let receipt = config_restore(
+            &paths,
+            None,
+            &candidate_path,
+            &backup_path,
+            Some(&before_revision),
+            Some("fixture-reconnect-restore"),
+        )
+        .unwrap();
+        assert_eq!(receipt.device_id, "device-session-3");
+        assert_eq!(receipt.after_revision, target_revision);
+        server.join().unwrap();
+        fs::remove_dir_all(paths.socket.parent().unwrap()).unwrap();
         fs::remove_dir_all(root).unwrap();
     }
 
