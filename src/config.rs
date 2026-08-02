@@ -1,3 +1,4 @@
+use crate::device::{self, ADAPTER as DEVICE_ADAPTER, EXPORT_KIND as DEVICE_EXPORT_KIND};
 use crate::fsutil;
 use crate::input::{self, BUNDLE_KIND, BUNDLE_SCHEMA_VERSION};
 use anyhow::{bail, Context, Result};
@@ -100,6 +101,14 @@ pub fn diff(base: &Path, candidate: &Path) -> Result<DiffReport> {
 }
 
 fn validate_bundle(bundle: &Path) -> Result<ValidationReport> {
+    match bundle_kind(bundle)?.as_str() {
+        BUNDLE_KIND => validate_input_bundle(bundle),
+        DEVICE_EXPORT_KIND => validate_device_bundle(bundle),
+        kind => bail!("unsupported configuration bundle kind: {kind}"),
+    }
+}
+
+fn validate_input_bundle(bundle: &Path) -> Result<ValidationReport> {
     let manifest = input::read_manifest(bundle)?;
     let mut checks = Vec::new();
     checks.push(ValidationCheck {
@@ -173,6 +182,113 @@ fn validate_bundle(bundle: &Path) -> Result<ValidationReport> {
     })
 }
 
+fn validate_device_bundle(bundle: &Path) -> Result<ValidationReport> {
+    let manifest = device::read_manifest(bundle)?;
+    let mut checks = vec![
+        ValidationCheck {
+            id: "manifest.schema-version".into(),
+            valid: manifest.schema_version == device::EXPORT_SCHEMA_VERSION,
+            summary: format!(
+                "schema version is {} (expected {})",
+                manifest.schema_version,
+                device::EXPORT_SCHEMA_VERSION
+            ),
+        },
+        ValidationCheck {
+            id: "manifest.kind".into(),
+            valid: manifest.kind == DEVICE_EXPORT_KIND,
+            summary: format!(
+                "bundle kind is {} (expected {DEVICE_EXPORT_KIND})",
+                manifest.kind
+            ),
+        },
+        ValidationCheck {
+            id: "manifest.adapter".into(),
+            valid: manifest.adapter == DEVICE_ADAPTER,
+            summary: format!(
+                "adapter is {} (expected {DEVICE_ADAPTER})",
+                manifest.adapter
+            ),
+        },
+    ];
+
+    let unique_paths: BTreeSet<&str> = manifest
+        .files
+        .iter()
+        .map(|record| record.relative_path.as_str())
+        .collect();
+    checks.push(ValidationCheck {
+        id: "manifest.unique-paths".into(),
+        valid: unique_paths.len() == manifest.files.len(),
+        summary: format!(
+            "manifest has {} file record(s) and {} unique path(s)",
+            manifest.files.len(),
+            unique_paths.len()
+        ),
+    });
+
+    for record in &manifest.files {
+        let id = format!("file.{}", record.relative_path);
+        if !safe_relative_path(&record.relative_path) {
+            checks.push(ValidationCheck {
+                id,
+                valid: false,
+                summary: "manifest path is not a safe relative path".into(),
+            });
+            continue;
+        }
+        let path = bundle.join(&record.relative_path);
+        let check = match fs::metadata(&path) {
+            Err(error) => ValidationCheck {
+                id,
+                valid: false,
+                summary: format!("{} is not readable: {error}", path.display()),
+            },
+            Ok(metadata) if !metadata.is_file() => ValidationCheck {
+                id,
+                valid: false,
+                summary: format!("{} is not a regular file", path.display()),
+            },
+            Ok(metadata) => {
+                let actual_sha1 = fsutil::sha1(&path)?;
+                let actual_sha256 = fsutil::sha256(&path)?;
+                let valid = metadata.len() == record.size
+                    && actual_sha1 == record.device_checksum_sha1
+                    && actual_sha256 == record.sha256;
+                ValidationCheck {
+                    id,
+                    valid,
+                    summary: if valid {
+                        format!(
+                            "{} matches size, device SHA-1, and host SHA-256",
+                            path.display()
+                        )
+                    } else {
+                        format!(
+                            "{} expected {} bytes/{}/{} but read {} bytes/{}/{}",
+                            path.display(),
+                            record.size,
+                            record.device_checksum_sha1,
+                            record.sha256,
+                            metadata.len(),
+                            actual_sha1,
+                            actual_sha256
+                        )
+                    },
+                }
+            }
+        };
+        checks.push(check);
+    }
+
+    Ok(ValidationReport {
+        path: bundle.display().to_string(),
+        kind: DEVICE_EXPORT_KIND.into(),
+        valid: checks.iter().all(|check| check.valid),
+        checks,
+    })
+}
+
 fn validate_json_file(path: &Path) -> Result<ValidationReport> {
     let bytes = fs::read(path)
         .with_context(|| format!("failed to read configuration at {}", path.display()))?;
@@ -216,18 +332,57 @@ fn read_documents(path: &Path) -> Result<BTreeMap<String, Value>> {
         bail!("configuration path does not exist: {}", path.display());
     }
 
-    let manifest = input::read_manifest(path)?;
     let mut documents = BTreeMap::new();
-    for record in manifest.files {
-        if !safe_relative_path(&record.relative_path) {
-            bail!("unsafe path in manifest: {}", record.relative_path);
+    match bundle_kind(path)?.as_str() {
+        BUNDLE_KIND => {
+            let manifest = input::read_manifest(path)?;
+            for record in manifest.files {
+                if !safe_relative_path(&record.relative_path) {
+                    bail!("unsafe path in manifest: {}", record.relative_path);
+                }
+                let file_path = path.join(&record.relative_path);
+                let value = serde_json::from_slice(&fs::read(&file_path)?)
+                    .with_context(|| format!("invalid JSON at {}", file_path.display()))?;
+                documents.insert(record.relative_path, value);
+            }
         }
-        let file_path = path.join(&record.relative_path);
-        let value = serde_json::from_slice(&fs::read(&file_path)?)
-            .with_context(|| format!("invalid JSON at {}", file_path.display()))?;
-        documents.insert(record.relative_path, value);
+        DEVICE_EXPORT_KIND => {
+            let manifest = device::read_manifest(path)?;
+            for record in manifest.files {
+                if !safe_relative_path(&record.relative_path) {
+                    bail!("unsafe path in manifest: {}", record.relative_path);
+                }
+                let file_path = path.join(&record.relative_path);
+                let bytes = fs::read(&file_path)
+                    .with_context(|| format!("failed to read {}", file_path.display()))?;
+                let value = serde_json::from_slice(&bytes).unwrap_or_else(|_| {
+                    serde_json::json!({
+                        "$binary": {
+                            "size": bytes.len(),
+                            "sha256": record.sha256,
+                        }
+                    })
+                });
+                documents.insert(record.relative_path, value);
+            }
+        }
+        kind => bail!("unsupported configuration bundle kind: {kind}"),
     }
     Ok(documents)
+}
+
+fn bundle_kind(bundle: &Path) -> Result<String> {
+    let manifest = bundle.join("manifest.json");
+    let value: Value =
+        serde_json::from_slice(&fs::read(&manifest).with_context(|| {
+            format!("failed to read export manifest at {}", manifest.display())
+        })?)
+        .with_context(|| format!("invalid export manifest at {}", manifest.display()))?;
+    value
+        .get("kind")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .context("export manifest omitted string field kind")
 }
 
 fn diff_value(path: &str, before: &Value, after: &Value, changes: &mut Vec<Change>) {
@@ -289,6 +444,9 @@ fn diff_value(path: &str, before: &Value, after: &Value, changes: &mut Vec<Chang
 }
 
 fn safe_relative_path(path: &str) -> bool {
+    if path.contains('\\') || path.contains('\0') {
+        return false;
+    }
     let path = Path::new(path);
     !path.is_absolute()
         && !path.as_os_str().is_empty()
@@ -304,6 +462,7 @@ fn escape_pointer(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn structural_diff_uses_json_pointers() {
@@ -323,5 +482,62 @@ mod tests {
         assert!(safe_relative_path("devices/1/keymap.json"));
         assert!(!safe_relative_path("../keymap.json"));
         assert!(!safe_relative_path("/tmp/keymap.json"));
+        assert!(!safe_relative_path("devices\\1\\keymap.json"));
+    }
+
+    #[test]
+    fn live_device_bundle_verifies_both_hashes() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "worklouderctl-config-device-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&root).unwrap();
+        let keymap = root.join("keymap.json");
+        fs::write(&keymap, b"{\"version\":1}\n").unwrap();
+        let size = fs::metadata(&keymap).unwrap().len();
+        let sha1 = fsutil::sha1(&keymap).unwrap();
+        let sha256 = fsutil::sha256(&keymap).unwrap();
+        let manifest = serde_json::json!({
+            "schemaVersion": 1,
+            "kind": DEVICE_EXPORT_KIND,
+            "adapter": DEVICE_ADAPTER,
+            "inputAppVersion": "0.18.0",
+            "deviceKitVersion": "0.1.29",
+            "device": {
+                "devicePid": "33632",
+                "deviceType": "codex_micro",
+                "layoutType": "universal",
+                "connectionType": "hid",
+                "isUsbConnection": false
+            },
+            "status": {
+                "firmwareVersion": "v0.6.0",
+                "selectedProfileIndex": 0,
+                "selectedLayerIndex": 2,
+                "batteryPercentage": null,
+                "isCharging": null
+            },
+            "files": [{
+                "relativePath": "keymap.json",
+                "size": size,
+                "deviceChecksumSha1": sha1,
+                "sha256": sha256
+            }],
+            "warnings": []
+        });
+        fs::write(
+            root.join("manifest.json"),
+            serde_json::to_vec_pretty(&manifest).unwrap(),
+        )
+        .unwrap();
+
+        assert!(validate(&root).unwrap().valid);
+        fs::write(&keymap, b"{\"version\":2}\n").unwrap();
+        assert!(!validate(&root).unwrap().valid);
+        fs::remove_dir_all(root).unwrap();
     }
 }
