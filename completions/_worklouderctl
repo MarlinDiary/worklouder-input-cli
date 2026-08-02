@@ -121,6 +121,59 @@ _arguments "${_arguments_options[@]}" \
     ;;
 esac
 ;;
+(compatibility)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__compatibility_commands" \
+"*::: :->compatibility" \
+&& ret=0
+
+    case $state in
+    (compatibility)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-compatibility-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'--version=[CLI version; defaults to the running binary version]:VERSION: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(verify)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (doctor)
 _arguments "${_arguments_options[@]}" \
 '--strict[Treat warnings as a failing exit status]' \
@@ -3541,6 +3594,7 @@ _worklouderctl_commands() {
 'version:Print CLI version information' \
 'tier:Inspect the configuration authority tiers' \
 'capability:Inspect capabilities covered by the CLI contract' \
+'compatibility:Inspect the release-gated application, bridge, and firmware matrix' \
 'doctor:Diagnose Codex, Input, and cached device configuration providers' \
 'codex:Inspect or export Codex-owned Codex Micro settings' \
 'input:Inspect or export Input-owned configuration' \
@@ -3829,6 +3883,16 @@ _worklouderctl__codex__command-key_commands() {
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'worklouderctl codex command-key commands' commands "$@"
+}
+(( $+functions[_worklouderctl__compatibility_commands] )) ||
+_worklouderctl__compatibility_commands() {
+    local commands; commands=(
+'list:List every CLI release represented in the matrix' \
+'show:Show authority versions, states, evidence, and claim boundaries' \
+'verify:Verify that the running Cargo version has exactly one valid entry' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl compatibility commands' commands "$@"
 }
 (( $+functions[_worklouderctl__completion_commands] )) ||
 _worklouderctl__completion_commands() {
@@ -4314,6 +4378,11 @@ _worklouderctl__codex__voice__help_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl codex voice help commands' commands "$@"
 }
+(( $+functions[_worklouderctl__compatibility__help_commands] )) ||
+_worklouderctl__compatibility__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl compatibility help commands' commands "$@"
+}
 (( $+functions[_worklouderctl__config__help_commands] )) ||
 _worklouderctl__config__help_commands() {
     local commands; commands=()
@@ -4583,6 +4652,11 @@ _worklouderctl__appsense__list_commands() {
 _worklouderctl__capability__list_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl capability list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__compatibility__list_commands] )) ||
+_worklouderctl__compatibility__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl compatibility list commands' commands "$@"
 }
 (( $+functions[_worklouderctl__control__list_commands] )) ||
 _worklouderctl__control__list_commands() {
@@ -5026,6 +5100,11 @@ _worklouderctl__appsense__show_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl appsense show commands' commands "$@"
 }
+(( $+functions[_worklouderctl__compatibility__show_commands] )) ||
+_worklouderctl__compatibility__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl compatibility show commands' commands "$@"
+}
 (( $+functions[_worklouderctl__control__show_commands] )) ||
 _worklouderctl__control__show_commands() {
     local commands; commands=()
@@ -5207,6 +5286,11 @@ _worklouderctl__config__validate_commands() {
 _worklouderctl__device__config__validate_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl device config validate commands' commands "$@"
+}
+(( $+functions[_worklouderctl__compatibility__verify_commands] )) ||
+_worklouderctl__compatibility__verify_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl compatibility verify commands' commands "$@"
 }
 (( $+functions[_worklouderctl__version_commands] )) ||
 _worklouderctl__version_commands() {

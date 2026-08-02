@@ -84,6 +84,9 @@ _worklouderctl() {
             command-key)
                 cmd+="__command__key"
                 ;;
+            compatibility)
+                cmd+="__compatibility"
+                ;;
             completion)
                 cmd+="__completion"
                 ;;
@@ -273,6 +276,9 @@ _worklouderctl() {
             validate)
                 cmd+="__validate"
                 ;;
+            verify)
+                cmd+="__verify"
+                ;;
             version)
                 cmd+="__version"
                 ;;
@@ -286,7 +292,7 @@ _worklouderctl() {
 
     case "${cmd}" in
         worklouderctl)
-            opts="-h -V --help --version --json version tier capability doctor codex input device bridge config schema backup agent transaction profile layer control action multi-action smart-action cheat-sheet preset radial appsense completion help"
+            opts="-h -V --help --version --json version tier capability compatibility doctor codex input device bridge config schema backup agent transaction profile layer control action multi-action smart-action cheat-sheet preset radial appsense completion help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2882,6 +2888,80 @@ _worklouderctl() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__compatibility)
+            opts="-h -V --help --version --json list show verify help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__compatibility__help)
+            opts="--json <SUBCOMMAND>..."
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__compatibility__list)
+            opts="-h -V --help --version --json"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__compatibility__show)
+            opts="-h --version --help --json"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --version)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__compatibility__verify)
+            opts="-h -V --help --version --json"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
                 *)
                     COMPREPLY=()
                     ;;
