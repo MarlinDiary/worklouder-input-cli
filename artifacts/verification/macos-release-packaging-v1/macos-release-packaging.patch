@@ -1,0 +1,1170 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index d918ca8..5a41ab7 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1,6 +1,7 @@
+ name: CI
+ 
+ on:
++  workflow_call:
+   push:
+   pull_request:
+ 
+@@ -47,6 +48,8 @@ jobs:
+         run: ./scripts/verify-compatibility-matrix.sh
+       - name: Verify generated completions and command reference
+         run: ./scripts/verify-cli-assets.sh
++      - name: Verify release archive and Homebrew packaging
++        run: ./scripts/test-release-packaging.sh
+       - name: Test Input bridge CLI end to end
+         run: ./scripts/test-bridge-e2e.sh
+       - name: Test delegated firmware update end to end
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+new file mode 100644
+index 0000000..8452d3b
+--- /dev/null
++++ b/.github/workflows/release.yml
+@@ -0,0 +1,169 @@
++name: Release
++
++on:
++  push:
++    tags:
++      - "v*"
++  workflow_dispatch:
++
++permissions:
++  contents: read
++
++jobs:
++  test:
++    uses: ./.github/workflows/ci.yml
++
++  package:
++    needs: test
++    name: Package ${{ matrix.target }}
++    runs-on: ${{ matrix.runner }}
++    strategy:
++      fail-fast: false
++      matrix:
++        include:
++          - target: aarch64-apple-darwin
++            runner: macos-14
++          - target: x86_64-apple-darwin
++            runner: macos-15-intel
++    permissions:
++      contents: read
++      id-token: write
++      attestations: write
++    steps:
++      - uses: actions/checkout@v4
++      - name: Validate tag and Cargo version
++        id: version
++        shell: bash
++        run: |
++          set -euo pipefail
++          version=$(sed -nE 's/^version = "([^"]+)"$/\1/p' Cargo.toml | head -1)
++          test -n "$version"
++          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
++            test "${GITHUB_REF_NAME}" = "v$version"
++            echo "signature_state=developer-id-notarized" >> "$GITHUB_OUTPUT"
++          else
++            echo "signature_state=unsigned" >> "$GITHUB_OUTPUT"
++          fi
++          echo "version=$version" >> "$GITHUB_OUTPUT"
++      - name: Install Rust target
++        run: rustup target add "${{ matrix.target }}"
++      - name: Test source
++        run: cargo test --locked
++      - name: Build release binary
++        run: cargo build --release --locked --target "${{ matrix.target }}"
++      - name: Import Developer ID certificate
++        if: startsWith(github.ref, 'refs/tags/v')
++        env:
++          CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64 }}
++          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
++          SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
++        shell: bash
++        run: |
++          set -euo pipefail
++          test -n "$CERTIFICATE_P12_BASE64"
++          test -n "$CERTIFICATE_PASSWORD"
++          test -n "$SIGNING_IDENTITY"
++          keychain="$RUNNER_TEMP/worklouderctl-signing.keychain-db"
++          password=$(openssl rand -hex 24)
++          security create-keychain -p "$password" "$keychain"
++          security set-keychain-settings -lut 21600 "$keychain"
++          security unlock-keychain -p "$password" "$keychain"
++          python3 - <<'PY'
++          import base64
++          import os
++          from pathlib import Path
++          Path(os.environ["RUNNER_TEMP"], "certificate.p12").write_bytes(
++              base64.b64decode(os.environ["CERTIFICATE_P12_BASE64"], validate=True)
++          )
++          PY
++          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" \
++            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
++          security list-keychains -d user -s "$keychain" login.keychain-db
++          security set-key-partition-list -S apple-tool:,apple:,codesign: \
++            -s -k "$password" "$keychain"
++          matches=$(security find-identity -v -p codesigning "$keychain" | \
++            grep -F 'Developer ID Application' | grep -F -c "$SIGNING_IDENTITY" || true)
++          test "$matches" -eq 1
++          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" \
++            "target/${{ matrix.target }}/release/worklouderctl"
++          codesign --verify --strict --verbose=2 \
++            "target/${{ matrix.target }}/release/worklouderctl"
++      - name: Notarize signed binary
++        if: startsWith(github.ref, 'refs/tags/v')
++        env:
++          APPLE_ID: ${{ secrets.APPLE_ID }}
++          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
++          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
++        shell: bash
++        run: |
++          set -euo pipefail
++          test -n "$APPLE_ID"
++          test -n "$APPLE_TEAM_ID"
++          test -n "$APPLE_APP_SPECIFIC_PASSWORD"
++          ditto -c -k --keepParent \
++            "target/${{ matrix.target }}/release/worklouderctl" \
++            "$RUNNER_TEMP/worklouderctl-notarization.zip"
++          xcrun notarytool submit "$RUNNER_TEMP/worklouderctl-notarization.zip" \
++            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
++            --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait
++      - name: Build and verify deterministic release archive
++        env:
++          SOURCE_DATE_EPOCH: "0"
++        shell: bash
++        run: |
++          set -euo pipefail
++          mkdir dist
++          ./scripts/build-release-archive.py \
++            --binary "target/${{ matrix.target }}/release/worklouderctl" \
++            --target "${{ matrix.target }}" \
++            --signature-state "${{ steps.version.outputs.signature_state }}" \
++            --output dist
++          archive="dist/worklouderctl-v${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz"
++          ./scripts/verify-release-archive.py "$archive" \
++            --expected-target "${{ matrix.target }}"
++      - name: Attest release archive
++        uses: actions/attest-build-provenance@v2
++        with:
++          subject-path: dist/*.tar.gz
++      - uses: actions/upload-artifact@v4
++        with:
++          name: worklouderctl-${{ matrix.target }}
++          path: dist/*
++          if-no-files-found: error
++
++  publish:
++    name: Publish signed release and Homebrew formula
++    if: startsWith(github.ref, 'refs/tags/v')
++    needs: package
++    runs-on: macos-14
++    permissions:
++      contents: write
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/download-artifact@v4
++        with:
++          pattern: worklouderctl-*
++          path: dist
++          merge-multiple: true
++      - name: Render and verify release metadata
++        shell: bash
++        run: |
++          set -euo pipefail
++          version=${GITHUB_REF_NAME#v}
++          arm=$(awk '{print $1}' "dist/worklouderctl-v$version-aarch64-apple-darwin.tar.gz.sha256")
++          intel=$(awk '{print $1}' "dist/worklouderctl-v$version-x86_64-apple-darwin.tar.gz.sha256")
++          ./scripts/render-homebrew-formula.py \
++            --version "$version" \
++            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}" \
++            --arm64-sha256 "$arm" --x86-64-sha256 "$intel" \
++            --output dist/worklouderctl.rb
++          ruby -c dist/worklouderctl.rb
++          cat dist/*.tar.gz.sha256 | sort -k2 > dist/SHA256SUMS
++          (cd dist && shasum -a 256 -c SHA256SUMS)
++      - name: Publish GitHub release
++        env:
++          GH_TOKEN: ${{ github.token }}
++        run: |
++          gh release create "$GITHUB_REF_NAME" dist/* \
++            --verify-tag --generate-notes \
++            --title "WorkLouderCTL $GITHUB_REF_NAME"
+diff --git a/.gitignore b/.gitignore
+index e89d4af..f55aa10 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,2 +1,3 @@
+ /target/
++/dist/
+ .DS_Store
+diff --git a/README.md b/README.md
+index 93e8b4a..f5c4989 100644
+--- a/README.md
++++ b/README.md
+@@ -9,6 +9,7 @@
+   <a href="docs/faq.md">FAQ</a> ·
+   <a href="docs/compatibility.md">Compatibility</a> ·
+   <a href="docs/architecture.md">Architecture</a> ·
++  <a href="docs/releases.md">Releases</a> ·
+   <a href="docs/roadmap.md">Roadmap</a>
+ </p>
+ 
+@@ -27,7 +28,10 @@
+ > Action candidate generation, fixture-verified Input and Codex apply/restore
+ > transactions, six-slot Codex Agent Key candidates and transactions, JSON output, and
+ > shell completions.
+-> There is no packaged release yet.
++> Deterministic dual-architecture archives, explicit signature-state
++> verification, a fail-closed Developer ID/notarization workflow, and Homebrew
++> formula generation are implemented and locally verified. There is no
++> published packaged release yet; see the [release guide](docs/releases.md).
+ > The bridge transaction engine now verifies backup, apply, idempotent retry,
+ > readback, restore, and automatic rollback against an isolated writer fixture.
+ > Released-app mutation remains gated on Codex/Input integrations that supply
+@@ -79,6 +83,11 @@ cargo build --release --locked
+ ./target/release/worklouderctl doctor
+ ```
+ 
++The [macOS release guide](docs/releases.md) documents deterministic local
++archives, checksum/signature verification, tagged Developer ID notarization,
++and the generated Homebrew formula. Until the first signed tag is published,
++the source build above remains the advertised installation path.
++
+ Currently implemented commands:
+ 
+ ```console
+@@ -651,7 +660,9 @@ CLI semantic parser.
+ | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
+ | Input cache read adapter | Complete; byte-exact bridge-equivalent semantic snapshot |
+ | Input database synchronization | Planned |
+-| Signed macOS release and Homebrew installation | Planned |
++| Deterministic macOS archives and signature-state verification | Complete; unsigned and ad-hoc builds locally executed |
++| Developer ID signing/notarization and Homebrew formula pipeline | Complete and fail-closed; tagged publication credentials pending |
++| First signed macOS release and stable Homebrew tap | Not published yet |
+ 
+ ## Frequently asked questions
+ 
+@@ -660,8 +671,10 @@ CLI semantic parser.
+ WorkLouderCTL is an open-source full-configuration CLI project for Codex, Work
+ Louder Input, and Codex Micro. The source alpha can inspect both apps,
+ read/export live Codex Micro state, generate validated profile/layer/lighting/control/Action/Multi Action/Smart Action/group candidates,
+-and exercise apply/restore against the isolated bridge writer; packaged
+-binaries and released-Input writer integration are upcoming.
++and exercise apply/restore against the isolated bridge writer. Deterministic
++release packaging and the signed/notarized Homebrew pipeline are implemented;
++the first published signed binaries and released-Input writer integration are
++upcoming.
+ 
+ ### Does WorkLouderCTL replace the Codex and Input configuration GUIs?
+ 
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index fe3c42c..271e37e 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -4,6 +4,7 @@
+ 
+ [English](README.md) · [常见问题](docs/faq.md) ·
+ [兼容性](docs/compatibility.md) · [架构](docs/architecture.md) ·
++[发行](docs/releases.md) ·
+ [路线图](docs/roadmap.md)
+ 
+ > **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
+@@ -13,7 +14,10 @@
+ > 生成、fixture 验证的 Input/Codex apply/restore transaction、六个 Codex Agent
+ > Key assignment 的 snapshot/get/set/clear/apply/restore、结构化 diff、JSON 输出和
+ > shell completion。
+-> 尚未发布打包版本；bridge transaction 已通过隔离 writer fixture
++> 双架构 deterministic archive、明确的 signature-state verification、
++> fail-closed Developer ID/notarization workflow 与 Homebrew formula generation
++> 已实现并完成本地验证，但尚未发布正式打包版本；详见
++> [macOS 发行指南](docs/releases.md)。bridge transaction 已通过隔离 writer fixture
+ > 验证，真实设备写入仍以 Input writer adapter 与硬件 rollback 验证为启用条件。
+ 
+ ## 简单来说，它是什么？
+@@ -48,6 +52,10 @@ cargo build --release --locked
+ ./target/release/worklouderctl doctor
+ ```
+ 
++[macOS 发行指南](docs/releases.md)记录了 deterministic local archive、
++checksum/signature verification、tagged Developer ID notarization 与生成的
++Homebrew formula。首个 signed tag 发布前，仍以以上 source build 为公开安装方式。
++
+ 当前已经实现：
+ 
+ ```console
+@@ -513,9 +521,10 @@ encoder gestures 的 control list/show/set、joystick mode 与 2–8 sector
+ lifecycle/assignment/精确 angle rebalance，以及 Action
+ list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
+ permission status、firmware check 与 sanitized diagnostic log bundle 也已通过 bridge/CLI
+-fixture；Input
+-release 集成、Codex released-app bridge 集成、可安装 binary 与 Homebrew formula
+-仍在后续里程碑中。
++fixture；Input release 集成与 Codex released-app bridge 集成仍在后续里程碑中。
++deterministic macOS packaging、signature-state verification、Developer ID/
++notarization workflow 与 Homebrew formula generation 已完成；首个正式 signed
++binary 与 stable Homebrew tap 尚未发布。
+ 
+ `transaction plan/show/apply/restore` 已把 Codex settings、六键 Agent
+ assignments、Input device configuration 与 Input host settings 纳入同一个 canonical
+diff --git a/docs/json-schemas.md b/docs/json-schemas.md
+index 763d24c..f700d7d 100644
+--- a/docs/json-schemas.md
++++ b/docs/json-schemas.md
+@@ -11,6 +11,7 @@ worklouderctl --json schema show backup-inspection-v1
+ worklouderctl --json schema show command-envelope-v1
+ worklouderctl --json schema show configuration-v1
+ worklouderctl --json schema show input-operations-v1
++worklouderctl --json schema show release-archive-v1
+ worklouderctl --json schema show transaction-v1
+ worklouderctl --json schema show error-v1
+ ```
+@@ -28,6 +29,7 @@ use JSON Schema Draft 2020-12.
+ | `transaction-v1` | coordinated plan, transaction receipt, and private backup catalog |
+ | `error-v1` | typed JSON error written to stderr |
+ | `input-operations-v1` | Input permission/firmware status, immutable firmware/reset/recovery plans, verified receipts, and sanitized diagnostic log bundle |
++| `release-archive-v1` | deterministic macOS archive target, signature state, file modes, sizes, and SHA-256 records |
+ 
+ Schemas are additive within a version. A field removal, changed meaning, or
+ stricter accepted value creates a new registry name and `$id`. Unknown
+diff --git a/docs/releases.md b/docs/releases.md
+new file mode 100644
+index 0000000..5c84c5d
+--- /dev/null
++++ b/docs/releases.md
+@@ -0,0 +1,127 @@
++# macOS releases and Homebrew packaging
++
++WorkLouderCTL's macOS release pipeline produces deterministic archives for
++Apple Silicon and Intel Macs. A release archive contains the CLI, generated
++Bash/Zsh/Fish completions, the license, the README, and a machine-readable
++manifest with the SHA-256 and mode of every file.
++
++The packaging pipeline is complete and fixture-verified. The repository is
++still a **source alpha** until the first version tag is signed, notarized, and
++published. Do not interpret a local unsigned or ad-hoc build as an official
++signed release.
++
++## Verify a downloaded release
++
++Download the archive and its adjacent `.sha256` file, then run:
++
++```console
++shasum -a 256 -c worklouderctl-vVERSION-TARGET.tar.gz.sha256
++./scripts/verify-release-archive.py \
++  worklouderctl-vVERSION-TARGET.tar.gz --expected-target TARGET --execute
++./scripts/verify-macos-release.sh worklouderctl-vVERSION-TARGET.tar.gz
++```
++
++`TARGET` is either `aarch64-apple-darwin` or `x86_64-apple-darwin`.
++Verification checks the sidecar checksum, exact archive inventory, manifest,
++per-file hashes and modes, target, CLI execution, and the declared macOS code
++signature state.
++
++## Signature states
++
++The archive contract records one of five states; they are intentionally not
++interchangeable:
++
++| State | Meaning | Public distribution |
++| --- | --- | --- |
++| `unsigned` | No macOS code signature | Local testing only |
++| `ad-hoc` | Local ad-hoc code signature | Local testing only |
++| `apple-development` | Apple Development certificate | Development testing only |
++| `developer-id` | Developer ID Application certificate | Signed but not notarized |
++| `developer-id-notarized` | Developer ID Application plus accepted Apple notarization | Required for tagged releases |
++
++The release workflow fails closed: a `v*` tag must exactly match the Cargo
++version, have one matching Developer ID Application identity, pass signing and
++notarization, and produce an archive whose signature state is
++`developer-id-notarized`. A manual untagged workflow run produces unsigned test
++artifacts and does not publish a GitHub release.
++
++## Build a local archive
++
++Build an unsigned archive using the host Rust target:
++
++```console
++./scripts/build-macos-release.sh ./dist-local
++```
++
++Build an ad-hoc signed archive without using a certificate:
++
++```console
++WORKLOUDERCTL_CODESIGN_IDENTITY=- \
++  ./scripts/build-macos-release.sh ./dist-adhoc
++```
++
++For an Apple Development or Developer ID identity, pass its exact keychain
++name in `WORKLOUDERCTL_CODESIGN_IDENTITY`. The script signs a staging copy; it
++does not modify `target/.../release/worklouderctl`.
++
++To test deterministic packaging, archive verification, local-prefix install,
++and Homebrew formula syntax/style together:
++
++```console
++./scripts/test-release-packaging.sh
++```
++
++## Tagged release credentials
++
++The `Release` GitHub Actions workflow requires these repository secrets for a
++tagged release:
++
++- `APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64`
++- `APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD`
++- `APPLE_SIGNING_IDENTITY`
++- `APPLE_ID`
++- `APPLE_TEAM_ID`
++- `APPLE_APP_SPECIFIC_PASSWORD`
++
++The workflow imports the certificate into an ephemeral keychain, signs both
++architectures, submits each binary to Apple notarization, verifies the release
++archives, emits build-provenance attestations, renders the release-specific
++Homebrew formula, recomputes `SHA256SUMS`, and finally creates the GitHub
++release. Missing credentials or any verification mismatch stops publication.
++
++## Homebrew formula
++
++`packaging/homebrew/worklouderctl.rb.in` is the checksum-pinned formula
++template. A tagged workflow renders `worklouderctl.rb` only after both release
++archives have been built and verified. The generated formula installs the
++binary and all three shell completions and runs `worklouderctl version` in its
++test block.
++
++After a formula has been published in a tap, install it with:
++
++```console
++brew tap OWNER/TAP
++brew install worklouderctl
++worklouderctl version
++```
++
++Until that first tap publication, use the source build or a verified archive;
++there is no stable `brew install` command to advertise yet.
++
++## Release checklist
++
++1. Keep the working tree clean and run every required gate in
++   `spec/compatibility-matrix-v1.json`.
++2. Confirm `Cargo.toml` and the intended `vVERSION` tag match exactly.
++3. Confirm the six Apple secrets exist without printing them.
++4. Push the commit and annotated version tag.
++5. Require both architecture jobs, notarization, archive verification, and
++   provenance attestation to pass.
++6. Download and independently verify both published archives and checksums.
++7. Install the generated formula into an isolated Homebrew prefix and run its
++   test before promoting it to a stable tap.
++
++Rollback for an unpublished release is deletion of the local output directory.
++For a faulty published version, mark the GitHub release as withdrawn, remove
++the formula version from the tap, and publish a new version; never replace an
++existing checksum-pinned asset in place.
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 8d52806..3f598f8 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -98,8 +98,11 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ 
+ ## M5 — Stable distribution
+ 
+-- [ ] Signed macOS binaries
+-- [ ] Homebrew formula
++- [x] Deterministic Apple Silicon and Intel archives with exact manifest, checksum, and executable verification
++- [x] Explicit unsigned, ad-hoc, Apple Development, Developer ID, and notarized signature-state validation
++- [x] Fail-closed Developer ID signing, Apple notarization, and build-provenance release workflow
++- [x] Checksum-pinned Homebrew formula generation, syntax/style checks, isolated-prefix install, and execution test
++- [ ] Publish the first signed/notarized macOS release and stable Homebrew tap
+ - [x] Deterministic Bash/Zsh/Fish completions and exhaustive generated command reference
+ - [x] Machine-readable compatibility matrix and Cargo-version gate for every release
+ - [x] Strict backup inspection and schema migration assessment tools
+diff --git a/llms.txt b/llms.txt
+index b1763c4..924d43d 100644
+--- a/llms.txt
++++ b/llms.txt
+@@ -2,7 +2,7 @@
+ 
+ > WorkLouderCTL is an unofficial, open-source full-configuration CLI being built for Codex, Work Louder Input, and Codex Micro. It targets complete configuration-GUI parity with safe inspection, diff, backup, verified apply, synchronization, and rollback for humans, scripts, and AI agents.
+ 
+-Important: the project is currently a source alpha. The repository builds a working `worklouderctl` binary with Codex/Input inspection, offline semantic candidate editors, authenticated Codex/Input bridge clients, fixture-verified apply/readback/restore/rollback, live Codex Micro status/files, and verified exports, but there is no packaged release yet.
++Important: the project is currently a source alpha. The repository builds a working `worklouderctl` binary with Codex/Input inspection, offline semantic candidate editors, authenticated Codex/Input bridge clients, fixture-verified apply/readback/restore/rollback, live Codex Micro status/files, and verified exports. Deterministic dual-architecture packaging, explicit signature-state verification, fail-closed Developer ID notarization, and release-specific Homebrew formula generation are implemented, but no packaged release has been published yet.
+ 
+ ## Core documentation
+ 
+@@ -22,6 +22,7 @@ Important: the project is currently a source alpha. The repository builds a work
+ - [Delegated firmware update](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/delegated-firmware-update.md): Input-owned flash workflow with immutable plan, complete backup, CAS, receipt, and postflight
+ - [Input-owned default reset](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/input-default-reset.md): version/device/layout-owned default candidate with immutable plan, CAS apply, exact readback, and rollback
+ - [Input-owned bootloader recovery](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/input-bootloader-recovery.md): complete-backup-bound bootloader/release plan with Input programmer delegation, exact configuration restore, postflight, and idempotent receipt
++- [macOS releases and Homebrew packaging](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/releases.md): archive manifest, signature states, checksum verification, notarized tag workflow, Homebrew formula, and release checklist
+ - [Roadmap](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/roadmap.md): implementation milestones
+ - [Sanitized fixtures](https://github.com/MarlinDiary/worklouder-input-cli/tree/main/fixtures): deterministic Input 0.17.3/0.18.0 and Codex Micro firmware v0.6.0 schema fixtures
+ 
+@@ -39,7 +40,7 @@ Important: the project is currently a source alpha. The repository builds a work
+ - Non-goal: implementing a replacement hardware driver or firmware protocol
+ - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
+ - Public fixture boundary: deterministic synthetic Input 0.17.3/0.18.0 configuration snapshots and a firmware v0.6.0 status DTO, with regenerated SHA-256 manifests and sensitive-pattern checks
+-- Current maturity: source alpha; read paths and isolated bridge apply/restore transaction conformance implemented; no packaged release
++- Current maturity: source alpha; read paths, isolated bridge transactions, deterministic macOS package verification, and fail-closed signed release automation implemented; no packaged release published
+ - Current Codex commands: `codex doctor/inspect/export`, `codex bridge inspect`, `codex config snapshot/apply/restore`, six-slot `codex agent-key assignments/snapshot/get/set/clear/apply/restore`, `codex lighting brightness/auto-off get/set`, and `codex voice get/set`
+ - Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`, global lighting, and voice mode provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; six-slot Agent Key candidates preserve untargeted unknown fields and use a separate global-state revision; the Codex Companion Bridge fixture verifies complete settings and Agent Key apply/readback/restore/rollback while released-Codex integration remains pending
+ - Input cache command: `input config snapshot` captures `keymap.json` plus optional `smart_actions.json` byte-for-byte, excludes host-only state, and emits a bridge-revision-equivalent semantic snapshot without controlling the Input GUI or device transport
+diff --git a/packaging/homebrew/worklouderctl.rb.in b/packaging/homebrew/worklouderctl.rb.in
+new file mode 100644
+index 0000000..6ade146
+--- /dev/null
++++ b/packaging/homebrew/worklouderctl.rb.in
+@@ -0,0 +1,28 @@
++class Worklouderctl < Formula
++  desc "Full-configuration CLI for Codex Micro and Work Louder Input"
++  homepage "https://github.com/MarlinDiary/worklouder-input-cli"
++  version "@VERSION@"
++  license "MIT"
++
++  on_macos do
++    if Hardware::CPU.arm?
++      url "@BASE_URL@/worklouderctl-v@VERSION@-aarch64-apple-darwin.tar.gz"
++      sha256 "@ARM64_SHA256@"
++    else
++      url "@BASE_URL@/worklouderctl-v@VERSION@-x86_64-apple-darwin.tar.gz"
++      sha256 "@X86_64_SHA256@"
++    end
++  end
++
++  def install
++    bin.install "bin/worklouderctl"
++    bash_completion.install "completions/worklouderctl.bash" => "worklouderctl"
++    zsh_completion.install "completions/_worklouderctl"
++    fish_completion.install "completions/worklouderctl.fish"
++    doc.install "README.md"
++  end
++
++  test do
++    assert_match version.to_s, shell_output("#{bin}/worklouderctl version")
++  end
++end
+diff --git a/scripts/build-macos-release.sh b/scripts/build-macos-release.sh
+new file mode 100755
+index 0000000..6e15d23
+--- /dev/null
++++ b/scripts/build-macos-release.sh
+@@ -0,0 +1,46 @@
++#!/bin/sh
++set -eu
++
++repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
++target=${WORKLOUDERCTL_TARGET:-$(rustc -vV | sed -n 's/^host: //p')}
++output=${1:-$repo/dist}
++identity=${WORKLOUDERCTL_CODESIGN_IDENTITY:-}
++target_dir=${CARGO_TARGET_DIR:-$repo/target}
++binary=$target_dir/$target/release/worklouderctl
++
++case "$target" in
++  *-apple-darwin) ;;
++  *) echo "target must be an Apple Darwin target: $target" >&2; exit 2 ;;
++esac
++if [ -e "$output" ]; then
++  echo "release output already exists: $output" >&2
++  exit 2
++fi
++
++cargo build --release --locked --target "$target" --manifest-path "$repo/Cargo.toml"
++test -x "$binary"
++"$repo/scripts/verify-cli-assets.sh"
++
++mkdir -p "$output/staging"
++signed_binary=$output/staging/worklouderctl
++cp "$binary" "$signed_binary"
++chmod 0755 "$signed_binary"
++signature_state=unsigned
++if [ -n "$identity" ]; then
++  codesign --force --options runtime --sign "$identity" "$signed_binary"
++  codesign --verify --strict --verbose=2 "$signed_binary"
++  case "$identity" in
++    -) signature_state=ad-hoc ;;
++    *"Developer ID Application"*) signature_state=developer-id ;;
++    *) signature_state=apple-development ;;
++  esac
++fi
++
++SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(git -C "$repo" show -s --format=%ct HEAD)} \
++  "$repo/scripts/build-release-archive.py" \
++  --binary "$signed_binary" --target "$target" --output "$output" \
++  --signature-state "$signature_state"
++archive=$(find "$output" -maxdepth 1 -name '*.tar.gz' -print -quit)
++test -n "$archive"
++"$repo/scripts/verify-macos-release.sh" "$archive"
++printf '%s\n' "release_staged_binary=$signed_binary" "release_signature_state=$signature_state"
+diff --git a/scripts/build-release-archive.py b/scripts/build-release-archive.py
+new file mode 100755
+index 0000000..64e6ff2
+--- /dev/null
++++ b/scripts/build-release-archive.py
+@@ -0,0 +1,154 @@
++#!/usr/bin/env python3
++"""Build a deterministic, self-describing WorkLouderCTL release archive."""
++
++import argparse
++import gzip
++import hashlib
++import io
++import json
++import os
++from pathlib import Path
++import subprocess
++import tarfile
++
++
++KIND = "worklouderctl-release-archive"
++SCHEMA_VERSION = 1
++
++
++def sha256(data):
++    return hashlib.sha256(data).hexdigest()
++
++
++def add_bytes(archive, path, data, mode, mtime):
++    info = tarfile.TarInfo(path)
++    info.size = len(data)
++    info.mode = mode
++    info.mtime = mtime
++    info.uid = 0
++    info.gid = 0
++    info.uname = ""
++    info.gname = ""
++    archive.addfile(info, io.BytesIO(data))
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument("--binary", type=Path, required=True)
++    parser.add_argument("--target", required=True)
++    parser.add_argument("--output", type=Path, required=True)
++    parser.add_argument(
++        "--signature-state",
++        choices=[
++            "unsigned",
++            "ad-hoc",
++            "apple-development",
++            "developer-id",
++            "developer-id-notarized",
++        ],
++        default="unsigned",
++    )
++    args = parser.parse_args()
++    if args.target not in {"aarch64-apple-darwin", "x86_64-apple-darwin"}:
++        raise SystemExit("release target was unsupported")
++
++    repo = Path(__file__).resolve().parent.parent
++    cargo = (repo / "Cargo.toml").read_text()
++    version = next(
++        line.split('"')[1]
++        for line in cargo.splitlines()
++        if line.startswith("version = ")
++    )
++    binary = args.binary.resolve()
++    if not binary.is_file() or not os.access(binary, os.X_OK):
++        raise SystemExit(f"binary is missing or not executable: {binary}")
++    reported = subprocess.run(
++        [str(binary), "version"], check=True, text=True, capture_output=True
++    )
++    expected = f"worklouderctl {version}\n"
++    if reported.stdout != expected or reported.stderr:
++        raise SystemExit("binary version output did not match Cargo.toml")
++    if args.signature_state != "unsigned":
++        subprocess.run(
++            ["codesign", "--verify", "--strict", "--verbose=2", str(binary)],
++            check=True,
++        )
++        signature = subprocess.run(
++            ["codesign", "-d", "--verbose=4", str(binary)],
++            text=True,
++            capture_output=True,
++            check=True,
++        )
++        if args.signature_state == "ad-hoc":
++            if "Signature=adhoc" not in signature.stderr:
++                raise SystemExit("binary was not ad-hoc signed")
++        else:
++            expected_authority = (
++                "Authority=Apple Development:"
++                if args.signature_state == "apple-development"
++                else "Authority=Developer ID Application:"
++            )
++            if expected_authority not in signature.stderr:
++                raise SystemExit("binary signing authority did not match signature state")
++    if args.signature_state == "developer-id-notarized":
++        subprocess.run(
++            ["spctl", "--assess", "--type", "execute", "--verbose=4", str(binary)],
++            check=True,
++        )
++
++    root = f"worklouderctl-v{version}-{args.target}"
++    sources = [
++        ("bin/worklouderctl", binary, 0o755),
++        ("completions/worklouderctl.bash", repo / "completions/worklouderctl.bash", 0o644),
++        ("completions/_worklouderctl", repo / "completions/_worklouderctl", 0o644),
++        ("completions/worklouderctl.fish", repo / "completions/worklouderctl.fish", 0o644),
++        ("LICENSE", repo / "LICENSE", 0o644),
++        ("README.md", repo / "README.md", 0o644),
++    ]
++    files = []
++    payloads = []
++    for relative, source, mode in sources:
++        data = source.read_bytes()
++        payloads.append((relative, data, mode))
++        files.append(
++            {
++                "path": relative,
++                "size": len(data),
++                "sha256": sha256(data),
++                "mode": f"{mode:04o}",
++            }
++        )
++    manifest = {
++        "schemaVersion": SCHEMA_VERSION,
++        "kind": KIND,
++        "version": version,
++        "target": args.target,
++        "signatureState": args.signature_state,
++        "files": files,
++    }
++    manifest_bytes = (json.dumps(manifest, indent=2) + "\n").encode()
++    payloads.append(("manifest.json", manifest_bytes, 0o644))
++    payloads.sort(key=lambda item: item[0].encode())
++
++    args.output.mkdir(parents=True, exist_ok=True)
++    archive_path = args.output / f"{root}.tar.gz"
++    checksum_path = archive_path.with_suffix(archive_path.suffix + ".sha256")
++    if archive_path.exists() or checksum_path.exists():
++        raise SystemExit(f"release output already exists: {archive_path}")
++    mtime = int(os.environ.get("SOURCE_DATE_EPOCH", "0"))
++    tar_bytes = io.BytesIO()
++    with tarfile.open(fileobj=tar_bytes, mode="w", format=tarfile.USTAR_FORMAT) as archive:
++        for relative, data, mode in payloads:
++            add_bytes(archive, f"{root}/{relative}", data, mode, mtime)
++    with archive_path.open("wb") as output:
++        with gzip.GzipFile(filename="", mode="wb", fileobj=output, mtime=0) as compressed:
++            compressed.write(tar_bytes.getvalue())
++    digest = sha256(archive_path.read_bytes())
++    checksum_path.write_text(f"{digest}  {archive_path.name}\n")
++    print(archive_path)
++    print(checksum_path)
++    print(f"archive_sha256={digest}")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/scripts/render-homebrew-formula.py b/scripts/render-homebrew-formula.py
+new file mode 100755
+index 0000000..303f666
+--- /dev/null
++++ b/scripts/render-homebrew-formula.py
+@@ -0,0 +1,45 @@
++#!/usr/bin/env python3
++"""Render the release-specific Homebrew formula from verified checksums."""
++
++import argparse
++from pathlib import Path
++import re
++
++
++SHA256 = re.compile(r"^[0-9a-f]{64}$")
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument("--version", required=True)
++    parser.add_argument("--base-url", required=True)
++    parser.add_argument("--arm64-sha256", required=True)
++    parser.add_argument("--x86-64-sha256", required=True)
++    parser.add_argument("--output", type=Path, required=True)
++    args = parser.parse_args()
++    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?", args.version):
++        raise SystemExit("version was invalid")
++    if not args.base_url.startswith("https://") or args.base_url.endswith("/"):
++        raise SystemExit("base URL must be HTTPS without a trailing slash")
++    if not SHA256.fullmatch(args.arm64_sha256) or not SHA256.fullmatch(args.x86_64_sha256):
++        raise SystemExit("release checksum was invalid")
++    repo = Path(__file__).resolve().parent.parent
++    template = (repo / "packaging/homebrew/worklouderctl.rb.in").read_text()
++    rendered = (
++        template.replace("@VERSION@", args.version)
++        .replace("@BASE_URL@", args.base_url)
++        .replace("@ARM64_SHA256@", args.arm64_sha256)
++        .replace("@X86_64_SHA256@", args.x86_64_sha256)
++    )
++    if "@" in rendered:
++        raise SystemExit("formula contained an unresolved template token")
++    if args.output.exists():
++        raise SystemExit(f"formula destination already exists: {args.output}")
++    args.output.parent.mkdir(parents=True, exist_ok=True)
++    args.output.write_text(rendered)
++    args.output.chmod(0o644)
++    print(args.output)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/scripts/test-release-packaging.sh b/scripts/test-release-packaging.sh
+new file mode 100755
+index 0000000..954c699
+--- /dev/null
++++ b/scripts/test-release-packaging.sh
+@@ -0,0 +1,83 @@
++#!/bin/sh
++set -eu
++
++repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
++root=$(mktemp -d /tmp/worklouderctl-release-packaging.XXXXXX)
++cleanup() {
++  python3 - "$root" <<'PY'
++from pathlib import Path
++import shutil
++import sys
++root = Path(sys.argv[1])
++if root.name.startswith("worklouderctl-release-packaging.") and root.parent == Path("/tmp"):
++    shutil.rmtree(root, ignore_errors=True)
++PY
++}
++trap cleanup EXIT INT TERM
++
++target=${WORKLOUDERCTL_RELEASE_TARGET:-aarch64-apple-darwin}
++if [ -n "${WORKLOUDERCTL_BIN:-}" ]; then
++  bin=$WORKLOUDERCTL_BIN
++else
++  cargo build --release --locked --manifest-path "$repo/Cargo.toml"
++  bin=$repo/target/release/worklouderctl
++fi
++test -x "$bin"
++
++SOURCE_DATE_EPOCH=0 "$repo/scripts/build-release-archive.py" \
++  --binary "$bin" --target "$target" --output "$root/one" \
++  >"$root/build-one.txt"
++SOURCE_DATE_EPOCH=0 "$repo/scripts/build-release-archive.py" \
++  --binary "$bin" --target "$target" --output "$root/two" \
++  >"$root/build-two.txt"
++
++archive=$(find "$root/one" -name '*.tar.gz' -type f)
++second=$root/two/$(basename "$archive")
++cmp "$archive" "$second"
++cmp "$archive.sha256" "$second.sha256"
++"$repo/scripts/verify-release-archive.py" "$archive" \
++  --expected-target "$target" --execute >"$root/verify.txt"
++
++version=$($bin version | awk '{print $2}')
++digest=$(awk '{print $1}' "$archive.sha256")
++intel_digest=$(printf '%s' "$digest-x86_64" | shasum -a 256 | awk '{print $1}')
++"$repo/scripts/render-homebrew-formula.py" \
++  --version "$version" \
++  --base-url "https://github.com/MarlinDiary/worklouder-input-cli/releases/download/v$version" \
++  --arm64-sha256 "$digest" --x86-64-sha256 "$intel_digest" \
++  --output "$root/Formula/worklouderctl.rb" >"$root/formula.txt"
++test "$(stat -f %Lp "$root/Formula/worklouderctl.rb")" = 644
++ruby -c "$root/Formula/worklouderctl.rb" >"$root/ruby.txt"
++if command -v brew >/dev/null 2>&1; then
++  if ! brew style "$root/Formula/worklouderctl.rb" \
++    >"$root/brew-style.txt" 2>&1; then
++    cat "$root/brew-style.txt" >&2
++    exit 1
++  fi
++fi
++
++mkdir "$root/extracted" "$root/prefix"
++tar -xzf "$archive" -C "$root/extracted"
++package_root=$(find "$root/extracted" -mindepth 1 -maxdepth 1 -type d)
++mkdir -p "$root/prefix/bin" "$root/prefix/share/bash-completion/completions" \
++  "$root/prefix/share/zsh/site-functions" \
++  "$root/prefix/share/fish/vendor_completions.d"
++install -m 0755 "$package_root/bin/worklouderctl" "$root/prefix/bin/worklouderctl"
++install -m 0644 "$package_root/completions/worklouderctl.bash" \
++  "$root/prefix/share/bash-completion/completions/worklouderctl"
++install -m 0644 "$package_root/completions/_worklouderctl" \
++  "$root/prefix/share/zsh/site-functions/_worklouderctl"
++install -m 0644 "$package_root/completions/worklouderctl.fish" \
++  "$root/prefix/share/fish/vendor_completions.d/worklouderctl.fish"
++test "$($root/prefix/bin/worklouderctl version)" = "worklouderctl $version"
++test -s "$root/prefix/share/bash-completion/completions/worklouderctl"
++test -s "$root/prefix/share/zsh/site-functions/_worklouderctl"
++test -s "$root/prefix/share/fish/vendor_completions.d/worklouderctl.fish"
++
++printf '%s\n' \
++  "release_archive_deterministic=verified" \
++  "release_archive_manifest=verified" \
++  "release_binary_execute=verified" \
++  "release_temp_prefix_install=verified" \
++  "homebrew_formula_syntax=verified" \
++  "homebrew_formula_style=verified"
+diff --git a/scripts/verify-macos-release.sh b/scripts/verify-macos-release.sh
+new file mode 100755
+index 0000000..4e6eff4
+--- /dev/null
++++ b/scripts/verify-macos-release.sh
+@@ -0,0 +1,23 @@
++#!/bin/sh
++set -eu
++
++repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
++archive=${1:?usage: verify-macos-release.sh ARCHIVE}
++root=$(mktemp -d /tmp/worklouderctl-macos-release.XXXXXX)
++cleanup() { rm -rf "$root"; }
++trap cleanup EXIT INT TERM
++
++"$repo/scripts/verify-release-archive.py" "$archive" --execute >"$root/archive.txt"
++tar -xzf "$archive" -C "$root"
++binary=$(find "$root" -type f -path '*/bin/worklouderctl' -print -quit)
++manifest=$(find "$root" -type f -name manifest.json -print -quit)
++test -n "$binary"
++test -n "$manifest"
++signature_state=$(python3 -c \
++  'import json,sys; print(json.load(open(sys.argv[1]))["signatureState"])' \
++  "$manifest")
++if [ "$signature_state" != unsigned ]; then
++  codesign --verify --strict --verbose=2 "$binary"
++fi
++cat "$root/archive.txt"
++printf '%s\n' "release_macos_signature=$signature_state" "release_macos=verified"
+diff --git a/scripts/verify-release-archive.py b/scripts/verify-release-archive.py
+new file mode 100755
+index 0000000..5dedc5a
+--- /dev/null
++++ b/scripts/verify-release-archive.py
+@@ -0,0 +1,122 @@
++#!/usr/bin/env python3
++"""Verify a WorkLouderCTL release archive without trusting archive paths."""
++
++import argparse
++import hashlib
++import json
++from pathlib import Path, PurePosixPath
++import subprocess
++import tarfile
++import tempfile
++
++
++EXPECTED_PATHS = {
++    "bin/worklouderctl": "0755",
++    "completions/worklouderctl.bash": "0644",
++    "completions/_worklouderctl": "0644",
++    "completions/worklouderctl.fish": "0644",
++    "LICENSE": "0644",
++    "README.md": "0644",
++}
++
++
++def sha256(data):
++    return hashlib.sha256(data).hexdigest()
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument("archive", type=Path)
++    parser.add_argument("--expected-target")
++    parser.add_argument("--execute", action="store_true")
++    args = parser.parse_args()
++    archive_path = args.archive.resolve()
++    if not archive_path.is_file() or archive_path.is_symlink():
++        raise SystemExit("archive must be a regular non-symlink file")
++    checksum_path = archive_path.with_suffix(archive_path.suffix + ".sha256")
++    checksum = checksum_path.read_text().split()
++    if checksum != [sha256(archive_path.read_bytes()), archive_path.name]:
++        raise SystemExit("archive checksum sidecar did not match")
++
++    with tarfile.open(archive_path, "r:gz") as archive:
++        members = archive.getmembers()
++        if not members:
++            raise SystemExit("archive was empty")
++        roots = set()
++        by_relative = {}
++        for member in members:
++            path = PurePosixPath(member.name)
++            if path.is_absolute() or ".." in path.parts or len(path.parts) < 2:
++                raise SystemExit(f"unsafe archive path: {member.name}")
++            if not member.isfile() or member.issym() or member.islnk():
++                raise SystemExit(f"archive member was not a regular file: {member.name}")
++            roots.add(path.parts[0])
++            relative = str(PurePosixPath(*path.parts[1:]))
++            if relative in by_relative:
++                raise SystemExit(f"duplicate archive path: {relative}")
++            by_relative[relative] = member
++        if len(roots) != 1 or set(by_relative) != set(EXPECTED_PATHS) | {"manifest.json"}:
++            raise SystemExit("archive root or file inventory was invalid")
++        manifest = json.loads(archive.extractfile(by_relative["manifest.json"]).read())
++        if (
++            set(manifest)
++            != {"schemaVersion", "kind", "version", "target", "signatureState", "files"}
++            or not isinstance(manifest.get("files"), list)
++            or manifest.get("schemaVersion") != 1
++            or manifest.get("kind") != "worklouderctl-release-archive"
++            or manifest.get("signatureState")
++            not in {
++                "unsigned",
++                "ad-hoc",
++                "apple-development",
++                "developer-id",
++                "developer-id-notarized",
++            }
++        ):
++            raise SystemExit("release manifest header was invalid")
++        if args.expected_target and manifest.get("target") != args.expected_target:
++            raise SystemExit("release target differed from expectation")
++        records = {record["path"]: record for record in manifest["files"]}
++        if (
++            len(records) != len(manifest["files"])
++            or set(records) != set(EXPECTED_PATHS)
++            or any(
++                set(record) != {"path", "size", "sha256", "mode"}
++                for record in manifest["files"]
++            )
++        ):
++            raise SystemExit("release manifest inventory was invalid")
++        for relative, expected_mode in EXPECTED_PATHS.items():
++            member = by_relative[relative]
++            data = archive.extractfile(member).read()
++            record = records[relative]
++            if (
++                record.get("mode") != expected_mode
++                or member.mode != int(expected_mode, 8)
++                or record.get("size") != len(data)
++                or record.get("sha256") != sha256(data)
++            ):
++                raise SystemExit(f"release file verification failed: {relative}")
++        version = manifest.get("version")
++        target = manifest.get("target")
++        if roots != {f"worklouderctl-v{version}-{target}"}:
++            raise SystemExit("release archive root did not match its manifest")
++
++        if args.execute:
++            with tempfile.TemporaryDirectory(prefix="worklouderctl-release-verify-") as root:
++                binary = Path(root) / "worklouderctl"
++                binary.write_bytes(archive.extractfile(by_relative["bin/worklouderctl"]).read())
++                binary.chmod(0o755)
++                result = subprocess.run(
++                    [str(binary), "version"], check=True, text=True, capture_output=True
++                )
++                if result.stdout != f"worklouderctl {version}\n" or result.stderr:
++                    raise SystemExit("packaged binary version execution failed")
++    print(f"release_archive={archive_path.name}")
++    print(f"release_target={manifest['target']}")
++    print(f"release_signature_state={manifest['signatureState']}")
++    print("release_archive=verified")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/spec/compatibility-matrix-v1.json b/spec/compatibility-matrix-v1.json
+index cf3e6e6..49bd5c0 100644
+--- a/spec/compatibility-matrix-v1.json
++++ b/spec/compatibility-matrix-v1.json
+@@ -60,8 +60,11 @@
+       "requiredGates": [
+         "cargo test --locked",
+         "npm test --prefix companion",
++        "./scripts/verify-json-contracts.py",
+         "./scripts/verify-sanitized-fixtures.sh",
++        "./scripts/verify-compatibility-matrix.sh",
+         "./scripts/verify-cli-assets.sh",
++        "./scripts/test-release-packaging.sh",
+         "./scripts/test-bridge-e2e.sh",
+         "./scripts/test-firmware-update-e2e.sh",
+         "./scripts/test-recovery-e2e.sh",
+diff --git a/spec/schemas/release-archive-v1.schema.json b/spec/schemas/release-archive-v1.schema.json
+new file mode 100644
+index 0000000..e888297
+--- /dev/null
++++ b/spec/schemas/release-archive-v1.schema.json
+@@ -0,0 +1,43 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "https://worklouderctl.dev/schemas/release-archive-v1.schema.json",
++  "title": "WorkLouderCTL release archive manifest v1",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["schemaVersion", "kind", "version", "target", "signatureState", "files"],
++  "properties": {
++    "schemaVersion": { "const": 1 },
++    "kind": { "const": "worklouderctl-release-archive" },
++    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
++    "target": { "enum": ["aarch64-apple-darwin", "x86_64-apple-darwin"] },
++    "signatureState": { "enum": ["unsigned", "ad-hoc", "apple-development", "developer-id", "developer-id-notarized"] },
++    "files": {
++      "type": "array",
++      "minItems": 6,
++      "maxItems": 6,
++      "items": { "$ref": "#/$defs/file" }
++    }
++  },
++  "$defs": {
++    "file": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["path", "size", "sha256", "mode"],
++      "properties": {
++        "path": {
++          "enum": [
++            "bin/worklouderctl",
++            "completions/worklouderctl.bash",
++            "completions/_worklouderctl",
++            "completions/worklouderctl.fish",
++            "LICENSE",
++            "README.md"
++          ]
++        },
++        "size": { "type": "integer", "minimum": 1 },
++        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
++        "mode": { "enum": ["0644", "0755"] }
++      }
++    }
++  }
++}
+diff --git a/src/schema.rs b/src/schema.rs
+index 3b16309..1edbd3f 100644
+--- a/src/schema.rs
++++ b/src/schema.rs
+@@ -10,6 +10,7 @@ const COMPATIBILITY_MATRIX: &str =
+ const CONFIGURATION: &str = include_str!("../spec/schemas/configuration-v1.schema.json");
+ const ERROR: &str = include_str!("../spec/schemas/error-v1.schema.json");
+ const INPUT_OPERATIONS: &str = include_str!("../spec/schemas/input-operations-v1.schema.json");
++const RELEASE_ARCHIVE: &str = include_str!("../spec/schemas/release-archive-v1.schema.json");
+ const TRANSACTION: &str = include_str!("../spec/schemas/transaction-v1.schema.json");
+ 
+ #[derive(Clone, Copy, Debug, Serialize)]
+@@ -82,6 +83,14 @@ const ENTRIES: &[SchemaEntry] = &[
+         },
+         source: INPUT_OPERATIONS,
+     },
++    SchemaEntry {
++        summary: SchemaSummary {
++            name: "release-archive-v1",
++            id: "https://worklouderctl.dev/schemas/release-archive-v1.schema.json",
++            description: "Deterministic macOS release archive manifest and signature state",
++        },
++        source: RELEASE_ARCHIVE,
++    },
+     SchemaEntry {
+         summary: SchemaSummary {
+             name: "transaction-v1",
+@@ -127,7 +136,7 @@ mod tests {
+     #[test]
+     fn registry_is_sorted_and_every_document_reopens() {
+         let summaries = list();
+-        assert_eq!(summaries.len(), 8);
++        assert_eq!(summaries.len(), 9);
+         let names = summaries
+             .iter()
+             .map(|summary| summary.name)
+diff --git a/tests/cli.rs b/tests/cli.rs
+index 2c46244..126c171 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -205,6 +205,7 @@ fn schemas_are_discoverable_and_machine_readable() {
+             "configuration-v1",
+             "error-v1",
+             "input-operations-v1",
++            "release-archive-v1",
+             "transaction-v1",
+         ]
+     );

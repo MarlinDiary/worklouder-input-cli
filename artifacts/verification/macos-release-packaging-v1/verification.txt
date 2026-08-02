@@ -1,0 +1,149 @@
+WorkLouderCTL macOS release packaging v1 verification record
+============================================================
+
+Scope
+-----
+Base commit: 1329195
+Feature commit: 3e8004a
+Changed branch/field: stable macOS distribution for aarch64-apple-darwin and x86_64-apple-darwin
+Release authority: GitHub Actions imports Developer ID credentials and delegates notarization to Apple notarytool
+CLI-owned driver, HID/BLE transport, firmware transport, Codex/Input GUI control: none
+Publication state: source alpha; no tagged Developer ID/notarized release was published by this verification
+
+Preserved original and baseline-red
+-----------------------------------
+Path: /tmp/worklouderctl-release-baseline.hfvpPI/base
+Source commit: 1329195
+Command: /bin/sh /tmp/worklouderctl-release-baseline.hfvpPI/base/scripts/build-macos-release.sh /tmp/worklouderctl-release-baseline.hfvpPI/output
+Literal stdout:
+
+Literal stderr:
+/bin/sh: /tmp/worklouderctl-release-baseline.hfvpPI/base/scripts/build-macos-release.sh: No such file or directory
+Exit status: 127
+Baseline behavior: the macOS release packaging command is absent.
+
+Modified artifacts
+------------------
+Repository root: /Users/marlin/Documents/Codex/2026-07-31/cod/worklouder-input-cli
+
+Apple Silicon archive:
+  Path: dist/packaging-v1-3e8004a/arm64/worklouderctl-v0.1.0-aarch64-apple-darwin.tar.gz
+  SHA-256: d9fd045e30803ad4c9eead7344e51fbb61c25b13adc5bf522c2db3c008400a54
+  Binary file output: Mach-O 64-bit executable arm64
+  Binary command/output/status: worklouderctl version -> worklouderctl 0.1.0 -> 0
+
+Intel archive:
+  Path: dist/packaging-v1-3e8004a/x86_64/worklouderctl-v0.1.0-x86_64-apple-darwin.tar.gz
+  SHA-256: 2d95ca211cc1494c9055116efedfdb024b2267f3ee82604d4a6f24ee6c1ea481
+  Binary file output: Mach-O 64-bit executable x86_64
+  Binary command/output/status: worklouderctl version -> worklouderctl 0.1.0 -> 0
+
+Rendered Homebrew formula:
+  Path: dist/packaging-v1-3e8004a/Formula/worklouderctl.rb
+  SHA-256: 196ec711c418126cae5a75c7f00e53b820891641097042d2e4829001653836b2
+  Mode: 0644
+  ruby -c output/status: Syntax OK -> 0
+  brew style output/status: 1 file inspected, no offenses detected -> 0
+
+The archives are real ignored distribution artifacts. They were reopened,
+checksum-verified, extracted, and executed; their hashes are not substitutes
+for a future Developer ID/notarized tagged release.
+
+Archive verification
+--------------------
+Commands:
+  ./scripts/verify-release-archive.py ARM_ARCHIVE --expected-target aarch64-apple-darwin --execute
+  ./scripts/verify-macos-release.sh ARM_ARCHIVE
+Literal stdout:
+release_archive=worklouderctl-v0.1.0-aarch64-apple-darwin.tar.gz
+release_target=aarch64-apple-darwin
+release_signature_state=unsigned
+release_archive=verified
+release_macos_signature=unsigned
+release_macos=verified
+Literal stderr:
+
+Exit status: 0
+
+Commands:
+  ./scripts/verify-release-archive.py INTEL_ARCHIVE --expected-target x86_64-apple-darwin --execute
+  ./scripts/verify-macos-release.sh INTEL_ARCHIVE
+Literal stdout:
+release_archive=worklouderctl-v0.1.0-x86_64-apple-darwin.tar.gz
+release_target=x86_64-apple-darwin
+release_signature_state=unsigned
+release_archive=verified
+release_macos_signature=unsigned
+release_macos=verified
+Literal stderr:
+
+Exit status: 0
+
+Packaging integration gate
+--------------------------
+Command: ./scripts/test-release-packaging.sh
+Literal stdout markers:
+release_archive_deterministic=verified
+release_archive_manifest=verified
+release_binary_execute=verified
+release_temp_prefix_install=verified
+homebrew_formula_syntax=verified
+homebrew_formula_style=verified
+Exit status: 0
+Verified behavior: deterministic manifest/checksum, executable archive,
+isolated-prefix install, formula syntax, and Homebrew style.
+
+Ad-hoc signature boundary
+-------------------------
+Path: /tmp/worklouderctl-adhoc-release.V22mcu/out/worklouderctl-v0.1.0-aarch64-apple-darwin.tar.gz
+SHA-256: d898df62f050093dc84ba1e74baa4805d386ddcd50e634dc977ae22da54380f4
+Command: ./scripts/verify-macos-release.sh ADHOC_ARCHIVE
+Literal stdout suffix:
+release_signature_state=ad-hoc
+release_archive=verified
+release_macos_signature=ad-hoc
+release_macos=verified
+Literal codesign stderr:
+ADHOC_EXTRACTED_BINARY: valid on disk
+ADHOC_EXTRACTED_BINARY: satisfies its Designated Requirement
+Exit status: 0
+Verified boundary: ad-hoc is preserved as a distinct local-only state and is
+never reported as Apple Development, Developer ID, or notarized.
+
+Signed-release workflow boundary
+--------------------------------
+Workflow: .github/workflows/release.yml
+Runner matrix: macos-14 / aarch64-apple-darwin and macos-15-intel / x86_64-apple-darwin
+Tagged release gate: Cargo version equals vVERSION; one exact Developer ID
+Application identity; hardened runtime and timestamp signing; Apple notarytool
+accepted; developer-id-notarized archive state; provenance attestation; exact
+dual-archive checksums; checksum-pinned formula; GitHub release publication.
+Manual untagged workflow behavior: unsigned artifacts only; no publish job.
+Credential-dependent Developer ID signing and Apple notarization were not
+claimed as locally executed.
+
+Patch/diff
+----------
+Path: artifacts/verification/macos-release-packaging-v1/macos-release-packaging.patch
+Command: git diff --binary 1329195..3e8004a -- . ':(exclude)artifacts/verification/macos-release-packaging-v1'
+SHA-256 after reopen: 23880ae5fb70e877d8c8ad95b8d2d25778fd23af4a0cd71c0314f8397cf9548e
+Reverse apply check exit status: 0
+
+Rollback
+--------
+Path: artifacts/verification/macos-release-packaging-v1/rollback.sh
+SHA-256 after reopen: 00c71e58207bb022c1417a6cc4febbd542c5ddc92e2b0e277615fff9564156d0
+Verification command: execute rollback.sh against a detached copy of feature
+commit 3e8004a and compare it to base commit 1329195, excluding this artifact
+directory.
+Literal stdout:
+rollback=verified
+base=1329195
+feature=3e8004a
+Exit status: 0
+
+Modified behavior: deterministic dual-architecture archives, exact manifest
+and signature-state verification, Homebrew formula generation/style/install
+test, and a fail-closed credential-gated signed/notarized release workflow.
+Rollback behavior: the detached feature copy exactly matches 1329195 after the
+reverse patch, and the release packaging command returns to absent.
