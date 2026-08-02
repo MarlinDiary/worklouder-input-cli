@@ -1378,9 +1378,13 @@ fn verify_successful_receipt_state(
     fs::set_permissions(&root, fs::Permissions::from_mode(0o700))?;
     let result = verify_live_mutations(&plan, &receipt.mutations, runtime, &root, "retry");
     let cleanup = fs::remove_dir_all(&root);
-    result?;
-    cleanup?;
-    Ok(())
+    match result {
+        Err(error) => Err(error),
+        Ok(()) => {
+            cleanup?;
+            Ok(())
+        }
+    }
 }
 
 fn verify_live_mutations(
