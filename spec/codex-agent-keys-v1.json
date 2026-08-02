@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-codex-agent-keys-contract",
+  "contractAppVersion": "26.727.51351",
+  "authority": "codex-global-state",
+  "globalStateKey": "codex-micro-custom-agent-assignments",
+  "snapshotKind": "worklouderctl-codex-agent-keys-snapshot",
+  "candidateReceiptKind": "worklouderctl-codex-agent-key-candidate",
+  "mutationResultKind": "worklouderctl-codex-agent-keys-mutation",
+  "adapter": "codex-companion-bridge-v1",
+  "slots": [
+    "AG00",
+    "AG01",
+    "AG02",
+    "AG03",
+    "AG04",
+    "AG05"
+  ],
+  "default": {
+    "AG00": null,
+    "AG01": null,
+    "AG02": null,
+    "AG03": null,
+    "AG04": null,
+    "AG05": null
+  },
+  "assignmentTypes": {
+    "thread": {
+      "required": ["hostId", "threadKey", "title"]
+    },
+    "command": {
+      "required": ["type", "commandId"],
+      "type": "command"
+    },
+    "skill": {
+      "required": ["type", "skillName", "skillPath"],
+      "type": "skill"
+    },
+    "keycap": {
+      "required": ["keycapId"]
+    },
+    "empty": null
+  },
+  "revisionAlgorithm": {
+    "id": "codex-agent-keys-revision-v1",
+    "prefixUtf8": "worklouder-codex-agent-keys-revision-v1\u0000",
+    "payload": "recursive-key-sorted compact JSON"
+  },
+  "offlineOperations": {
+    "snapshot": "codex agent-key snapshot --output SNAPSHOT.json",
+    "get": "codex agent-key get --input SNAPSHOT.json SLOT",
+    "setCommand": "codex agent-key set --input SNAPSHOT.json SLOT --command COMMAND_ID --output CANDIDATE.json",
+    "setSkill": "codex agent-key set --input SNAPSHOT.json SLOT --skill-name NAME --skill-path PATH --output CANDIDATE.json",
+    "setThread": "codex agent-key set --input SNAPSHOT.json SLOT --thread-host HOST --thread-key KEY --title TITLE --output CANDIDATE.json",
+    "setKeycap": "codex agent-key set --input SNAPSHOT.json SLOT --keycap KEYCAP_ID --output CANDIDATE.json",
+    "clear": "codex agent-key clear --input SNAPSHOT.json SLOT --output CANDIDATE.json"
+  },
+  "liveOperations": {
+    "apply": "codex agent-key apply --input CANDIDATE.json --backup BEFORE.json",
+    "restore": "codex agent-key restore --input BEFORE.json --backup CURRENT.json"
+  },
+  "validation": {
+    "requireExactContractAppVersionForMutation": true,
+    "preserveUntargetedAssignments": true,
+    "preserveUnknownFieldsInUntargetedAssignments": true,
+    "rejectUnknownSlots": true,
+    "atomicPublishAndReopen": true,
+    "compareAndSwapRevision": true,
+    "exactReadback": true,
+    "automaticRollback": true
+  }
+}

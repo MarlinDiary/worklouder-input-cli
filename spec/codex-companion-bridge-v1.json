@@ -51,7 +51,9 @@
     "codex.settings.snapshot": "codex.settings.snapshot.v1",
     "codex.settings.apply": "codex.settings.apply.v1",
     "codex.settings.restore": "codex.settings.restore.v1",
-    "codex.agentKeys.snapshot": "codex.agentKeys.snapshot.v1"
+    "codex.agentKeys.snapshot": "codex.agentKeys.snapshot.v1",
+    "codex.agentKeys.apply": "codex.agentKeys.apply.v1",
+    "codex.agentKeys.restore": "codex.agentKeys.restore.v1"
   },
   "settingsSnapshot": {
     "kind": "worklouderctl-codex-settings-snapshot",
@@ -88,7 +90,8 @@
     "idempotencyScope": "bridge session"
   },
   "agentKeys": {
-    "snapshotKind": "worklouder-codex-agent-keys-snapshot",
+    "snapshotKind": "worklouderctl-codex-agent-keys-snapshot",
+    "mutationResultKind": "worklouderctl-codex-agent-keys-mutation",
     "globalStateKey": "codex-micro-custom-agent-assignments",
     "slots": [
       "AG00",
@@ -140,7 +143,22 @@
       "id": "codex-agent-keys-revision-v1",
       "prefixUtf8": "worklouder-codex-agent-keys-revision-v1\\u0000",
       "payload": "recursive-key-sorted compact JSON"
-    }
+    },
+    "mutationRequiredRequestFields": [
+      "expectedGlobalStateRevision",
+      "targetGlobalStateRevision",
+      "idempotencyKey",
+      "assignments"
+    ],
+    "mutationSequence": [
+      "serialize on Codex main-process queue",
+      "snapshot current assignments and revision",
+      "compare global-state revision",
+      "replace all six assignments through set-global-state",
+      "snapshot and validate exact readback",
+      "restore pre-mutation assignments after any readback failure"
+    ],
+    "capabilityGate": "apply/restore are advertised only when the integration supplies an exact global-state writer"
   },
   "limits": {
     "tokenBytes": 4096,
