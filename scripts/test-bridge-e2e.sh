@@ -38,6 +38,7 @@ smart_url_snapshot=$root/config-smart-url.json
 smart_app_snapshot=$root/config-smart-app.json
 smart_group_snapshot=$root/config-smart-group.json
 smart_bound_snapshot=$root/config-smart-bound.json
+cheat_bound_snapshot=$root/config-cheat-sheet-bound.json
 smart_deleted_snapshot=$root/config-smart-deleted.json
 renamed_profile_snapshot=$root/config-profile-renamed.json
 selected_snapshot=$root/config-selected.json
@@ -317,6 +318,14 @@ revision=$(python3 -c \
   >"$root/smart-show.json"
 "$bin" --json smart-action group show --input "$smart_bound_snapshot" --id 0 \
   >"$root/smart-group-show.json"
+"$bin" --json cheat-sheet catalog >"$root/cheat-sheet-catalog.json"
+"$bin" --json cheat-sheet bindings --input "$smart_bound_snapshot" \
+  --profile 0 --layer 0 >"$root/cheat-sheet-bindings-before.json"
+"$bin" --json cheat-sheet bind --input "$smart_bound_snapshot" \
+  --profile 0 --layer 0 --control encoder:0:press toggle \
+  --output "$cheat_bound_snapshot" >"$root/cheat-sheet-bind.json"
+"$bin" --json cheat-sheet bindings --input "$cheat_bound_snapshot" \
+  --profile 0 --layer 0 >"$root/cheat-sheet-bindings-after.json"
 "$bin" --json smart-action delete --input "$smart_bound_snapshot" --id 1 \
   --output "$smart_deleted_snapshot" >"$root/smart-delete.json"
 "$bin" --json device --transport bridge \
@@ -325,21 +334,21 @@ revision=$(python3 -c \
   >"$root/config-bridge-validation.json"
 candidate_revision=$(python3 -c \
   'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
-  "$smart_bound_snapshot")
+  "$cheat_bound_snapshot")
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config apply \
-  --input "$smart_bound_snapshot" --backup "$root/pre-apply.json" \
+  --input "$cheat_bound_snapshot" --backup "$root/pre-apply.json" \
   --expected-revision "$revision" --idempotency-key e2e-apply-1 \
   >"$root/config-apply.json"
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config apply \
-  --input "$smart_bound_snapshot" --backup "$root/pre-apply.json" \
+  --input "$cheat_bound_snapshot" --backup "$root/pre-apply.json" \
   --expected-revision "$revision" --idempotency-key e2e-apply-1 \
   >"$root/config-apply-replay.json"
 set +e
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config apply \
-  --input "$smart_bound_snapshot" --backup "$root/stale-attempt-backup.json" \
+  --input "$cheat_bound_snapshot" --backup "$root/stale-attempt-backup.json" \
   --expected-revision "$revision" --idempotency-key e2e-apply-stale \
   >"$root/config-apply-stale.json" 2>"$root/config-apply-stale.err"
 stale_status=$?
@@ -389,13 +398,21 @@ bridge_validation = json.loads(
     (root / "config-bridge-validation.json").read_text()
 )
 candidate = json.loads((root / "config-candidate.json").read_text())
-apply_candidate = json.loads((root / "config-smart-bound.json").read_text())
+apply_candidate = json.loads((root / "config-cheat-sheet-bound.json").read_text())
 smart_text_candidate = json.loads((root / "config-smart-text.json").read_text())
 smart_command_candidate = json.loads((root / "config-smart-command.json").read_text())
 smart_url_candidate = json.loads((root / "config-smart-url.json").read_text())
 smart_app_candidate = json.loads((root / "config-smart-app.json").read_text())
 smart_group_candidate = json.loads((root / "config-smart-group.json").read_text())
 smart_deleted_candidate = json.loads((root / "config-smart-deleted.json").read_text())
+cheat_sheet_catalog = json.loads((root / "cheat-sheet-catalog.json").read_text())
+cheat_sheet_bindings_before = json.loads(
+    (root / "cheat-sheet-bindings-before.json").read_text()
+)
+cheat_sheet_bind = json.loads((root / "cheat-sheet-bind.json").read_text())
+cheat_sheet_bindings_after = json.loads(
+    (root / "cheat-sheet-bindings-after.json").read_text()
+)
 renamed_profile = json.loads((root / "config-profile-renamed.json").read_text())
 selected = json.loads((root / "config-selected.json").read_text())
 profile_created_candidate = json.loads((root / "config-profile-created.json").read_text())
@@ -771,6 +788,23 @@ assert smart_delete["changedPaths"] == [
     "/smart_actions.json/smartActionGroups/0/actionIds",
     "/smart_actions.json/smartActions/SA_1",
 ]
+assert [item["token"] for item in cheat_sheet_catalog["assignments"]] == [
+    "KI_CS_SHOW", "KI_CS_SHOW_TMP", "KI_CS_HIDE", "KI_CS_TOGGLE",
+]
+assert cheat_sheet_bindings_before["bindings"] == []
+assert cheat_sheet_bind["operation"] == "cheat-sheet-bind"
+assert cheat_sheet_bind["changedPaths"] == [
+    "/keymap.json/profiles/0/layers/0/layout/encoders/0/2",
+]
+assert cheat_sheet_bindings_after["bindings"] == [{
+    "behavior": "toggle",
+    "control": {
+        "id": "encoder:0:press",
+        "kind": "encoder",
+        "assignment": "KI_CS_TOGGLE",
+        "assignmentKind": "internal",
+    },
+}]
 
 def payload(document, name):
     record = next(item for item in document["files"] if item["relativePath"] == name)
@@ -995,6 +1029,7 @@ assert post_apply_keymap["profiles"][2]["name"] == "CLI Profile"
 assert post_apply_keymap["profiles"][0]["layers"][2]["name"] == "CLI Layer"
 assert post_apply_keymap["linkedApps"][-1]["id"] == 0
 assert post_apply_keymap["profiles"][0]["layers"][0]["linkedAppId"] == 0
+assert post_apply_keymap["profiles"][0]["layers"][0]["layout"]["encoders"][0][2] == "KI_CS_TOGGLE"
 for layer in post_apply_keymap["profiles"][0]["layers"]:
     assert layer["lights"]["backlight"]["effect"] == "breath"
     assert layer["lights"]["backlight"]["color"] == 0x102030
@@ -1080,6 +1115,7 @@ print("semantic_smart_action_typed_crud=verified")
 print("semantic_smart_action_group_crud=verified")
 print("semantic_smart_action_binding_cascade=verified")
 print("semantic_smart_action_apply_readback_restore=verified")
+print("semantic_cheat_sheet_catalog_bind_apply_restore=verified")
 print("semantic_unknown_fields=preserved")
 print("semantic_unrelated_file_bytes=preserved")
 print("config_live_cas=verified")
