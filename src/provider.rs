@@ -410,10 +410,7 @@ mod tests {
             for (marker, quote) in [("from \"./", '"'), ("from './", '\'')] {
                 for suffix in source.split(marker).skip(1) {
                     let relative = suffix.split(quote).next().unwrap();
-                    let relative = relative
-                        .split(|character| character == '?' || character == '#')
-                        .next()
-                        .unwrap();
+                    let relative = relative.split(['?', '#']).next().unwrap();
                     let dependency = Path::new(path)
                         .parent()
                         .unwrap()
