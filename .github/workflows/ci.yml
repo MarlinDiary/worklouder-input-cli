@@ -62,6 +62,8 @@ jobs:
         run: ./scripts/test-recovery-e2e.sh
       - name: Test Codex bridge CLI end to end
         run: ./scripts/test-codex-bridge-e2e.sh
+      - name: Test authenticated global doctor readiness
+        run: ./scripts/test-doctor-readiness-e2e.sh
       - name: Test four-authority transactions and rollback
         run: ./scripts/test-transaction-e2e.sh
       - name: Test ambiguous provider-error rollback

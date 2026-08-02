@@ -130,6 +130,10 @@ handshakes and the complete Codex/Input apply-and-restore capability sets.
 Missing endpoints, handshake failures, or incomplete capability negotiation are
 warnings; `--strict` promotes any such warning to a failing exit status. This
 probe is read-only and does not focus, reopen, or mutate either GUI/runtime.
+The isolated dual-provider E2E performs both authenticated protocol handshakes,
+requires all eight Codex/Input apply-and-restore capabilities, obtains
+`configurationReady: true` with strict exit `0`, and verifies the provider
+configuration bytes are unchanged by the probe.
 
 ## Adding support
 
