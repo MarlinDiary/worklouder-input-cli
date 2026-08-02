@@ -63,7 +63,7 @@ worklouderctl codex agent-key tap-mode get|set --input SNAPSHOT
 worklouderctl codex command-key get|set|reset --input SNAPSHOT ACT06
 worklouderctl codex dial mode get|set --input SNAPSHOT
 worklouderctl codex dial gesture get|set|clear --input SNAPSHOT GESTURE
-worklouderctl codex joystick get|set|reset
+worklouderctl codex joystick get|set|clear --input SNAPSHOT up|right|down|left
 worklouderctl codex voice get|set --input SNAPSHOT
 worklouderctl codex lighting brightness get|set --input SNAPSHOT
 worklouderctl codex lighting auto-off get|set --input SNAPSHOT

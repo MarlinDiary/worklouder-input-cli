@@ -52,7 +52,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Six Command Key slots get/set/reset offline candidates
 - [x] voice mode
 - [x] dial modes and command/Skill/empty custom gestures
-- [ ] joystick directions and Skills
+- [x] joystick directions and command/Skill/empty candidates
 - [x] global brightness and auto-off
 - [x] Codex settings backup, apply, readback, restore, and automatic rollback fixture
 - [x] Codex settings-only structural diff with revisions and typed before/after values
