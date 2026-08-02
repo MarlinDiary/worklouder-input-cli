@@ -481,6 +481,124 @@ pub enum CodexAgentKeyCommand {
         token: Option<PathBuf>,
     },
 
+    /// Save all six live Agent Key assignments as a revisioned snapshot.
+    Snapshot {
+        /// Destination JSON file. It must not already exist.
+        #[clap(long, value_parser)]
+        output: PathBuf,
+
+        /// Override the Codex Companion Bridge Unix socket path.
+        #[clap(long, value_parser)]
+        socket: Option<PathBuf>,
+
+        /// Override the Codex Companion Bridge token file path.
+        #[clap(long, value_parser)]
+        token: Option<PathBuf>,
+    },
+
+    /// Read one assignment from an offline Agent Key snapshot.
+    Get {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        /// Logical slot: AG00 through AG05.
+        slot: String,
+    },
+
+    /// Set one assignment in an offline Agent Key candidate.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        /// Logical slot: AG00 through AG05.
+        slot: String,
+
+        /// Assign a Codex command ID.
+        #[clap(long)]
+        command: Option<String>,
+
+        /// Assign a Skill display name; pair with --skill-path.
+        #[clap(long)]
+        skill_name: Option<String>,
+
+        /// Assign a Skill path; pair with --skill-name.
+        #[clap(long)]
+        skill_path: Option<String>,
+
+        /// Assign a task host ID; pair with --thread-key and --title.
+        #[clap(long)]
+        thread_host: Option<String>,
+
+        /// Assign a task thread key; pair with --thread-host and --title.
+        #[clap(long)]
+        thread_key: Option<String>,
+
+        /// Assign a task title; pair with --thread-host and --thread-key.
+        #[clap(long)]
+        title: Option<String>,
+
+        /// Assign a frozen keycap ID.
+        #[clap(long)]
+        keycap: Option<String>,
+
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Clear one assignment in an offline Agent Key candidate.
+    Clear {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        /// Logical slot: AG00 through AG05.
+        slot: String,
+
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Apply all six Agent Key assignments with backup, CAS, and readback.
+    Apply {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        #[clap(long, value_parser)]
+        backup: PathBuf,
+
+        #[clap(long)]
+        expected_global_state_revision: Option<String>,
+
+        #[clap(long)]
+        idempotency_key: Option<String>,
+
+        #[clap(long, value_parser)]
+        socket: Option<PathBuf>,
+
+        #[clap(long, value_parser)]
+        token: Option<PathBuf>,
+    },
+
+    /// Restore all six Agent Key assignments with backup, CAS, and readback.
+    Restore {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        #[clap(long, value_parser)]
+        backup: PathBuf,
+
+        #[clap(long)]
+        expected_global_state_revision: Option<String>,
+
+        #[clap(long)]
+        idempotency_key: Option<String>,
+
+        #[clap(long, value_parser)]
+        socket: Option<PathBuf>,
+
+        #[clap(long, value_parser)]
+        token: Option<PathBuf>,
+    },
+
     /// Inspect or edit the single-tap focus behavior.
     TapMode {
         #[clap(subcommand)]

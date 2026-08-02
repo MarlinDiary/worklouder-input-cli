@@ -1,4 +1,4 @@
-use crate::{codex, fsutil};
+use crate::{codex, codex_agent_keys};
 use anyhow::{bail, ensure, Context, Result};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -19,10 +19,7 @@ const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const SETTINGS_SNAPSHOT_KIND: &str = "worklouderctl-codex-settings-snapshot";
 const SETTINGS_MUTATION_KIND: &str = "worklouderctl-codex-settings-mutation";
-const AGENT_KEYS_SNAPSHOT_KIND: &str = "worklouder-codex-agent-keys-snapshot";
-const AGENT_KEYS_STATE_KEY: &str = "codex-micro-custom-agent-assignments";
-const AGENT_KEYS_PREFIX: &[u8] = b"worklouder-codex-agent-keys-revision-v1\0";
-const AGENT_KEY_SLOTS: [&str; 6] = ["AG00", "AG01", "AG02", "AG03", "AG04", "AG05"];
+const AGENT_KEYS_SNAPSHOT_KIND: &str = "worklouderctl-codex-agent-keys-snapshot";
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug)]
@@ -40,17 +37,6 @@ pub struct CodexBridgeInspection {
     pub session_id: String,
     pub capabilities: Vec<String>,
     pub socket: PathBuf,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentKeysSnapshot {
-    pub schema_version: u64,
-    pub kind: String,
-    pub global_state_key: String,
-    pub slots: Vec<String>,
-    pub assignments: BTreeMap<String, Value>,
-    pub global_state_revision: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -81,6 +67,22 @@ pub struct SettingsMutationReceipt {
     pub target_settings_revision: String,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentKeysMutationReceipt {
+    pub backup: PathBuf,
+    pub schema_version: u64,
+    pub kind: String,
+    pub operation: String,
+    pub idempotency_key: String,
+    pub idempotent_replay: bool,
+    pub changed: bool,
+    pub rollback_performed: bool,
+    pub before_global_state_revision: String,
+    pub after_global_state_revision: String,
+    pub target_global_state_revision: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Handshake {
@@ -106,6 +108,17 @@ struct RawSettingsSnapshot {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct RawAgentKeysSnapshot {
+    schema_version: u64,
+    kind: String,
+    global_state_key: String,
+    slots: Vec<String>,
+    assignments: BTreeMap<String, Value>,
+    global_state_revision: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RawMutationResponse {
     schema_version: u64,
     kind: String,
@@ -119,6 +132,21 @@ struct RawMutationResponse {
     before_settings_revision: String,
     after_settings_revision: String,
     target_settings_revision: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawAgentKeysMutationResponse {
+    schema_version: u64,
+    kind: String,
+    operation: String,
+    idempotency_key: String,
+    idempotent_replay: bool,
+    changed: bool,
+    rollback_performed: bool,
+    before_global_state_revision: String,
+    after_global_state_revision: String,
+    target_global_state_revision: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -200,15 +228,61 @@ pub fn settings_snapshot(
     })
 }
 
-pub fn agent_keys_snapshot(paths: &CodexBridgePaths) -> Result<AgentKeysSnapshot> {
+pub fn agent_keys_snapshot(paths: &CodexBridgePaths) -> Result<codex_agent_keys::Snapshot> {
     let mut client = Client::connect(paths)?;
-    let snapshot: AgentKeysSnapshot = client.call(
+    let raw: RawAgentKeysSnapshot = client.call(
         "codex.agentKeys.snapshot",
         "codex.agentKeys.snapshot.v1",
         json!({}),
     )?;
-    validate_agent_keys(&snapshot)?;
-    Ok(snapshot)
+    validate_raw_agent_keys_snapshot(raw, &client.handshake.codex_version)
+}
+
+pub fn agent_keys_snapshot_to_file(
+    paths: &CodexBridgePaths,
+    output: &Path,
+) -> Result<codex_agent_keys::SnapshotReceipt> {
+    let snapshot = agent_keys_snapshot(paths)?;
+    codex_agent_keys::write_snapshot(output, &snapshot)?;
+    Ok(codex_agent_keys::snapshot_receipt(output, &snapshot))
+}
+
+pub fn agent_keys_apply(
+    paths: &CodexBridgePaths,
+    input: &Path,
+    backup: &Path,
+    expected_revision: Option<&str>,
+    idempotency_key: Option<&str>,
+) -> Result<AgentKeysMutationReceipt> {
+    agent_keys_mutate(
+        paths,
+        "apply",
+        "codex.agentKeys.apply",
+        "codex.agentKeys.apply.v1",
+        input,
+        backup,
+        expected_revision,
+        idempotency_key,
+    )
+}
+
+pub fn agent_keys_restore(
+    paths: &CodexBridgePaths,
+    input: &Path,
+    backup: &Path,
+    expected_revision: Option<&str>,
+    idempotency_key: Option<&str>,
+) -> Result<AgentKeysMutationReceipt> {
+    agent_keys_mutate(
+        paths,
+        "restore",
+        "codex.agentKeys.restore",
+        "codex.agentKeys.restore.v1",
+        input,
+        backup,
+        expected_revision,
+        idempotency_key,
+    )
 }
 
 pub fn settings_apply(
@@ -326,12 +400,83 @@ fn settings_mutate(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
+fn agent_keys_mutate(
+    paths: &CodexBridgePaths,
+    operation: &str,
+    method: &str,
+    capability: &str,
+    input: &Path,
+    backup: &Path,
+    expected_revision: Option<&str>,
+    idempotency_key: Option<&str>,
+) -> Result<AgentKeysMutationReceipt> {
+    ensure!(input != backup, "input and backup paths must differ");
+    let candidate = codex_agent_keys::read_snapshot(input)?;
+    codex_agent_keys::ensure_mutation_compatible(&candidate)?;
+    let target_revision = codex_agent_keys::revision(&candidate.assignments)?;
+    let backup_snapshot = prepare_agent_keys_backup(paths, backup)?;
+    codex_agent_keys::ensure_mutation_compatible(&backup_snapshot)?;
+    let expected = expected_revision.unwrap_or(&backup_snapshot.global_state_revision);
+    ensure!(
+        is_lower_sha256(expected),
+        "expected Agent Key revision is invalid"
+    );
+    let key = idempotency_key
+        .map(str::to_owned)
+        .unwrap_or_else(|| generated_idempotency_key("agent-keys", &target_revision));
+    ensure!(
+        !key.is_empty() && key.len() <= 256 && !key.contains('\0'),
+        "idempotency key is invalid"
+    );
+    let mut client = Client::connect(paths)?;
+    ensure!(
+        client.handshake.codex_version == candidate.installed_app_version,
+        "connected Codex version differs from the Agent Key candidate"
+    );
+    let response: RawAgentKeysMutationResponse = client.call(
+        method,
+        capability,
+        json!({
+            "expectedGlobalStateRevision": expected,
+            "targetGlobalStateRevision": target_revision,
+            "idempotencyKey": key,
+            "assignments": candidate.assignments,
+        }),
+    )?;
+    validate_agent_keys_mutation_response(&response, operation, &key, expected, &target_revision)?;
+    Ok(AgentKeysMutationReceipt {
+        backup: backup.to_path_buf(),
+        schema_version: response.schema_version,
+        kind: response.kind,
+        operation: response.operation,
+        idempotency_key: response.idempotency_key,
+        idempotent_replay: response.idempotent_replay,
+        changed: response.changed,
+        rollback_performed: response.rollback_performed,
+        before_global_state_revision: response.before_global_state_revision,
+        after_global_state_revision: response.after_global_state_revision,
+        target_global_state_revision: response.target_global_state_revision,
+    })
+}
+
 fn prepare_backup(paths: &CodexBridgePaths, backup: &Path) -> Result<codex::Snapshot> {
     if backup.exists() {
         return codex::read_snapshot(backup);
     }
     settings_snapshot(paths, backup)?;
     codex::read_snapshot(backup)
+}
+
+fn prepare_agent_keys_backup(
+    paths: &CodexBridgePaths,
+    backup: &Path,
+) -> Result<codex_agent_keys::Snapshot> {
+    if backup.exists() {
+        return codex_agent_keys::read_snapshot(backup);
+    }
+    agent_keys_snapshot_to_file(paths, backup)?;
+    codex_agent_keys::read_snapshot(backup)
 }
 
 fn validate_raw_snapshot(raw: RawSettingsSnapshot, codex_version: &str) -> Result<codex::Snapshot> {
@@ -366,79 +511,25 @@ fn validate_raw_snapshot(raw: RawSettingsSnapshot, codex_version: &str) -> Resul
     )
 }
 
-fn validate_agent_keys(snapshot: &AgentKeysSnapshot) -> Result<()> {
+fn validate_raw_agent_keys_snapshot(
+    raw: RawAgentKeysSnapshot,
+    codex_version: &str,
+) -> Result<codex_agent_keys::Snapshot> {
     ensure!(
-        snapshot.schema_version == 1,
+        raw.schema_version == 1,
         "Codex bridge returned an unknown Agent Key schema"
     );
     ensure!(
-        snapshot.kind == AGENT_KEYS_SNAPSHOT_KIND,
+        raw.kind == AGENT_KEYS_SNAPSHOT_KIND,
         "Codex bridge returned an unknown Agent Key kind"
     );
-    ensure!(
-        snapshot.global_state_key == AGENT_KEYS_STATE_KEY,
-        "Codex bridge returned the wrong Agent Key state key"
-    );
-    ensure!(
-        snapshot
-            .slots
-            .iter()
-            .map(String::as_str)
-            .eq(AGENT_KEY_SLOTS),
-        "Codex bridge returned unexpected Agent Key slots"
-    );
-    ensure!(
-        snapshot.assignments.len() == AGENT_KEY_SLOTS.len(),
-        "Codex bridge returned incomplete Agent Key assignments"
-    );
-    for slot in AGENT_KEY_SLOTS {
-        validate_assignment(
-            snapshot
-                .assignments
-                .get(slot)
-                .context("Agent Key slot was missing")?,
-        )?;
-    }
-    let canonical = serde_json::to_vec(&canonical_json(&serde_json::to_value(
-        &snapshot.assignments,
-    )?))?;
-    let mut framed = AGENT_KEYS_PREFIX.to_vec();
-    framed.extend(canonical);
-    ensure!(
-        fsutil::sha256_bytes(&framed)? == snapshot.global_state_revision,
-        "Codex Agent Key revision readback differed"
-    );
-    Ok(())
-}
-
-fn validate_assignment(value: &Value) -> Result<()> {
-    if value.is_null() {
-        return Ok(());
-    }
-    let object = value
-        .as_object()
-        .context("Agent Key assignment must be an object")?;
-    let non_empty = |key: &str| {
-        object
-            .get(key)
-            .and_then(Value::as_str)
-            .map(|value| !value.is_empty())
-            .unwrap_or(false)
-    };
-    let valid = match object.get("type").and_then(Value::as_str) {
-        Some("command") => non_empty("commandId"),
-        Some("skill") => non_empty("skillName") && non_empty("skillPath"),
-        Some(_) => false,
-        None => {
-            non_empty("keycapId")
-                || (non_empty("hostId") && non_empty("threadKey") && non_empty("title"))
-        }
-    };
-    ensure!(
-        valid,
-        "Codex bridge returned an invalid Agent Key assignment"
-    );
-    Ok(())
+    codex_agent_keys::snapshot_from_bridge(
+        codex_version.to_owned(),
+        raw.global_state_key,
+        raw.slots,
+        raw.assignments,
+        raw.global_state_revision,
+    )
 }
 
 fn validate_mutation_response(
@@ -485,6 +576,45 @@ fn validate_mutation_response(
     ensure!(
         !response.rollback_performed,
         "Codex bridge reported rollback for a successful mutation"
+    );
+    Ok(())
+}
+
+fn validate_agent_keys_mutation_response(
+    response: &RawAgentKeysMutationResponse,
+    operation: &str,
+    idempotency_key: &str,
+    expected_revision: &str,
+    target_revision: &str,
+) -> Result<()> {
+    ensure!(
+        response.schema_version == 1 && response.kind == codex_agent_keys::mutation_result_kind()?,
+        "Codex bridge returned an unknown Agent Key mutation result"
+    );
+    ensure!(
+        response.operation == operation,
+        "Codex bridge returned the wrong Agent Key operation"
+    );
+    ensure!(
+        response.idempotency_key == idempotency_key,
+        "Codex bridge returned the wrong Agent Key idempotency key"
+    );
+    ensure!(
+        response.before_global_state_revision == expected_revision,
+        "Codex Agent Key mutation began from an unexpected revision"
+    );
+    ensure!(
+        response.after_global_state_revision == target_revision
+            && response.target_global_state_revision == target_revision,
+        "Codex Agent Key mutation readback did not match the target revision"
+    );
+    ensure!(
+        response.changed != (expected_revision == target_revision),
+        "Codex Agent Key mutation returned an inconsistent changed flag"
+    );
+    ensure!(
+        !response.rollback_performed,
+        "Codex bridge reported rollback for a successful Agent Key mutation"
     );
     Ok(())
 }
@@ -546,21 +676,6 @@ fn is_lower_sha256(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-fn canonical_json(value: &Value) -> Value {
-    match value {
-        Value::Object(object) => {
-            let sorted: BTreeMap<&String, &Value> = object.iter().collect();
-            let mut canonical = serde_json::Map::new();
-            for (key, value) in sorted {
-                canonical.insert(key.clone(), canonical_json(value));
-            }
-            Value::Object(canonical)
-        }
-        Value::Array(values) => Value::Array(values.iter().map(canonical_json).collect()),
-        value => value.clone(),
-    }
 }
 
 impl Client {

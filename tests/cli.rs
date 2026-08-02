@@ -342,8 +342,18 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
         .unwrap();
     let agent_key_stdout = String::from_utf8(agent_key.stdout).unwrap();
     assert!(agent_key.status.success());
-    assert!(agent_key_stdout.contains("assignments"));
-    assert!(agent_key_stdout.contains("tap-mode"));
+    for command in [
+        "assignments",
+        "snapshot",
+        "get",
+        "set",
+        "clear",
+        "apply",
+        "restore",
+        "tap-mode",
+    ] {
+        assert!(agent_key_stdout.contains(command));
+    }
 }
 
 #[test]

@@ -1,6 +1,7 @@
 pub mod bridge;
 pub mod cli;
 pub mod codex;
+pub mod codex_agent_keys;
 pub mod codex_bridge;
 pub mod config;
 pub mod contract;
@@ -1771,6 +1772,116 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
                     writeln!(out, "revision={}", result.global_state_revision)?;
                 }
             }
+            CodexAgentKeyCommand::Snapshot {
+                output,
+                socket,
+                token,
+            } => {
+                let result = codex_bridge::agent_keys_snapshot_to_file(
+                    &codex_bridge::paths(socket, token),
+                    &output,
+                )?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "Saved {} Agent Key assignment(s) to {}",
+                        result.assigned_count,
+                        result.output.display()
+                    )?;
+                    writeln!(out, "revision={}", result.global_state_revision)?;
+                }
+            }
+            CodexAgentKeyCommand::Get { input, slot } => {
+                let result = codex_agent_keys::get(&input, &slot)?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "slot={}\ttype={}\t{}",
+                        result.slot,
+                        result.assignment_type,
+                        serde_json::to_string(&result.assignment)?
+                    )?;
+                    writeln!(out, "revision={}", result.global_state_revision)?;
+                }
+            }
+            CodexAgentKeyCommand::Set {
+                input,
+                slot,
+                command,
+                skill_name,
+                skill_path,
+                thread_host,
+                thread_key,
+                title,
+                keycap,
+                output,
+            } => write_agent_key_candidate_result(
+                codex_agent_keys::set(
+                    &input,
+                    &slot,
+                    agent_key_assignment(
+                        command,
+                        skill_name,
+                        skill_path,
+                        thread_host,
+                        thread_key,
+                        title,
+                        keycap,
+                    )?,
+                    &output,
+                )?,
+                json,
+                &mut out,
+            )?,
+            CodexAgentKeyCommand::Clear {
+                input,
+                slot,
+                output,
+            } => write_agent_key_candidate_result(
+                codex_agent_keys::clear(&input, &slot, &output)?,
+                json,
+                &mut out,
+            )?,
+            CodexAgentKeyCommand::Apply {
+                input,
+                backup,
+                expected_global_state_revision,
+                idempotency_key,
+                socket,
+                token,
+            } => write_agent_key_mutation_result(
+                codex_bridge::agent_keys_apply(
+                    &codex_bridge::paths(socket, token),
+                    &input,
+                    &backup,
+                    expected_global_state_revision.as_deref(),
+                    idempotency_key.as_deref(),
+                )?,
+                json,
+                &mut out,
+            )?,
+            CodexAgentKeyCommand::Restore {
+                input,
+                backup,
+                expected_global_state_revision,
+                idempotency_key,
+                socket,
+                token,
+            } => write_agent_key_mutation_result(
+                codex_bridge::agent_keys_restore(
+                    &codex_bridge::paths(socket, token),
+                    &input,
+                    &backup,
+                    expected_global_state_revision.as_deref(),
+                    idempotency_key.as_deref(),
+                )?,
+                json,
+                &mut out,
+            )?,
             CodexAgentKeyCommand::TapMode { command } => match command {
                 CodexAgentTapModeCommand::Get { input } => {
                     let result = codex::agent_tap_mode_get(&input)?;
@@ -1883,6 +1994,106 @@ fn write_codex_mutation_result(
             },
             result.before_settings_revision,
             result.after_settings_revision
+        )?;
+        writeln!(out, "backup={}", result.backup.display())?;
+        writeln!(out, "idempotency-key={}", result.idempotency_key)?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn agent_key_assignment(
+    command: Option<String>,
+    skill_name: Option<String>,
+    skill_path: Option<String>,
+    thread_host: Option<String>,
+    thread_key: Option<String>,
+    title: Option<String>,
+    keycap: Option<String>,
+) -> Result<serde_json::Value> {
+    match (
+        command,
+        skill_name,
+        skill_path,
+        thread_host,
+        thread_key,
+        title,
+        keycap,
+    ) {
+        (Some(command_id), None, None, None, None, None, None) => Ok(serde_json::json!({
+            "type": "command",
+            "commandId": command_id,
+        })),
+        (None, Some(skill_name), Some(skill_path), None, None, None, None) => {
+            Ok(serde_json::json!({
+                "type": "skill",
+                "skillName": skill_name,
+                "skillPath": skill_path,
+            }))
+        }
+        (None, None, None, Some(host_id), Some(thread_key), Some(title), None) => {
+            Ok(serde_json::json!({
+                "hostId": host_id,
+                "threadKey": thread_key,
+                "title": title,
+            }))
+        }
+        (None, None, None, None, None, None, Some(keycap_id)) => {
+            Ok(serde_json::json!({ "keycapId": keycap_id }))
+        }
+        _ => anyhow::bail!(
+            "select exactly one Agent Key assignment: --command, --skill-name with --skill-path, --thread-host with --thread-key and --title, or --keycap"
+        ),
+    }
+}
+
+fn write_agent_key_candidate_result(
+    result: codex_agent_keys::CandidateReceipt,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    if json {
+        write_json(&mut out, &result)?;
+    } else {
+        writeln!(
+            out,
+            "{} candidate {} at {}",
+            result.operation,
+            if result.changed {
+                "changed"
+            } else {
+                "unchanged"
+            },
+            result.output.display()
+        )?;
+        writeln!(
+            out,
+            "revision={} -> {}",
+            result.before_revision, result.after_revision
+        )?;
+    }
+    Ok(())
+}
+
+fn write_agent_key_mutation_result(
+    result: codex_bridge::AgentKeysMutationReceipt,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    if json {
+        write_json(&mut out, &result)?;
+    } else {
+        writeln!(
+            out,
+            "Agent Keys {} {} (revision {} -> {})",
+            result.operation,
+            if result.changed {
+                "changed"
+            } else {
+                "unchanged"
+            },
+            result.before_global_state_revision,
+            result.after_global_state_revision
         )?;
         writeln!(out, "backup={}", result.backup.display())?;
         writeln!(out, "idempotency-key={}", result.idempotency_key)?;
