@@ -17,7 +17,13 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-cargo build --locked --manifest-path "$repo/Cargo.toml"
+if [ -n "${WORKLOUDERCTL_BIN:-}" ]; then
+  bin=$WORKLOUDERCTL_BIN
+else
+  cargo build --locked --manifest-path "$repo/Cargo.toml"
+  bin=$repo/target/debug/worklouderctl
+fi
+test -x "$bin"
 WORKLOUDERCTL_FIXTURE_RECOVERY=1 \
   node "$repo/companion/fixture-server.mjs" "$socket" "$token" \
   >"$server_log" 2>&1 &
@@ -33,7 +39,6 @@ while [ ! -S "$socket" ] || [ ! -f "$token" ]; do
   sleep 0.05
 done
 
-bin=$repo/target/debug/worklouderctl
 node "$repo/companion/conformance.mjs" \
   --socket "$socket" --token "$token" \
   --require input.recovery.plan.v1 \
