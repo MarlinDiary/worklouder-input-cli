@@ -184,6 +184,15 @@ revision=$(python3 -c \
 preset_candidate_revision=$(python3 -c \
   'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
   "$preset_installed_snapshot")
+"$bin" --json transaction plan \
+  --input-config-base "$config_snapshot" \
+  --input-config-candidate "$preset_installed_snapshot" \
+  --input-host-settings-base "$host_settings_snapshot" \
+  --input-host-settings-candidate "$host_settings_enabled" \
+  --output "$root/input-transaction-plan.json" \
+  >"$root/input-transaction-plan-receipt.json"
+"$bin" --json transaction show --input "$root/input-transaction-plan.json" \
+  >"$root/input-transaction-plan-show.json"
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config validate \
   --input "$preset_installed_snapshot" --expected-revision "$revision" \
@@ -586,6 +595,9 @@ preset_apply = json.loads((root / "preset-config-apply.json").read_text())
 preset_post_apply = json.loads((root / "preset-post-apply.json").read_text())
 preset_restore = json.loads((root / "preset-config-restore.json").read_text())
 preset_post_restore = json.loads((root / "preset-post-restore.json").read_text())
+input_transaction_plan = json.loads((root / "input-transaction-plan.json").read_text())
+input_transaction_plan_receipt = json.loads((root / "input-transaction-plan-receipt.json").read_text())
+input_transaction_plan_show = json.loads((root / "input-transaction-plan-show.json").read_text())
 
 assert conformance["conformant"] is True
 assert conformance["protocolVersion"] == 1
@@ -1174,6 +1186,16 @@ assert preset_restore["beforeRevision"] == preset_installed["revision"]
 assert preset_restore["afterRevision"] == snapshot["revision"]
 assert preset_post_restore["revision"] == snapshot["revision"]
 assert payload(preset_post_restore, "keymap.json") == payload(snapshot, "keymap.json")
+assert input_transaction_plan_show == input_transaction_plan
+assert input_transaction_plan_receipt["authorityCount"] == 2
+assert input_transaction_plan_receipt["changedAuthorityCount"] == 2
+assert [item["id"] for item in input_transaction_plan["authorities"]] == [
+    "input-config", "input-host-settings",
+]
+assert input_transaction_plan["authorities"][0]["beforeRevision"] == snapshot["revision"]
+assert input_transaction_plan["authorities"][0]["targetRevision"] == preset_installed["revision"]
+assert input_transaction_plan["authorities"][1]["beforeRevision"] == host_settings["revision"]
+assert input_transaction_plan["authorities"][1]["targetRevision"] == host_settings_enabled["revision"]
 
 print("bridge_protocol=1")
 print("node_conformance=verified")
@@ -1235,4 +1257,5 @@ print("preset_catalog_snapshot_revision=verified")
 print("preset_list_show_preview=verified")
 print("preset_install_remap_dedup=verified")
 print("preset_apply_readback_restore=verified")
+print("input_cross_authority_plan_diff=verified")
 PY

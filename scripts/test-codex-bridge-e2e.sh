@@ -83,6 +83,15 @@ done
   >"$ROOT/agent-command-receipt.json"
 "$BIN" --json codex agent-key clear --input "$ROOT/agent-command.json" AG00 \
   --output "$ROOT/agent-candidate.json" >"$ROOT/agent-clear-receipt.json"
+"$BIN" --json transaction plan \
+  --codex-settings-base "$ROOT/baseline.json" \
+  --codex-settings-candidate "$ROOT/candidate.json" \
+  --codex-agent-keys-base "$ROOT/agent-baseline.json" \
+  --codex-agent-keys-candidate "$ROOT/agent-candidate.json" \
+  --output "$ROOT/codex-transaction-plan.json" \
+  >"$ROOT/codex-transaction-plan-receipt.json"
+"$BIN" --json transaction show --input "$ROOT/codex-transaction-plan.json" \
+  >"$ROOT/codex-transaction-plan-show.json"
 "$BIN" --json codex agent-key apply --socket "$SOCKET" --token "$TOKEN" \
   --input "$ROOT/agent-candidate.json" --backup "$ROOT/agent-pre-apply.json" \
   --idempotency-key fixture-agent-apply-v1 >"$ROOT/agent-apply.json"
@@ -127,6 +136,9 @@ agent_restored = json.loads((root / "agent-restored.json").read_text())
 agent_apply = json.loads((root / "agent-apply.json").read_text())
 agent_replay = json.loads((root / "agent-apply-replay.json").read_text())
 agent_restore = json.loads((root / "agent-restore.json").read_text())
+transaction_plan = json.loads((root / "codex-transaction-plan.json").read_text())
+transaction_receipt = json.loads((root / "codex-transaction-plan-receipt.json").read_text())
+transaction_show = json.loads((root / "codex-transaction-plan-show.json").read_text())
 
 assert baseline["settings"]["codex-micro-agent-source"] == "recent"
 assert "codex.agentKeys.apply.v1" in bridge["capabilities"]
@@ -160,6 +172,15 @@ assert agent_restore["changed"] is True and agent_restore["rollbackPerformed"] i
 assert agent_restored["assignments"] == agent_baseline["assignments"]
 assert agent_restored["globalStateRevision"] == agent_baseline["globalStateRevision"]
 assert "revision conflict" in (root / "agent-stale.stderr").read_text()
+assert transaction_show == transaction_plan
+assert transaction_receipt["authorityCount"] == 2
+assert transaction_receipt["changedAuthorityCount"] == 2
+assert [item["id"] for item in transaction_plan["authorities"]] == [
+    "codex-settings", "codex-agent-keys",
+]
+assert transaction_plan["authorities"][0]["beforeRevision"] != transaction_plan["authorities"][0]["targetRevision"]
+assert transaction_plan["authorities"][1]["beforeRevision"] == agent_baseline["globalStateRevision"]
+assert transaction_plan["authorities"][1]["targetRevision"] == agent_modified["globalStateRevision"]
 
 print(json.dumps({
     "status": "pass",
@@ -184,5 +205,6 @@ print(json.dumps({
     "agentKeysRestoredRevision": agent_restored["globalStateRevision"],
     "agentKeysIdempotentReplay": agent_replay["idempotentReplay"],
     "agentKeysStaleCasRejected": True,
+    "crossAuthorityPlanDiff": True,
 }, separators=(",", ":")))
 PY
