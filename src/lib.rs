@@ -21,10 +21,10 @@ use cli::{
     CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexDialCommand, CodexDialGesture,
     CodexDialGestureCommand, CodexDialMode, CodexDialModeCommand, CodexJoystickCommand,
     CodexJoystickDirection, CodexLightingAutoOff, CodexLightingAutoOffCommand,
-    CodexLightingBrightnessCommand, CodexLightingCommand, CodexRuntimeCommand, CodexVoiceCommand,
-    CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand, DeviceCommand,
-    DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand, LayerCommand,
-    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
+    CodexLightingBrightnessCommand, CodexLightingCommand, CodexResetCommand, CodexRuntimeCommand,
+    CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand,
+    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand,
+    LayerCommand, LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
     MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
     SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
     TierCommand,
@@ -2200,6 +2200,11 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
                 json,
                 &mut out,
             )?,
+        },
+        CodexCommand::Reset { command } => match command {
+            CodexResetCommand::Layout { input, output } => {
+                write_codex_candidate_result(codex::layout_reset(&input, &output)?, json, &mut out)?
+            }
         },
         CodexCommand::Lighting { command } => match command {
             CodexLightingCommand::Brightness { command } => match command {

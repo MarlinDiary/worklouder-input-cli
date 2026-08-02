@@ -928,6 +928,40 @@ pub fn joystick_clear(input: &Path, direction: &str, output: &Path) -> Result<Ca
     )
 }
 
+pub fn layout_reset(input: &Path, output: &Path) -> Result<CandidateReceipt> {
+    let mut snapshot = read_snapshot(input)?;
+    let contract = load_contract()?;
+    let before_revision = settings_revision(&snapshot.settings)?;
+    let default_layout = contract
+        .definitions
+        .get("codex-micro-layout")
+        .context("frozen layout definition was missing")?
+        .default
+        .clone();
+    validate_layout(&default_layout, &contract.layout)?;
+    let changed = snapshot
+        .effective_settings
+        .get("codex-micro-layout")
+        .context("effective Codex Micro layout was missing")?
+        != &default_layout;
+    if changed {
+        snapshot
+            .settings
+            .insert("codex-micro-layout".into(), default_layout);
+        refresh_effective_settings(&mut snapshot, &contract)?;
+    }
+    publish_candidate(
+        snapshot,
+        output,
+        "codex-layout-reset",
+        before_revision,
+        changed
+            .then(|| "/settings/codex-micro-layout".into())
+            .into_iter()
+            .collect(),
+    )
+}
+
 fn joystick_write(
     input: &Path,
     direction: &str,
@@ -2397,6 +2431,98 @@ mod tests {
         assert!(invalid_assignment
             .to_string()
             .contains("select exactly one joystick assignment"));
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn layout_reset_restores_exact_default_and_preserves_other_settings() {
+        let root = fixture_root();
+        fs::create_dir_all(&root).unwrap();
+        let config = root.join("config.toml");
+        let snapshot_path = root.join("snapshot.json");
+        let inherited_noop_path = root.join("inherited-noop.json");
+        let custom_path = root.join("custom.json");
+        let reset_path = root.join("reset.json");
+        let explicit_noop_path = root.join("explicit-noop.json");
+        fs::write(
+            &config,
+            b"[desktop]\ncodex-micro-agent-source = \"priority\"\ncodex-micro-future = \"preserved\"\n",
+        )
+        .unwrap();
+        let source_sha = fsutil::sha256(&config).unwrap();
+        let mut snapshot = export(&config, &root.join("missing.app"), &snapshot_path).unwrap();
+
+        let inherited_noop = layout_reset(&snapshot_path, &inherited_noop_path).unwrap();
+        assert!(!inherited_noop.changed);
+        assert!(!read_snapshot(&inherited_noop_path)
+            .unwrap()
+            .settings
+            .contains_key("codex-micro-layout"));
+
+        let contract = load_contract().unwrap();
+        let mut custom = contract.definitions["codex-micro-layout"].default.clone();
+        custom["slots"]["ACT06"] = serde_json::json!({
+            "keycapId": "BUG",
+            "commandId": "fixture.command"
+        });
+        custom["analogStick"]["up"] = serde_json::json!({
+            "type": "skill",
+            "skillName": "Plan Skill",
+            "skillPath": "/tmp/plan/SKILL.md"
+        });
+        custom["encoderMode"] = Value::String("custom".into());
+        custom["encoder"]["left"] = serde_json::json!({
+            "type": "command",
+            "commandId": "navigateBack"
+        });
+        custom["voiceButtonMode"] = Value::String("realtime".into());
+        custom["futureLayoutMetadata"] = serde_json::json!({"dropOnReset": true});
+        snapshot
+            .settings
+            .insert("codex-micro-layout".into(), custom);
+        refresh_effective_settings(&mut snapshot, &contract).unwrap();
+        let mut bytes = serde_json::to_vec_pretty(&snapshot).unwrap();
+        bytes.push(b'\n');
+        fs::write(&custom_path, bytes).unwrap();
+
+        let reset = layout_reset(&custom_path, &reset_path).unwrap();
+        assert!(reset.changed);
+        assert_eq!(reset.changed_paths, vec!["/settings/codex-micro-layout"]);
+        let reopened = read_snapshot(&reset_path).unwrap();
+        assert_eq!(
+            reopened.settings["codex-micro-layout"],
+            contract.definitions["codex-micro-layout"].default
+        );
+        assert_eq!(reopened.settings["codex-micro-agent-source"], "priority");
+        assert_eq!(reopened.settings["codex-micro-future"], "preserved");
+        assert_eq!(
+            command_key_get(&reset_path, "ACT06").unwrap().keycap_id,
+            "FAST"
+        );
+        assert_eq!(
+            joystick_get(&reset_path, "up")
+                .unwrap()
+                .command_id
+                .as_deref(),
+            Some("composer.togglePlanMode")
+        );
+        assert_eq!(
+            dial_mode_get(&reset_path).unwrap().value,
+            "composer-navigation"
+        );
+        assert_eq!(
+            dial_gesture_get(&reset_path, "left")
+                .unwrap()
+                .assignment_type,
+            "empty"
+        );
+        assert_eq!(voice_mode_get(&reset_path).unwrap().value, "push-to-talk");
+        assert_eq!(fsutil::sha256(&config).unwrap(), source_sha);
+
+        let explicit_noop = layout_reset(&reset_path, &explicit_noop_path).unwrap();
+        assert!(!explicit_noop.changed);
+        assert_eq!(explicit_noop.before_revision, explicit_noop.after_revision);
 
         fs::remove_dir_all(root).unwrap();
     }

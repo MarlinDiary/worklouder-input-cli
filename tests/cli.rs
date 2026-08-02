@@ -327,6 +327,7 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
     assert!(stdout.contains("command-key"));
     assert!(stdout.contains("dial"));
     assert!(stdout.contains("joystick"));
+    assert!(stdout.contains("reset"));
     assert!(stdout.contains("lighting"));
     assert!(stdout.contains("voice"));
 
@@ -387,6 +388,14 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
     assert!(joystick_stdout.contains("get"));
     assert!(joystick_stdout.contains("set"));
     assert!(joystick_stdout.contains("clear"));
+
+    let reset = binary()
+        .args(["codex", "reset", "--help"])
+        .output()
+        .unwrap();
+    let reset_stdout = String::from_utf8(reset.stdout).unwrap();
+    assert!(reset.status.success());
+    assert!(reset_stdout.contains("layout"));
 }
 
 #[test]
@@ -710,6 +719,98 @@ fn codex_joystick_candidates_run_end_to_end_without_writing_source() {
     assert!(cleared_view.status.success());
     let cleared_view: serde_json::Value = serde_json::from_slice(&cleared_view.stdout).unwrap();
     assert_eq!(cleared_view["assignmentType"], "empty");
+    assert_eq!(worklouderctl::fsutil::sha256(&config).unwrap(), source_sha);
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn codex_layout_reset_runs_end_to_end_without_writing_source() {
+    let root = fixture_root();
+    fs::create_dir_all(&root).unwrap();
+    let config = root.join("config.toml");
+    let snapshot = root.join("snapshot.json");
+    let joystick = root.join("joystick.json");
+    let voice = root.join("voice.json");
+    let reset = root.join("reset.json");
+    fs::write(
+        &config,
+        b"[desktop]\ncodex-micro-agent-source = \"priority\"\ncodex-micro-future = \"preserved\"\n",
+    )
+    .unwrap();
+    let source_sha = worklouderctl::fsutil::sha256(&config).unwrap();
+
+    let export = binary()
+        .args(["codex", "export", "--config"])
+        .arg(&config)
+        .arg("--app")
+        .arg(root.join("missing.app"))
+        .arg("--output")
+        .arg(&snapshot)
+        .output()
+        .unwrap();
+    assert!(export.status.success());
+
+    let set_joystick = binary()
+        .args(["codex", "joystick", "set", "--input"])
+        .arg(&snapshot)
+        .args(["up", "--command", "fixture.command", "--output"])
+        .arg(&joystick)
+        .output()
+        .unwrap();
+    assert!(set_joystick.status.success());
+    let set_voice = binary()
+        .args(["codex", "voice", "set", "--input"])
+        .arg(&joystick)
+        .args(["realtime", "--output"])
+        .arg(&voice)
+        .output()
+        .unwrap();
+    assert!(set_voice.status.success());
+
+    let reset_result = binary()
+        .args(["--json", "codex", "reset", "layout", "--input"])
+        .arg(&voice)
+        .arg("--output")
+        .arg(&reset)
+        .output()
+        .unwrap();
+    assert!(reset_result.status.success());
+    let reset_result: serde_json::Value = serde_json::from_slice(&reset_result.stdout).unwrap();
+    assert_eq!(reset_result["operation"], "codex-layout-reset");
+    assert_eq!(
+        reset_result["changedPaths"],
+        serde_json::json!(["/settings/codex-micro-layout"])
+    );
+
+    let up = binary()
+        .args(["--json", "codex", "joystick", "get", "--input"])
+        .arg(&reset)
+        .arg("up")
+        .output()
+        .unwrap();
+    assert!(up.status.success());
+    let up: serde_json::Value = serde_json::from_slice(&up.stdout).unwrap();
+    assert_eq!(up["commandId"], "composer.togglePlanMode");
+    let voice = binary()
+        .args(["--json", "codex", "voice", "get", "--input"])
+        .arg(&reset)
+        .output()
+        .unwrap();
+    assert!(voice.status.success());
+    let voice: serde_json::Value = serde_json::from_slice(&voice.stdout).unwrap();
+    assert_eq!(voice["value"], "push-to-talk");
+
+    let reset_snapshot: serde_json::Value =
+        serde_json::from_slice(&fs::read(&reset).unwrap()).unwrap();
+    assert_eq!(
+        reset_snapshot["settings"]["codex-micro-agent-source"],
+        "priority"
+    );
+    assert_eq!(
+        reset_snapshot["settings"]["codex-micro-future"],
+        "preserved"
+    );
     assert_eq!(worklouderctl::fsutil::sha256(&config).unwrap(), source_sha);
 
     fs::remove_dir_all(root).unwrap();

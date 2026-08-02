@@ -466,6 +466,12 @@ pub enum CodexCommand {
         command: CodexJoystickCommand,
     },
 
+    /// Restore Codex Micro configuration surfaces to frozen defaults.
+    Reset {
+        #[clap(subcommand)]
+        command: CodexResetCommand,
+    },
+
     /// Inspect or edit Codex-native global lighting in an offline snapshot.
     Lighting {
         #[clap(subcommand)]
@@ -934,6 +940,17 @@ pub enum CodexJoystickCommand {
         input: PathBuf,
         #[clap(value_enum)]
         direction: CodexJoystickDirection,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexResetCommand {
+    /// Restore the complete Codex Micro layout to the installed-build default.
+    Layout {
+        #[clap(long, value_parser)]
+        input: PathBuf,
         #[clap(long, value_parser)]
         output: PathBuf,
     },
