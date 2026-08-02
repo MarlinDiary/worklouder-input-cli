@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-codex-companion-bridge-contract",
+  "protocolVersion": 1,
+  "contractAppVersion": "26.727.51351",
+  "authority": [
+    "codex-settings",
+    "codex-global-state",
+    "codex-runtime"
+  ],
+  "staticEvidence": {
+    "appBundle": "/Applications/ChatGPT.app",
+    "bundleIdentifier": "com.openai.codex",
+    "asarRelativePath": "Contents/Resources/app.asar",
+    "asarSha256": "a529edd72e10b08931c0d695b5e3e6a0be7f51874610dafc04f578436ab7d74d",
+    "nativeHandlers": [
+      "settings-read",
+      "settings-write",
+      "get-global-state",
+      "set-global-state"
+    ],
+    "rendererTransport": "POST vscode://codex/{method}",
+    "externalListenerObserved": false
+  },
+  "discovery": {
+    "socket": "$HOME/Library/Application Support/Codex/worklouderctl-codex-bridge-v1.sock",
+    "token": "$HOME/Library/Application Support/Codex/worklouderctl-codex-bridge-v1.token",
+    "environmentSocket": "WORKLOUDERCTL_CODEX_BRIDGE_SOCKET",
+    "environmentToken": "WORKLOUDERCTL_CODEX_BRIDGE_TOKEN_FILE",
+    "mode": "0600",
+    "transport": "JSON-RPC 2.0 newline frames over Unix socket"
+  },
+  "handshake": {
+    "method": "bridge.hello",
+    "request": [
+      "protocolVersion",
+      "token",
+      "client.name",
+      "client.version"
+    ],
+    "response": [
+      "protocolVersion",
+      "bridgeVersion",
+      "codexVersion",
+      "sessionId",
+      "capabilities"
+    ]
+  },
+  "methods": {
+    "bridge.health": "bridge.health.v1",
+    "codex.settings.snapshot": "codex.settings.snapshot.v1",
+    "codex.settings.apply": "codex.settings.apply.v1",
+    "codex.settings.restore": "codex.settings.restore.v1",
+    "codex.agentKeys.snapshot": "codex.agentKeys.snapshot.v1"
+  },
+  "settingsSnapshot": {
+    "fields": [
+      "filePath",
+      "sourceSha256",
+      "settings",
+      "effectiveSettings",
+      "definitions",
+      "settingsRevision"
+    ],
+    "settingsRevisionAlgorithm": "codex-settings-revision-v1"
+  },
+  "mutation": {
+    "requiredRequestFields": [
+      "expectedSourceSha256",
+      "expectedSettingsRevision",
+      "targetSettingsRevision",
+      "idempotencyKey",
+      "settings",
+      "effectiveSettings"
+    ],
+    "sequence": [
+      "serialize on Codex main-process queue",
+      "snapshot current settings and source hash",
+      "compare source SHA-256 and settings revision",
+      "replace the complete explicit Codex Micro settings set through Codex authority",
+      "flush",
+      "snapshot and validate exact explicit/effective readback",
+      "restore pre-mutation snapshot after any readback failure"
+    ],
+    "capabilityGate": "apply/restore are advertised only when the integration supplies exact replace including removal of formerly absent keys",
+    "idempotencyScope": "bridge session"
+  },
+  "agentKeys": {
+    "globalStateKey": "codex-micro-custom-agent-assignments",
+    "slots": [
+      "AG00",
+      "AG01",
+      "AG02",
+      "AG03",
+      "AG04",
+      "AG05"
+    ],
+    "default": {
+      "AG00": null,
+      "AG01": null,
+      "AG02": null,
+      "AG03": null,
+      "AG04": null,
+      "AG05": null
+    },
+    "assignmentTypes": {
+      "thread": {
+        "required": [
+          "hostId",
+          "threadKey",
+          "title"
+        ]
+      },
+      "command": {
+        "required": [
+          "type",
+          "commandId"
+        ],
+        "type": "command"
+      },
+      "skill": {
+        "required": [
+          "type",
+          "skillName",
+          "skillPath"
+        ],
+        "type": "skill"
+      },
+      "keycap": {
+        "required": [
+          "keycapId"
+        ]
+      },
+      "empty": null
+    },
+    "globalStateRevisionAlgorithm": {
+      "id": "codex-agent-keys-revision-v1",
+      "prefixUtf8": "worklouder-codex-agent-keys-revision-v1\\u0000",
+      "payload": "recursive-key-sorted compact JSON"
+    }
+  },
+  "limits": {
+    "tokenBytes": 4096,
+    "requestBytes": 16777216,
+    "responseBytes": 16777216,
+    "idempotencyEntries": 256
+  },
+  "boundary": {
+    "shipsDriver": false,
+    "implementsCodexRuntime": false,
+    "editsChromiumLevelDb": false,
+    "editsAppAsar": false,
+    "integrationOwner": "running Codex main process"
+  }
+}
