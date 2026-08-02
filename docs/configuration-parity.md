@@ -4,9 +4,9 @@ This matrix is the acceptance contract for “replace Codex + Input configuratio
 with one CLI.” A row reaches **parity** only when the CLI can read, validate,
 diff, write, read back, and roll back the corresponding GUI configuration.
 
-Runtime parity is tracked separately. Codex-aware commands still execute in
-Codex; Input host actions still execute in Input unless a later standalone
-runtime adapter explicitly replaces them.
+Codex-aware commands continue to execute in Codex and Input host actions
+continue to execute in Input. Driver/runtime replacement is outside this
+parity contract.
 
 ## Status vocabulary
 
@@ -76,7 +76,7 @@ the runtime reloaded the new value.
 | Device setup | identity, transport, battery, firmware | `doctor`, `device status` | researched |
 | Input permissions | Input Monitoring and Accessibility | `input permissions` | researched |
 | Firmware check | compatible release and requirements | `firmware check` | researched |
-| Firmware update | download, verify, USB flash, readback | `firmware update` | adapter-pending |
+| Firmware update | delegate download/USB flash to Input, then verify readback | `input firmware update` | adapter-pending |
 | Reset settings | full backup, reset, post-state | `device reset` | researched |
 | Logs | collect and sanitize diagnostic bundle | `logs collect` | researched |
 | Recovery | restore files or firmware recovery | `device recover` | adapter-pending |

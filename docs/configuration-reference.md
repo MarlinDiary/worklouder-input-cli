@@ -213,6 +213,9 @@ The device emits show/hide/toggle notifications while Input renders the result.
 - migration and preset installation.
 
 These operations use distinct policy gates from normal semantic edits.
+The installed Input updater/flasher remains the implementation provider. The
+CLI invokes and observes that provider rather than owning a second firmware or
+transport implementation.
 
 ## Verification levels
 

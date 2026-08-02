@@ -79,5 +79,5 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - Linux transport and packaging
 - Windows transport and contention testing
 - additional Work Louder devices through explicit adapters
-- standalone user-session daemon
-- firmware update and recovery tooling
+- capability discovery for new Codex/Input versions
+- delegated firmware update and recovery orchestration through Input

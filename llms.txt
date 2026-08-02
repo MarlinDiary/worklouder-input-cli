@@ -27,6 +27,8 @@ Important: the project is currently pre-alpha. This repository contains the prod
 - Initial host target: macOS
 - Product goal: replace Codex and Input configuration GUIs for Codex Micro with complete typed CLI coverage
 - Tier boundary: Tier 1 uses Codex authorities; Tier 2 and above use Work Louder Input authorities; the CLI configures every tier
+- Provider strategy: delegate driver, BLE/HID, firmware, and host runtime behavior to the installed Codex/Input versions
+- Non-goal: implementing a replacement hardware driver or firmware protocol
 - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
 - Current maturity: pre-alpha; no released binary
 - Safety model: inspect, plan, diff, backup, conflict check, apply, readback, checksum verification, synchronize, rollback

@@ -136,7 +136,8 @@ checksums against exact app/firmware fixtures.
 The product target is full configuration parity with both Codex and Input.
 “Codex authority” and “Input authority” identify schemas and runtimes; they do
 not reserve either GUI as the sole editor. Runtime replacement remains a
-separate track from configuration-GUI replacement.
+non-goal: the CLI delegates driver, transport, firmware, and host execution to
+the installed Codex/Input providers so their updates remain authoritative.
 
 ## Official sources checked
 

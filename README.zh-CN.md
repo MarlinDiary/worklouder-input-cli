@@ -22,6 +22,8 @@ WorkLouderCTL 就是为这些场景设计的。
 产品目标是让 GUI 对“配置”变为可选：Tier 1 通过 Codex settings adapter
 完整读写，Tier 2 及以上通过 Input/device adapters 完整读写。Codex 和 Input
 仍可作为 Codex-aware actions、AppSense、Smart Actions 与动态灯光的运行时。
+CLI 不实现新的键盘 driver、BLE/HID stack、firmware protocol 或 host-action
+runtime，而是调用当前已安装的 Codex/Input provider，从而继续获得上游更新。
 
 ```text
 读取当前状态 → 生成计划与 diff → 备份 → 写入 → readback 验证 → 同步 Input → 恢复或完成
@@ -75,7 +77,7 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 - Tier 1 写入 Codex settings authority，Tier 2+ 同步 device、Input cache/database；
 - 需要宿主语义的动作仍由对应 runtime 执行并接受行为验证。
 
-未来可以继续发展独立 driver/runtime；它与“完整替代配置 GUI”是两个独立目标。
+独立 driver/runtime 明确不属于本项目目标；CLI 只替代配置入口和配置工作流。
 
 ## 当前进度
 

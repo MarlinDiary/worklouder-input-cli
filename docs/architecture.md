@@ -7,6 +7,25 @@ The authority boundary is defined in the [configuration tier model](tier-model.m
 Tier 1 uses Codex authorities, while Tier 2 and above use Input authorities.
 The CLI provides full configuration coverage across both sides.
 
+## Provider strategy
+
+WorkLouderCTL is a configuration control plane, not a hardware-driver project.
+It delegates device transport, BLE/HID behavior, firmware flashing, Codex-aware
+actions, and Input host actions to the currently installed Codex/Input builds.
+
+Provider selection follows this order:
+
+1. use the running app's supported settings/IPC/RPC surface;
+2. use the exact installed app's bundled device kit where a headless provider
+   entry point is verified;
+3. use coordinated file adapters only for state that the app itself persists;
+4. preserve new/unknown fields and expose them through raw inspect/export;
+5. disable typed writes for a changed schema until its adapter fixtures pass.
+
+This keeps firmware, transport fixes, new device support, and runtime behavior
+with the upstream applications while the CLI owns planning, validation, diff,
+automation, verification, and rollback.
+
 ## State authorities
 
 The initial Codex Micro model has multiple authorities:
@@ -61,6 +80,7 @@ synchronizes them as one operation.
 
 - read-only by default;
 - Tier 1 writes require an exact Codex settings adapter;
+- no replacement driver, BLE/HID stack, firmware flasher, or host runtime;
 - every plan names its tier and state authority;
 - no mutation for unknown versions;
 - no hidden AI-only write route;

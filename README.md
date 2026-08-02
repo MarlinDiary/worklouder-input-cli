@@ -36,6 +36,10 @@ Codex and every Codex Micro surface in Work Louder Input. The GUIs become
 optional for configuration; Codex and Input may still provide the live runtime
 for Codex-aware actions, AppSense, Smart Actions, and reactive lighting.
 
+WorkLouderCTL does **not** implement a replacement keyboard driver, BLE/HID
+stack, firmware protocol, or host-action runtime. It delegates those jobs to
+the installed Codex and Input versions, so vendor updates remain available.
+
 ## Why a full-configuration CLI?
 
 The official Input app is useful for visual editing. A CLI adds workflows that
@@ -156,8 +160,8 @@ pre-alpha and does not yet publish an installable binary.
 ### Does WorkLouderCTL replace the Codex and Input configuration GUIs?
 
 Yes. Full configuration parity is the product target. Codex and Input remain
-available as visual editors and as runtime components for features that execute
-inside those apps. A standalone driver/runtime is a separate later track.
+the driver/runtime providers for features that execute inside those apps. A
+replacement driver/runtime is outside the project contract.
 
 ### Does it support Codex Micro?
 

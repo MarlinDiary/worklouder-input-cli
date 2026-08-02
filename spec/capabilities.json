@@ -4,6 +4,10 @@
   "researchSnapshot": "2026-08-02",
   "productGoal": "full-configuration-parity",
   "targetConfigurationGuisOptional": true,
+  "providerStrategy": "delegate-to-installed-codex-and-input",
+  "implementsHardwareDriver": false,
+  "implementsFirmwareProtocol": false,
+  "implementsHostActionRuntime": false,
   "target": {
     "device": "Codex Micro",
     "host": "macOS",

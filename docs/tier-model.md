@@ -114,6 +114,10 @@ Firmware changes and destructive resets are separate commands from normal
 configuration apply. They always require a fresh backup and explicit target
 version.
 
+Firmware and recovery commands delegate to the installed Input updater/flasher;
+the CLI adds planning, artifact verification, logging, and post-state readback.
+It does not reimplement the firmware or transport protocol.
+
 ## Cross-tier conflict rule
 
 The Codex-native layer and Input layers share one physical device and vendor

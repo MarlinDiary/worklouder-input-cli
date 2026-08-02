@@ -26,8 +26,16 @@ their GUIs.
 
 It replaces their Codex Micro configuration workflows. Codex still executes
 Codex-aware commands and task lighting; Input still executes AppSense, Smart
-Actions, Cheat Sheet, and other host behavior. Replacing those runtimes and the
-hardware driver is a separate track.
+Actions, Cheat Sheet, transport, firmware updates, and other host behavior.
+The project does not replace those runtimes or the hardware driver.
+
+## Why not build a new driver?
+
+Codex and Input updates can add transport fixes, firmware support, device
+capabilities, and runtime behavior. WorkLouderCTL detects and delegates to the
+installed providers instead of maintaining a second driver stack. The CLI owns
+configuration automation and verification while upstream owns device/runtime
+evolution.
 
 ## Which device will be supported first?
 
