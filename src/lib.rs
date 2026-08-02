@@ -3,6 +3,7 @@ pub mod cli;
 pub mod codex;
 pub mod codex_agent_keys;
 pub mod codex_bridge;
+pub mod codex_runtime;
 pub mod config;
 pub mod contract;
 pub mod device;
@@ -19,15 +20,17 @@ use cli::{
     CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand,
     CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexLightingAutoOff,
     CodexLightingAutoOffCommand, CodexLightingBrightnessCommand, CodexLightingCommand,
-    CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell, ConfigCommand, ControlCommand,
-    DeviceCommand, DeviceConfigCommand, DeviceTransport, InputCommand, InputConfigCommand,
-    LayerCommand, LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
-    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
-    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
-    TierCommand,
+    CodexRuntimeCommand, CodexVoiceCommand, CodexVoiceMode, Command, CompletionShell,
+    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
+    InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand, LightingEffect,
+    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
+    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+    SmartActionType as CliSmartActionType, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
+use std::path::PathBuf;
+use std::time::Duration;
 
 pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
     match cli.command {
@@ -1649,6 +1652,82 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
                     json,
                     &mut out,
                 )?,
+            }
+        }
+        CodexCommand::Runtime {
+            app,
+            input_app,
+            command,
+        } => {
+            let app = codex::app_path(app);
+            let input_app = input_app.unwrap_or_else(|| PathBuf::from("/Applications/input.app"));
+            match command {
+                CodexRuntimeCommand::Status => {
+                    let result = codex_runtime::status(&app)?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "Codex Micro runtime healthy={} status={} pid={}",
+                            result.healthy, result.state.device_state.status, result.app_pid
+                        )?;
+                        writeln!(
+                            out,
+                            "comm={} api={} hid={} joystick={} connect-pending={} topology-pending={}",
+                            result.state.has_comm,
+                            result.state.has_api,
+                            result.state.has_hid_subscription,
+                            result.state.has_joystick_subscription,
+                            result.state.has_connect_promise,
+                            result.state.has_topology_promise
+                        )?;
+                        for finding in result.findings {
+                            writeln!(
+                                out,
+                                "{}\t{}\t{}",
+                                if finding.passed { "PASS" } else { "FAIL" },
+                                finding.id,
+                                finding.summary
+                            )?;
+                        }
+                    }
+                }
+                CodexRuntimeCommand::Recover { timeout_seconds } => {
+                    let result = codex_runtime::recover(
+                        &app,
+                        &input_app,
+                        Duration::from_secs(timeout_seconds),
+                    )?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "Codex Micro runtime recovered={} changed={} status={}",
+                            result.recovered, result.changed, result.after.device_state.status
+                        )?;
+                        writeln!(
+                            out,
+                            "input-pid={} paused={} resumed={}",
+                            result
+                                .input_pid
+                                .map(|pid| pid.to_string())
+                                .unwrap_or_else(|| "none".into()),
+                            result.input_paused,
+                            result.input_resumed
+                        )?;
+                        for finding in result.findings {
+                            writeln!(
+                                out,
+                                "{}\t{}\t{}",
+                                if finding.passed { "PASS" } else { "FAIL" },
+                                finding.id,
+                                finding.summary
+                            )?;
+                        }
+                    }
+                }
             }
         }
         CodexCommand::Doctor {

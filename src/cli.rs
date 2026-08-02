@@ -381,6 +381,20 @@ pub enum CodexCommand {
         command: CodexConfigCommand,
     },
 
+    /// Inspect or recover the live Codex Micro service without restarting windows.
+    Runtime {
+        /// Override the Codex application bundle path.
+        #[clap(long, value_parser)]
+        app: Option<PathBuf>,
+
+        /// Override the Work Louder Input application bundle path.
+        #[clap(long, value_parser)]
+        input_app: Option<PathBuf>,
+
+        #[clap(subcommand)]
+        command: CodexRuntimeCommand,
+    },
+
     /// Diagnose the Codex app and Codex Micro settings source.
     Doctor {
         /// Treat warnings as a failing exit status.
@@ -450,6 +464,19 @@ pub enum CodexCommand {
     Voice {
         #[clap(subcommand)]
         command: CodexVoiceCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexRuntimeCommand {
+    /// Read the one live CodexMicroService instance and its subscriptions.
+    Status,
+
+    /// Restart only a stuck CodexMicroService with automatic Input coordination.
+    Recover {
+        /// Maximum seconds to wait for connected HID and joystick subscriptions.
+        #[clap(long, default_value = "15")]
+        timeout_seconds: u64,
     },
 }
 
