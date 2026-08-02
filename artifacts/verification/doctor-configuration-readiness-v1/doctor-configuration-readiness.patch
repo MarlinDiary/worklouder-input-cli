@@ -1,0 +1,407 @@
+diff --git a/README.md b/README.md
+index 66038e9..bd75c85 100644
+--- a/README.md
++++ b/README.md
+@@ -88,6 +88,13 @@ archives, checksum/signature verification, tagged Developer ID notarization,
+ and the generated Homebrew formula. Until the first signed tag is published,
+ the source build above remains the advertised installation path.
+ 
++`worklouderctl doctor` separates readable provider health from configuration
++readiness. It reports `configurationReady: true` only when both installed
++runtimes expose authenticated bridges with every required apply and restore
++capability. `doctor --strict` exits nonzero for a missing, unreachable, or
++incomplete bridge; plain `doctor` retains the diagnostic report and warning
++exit behavior without writing to either provider.
++
+ Currently implemented commands:
+ 
+ ```console
+@@ -649,7 +656,7 @@ CLI semantic parser.
+ | SEO/AIO and product documentation foundation | Complete |
+ | Sanitized research fixtures and schema model | Complete; deterministic regeneration, manifests, parsing, and sensitive-pattern gates verified |
+ | Rust CLI foundation, tier/capability contract, and JSON output | Complete |
+-| Provider `doctor` and Input `inspect`/exact-byte `export`/semantic cache snapshot | Complete |
++| Provider `doctor` with authenticated configuration readiness and Input `inspect`/exact-byte `export`/semantic cache snapshot | Complete |
+ | Bundle `validate` and structural `diff` | Complete |
+ | Codex settings contract and TOML `doctor`/`inspect`/`export` | Complete |
+ | Codex Agent source/tap mode and Command Key offline candidates | Complete; Codex bridge apply/restore fixture verified |
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index c55586e..f2327ba 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -56,6 +56,12 @@ cargo build --release --locked
+ checksum/signature verification、tagged Developer ID notarization 与生成的
+ Homebrew formula。首个 signed tag 发布前，仍以以上 source build 为公开安装方式。
+ 
++`worklouderctl doctor` 会区分 provider 的可读健康状态和完整配置就绪状态。
++只有 Codex 与 Input runtime 都提供经过认证、且包含全部 apply/restore capability
++的 bridge 时，JSON 才会报告 `configurationReady: true`。bridge 缺失、不可连接或
++capability 不完整时，`doctor --strict` 会以非零状态退出；普通 `doctor` 仍只读输出
++诊断与 warning，不会写入任一 provider。
++
+ 当前已经实现：
+ 
+ ```console
+diff --git a/completions/_worklouderctl b/completions/_worklouderctl
+index 4912592..9a83734 100644
+--- a/completions/_worklouderctl
++++ b/completions/_worklouderctl
+@@ -3700,7 +3700,7 @@ _worklouderctl_commands() {
+ 'tier:Inspect the configuration authority tiers' \
+ 'capability:Inspect capabilities covered by the CLI contract' \
+ 'compatibility:Inspect the release-gated application, bridge, and firmware matrix' \
+-'doctor:Diagnose Codex, Input, and cached device configuration providers' \
++'doctor:Diagnose provider health and authenticated configuration readiness' \
+ 'codex:Inspect or export Codex-owned Codex Micro settings' \
+ 'input:Inspect or export Input-owned configuration' \
+ 'device:Read live Codex Micro state through Input or its compatibility provider' \
+diff --git a/completions/worklouderctl.fish b/completions/worklouderctl.fish
+index 1dd2153..b85f595 100644
+--- a/completions/worklouderctl.fish
++++ b/completions/worklouderctl.fish
+@@ -5,7 +5,7 @@ complete -c worklouderctl -n "__fish_use_subcommand" -f -a "version" -d 'Print C
+ complete -c worklouderctl -n "__fish_use_subcommand" -f -a "tier" -d 'Inspect the configuration authority tiers'
+ complete -c worklouderctl -n "__fish_use_subcommand" -f -a "capability" -d 'Inspect capabilities covered by the CLI contract'
+ complete -c worklouderctl -n "__fish_use_subcommand" -f -a "compatibility" -d 'Inspect the release-gated application, bridge, and firmware matrix'
+-complete -c worklouderctl -n "__fish_use_subcommand" -f -a "doctor" -d 'Diagnose Codex, Input, and cached device configuration providers'
++complete -c worklouderctl -n "__fish_use_subcommand" -f -a "doctor" -d 'Diagnose provider health and authenticated configuration readiness'
+ complete -c worklouderctl -n "__fish_use_subcommand" -f -a "codex" -d 'Inspect or export Codex-owned Codex Micro settings'
+ complete -c worklouderctl -n "__fish_use_subcommand" -f -a "input" -d 'Inspect or export Input-owned configuration'
+ complete -c worklouderctl -n "__fish_use_subcommand" -f -a "device" -d 'Read live Codex Micro state through Input or its compatibility provider'
+diff --git a/docs/command-reference.md b/docs/command-reference.md
+index 927dd4c..a8ac123 100644
+--- a/docs/command-reference.md
++++ b/docs/command-reference.md
+@@ -31,7 +31,7 @@ SUBCOMMANDS:
+     config           Validate or compare exported configuration
+     control          Inspect or edit physical controls in an offline configuration snapshot
+     device           Read live Codex Micro state through Input or its compatibility provider
+-    doctor           Diagnose Codex, Input, and cached device configuration providers
++    doctor           Diagnose provider health and authenticated configuration readiness
+     help             Print this message or the help of the given subcommand(s)
+     input            Inspect or export Input-owned configuration
+     layer            Inspect or edit layers in an offline configuration snapshot
+@@ -356,7 +356,7 @@ SUBCOMMANDS:
+ 
+ ```text
+ worklouderctl-doctor 0.1.0
+-Diagnose Codex, Input, and cached device configuration providers
++Diagnose provider health and authenticated configuration readiness
+ 
+ USAGE:
+     worklouderctl doctor [OPTIONS]
+diff --git a/docs/compatibility.md b/docs/compatibility.md
+index 062e69a..4006e2f 100644
+--- a/docs/compatibility.md
++++ b/docs/compatibility.md
+@@ -124,6 +124,13 @@ rollback after a corrupt readback. These are transaction-engine claims; they do
+ not extend the Input 0.18.0 hardware boundary until an exact writer adapter and
+ real-device restore test pass.
+ 
++`worklouderctl doctor` therefore reports application health and authenticated
++configuration readiness separately. `configurationReady` requires both bridge
++handshakes and the complete Codex/Input apply-and-restore capability sets.
++Missing endpoints, handshake failures, or incomplete capability negotiation are
++warnings; `--strict` promotes any such warning to a failing exit status. This
++probe is read-only and does not focus, reopen, or mutate either GUI/runtime.
++
+ ## Adding support
+ 
+ New compatibility claims require:
+diff --git a/docs/faq.md b/docs/faq.md
+index 4c5a9f7..da656ea 100644
+--- a/docs/faq.md
++++ b/docs/faq.md
+@@ -18,6 +18,12 @@ and runs authenticated Codex/Input apply/readback/restore/rollback transactions
+ against isolated reference writers. Packaged releases and released-app writer
+ integration are later milestones.
+ 
++Run `worklouderctl doctor --strict` to test the current machine rather than
++inferring write support from installed/running apps. The JSON field
++`configurationReady` becomes true only after both authenticated bridges
++advertise all required apply and restore capabilities. A plain `doctor` remains
++read-only and reports an unavailable bridge as a warning.
++
+ ## What does full-configuration parity mean?
+ 
+ Every setting available in the Codex Micro page or Input's Codex Micro views
+diff --git a/src/cli.rs b/src/cli.rs
+index 7a41adc..eccebd0 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -36,7 +36,7 @@ pub enum Command {
+         command: CompatibilityCommand,
+     },
+ 
+-    /// Diagnose Codex, Input, and cached device configuration providers.
++    /// Diagnose provider health and authenticated configuration readiness.
+     Doctor {
+         /// Treat warnings as a failing exit status.
+         #[clap(long)]
+diff --git a/src/doctor.rs b/src/doctor.rs
+index 8ceca68..67a4496 100644
+--- a/src/doctor.rs
++++ b/src/doctor.rs
+@@ -1,4 +1,4 @@
+-use crate::fsutil;
++use crate::{bridge, codex_bridge, fsutil};
+ use serde::Serialize;
+ use serde_json::Value;
+ use std::env;
+@@ -48,6 +48,7 @@ pub struct DeviceState {
+ #[serde(rename_all = "camelCase")]
+ pub struct DoctorReport {
+     pub status: CheckStatus,
++    pub configuration_ready: bool,
+     pub checks: Vec<Check>,
+     pub providers: Vec<Provider>,
+     pub input_support_root: PathBuf,
+@@ -92,7 +93,10 @@ pub fn inspect() -> DoctorReport {
+         .map(PathBuf::from)
+         .unwrap_or_else(default_input_support_root);
+ 
+-    inspect_paths(&codex_path, &input_path, &support_root)
++    let mut report = inspect_paths(&codex_path, &input_path, &support_root);
++    report.configuration_ready = inspect_configuration_bridges(&mut report.checks);
++    report.status = aggregate_status(&report.checks);
++    report
+ }
+ 
+ pub fn inspect_paths(codex_path: &Path, input_path: &Path, support_root: &Path) -> DoctorReport {
+@@ -137,6 +141,7 @@ pub fn inspect_paths(codex_path: &Path, input_path: &Path, support_root: &Path)
+     let status = aggregate_status(&checks);
+     DoctorReport {
+         status,
++        configuration_ready: false,
+         checks,
+         providers: vec![codex, input],
+         input_support_root: support_root.to_path_buf(),
+@@ -144,6 +149,115 @@ pub fn inspect_paths(codex_path: &Path, input_path: &Path, support_root: &Path)
+     }
+ }
+ 
++const INPUT_CONFIGURATION_CAPABILITIES: &[&str] = &[
++    "device.config.apply.v1",
++    "device.config.restore.v1",
++    "input.host-settings.apply.v1",
++    "input.host-settings.restore.v1",
++];
++
++const CODEX_CONFIGURATION_CAPABILITIES: &[&str] = &[
++    "codex.settings.apply.v1",
++    "codex.settings.restore.v1",
++    "codex.agentKeys.apply.v1",
++    "codex.agentKeys.restore.v1",
++];
++
++fn inspect_configuration_bridges(checks: &mut Vec<Check>) -> bool {
++    let input_paths = bridge::paths(None, None);
++    let input_ready = inspect_bridge(
++        "input",
++        &input_paths.socket,
++        &input_paths.token,
++        INPUT_CONFIGURATION_CAPABILITIES,
++        || bridge::inspect(&input_paths).map(|inspection| inspection.capabilities),
++        checks,
++    );
++
++    let codex_paths = codex_bridge::paths(None, None);
++    let codex_ready = inspect_bridge(
++        "codex",
++        &codex_paths.socket,
++        &codex_paths.token,
++        CODEX_CONFIGURATION_CAPABILITIES,
++        || codex_bridge::inspect(&codex_paths).map(|inspection| inspection.capabilities),
++        checks,
++    );
++
++    input_ready && codex_ready
++}
++
++fn inspect_bridge<F>(
++    provider: &str,
++    socket: &Path,
++    token: &Path,
++    required: &[&str],
++    inspect: F,
++    checks: &mut Vec<Check>,
++) -> bool
++where
++    F: FnOnce() -> anyhow::Result<Vec<String>>,
++{
++    let id = format!("provider.{provider}.configuration-bridge");
++    if !socket.exists() || !token.is_file() {
++        checks.push(Check {
++            id,
++            status: CheckStatus::Warn,
++            summary: format!(
++                "{provider} configuration bridge is not discoverable at {} with token {}; provider health is read-only",
++                socket.display(),
++                token.display()
++            ),
++        });
++        return false;
++    }
++
++    let capabilities = match inspect() {
++        Ok(capabilities) => capabilities,
++        Err(error) => {
++            checks.push(Check {
++                id,
++                status: CheckStatus::Warn,
++                summary: format!(
++                    "{provider} configuration bridge handshake failed at {}: {error}",
++                    socket.display()
++                ),
++            });
++            return false;
++        }
++    };
++    let missing = missing_capabilities(&capabilities, required);
++    if missing.is_empty() {
++        checks.push(Check {
++            id,
++            status: CheckStatus::Pass,
++            summary: format!(
++                "{provider} configuration bridge is authenticated with all {} required mutation capabilities",
++                required.len()
++            ),
++        });
++        true
++    } else {
++        checks.push(Check {
++            id,
++            status: CheckStatus::Warn,
++            summary: format!(
++                "{provider} configuration bridge is missing required capabilities: {}",
++                missing.join(", ")
++            ),
++        });
++        false
++    }
++}
++
++fn missing_capabilities<'a>(available: &[String], required: &[&'a str]) -> Vec<&'a str> {
++    required
++        .iter()
++        .copied()
++        .filter(|required| !available.iter().any(|value| value == required))
++        .collect()
++}
++
+ fn inspect_provider(name: &str, app_path: &Path, checks: &mut Vec<Check>) -> Provider {
+     let installed = app_path.is_dir();
+     checks.push(Check {
+@@ -429,4 +543,84 @@ mod tests {
+         assert_eq!(checks[0].status, CheckStatus::Fail);
+         fs::remove_dir_all(root).unwrap();
+     }
++
++    #[test]
++    fn configuration_readiness_requires_every_mutation_capability() {
++        let available = vec![
++            "device.config.apply.v1".to_owned(),
++            "device.config.restore.v1".to_owned(),
++            "input.host-settings.apply.v1".to_owned(),
++        ];
++        assert_eq!(
++            missing_capabilities(&available, INPUT_CONFIGURATION_CAPABILITIES),
++            vec!["input.host-settings.restore.v1"]
++        );
++
++        let complete = INPUT_CONFIGURATION_CAPABILITIES
++            .iter()
++            .map(|value| (*value).to_owned())
++            .collect::<Vec<_>>();
++        assert!(missing_capabilities(&complete, INPUT_CONFIGURATION_CAPABILITIES).is_empty());
++    }
++
++    #[test]
++    fn missing_bridge_endpoints_are_read_only_without_connecting() {
++        let root = fixture_root();
++        let mut checks = Vec::new();
++        let ready = inspect_bridge(
++            "fixture",
++            &root.join("bridge.sock"),
++            &root.join("bridge.token"),
++            &["fixture.apply.v1"],
++            || panic!("missing endpoints must not trigger a handshake"),
++            &mut checks,
++        );
++
++        assert!(!ready);
++        assert_eq!(checks.len(), 1);
++        assert_eq!(checks[0].status, CheckStatus::Warn);
++        assert!(checks[0].summary.contains("provider health is read-only"));
++    }
++
++    #[test]
++    fn authenticated_bridge_must_advertise_every_required_capability() {
++        let root = fixture_root();
++        fs::create_dir_all(&root).unwrap();
++        let socket = root.join("bridge.sock");
++        let token = root.join("bridge.token");
++        fs::write(&socket, b"fixture").unwrap();
++        fs::write(&token, b"secret").unwrap();
++
++        let mut incomplete_checks = Vec::new();
++        let incomplete = inspect_bridge(
++            "fixture",
++            &socket,
++            &token,
++            &["fixture.apply.v1", "fixture.restore.v1"],
++            || Ok(vec!["fixture.apply.v1".to_owned()]),
++            &mut incomplete_checks,
++        );
++        assert!(!incomplete);
++        assert_eq!(incomplete_checks[0].status, CheckStatus::Warn);
++        assert!(incomplete_checks[0].summary.contains("fixture.restore.v1"));
++
++        let mut complete_checks = Vec::new();
++        let complete = inspect_bridge(
++            "fixture",
++            &socket,
++            &token,
++            &["fixture.apply.v1", "fixture.restore.v1"],
++            || {
++                Ok(vec![
++                    "fixture.apply.v1".to_owned(),
++                    "fixture.restore.v1".to_owned(),
++                ])
++            },
++            &mut complete_checks,
++        );
++        assert!(complete);
++        assert_eq!(complete_checks[0].status, CheckStatus::Pass);
++
++        fs::remove_dir_all(root).unwrap();
++    }
+ }
+diff --git a/src/lib.rs b/src/lib.rs
+index fa9b5f0..2d626f9 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -897,7 +897,7 @@ fn run_appsense(command: AppSenseCommand, json: bool, mut out: impl Write) -> Re
+             poll_ms,
+         } => {
+             anyhow::ensure!(
+-                timeout_ms <= 300_000 && poll_ms >= 10 && poll_ms <= 10_000,
++                timeout_ms <= 300_000 && (10..=10_000).contains(&poll_ms),
+                 "AppSense timeout or poll interval was invalid"
+             );
+             for (label, value) in [
+@@ -3647,11 +3647,12 @@ fn run_doctor(strict: bool, json: bool, mut out: impl Write) -> Result<()> {
+     } else {
+         writeln!(
+             out,
+-            "doctor: {:?} ({} pass, {} warn, {} fail)",
++            "doctor: {:?} ({} pass, {} warn, {} fail, configuration ready: {})",
+             report.status,
+             report.pass_count(),
+             report.warning_count(),
+-            report.failure_count()
++            report.failure_count(),
++            report.configuration_ready
+         )?;
+         for check in &report.checks {
+             writeln!(out, "{:?}\t{}\t{}", check.status, check.id, check.summary)?;

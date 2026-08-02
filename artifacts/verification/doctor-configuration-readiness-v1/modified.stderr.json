@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-error",
+  "code": "unexpected",
+  "exitStatus": 1,
+  "message": "doctor found 2 warning(s) and 0 failure(s)",
+  "causes": []
+}

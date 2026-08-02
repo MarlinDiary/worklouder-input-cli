@@ -1,0 +1,123 @@
+WorkLouderCTL doctor configuration readiness v1 verification record
+===================================================================
+
+Scope
+-----
+Base commit: 1647b3a2c03615cb61b90eb336b5739d0dfaa384
+Feature commit: fbdbbafcb779a2b17ef95d041745dbe5a98097c7
+Changed branch/field: global doctor report status plus configurationReady and
+provider.input/provider.codex configuration-bridge checks
+Provider boundary: read-only health probes plus authenticated bridge capability
+negotiation; no provider configuration, GUI focus, app reopen, or device write
+
+Fixture inputs
+--------------
+Root: /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ
+Codex app input: ChatGPT.app/Contents/Info.plist, version fixture-codex-v1
+Input app input: input.app/Contents/Info.plist, version fixture-input-v1
+Runtime-presence guards (shell-only; no GUI launch):
+/bin/sh -c 'sleep 60 & wait' /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/ChatGPT.app/Contents/MacOS/Codex
+/bin/sh -c 'sleep 60 & wait' /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/input.app/Contents/MacOS/input
+Input support files and literal content:
+support/devices/fixture-device/keymap.json: {"layers":[]}
+support/devices/fixture-device/smart_actions.json: {}
+support/input_storage.json: {}
+Bridge input: both default socket/token pairs absent under /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/home
+
+Preserved original and baseline-red
+-----------------------------------
+Path: /tmp/worklouderctl-doctor-readiness-v1.ik5aMf/original-worklouderctl
+Source commit: 1647b3a2c03615cb61b90eb336b5739d0dfaa384
+SHA-256 after reopen: 55edce0d9e7d291e0c442e726df4ff1b13ddbfcf1004f632007c64806bf6b152
+Exact command:
+HOME=/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/home \
+WORKLOUDERCTL_CODEX_APP=/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/ChatGPT.app \
+WORKLOUDERCTL_INPUT_APP=/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/input.app \
+WORKLOUDERCTL_INPUT_SUPPORT_ROOT=/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support \
+/tmp/worklouderctl-doctor-readiness-v1.ik5aMf/original-worklouderctl --json doctor --strict
+Literal stdout (also frozen at baseline.stdout.json, SHA-256 a8152ad688562d185db75016fae6ad6cf0fe19ce151e5c34bd4a34a3634d923e):
+```json
+{"status":"pass","checks":[{"id":"host.macos","status":"pass","summary":"macOS host detected"},{"id":"provider.codex.installed","status":"pass","summary":"codex app found at /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/ChatGPT.app"},{"id":"provider.codex.version","status":"pass","summary":"codex version fixture-codex-v1"},{"id":"provider.codex.running","status":"pass","summary":"codex runtime is active"},{"id":"provider.input.installed","status":"pass","summary":"input app found at /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/input.app"},{"id":"provider.input.version","status":"pass","summary":"input version fixture-input-v1"},{"id":"provider.input.running","status":"pass","summary":"input runtime is active"},{"id":"input.support-root","status":"pass","summary":"Input support root found at /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support"},{"id":"input.devices","status":"pass","summary":"1 cached device directorie(s) found"},{"id":"input.device.fixture-device.keymap","status":"pass","summary":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support/devices/fixture-device/keymap.json is valid JSON (sha256 1e1ad62b1a5079dfe43082d09feb36154d69783c77d466004e9a539db91747b6)"},{"id":"input.device.fixture-device.smart-actions","status":"pass","summary":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support/devices/fixture-device/smart_actions.json is valid JSON (sha256 ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356)"},{"id":"input.storage","status":"pass","summary":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support/input_storage.json is valid JSON (sha256 ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356)"}],"providers":[{"name":"codex","appPath":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/ChatGPT.app","installed":true,"running":true,"version":"fixture-codex-v1"},{"name":"input","appPath":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/input.app","installed":true,"running":true,"version":"fixture-input-v1"}],"inputSupportRoot":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support","devices":[{"id":"fixture-device","directory":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support/devices/fixture-device","keymapSha256":"1e1ad62b1a5079dfe43082d09feb36154d69783c77d466004e9a539db91747b6","smartActionsSha256":"ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"}]}
+```
+Literal stderr (also frozen at baseline.stderr.txt, SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855):
+```text
+
+```
+Exit status: 0
+Baseline-red behavior: provider/runtime/cache health passes, but the report has
+no configurationReady field or bridge capability checks and strict mode
+incorrectly reports configuration readiness as a successful process.
+
+Modified artifact and patch-green
+---------------------------------
+Path: target/release/worklouderctl (working directory: repository root)
+Build command: cargo build --release --locked
+SHA-256 after reopen and execution: 3a35e270a02f5dfc60b42f29b3e22806d0ac287066a4eb341a686869df57c439
+Exact command:
+HOME=/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/home \
+WORKLOUDERCTL_CODEX_APP=/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/ChatGPT.app \
+WORKLOUDERCTL_INPUT_APP=/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/input.app \
+WORKLOUDERCTL_INPUT_SUPPORT_ROOT=/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support \
+./target/release/worklouderctl --json doctor --strict
+Literal stdout (also frozen at modified.stdout.json, SHA-256 b36bfb6502f0c67564ab1fd6da8d7d55aa04af7f641f52f87e92f88e243b1585):
+```json
+{"status":"warn","configurationReady":false,"checks":[{"id":"host.macos","status":"pass","summary":"macOS host detected"},{"id":"provider.codex.installed","status":"pass","summary":"codex app found at /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/ChatGPT.app"},{"id":"provider.codex.version","status":"pass","summary":"codex version fixture-codex-v1"},{"id":"provider.codex.running","status":"pass","summary":"codex runtime is active"},{"id":"provider.input.installed","status":"pass","summary":"input app found at /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/input.app"},{"id":"provider.input.version","status":"pass","summary":"input version fixture-input-v1"},{"id":"provider.input.running","status":"pass","summary":"input runtime is active"},{"id":"input.support-root","status":"pass","summary":"Input support root found at /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support"},{"id":"input.devices","status":"pass","summary":"1 cached device directorie(s) found"},{"id":"input.device.fixture-device.keymap","status":"pass","summary":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support/devices/fixture-device/keymap.json is valid JSON (sha256 1e1ad62b1a5079dfe43082d09feb36154d69783c77d466004e9a539db91747b6)"},{"id":"input.device.fixture-device.smart-actions","status":"pass","summary":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support/devices/fixture-device/smart_actions.json is valid JSON (sha256 ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356)"},{"id":"input.storage","status":"pass","summary":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support/input_storage.json is valid JSON (sha256 ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356)"},{"id":"provider.input.configuration-bridge","status":"warn","summary":"input configuration bridge is not discoverable at /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/home/Library/Application Support/input/worklouderctl-bridge-v1.sock with token /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/home/Library/Application Support/input/worklouderctl-bridge-v1.token; provider health is read-only"},{"id":"provider.codex.configuration-bridge","status":"warn","summary":"codex configuration bridge is not discoverable at /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/home/Library/Application Support/Codex/worklouderctl-codex-bridge-v1.sock with token /tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/home/Library/Application Support/Codex/worklouderctl-codex-bridge-v1.token; provider health is read-only"}],"providers":[{"name":"codex","appPath":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/ChatGPT.app","installed":true,"running":true,"version":"fixture-codex-v1"},{"name":"input","appPath":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/input.app","installed":true,"running":true,"version":"fixture-input-v1"}],"inputSupportRoot":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support","devices":[{"id":"fixture-device","directory":"/tmp/worklouderctl-doctor-readiness-fixture-v1.2PfryJ/support/devices/fixture-device","keymapSha256":"1e1ad62b1a5079dfe43082d09feb36154d69783c77d466004e9a539db91747b6","smartActionsSha256":"ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"}]}
+```
+Literal stderr (also frozen at modified.stderr.json, SHA-256 ad5e680ec253995c00245cb2cc15157adc6eed9092dbf7a96dc7565896f859a0):
+```json
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-error",
+  "code": "unexpected",
+  "exitStatus": 1,
+  "message": "doctor found 2 warning(s) and 0 failure(s)",
+  "causes": []
+}
+```
+Exit status: 1
+Patch-green behavior: provider health remains readable, configurationReady is
+false, both absent bridges are named warnings, and strict mode exits 1. Unit
+fixtures additionally verify absent endpoints skip the handshake, incomplete
+capabilities warn, and complete authenticated capabilities pass.
+Reopen command outputs were byte-identical to all four frozen stdout/stderr
+files; baseline exit 0 and modified exit 1 were reproduced.
+
+Patch/diff
+----------
+Path: artifacts/verification/doctor-configuration-readiness-v1/doctor-configuration-readiness.patch
+Command: git diff --binary 1647b3a..fbdbbaf -- .   ':(exclude)artifacts/verification/doctor-configuration-readiness-v1'
+SHA-256 after reopen: b6b74fd4d153116b37546115d46485f93a793d77ce5f36a76df77c895f0197ad
+Command: git apply --check --reverse artifacts/verification/doctor-configuration-readiness-v1/doctor-configuration-readiness.patch
+Literal stdout:
+```text
+
+```
+Literal stderr:
+```text
+
+```
+Exit status: 0
+
+Rollback
+--------
+Path: artifacts/verification/doctor-configuration-readiness-v1/rollback.sh
+SHA-256 after reopen: f62feaaf5db19c05f7b8f3dc8e1312a541ee995afa4327f02d68c490ca18335e
+Exact verification command (working directory: repository root):
+artifact_abs="$PWD/artifacts/verification/doctor-configuration-readiness-v1"
+"$artifact_abs/rollback.sh" \
+  /tmp/worklouderctl-doctor-readiness-rollback-v1.4oENfO/repo \
+  "$artifact_abs/doctor-configuration-readiness.patch"
+Literal stdout:
+```text
+rollback=verified
+base=1647b3a2c03615cb61b90eb336b5739d0dfaa384
+feature=fbdbbafcb779a2b17ef95d041745dbe5a98097c7
+```
+Literal stderr:
+```text
+
+```
+Exit status: 0
+Rollback behavior: reverse application in a detached feature worktree exactly
+matches 1647b3a2c03615cb61b90eb336b5739d0dfaa384, excluding this evidence directory; the worktree was then
+removed through git worktree remove --force.
