@@ -158,3 +158,24 @@ Path:
 SHA-256:
   7027e2d4652e295074343ae95d22d21be43b0cf114d8efa0184eadfa941b1b5b
 The isolated rollback execution is appended after the artifact commit.
+
+Isolated rollback execution
+---------------------------
+Artifact commit:
+  8cdc583 test: publish Codex dial evidence
+Command:
+  artifacts/verification/codex-dial-v1/rollback.sh \
+    /tmp/worklouderctl-codex-dial-v1.lQRKnc/rollback-worktree
+Literal output:
+  rollback=verified
+  base=68534b6874ddfda5fb5be5157e49b1aeff2865c7
+Exit status: 0
+Postcondition:
+  worktree equals base outside artifacts/verification/codex-dial-v1
+Exit status: 0
+Rolled-back behavior:
+  cargo run --quiet --locked --manifest-path ROLLBACK_WORKTREE/Cargo.toml -- \
+    codex dial --help
+Literal stderr:
+  error: Found argument 'dial' which wasn't expected, or isn't valid in this context
+Exit status: 2
