@@ -114,6 +114,8 @@ worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
 worklouderctl codex lighting auto-off set --input CODEX_BRIGHTNESS.json 10-minutes --output CODEX_LIGHTING.json
 worklouderctl codex voice get --input CODEX_LIGHTING.json
 worklouderctl codex voice set --input CODEX_LIGHTING.json realtime --output CODEX_VOICE.json
+worklouderctl codex runtime status
+worklouderctl codex runtime recover [--timeout-seconds 15]
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
 worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
@@ -213,6 +215,19 @@ separate global-state revision CAS, immutable backup, idempotent retry, exact
 six-slot readback, stale-CAS rejection, and automatic rollback. Assignment
 storage and the `codex-micro-agent-source=custom` setting remain independently
 controlled, so applying assignments never changes source ordering implicitly.
+
+`codex runtime status` is the released-app Tier 1 liveness probe. It requires
+the exact frozen Codex version and bundle hashes, attaches to the Codex main
+process on loopback, and reads the one live `CodexMicroService`. Healthy means
+`connected`, live comm/API objects, settled connection/topology Promises, and
+active `v.oai.hid` plus `v.oai.rad` subscriptions. `codex runtime recover`
+temporarily pauses the Input process without closing its window, restarts only
+that Codex service, requires the complete healthy state, resumes Input, and
+holds the same state for a post-resume stability window. It does not rewrite
+Codex settings, Input caches, the device keymap, firmware, or either app bundle.
+The loopback inspector is closed after use and a one-shot reattach handler is
+installed for the next CLI invocation. A changed Codex bundle requires a newly
+verified runtime contract.
 
 The repository ships the reference Codex main-process adapter and Electron
 integration. The inspected Codex 26.727.51351 release exposes its internal

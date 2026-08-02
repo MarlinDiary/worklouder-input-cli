@@ -13,7 +13,7 @@ not a public support guarantee.
 | --- | ---: | --- |
 | Device | Work Louder Codex Micro | Initial target |
 | Host OS | macOS | Initial target |
-| Codex app | 26.727.51351 | Exact Tier 1 settings read/offline candidate adapter verified; external bridge integration pending |
+| Codex app | 26.727.51351 | Exact Tier 1 settings read/offline candidate adapter and service-only runtime recovery contract verified; external settings bridge integration pending |
 | Codex Companion Bridge | Protocol v1 | Settings and six-slot Agent Key snapshot/CAS/apply/restore/rollback fixture verified |
 | Work Louder Input | 0.17.3 | Earlier schema fixture |
 | Work Louder Input | 0.18.0 | Exact bundled-kit live read adapter verified |
@@ -33,6 +33,16 @@ were reconstructed, an atomic typed snapshot was reopened, and the source
 Codex settings mutation. Static inspection found the internal `settings-read`,
 `settings-write`, `get-global-state`, and `set-global-state` handlers, while the
 released build did not expose an external listener.
+
+The same exact Codex build has a separate runtime-health boundary. A captured
+`WRITE_FAILED` transition left the device enumerated and settings intact while
+the service retained stale connection/topology Promises and lost both
+`v.oai.hid` and `v.oai.rad` subscriptions. A service-only restart performed
+while Input was paused restored `connected`, battery readback, both
+subscriptions, and the Codex layer without restarting either window. The CLI
+adapter verifies the app, `app.asar`, HID topology watcher, and Input Monitoring
+permission module hashes before attaching; a changed byte disables this
+contract until new evidence is frozen.
 
 The isolated Codex Companion Bridge v1 fixture has cross-language evidence for
 authenticated capability negotiation; frozen-definition settings snapshots;

@@ -83,6 +83,8 @@ worklouderctl codex lighting auto-off get --input CODEX_BRIGHTNESS.json
 worklouderctl codex lighting auto-off set --input CODEX_BRIGHTNESS.json 10-minutes --output CODEX_LIGHTING.json
 worklouderctl codex voice get --input CODEX_LIGHTING.json
 worklouderctl codex voice set --input CODEX_LIGHTING.json realtime --output CODEX_VOICE.json
+worklouderctl codex runtime status
+worklouderctl codex runtime recover [--timeout-seconds 15]
 worklouderctl input inspect [--device DEVICE_ID]
 worklouderctl input export --output BACKUP_DIRECTORY
 worklouderctl input config snapshot --output CONFIG.json [--device DEVICE_ID]
@@ -175,6 +177,16 @@ assignment shape，并保留未修改 slot 的未知字段。`codex agent-key ap
 readback、stale-CAS rejection 与 automatic rollback。assignment storage 和
 `codex-micro-agent-source=custom` 是两个独立 authority，因此 assignment transaction
 不会隐式改变 source ordering。
+
+`codex runtime status` 是 released app 的 Tier 1 liveness probe：先核对冻结的 Codex
+版本与 bundle hashes，再经 loopback 附加到 Codex main process，读取唯一的
+`CodexMicroService`。完整健康条件为 `connected`、comm/API 对象存在、connection/
+topology Promises 已结束，以及 `v.oai.hid` 和 `v.oai.rad` subscriptions 都存在。
+`codex runtime recover` 会在不关闭 Input 窗口的情况下短暂暂停 Input process，只重启
+这个 Codex service，确认完整健康状态后恢复 Input，并持续检查 post-resume stability
+window。整个过程不重写 Codex settings、Input caches、device keymap、firmware 或任一
+app bundle。loopback Inspector 使用后关闭，并为同一 Codex process 的下一次 CLI
+调用布置 one-shot reattach handler；Codex bundle 变化后必须先冻结并验证新 contract。
 
 仓库已经包含 Codex main-process reference adapter 和 Electron integration。
 静态检查确认 Codex 26.727.51351 内部有 `settings-read`、`settings-write` 与

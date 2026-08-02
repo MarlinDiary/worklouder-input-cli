@@ -35,6 +35,7 @@ parity contract.
 | Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | strict offline candidate plus `3-minutes -> 10-minutes -> 3-minutes` bridge apply/readback/restore fixture verified |
 | Layout reset | installed-build default layout | `codex reset layout` | researched |
 | Full object | export, validate, diff, apply, restore | `codex config snapshot/apply/restore`, future diff | authenticated snapshot/CAS/apply/readback/restore/rollback fixture verified; released Codex integration and diff pending |
+| Runtime health | connected control plane, settled reconnect, HID/joystick subscriptions | `codex runtime status/recover` | exact 26.727.51351 bundle contract, live failed-state capture and service-only recovery verified; CDP transport and CLI surface regression verified |
 
 ### Tier 1 adapter
 
@@ -47,6 +48,13 @@ canonical settings revisions, verifies exact explicit/effective readback, and
 restores the pre-mutation snapshot after any failure. The inspected released
 Codex build does not publish the external Unix socket, so released integration
 remains separate from fixture transaction evidence.
+
+The separate `codex-node-inspector-runtime-v1` adapter covers runtime health,
+not configuration mutation. It is pinned to the exact app version plus
+`app.asar` and native permission/topology module hashes. Recovery coordinates
+with the running Input process, restarts only the released `CodexMicroService`,
+and treats missing HID or joystick subscriptions and never-settled reconnect
+Promises as failures even when the USB interface still enumerates.
 
 ## Tier 2 — Input device configuration
 

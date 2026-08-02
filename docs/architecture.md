@@ -53,6 +53,20 @@ recovery, and exact source SHA recovery. Codex 26.727.51351
 contains the internal handlers but does not yet ship the external listener,
 leaving released-app integration as the next upstream milestone.
 
+## Implemented Codex runtime recovery path
+
+`codex-node-inspector-runtime-v1` is a narrow released-app compatibility path
+for liveness, separate from the settings bridge. It verifies the exact Codex
+26.727.51351 app and native-module hashes, opens a loopback-only Node inspector,
+and locates the one live `CodexMicroService` by its frozen prototype. Status
+requires a connected device, live comm/API, settled reconnect/topology
+Promises, and HID plus joystick subscriptions. Recovery pauses Input without
+closing its window, invalidates only the stale service attempt, invokes the
+released service's stop/start path, resumes Input after full readback, and
+checks a post-resume stability window. The CLI closes an inspector it opened
+and re-arms one-shot `SIGUSR1` attachment for the next invocation. It never
+patches the app or replaces the Work Louder device kit.
+
 ## Implemented Input Companion Bridge path
 
 The `input-companion-bridge-v1` client authenticates to the running Input main
