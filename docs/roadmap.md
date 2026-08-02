@@ -7,15 +7,21 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Repository name and product positioning
 - [x] SEO/AIO README and FAQ foundation
 - [x] Compatibility and architecture policies
-- [ ] Sanitized Input 0.17.3 and firmware v0.6.0 fixtures
-- [ ] Baseline checksums and verification records
-- [ ] CLI contract and JSON schemas
+- [x] Tier 1 Codex / Tier 2+ Input authority contract
+- [x] Codex 26.727.51351 and Input 0.18.0 feature inventory
+- [x] Baseline checksums and reconnect verification record
+- [x] Machine-readable capability registry
+- [ ] Publish sanitized Input 0.17.3/0.18.0 and firmware v0.6.0 fixtures
+- [ ] CLI command and configuration JSON schemas
 
 ## M1 — Read-only alpha
 
 - [ ] `worklouderctl version`
 - [ ] `worklouderctl doctor`
 - [ ] `worklouderctl input inspect`
+- [ ] `worklouderctl codex inspect`
+- [ ] `worklouderctl codex open-settings`
+- [ ] `worklouderctl tier explain`
 - [ ] `worklouderctl device status`
 - [ ] `worklouderctl device files`
 - [ ] `worklouderctl device export`

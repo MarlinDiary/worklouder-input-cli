@@ -9,6 +9,9 @@ Important: the project is currently pre-alpha. This repository contains the prod
 - [README](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/README.md): canonical project overview, status, scope, and planned CLI
 - [Chinese README](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/README.zh-CN.md): Simplified Chinese overview
 - [FAQ](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/faq.md): direct answers about Work Louder Input CLI and Codex Micro support
+- [Tier model](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/tier-model.md): normative Codex Tier 1 and Input Tier 2+ authority boundary
+- [Configuration reference](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/configuration-reference.md): complete researched capability inventory
+- [2026-08-02 audit](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/research/2026-08-02-codex-micro-audit.md): frozen app, firmware, state, protocol, and rollback evidence
 - [Compatibility](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/compatibility.md): version and evidence policy
 - [Architecture](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/architecture.md): device, cache, database, transaction, and rollback model
 - [Roadmap](https://github.com/MarlinDiary/worklouder-input-cli/blob/main/docs/roadmap.md): implementation milestones
@@ -21,7 +24,8 @@ Important: the project is currently pre-alpha. This repository contains the prod
 - Product category: companion CLI and command-line configurator
 - Initial device target: Work Louder Codex Micro
 - Initial host target: macOS
-- Initial research baseline: Work Louder Input 0.17.3 and Codex Micro firmware v0.6.0
+- Tier boundary: Tier 1 is configured in Codex; Tier 2 and above depend on Work Louder Input
+- Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
 - Current maturity: pre-alpha; no released binary
 - Safety model: inspect, plan, diff, backup, conflict check, apply, readback, checksum verification, synchronize, rollback
 - Agent model: deterministic JSON over the same transaction engine as the human CLI

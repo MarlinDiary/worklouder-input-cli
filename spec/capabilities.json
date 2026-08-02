@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schemaVersion": 1,
+  "researchSnapshot": "2026-08-02",
+  "target": {
+    "device": "Codex Micro",
+    "host": "macOS",
+    "codexApp": "26.727.51351",
+    "inputApp": "0.18.0",
+    "firmware": "v0.6.0"
+  },
+  "tiers": [
+    {
+      "id": 1,
+      "name": "codex-native",
+      "authority": ["codex-settings", "codex-runtime"],
+      "dependsOnInput": false,
+      "initialCliMode": "inspect",
+      "capabilities": [
+        "agent-keys",
+        "command-keys",
+        "voice-button",
+        "codex-dial",
+        "codex-joystick",
+        "task-status-lighting",
+        "global-lighting"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "input-device-config",
+      "authority": ["device-keymap", "device-smart-actions", "input-cache", "input-database"],
+      "dependsOnInput": true,
+      "initialCliMode": "transactional",
+      "capabilities": [
+        "profiles",
+        "layers",
+        "basic-keys",
+        "actions",
+        "multi-actions",
+        "encoder",
+        "joystick-sectors",
+        "layer-lighting",
+        "linked-apps"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "input-host-automation",
+      "authority": ["device-smart-actions", "input-database", "input-runtime"],
+      "dependsOnInput": true,
+      "initialCliMode": "transactional",
+      "capabilities": [
+        "smart-actions",
+        "appsense",
+        "cheat-sheet",
+        "radial-menu",
+        "command-permission"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "input-operations",
+      "authority": ["input-runtime", "input-updater", "firmware-flasher"],
+      "dependsOnInput": true,
+      "initialCliMode": "gated",
+      "capabilities": [
+        "diagnostics",
+        "logs",
+        "permissions",
+        "firmware-check",
+        "firmware-update",
+        "reset",
+        "recovery"
+      ]
+    }
+  ]
+}

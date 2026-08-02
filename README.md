@@ -74,7 +74,7 @@ yet. Follow the [roadmap](docs/roadmap.md) for implementation status.
 ## Target capabilities
 
 | Area | Target scope |
-|---|---|
+| --- | --- |
 | Device discovery | Codex Micro status, firmware, active profile/layer, USB and Bluetooth transport details |
 | Profiles and layers | List, create, rename, select, diff, import, and export |
 | Controls | Keys, rotary encoder, encoder press, and planar joystick sectors |
@@ -116,7 +116,8 @@ The first implementation target is intentionally narrow:
 
 - **Device:** Work Louder Codex Micro
 - **Host:** macOS
-- **Research baseline:** Work Louder Input 0.17.3
+- **Codex inspection baseline:** Codex 26.727.51351
+- **Input schema fixtures:** Work Louder Input 0.17.3 and 0.18.0
 - **Firmware fixture baseline:** Codex Micro v0.6.0
 
 These versions describe the current research fixtures, not a released support
@@ -127,7 +128,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 ## Project status
 
 | Milestone | Status |
-|---|---|
+| --- | --- |
 | SEO/AIO and product documentation foundation | Complete |
 | Sanitized research fixtures and schema model | Planned |
 | Read-only `doctor`, `inspect`, `status`, and `export` | Planned |
@@ -165,6 +166,9 @@ Read the complete [FAQ](docs/faq.md).
 
 ## Documentation
 
+- [Configuration tier model](docs/tier-model.md)
+- [Complete configuration reference](docs/configuration-reference.md)
+- [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
 - [Frequently asked questions](docs/faq.md)
 - [Compatibility and support policy](docs/compatibility.md)
 - [Companion architecture](docs/architecture.md)

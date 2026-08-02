@@ -30,15 +30,17 @@ a separate future track and is not required for the companion workflow.
 
 ## Which device will be supported first?
 
-Work Louder Codex Micro on macOS is the first target. Input 0.17.3 and Codex
-Micro firmware v0.6.0 are the initial research fixtures. They are not yet a
-release support guarantee.
+Work Louder Codex Micro on macOS is the first target. Codex 26.727.51351,
+Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0 are the initial research
+fixtures. They are not yet a release support guarantee.
 
 ## Which Codex Micro controls are in scope?
 
-The target model includes profiles, six layers, the key matrix, rotary encoder,
-encoder press, planar joystick sectors, Actions/macros, Multi Actions, Smart
-Actions, linked apps, backlight, underglow, and layer metadata.
+The complete model includes Codex-native Agent/Command keys, voice, Codex dial,
+Codex joystick, and task-state lighting in Tier 1. Input-backed tiers include
+profiles, six layers, the key matrix, encoder, joystick sectors, Actions,
+Multi Actions, Smart Actions, linked apps, backlight, underglow, and layer
+metadata. Tier 1 remains configured in Codex; the other tiers depend on Input.
 
 ## Can an AI agent configure Codex Micro?
 

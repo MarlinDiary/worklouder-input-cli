@@ -53,7 +53,8 @@ worklouderctl backup restore BACKUP_ID
 
 - 设备：Work Louder Codex Micro
 - 系统：macOS
-- 研究基线：Work Louder Input 0.17.3
+- Codex 检查基线：Codex 26.727.51351
+- Input schema fixtures：Work Louder Input 0.17.3 与 0.18.0
 - firmware fixture：Codex Micro v0.6.0
 
 以上是当前研究基线；正式支持范围会通过版本适配器、fixtures 和真实硬件 readback 明确记录。
@@ -72,6 +73,11 @@ WorkLouderCTL 第一阶段是 **Input Companion CLI**：
 ## 当前进度
 
 仓库目前处于产品定义与 fixture 准备阶段。可安装 binary、Homebrew formula 和完整命令将在经过硬件验证后发布。
+
+配置边界已经确定：**Tier 1 在 Codex App 内配置；Tier 2 及以上依赖
+Work Louder Input。** 详见 [Tier 模型](docs/tier-model.md)、
+[完整配置参考](docs/configuration-reference.md) 与
+[2026-08-02 深度审计](docs/research/2026-08-02-codex-micro-audit.md)。
 
 ## 项目独立性
 
