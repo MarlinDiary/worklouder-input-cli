@@ -25,12 +25,27 @@ shasum -a 256 -c worklouderctl-vVERSION-TARGET.tar.gz.sha256
 ./scripts/verify-release-archive.py \
   worklouderctl-vVERSION-TARGET.tar.gz --expected-target TARGET --execute
 ./scripts/verify-macos-release.sh worklouderctl-vVERSION-TARGET.tar.gz
+shasum -a 256 -c \
+  worklouder-input-companion-bridge-reference-VERSION.tgz.sha256
 ```
 
 `TARGET` is either `aarch64-apple-darwin` or `x86_64-apple-darwin`.
 Verification checks the sidecar checksum, exact archive inventory, manifest,
 per-file hashes and modes, target, CLI execution, and the declared macOS code
 signature state.
+
+Verify the integration package from a source checkout, or install the already
+checksum-verified release tgz directly:
+
+```console
+./scripts/test-companion-package.py
+npm install --ignore-scripts --no-audit --no-fund \
+  ./worklouder-input-companion-bridge-reference-VERSION.tgz
+./node_modules/.bin/input-companion-conformance --help
+```
+
+`private: true` blocks accidental npm-registry publication; the reviewed,
+checksum-pinned GitHub release asset is the distribution mechanism.
 
 ## Signature states
 

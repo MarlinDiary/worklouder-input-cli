@@ -26,9 +26,10 @@ claim-boundary, and required-gate inventory is added.
 | Work Louder Input | 0.17.3 | Deterministic sanitized structural fixture; original installed bundle was superseded |
 | Work Louder Input | 0.18.0 | Deterministic sanitized fixture plus exact bundled-kit live read adapter verified |
 | Input Companion Bridge | Protocol v1 | Snapshot/CAS/apply/replay/restore/rollback fixture conformance verified; released Input writer pending |
+| Companion integration bundle | 0.1.0 | Deterministic exact-inventory tgz, installed exports, and conformance executable verified; attached by the tagged release workflow |
 | Codex Micro firmware | v0.6.0 | Live status/files/export read boundary verified |
-| USB | Observed | Release verification pending |
-| Bluetooth | Observed | Live read boundary verified; mutation pending |
+| USB | Observed | Official-provider writer and physical rollback evidence pending external integration |
+| Bluetooth | Observed | Live read boundary verified; configuration mutation uses the same external provider gate |
 
 The 2026-08-02 audit recorded Input updating from 0.17.3 to 0.18.0 during a
 live session. Adapter selection therefore re-reads the installed and running

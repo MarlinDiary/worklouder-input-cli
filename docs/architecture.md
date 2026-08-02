@@ -135,7 +135,14 @@ synchronizes them as one operation.
 └──────────────────────────────┴─────────────────────────────┘
 ```
 
-## Planned write transaction
+## Implemented guarded write transaction
+
+The transaction core executes planning, CAS, backup, apply, readback,
+synchronization, and rollback against the packaged reference providers. A
+released Codex/Input integration supplies live discovery, runtime coordination,
+and the same complete-set writer boundary; it does not introduce a second
+transaction or a direct database/device write route. Physical device effects
+remain provider-owned and require the external evidence listed in the roadmap.
 
 1. Classify every requested field by tier and authority.
 2. Discover the exact Codex/Input installations, runtimes, and connected device.

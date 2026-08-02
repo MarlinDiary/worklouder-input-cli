@@ -61,7 +61,7 @@ Promises as failures even when the USB interface still enumerates.
 | GUI surface | Configuration coverage | Planned command family | Current status |
 | --- | --- | --- | --- |
 | Profiles | create, duplicate, rename, select, delete, up to six | `profile` | full lifecycle candidate-verified; profile create included in combined fixture apply/readback/restore |
-| Layers | create, duplicate, rename, reorder, delete, color, up to six | `layer` | lifecycle and ordering candidate-verified; layer create included in combined fixture transaction; live active-layer selection pending |
+| Layers | create, duplicate, rename, reorder, delete, color, up to six | `layer` | lifecycle, ordering, combined fixture transaction, and active-layer runtime observation verified; Input 0.18.0 has no persisted active-layer field or device RPC setter |
 | Basic keys | all frozen Input 0.18.0 device tokens | `control list/show/set` | candidate-verified |
 | Layer/profile keys | normal/temp layers and profiles 1–6 | `control list/show/set` | candidate-verified |
 | Actions | simple/advanced events, delays, groups | `action` | list/show/create/rename/delete, event CRUD/reorder, and group metadata/member/orphan-cascade candidate-verified |

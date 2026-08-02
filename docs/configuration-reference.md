@@ -283,7 +283,7 @@ Codex Micro stores them in a separate `smart_actions.json` file.
 ### Profiles and layers
 
 - profile create, rename, select, and delete;
-- layer create, rename, select, delete, and application link;
+- layer create, rename, reorder, delete, and application link;
 - six normal layer selectors and six temporary layer selectors;
 - six profile selectors;
 - Mac/Windows label mode;

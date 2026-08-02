@@ -36,7 +36,6 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Cross-language bridge status/files/export conformance test
 - [x] Revisioned config snapshot and live compare-and-swap validation
 - [x] Fixture-verified bridge apply/restore, idempotent retry, and auto rollback
-- [ ] Integrate the bridge adapter into an official Input release
 - [x] Structural `validate` and `diff`
 - [x] JSON output
 - [x] Typed exit statuses and JSON error envelopes
@@ -45,7 +44,6 @@ The roadmap prioritizes evidence and configuration safety over command count.
 
 - [x] Exact Codex 26.727.51351 read contract and settings-schema adapter
 - [x] `settings-read` and `settings-write` bridge client/reference integration
-- [ ] Integrate the Codex Companion Bridge into a released Codex build
 - [x] Agent source and single-tap behavior offline candidates
 - [x] Six Agent Key task/command/Skill/keycap assignment snapshot and validation
 - [x] Six Agent Key offline get/set/clear plus bridge apply/restore transaction
@@ -90,11 +88,11 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Input-owned cache/database adapter contract through configuration writer and ApplicationService; no direct LokiJS writes
 - [x] Input process coordination through the in-process serialized bridge; direct compatibility reads retain explicit quit/reopen
 - [x] Codex settings-bridge protocol, client, and reference process integration
-- [ ] Released Codex process integration
 - [x] Private backup catalog with atomic publication and mode-0700/0600 containment
 - [x] Plan/apply all-authority CAS conflict detection and retry drift rejection
 - [x] Exact provider readback plus coordinated all-authority postflight
 - [x] Automatic reverse rollback and manual restore with roll-forward recovery
+- [x] One full-parity fixture spanning all four tiers, unified diff, semantic post-state, observed fixture behavior, and exact rollback
 
 ## M5 — Stable distribution
 
@@ -102,7 +100,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Explicit unsigned, ad-hoc, Apple Development, Developer ID, and notarized signature-state validation
 - [x] Fail-closed Developer ID signing, Apple notarization, and build-provenance release workflow
 - [x] Checksum-pinned Homebrew formula generation, syntax/style checks, isolated-prefix install, and execution test
-- [ ] Publish the first signed/notarized macOS release and stable Homebrew tap
+- [x] Deterministic Companion integration bundle with exact inventory, installed exports, conformance binary, checksum, and provenance workflow
 - [x] Deterministic Bash/Zsh/Fish completions and exhaustive generated command reference
 - [x] Machine-readable compatibility matrix and Cargo-version gate for every release
 - [x] Strict backup inspection and schema migration assessment tools
@@ -116,10 +114,25 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Input-owned complete default/reset candidate per device/layout/version through the existing configuration transaction, with immutable plan, idempotent apply, readback, and exact rollback
 - [x] Bootloader recovery authority and exact post-recovery configuration restore, with immutable backup-bound plan, Input programmer delegation, receipt inspection, and idempotent replay
 
+## External release gates
+
+These gates change vendor or credential-owned state rather than this
+repository. They are intentionally tracked separately from implementation:
+
+- an official Input release adopts the packaged Input Companion Bridge and
+  supplies its complete configuration writer;
+- a released Codex build adopts the packaged Codex Companion Bridge and
+  supplies exact settings and Agent Key replacers;
+- the project owner provisions Developer ID/notarization credentials, creates
+  the first version tag, verifies the published binaries, and promotes the
+  generated formula to a stable Homebrew tap;
+- official-provider USB mutation and physical-device rollback evidence is
+  frozen after those released integrations exist.
+
 ## Later tracks
 
 - Linux transport and packaging
 - Windows transport and contention testing
 - additional Work Louder devices through explicit adapters
 - capability discovery for new Codex/Input versions
-- delegated firmware update and recovery orchestration through Input
+- signed Windows/Linux distribution after their provider boundaries exist
