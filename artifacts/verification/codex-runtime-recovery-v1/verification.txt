@@ -247,3 +247,28 @@ Path:
 SHA-256:
   4618ee1f8bc6f110ea514a2c09b71d1041a0febad6c3fd01447fa908a260a925
 The isolated-worktree execution result is appended after the artifact commit.
+
+Isolated rollback execution
+---------------------------
+Artifact commit:
+  f1cce74 test: publish Codex runtime recovery evidence
+Command:
+  artifacts/verification/codex-runtime-recovery-v1/rollback.sh \
+    /tmp/worklouderctl-codex-runtime-recovery-v1.7scyVY/rollback-worktree
+Literal output:
+  rollback=verified
+  base=0977dcec9b35660064efeb5dae5faba1485c068c
+Exit status: 0
+Postcondition command:
+  git -C ROLLBACK_WORKTREE diff --quiet \
+    0977dcec9b35660064efeb5dae5faba1485c068c -- . \
+    ':(exclude)artifacts/verification/codex-runtime-recovery-v1'
+Literal output: (empty)
+Exit status: 0
+Rolled-back behavior command:
+  cargo run --quiet --locked --manifest-path \
+    ROLLBACK_WORKTREE/Cargo.toml -- codex runtime --help
+Literal stdout: (empty)
+Literal stderr:
+  error: Found argument 'runtime' which wasn't expected, or isn't valid in this context
+Exit status: 2
