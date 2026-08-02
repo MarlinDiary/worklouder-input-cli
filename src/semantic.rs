@@ -1391,12 +1391,10 @@ pub fn profile_delete(input: &Path, id: u64, output: &Path) -> Result<CandidateR
         .and_then(Value::as_array_mut)
         .context("keymap.json profiles was invalid")?
         .remove(index);
-    let new_active = if index < active_index {
-        active_index - 1
-    } else if index == active_index {
-        active_index.saturating_sub(1)
-    } else {
-        active_index
+    let new_active = match index.cmp(&active_index) {
+        std::cmp::Ordering::Less => active_index - 1,
+        std::cmp::Ordering::Equal => active_index.saturating_sub(1),
+        std::cmp::Ordering::Greater => active_index,
     };
     let mut paths = vec![format!("/keymap.json/profiles/{index}")];
     if new_active != active_index {
@@ -1797,11 +1795,10 @@ pub fn layer_lighting_set(
         "the Codex protected layer has no editable lighting"
     );
 
-    let target_before = profile_layers(profile)?[layer_index]
+    let mut target_after = profile_layers(profile)?[layer_index]
         .get("lights")
         .cloned()
         .unwrap_or_else(|| defaults.clone());
-    let mut target_after = target_before.clone();
     let target_zone = target_after
         .get_mut(zone.field())
         .and_then(Value::as_object_mut)
