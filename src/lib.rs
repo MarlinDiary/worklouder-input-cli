@@ -11,6 +11,7 @@ pub mod doctor;
 pub mod fsutil;
 pub mod input;
 pub mod semantic;
+pub mod transaction;
 
 use anyhow::Result;
 use clap::CommandFactory;
@@ -30,7 +31,7 @@ use cli::{
     LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
     MultiActionGroupCommand, MultiActionGroupMemberCommand, PresetCommand, ProfileCommand,
     RadialCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
-    SmartActionType as CliSmartActionType, TierCommand,
+    SmartActionType as CliSmartActionType, TierCommand, TransactionCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -97,6 +98,7 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
             command,
         } => run_bridge(command, socket, token, cli.json, &mut out)?,
         Command::Config { command } => run_config(command, cli.json, &mut out)?,
+        Command::Transaction { command } => run_transaction(command, cli.json, &mut out)?,
         Command::Profile { command } => run_profile(command, cli.json, &mut out)?,
         Command::Layer { command } => run_layer(command, cli.json, &mut out)?,
         Command::Control { command } => run_control(command, cli.json, &mut out)?,
@@ -110,6 +112,70 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
 
+    Ok(())
+}
+
+fn run_transaction(command: TransactionCommand, json: bool, mut out: impl Write) -> Result<()> {
+    match command {
+        TransactionCommand::Plan {
+            codex_settings_base,
+            codex_settings_candidate,
+            codex_agent_keys_base,
+            codex_agent_keys_candidate,
+            input_config_base,
+            input_config_candidate,
+            input_host_settings_base,
+            input_host_settings_candidate,
+            output,
+        } => {
+            let receipt = transaction::create_plan(
+                transaction::PlanInputs {
+                    codex_settings_base,
+                    codex_settings_candidate,
+                    codex_agent_keys_base,
+                    codex_agent_keys_candidate,
+                    input_config_base,
+                    input_config_candidate,
+                    input_host_settings_base,
+                    input_host_settings_candidate,
+                },
+                &output,
+            )?;
+            if json {
+                write_json(&mut out, &receipt)?;
+            } else {
+                writeln!(
+                    out,
+                    "Planned {} authorities ({} changed, {} changes) at {}",
+                    receipt.authority_count,
+                    receipt.changed_authority_count,
+                    receipt.change_count,
+                    receipt.output.display()
+                )?;
+                writeln!(out, "revision={}", receipt.revision)?;
+            }
+        }
+        TransactionCommand::Show { input } => {
+            let plan = transaction::read_plan(&input)?;
+            if json {
+                write_json(&mut out, &plan)?;
+            } else {
+                for authority in plan.authorities {
+                    writeln!(
+                        out,
+                        "{}\ttier={}\tchanged={}\tchanges={}\t{} -> {}",
+                        authority.id,
+                        authority.tier,
+                        authority.changed,
+                        authority.changes.len(),
+                        authority.before_revision,
+                        authority.target_revision
+                    )?;
+                }
+                writeln!(out, "revision={}", plan.revision)?;
+            }
+        }
+    }
     Ok(())
 }
 

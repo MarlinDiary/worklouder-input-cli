@@ -807,6 +807,47 @@ struct SemanticSnapshot {
     revision: String,
 }
 
+pub(crate) struct SnapshotAuthority {
+    pub device_id: String,
+    pub revision: String,
+    pub documents: BTreeMap<String, Value>,
+}
+
+pub(crate) fn snapshot_authority(input: &Path) -> Result<SnapshotAuthority> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let files = snapshot
+        .document
+        .get("files")
+        .and_then(Value::as_array)
+        .context("configuration snapshot files were invalid")?;
+    let mut documents = BTreeMap::new();
+    for (record, bytes) in files.iter().zip(&snapshot.file_bytes) {
+        let path = object_string(record, "relativePath", "configuration file")?;
+        let value = if path.ends_with(".json") {
+            serde_json::from_slice(bytes)
+                .with_context(|| format!("configuration file {path} was invalid JSON"))?
+        } else {
+            serde_json::json!({
+                "kind": "binary",
+                "size": object_u64(record, "size", "configuration file")?,
+                "deviceChecksumSha1": object_string(
+                    record,
+                    "deviceChecksumSha1",
+                    "configuration file",
+                )?,
+                "sha256": object_string(record, "sha256", "configuration file")?,
+            })
+        };
+        documents.insert(path.to_owned(), value);
+    }
+    Ok(SnapshotAuthority {
+        device_id: object_string(&snapshot.document, "deviceId", "configuration snapshot")?
+            .to_owned(),
+        revision: snapshot.revision,
+        documents,
+    })
+}
+
 pub fn profile_list(input: &Path) -> Result<ProfileList> {
     let snapshot = SemanticSnapshot::read(input)?;
     let (active_profile_index, active_profile_id) = active_profile_selection(&snapshot.keymap)?;

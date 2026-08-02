@@ -103,6 +103,12 @@ pub enum Command {
         command: ConfigCommand,
     },
 
+    /// Plan coordinated Codex and Input mutations with one unified diff.
+    Transaction {
+        #[clap(subcommand)]
+        command: TransactionCommand,
+    },
+
     /// Inspect or edit profiles in an offline configuration snapshot.
     Profile {
         #[clap(subcommand)]
@@ -1082,6 +1088,37 @@ pub enum ConfigCommand {
 
         #[clap(value_parser)]
         candidate: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum TransactionCommand {
+    /// Validate authority baselines/candidates and publish an immutable coordinated plan.
+    Plan {
+        #[clap(long, value_parser, requires = "codex-settings-candidate")]
+        codex_settings_base: Option<PathBuf>,
+        #[clap(long, value_parser, requires = "codex-settings-base")]
+        codex_settings_candidate: Option<PathBuf>,
+        #[clap(long, value_parser, requires = "codex-agent-keys-candidate")]
+        codex_agent_keys_base: Option<PathBuf>,
+        #[clap(long, value_parser, requires = "codex-agent-keys-base")]
+        codex_agent_keys_candidate: Option<PathBuf>,
+        #[clap(long, value_parser, requires = "input-config-candidate")]
+        input_config_base: Option<PathBuf>,
+        #[clap(long, value_parser, requires = "input-config-base")]
+        input_config_candidate: Option<PathBuf>,
+        #[clap(long, value_parser, requires = "input-host-settings-candidate")]
+        input_host_settings_base: Option<PathBuf>,
+        #[clap(long, value_parser, requires = "input-host-settings-base")]
+        input_host_settings_candidate: Option<PathBuf>,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Reopen and print a validated coordinated plan and unified diff.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
     },
 }
 
