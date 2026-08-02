@@ -827,6 +827,7 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::TcpListener;
 
     fn contract() -> Contract {
         serde_json::from_str(CONTRACT_JSON).unwrap()
@@ -906,5 +907,54 @@ mod tests {
         );
         assert_eq!(contract.service_chunk, "./service-4uQDVZZZ.js");
         assert_eq!(contract.service_export, "CodexMicroService");
+    }
+
+    #[test]
+    fn cdp_client_round_trip_uses_websocket_json_messages() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let headers = read_headers(&mut stream).unwrap();
+            assert!(headers.starts_with("GET /fixture HTTP/1.1"));
+            assert!(headers.contains("Upgrade: websocket"));
+            stream
+                .write_all(
+                    b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: fixture\r\n\r\n",
+                )
+                .unwrap();
+
+            let request: Value =
+                serde_json::from_slice(&read_text_message(&mut stream).unwrap()).unwrap();
+            assert_eq!(request["method"], "Runtime.evaluate");
+            assert_eq!(request["params"]["expression"], "1 + 1");
+            let response = serde_json::to_vec(&json!({
+                "id": request["id"],
+                "result": {"result": {"type": "number", "value": 2}}
+            }))
+            .unwrap();
+            write_server_text_frame(&mut stream, &response).unwrap();
+        });
+
+        let mut client = CdpClient::connect(&format!("ws://127.0.0.1:{port}/fixture")).unwrap();
+        let result = client
+            .call("Runtime.evaluate", json!({"expression": "1 + 1"}))
+            .unwrap();
+        assert_eq!(result.pointer("/result/value"), Some(&json!(2)));
+        server.join().unwrap();
+    }
+
+    fn write_server_text_frame(stream: &mut TcpStream, payload: &[u8]) -> Result<()> {
+        let mut frame = vec![0x81];
+        if payload.len() <= 125 {
+            frame.push(payload.len() as u8);
+        } else {
+            frame.push(126);
+            frame.extend_from_slice(&(payload.len() as u16).to_be_bytes());
+        }
+        frame.extend_from_slice(payload);
+        stream.write_all(&frame)?;
+        stream.flush()?;
+        Ok(())
     }
 }

@@ -62,6 +62,7 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("doctor"));
     assert!(stdout.contains("bridge"));
     assert!(stdout.contains("config"));
+    assert!(stdout.contains("runtime"));
     assert!(stdout.contains("codex"));
     assert!(stdout.contains("device"));
     assert!(stdout.contains("input"));
@@ -374,6 +375,27 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
     assert!(voice.status.success());
     assert!(voice_stdout.contains("push-to-talk"));
     assert!(voice_stdout.contains("realtime"));
+}
+
+#[test]
+fn codex_runtime_help_exposes_status_and_coordinated_recovery() {
+    let runtime = binary()
+        .args(["codex", "runtime", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(runtime.stdout).unwrap();
+    assert!(runtime.status.success());
+    assert!(stdout.contains("status"));
+    assert!(stdout.contains("recover"));
+    assert!(stdout.contains("--input-app"));
+
+    let recover = binary()
+        .args(["codex", "runtime", "recover", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(recover.stdout).unwrap();
+    assert!(recover.status.success());
+    assert!(stdout.contains("--timeout-seconds"));
 }
 
 #[test]
