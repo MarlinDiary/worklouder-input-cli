@@ -30,6 +30,7 @@ if [ -n "$identity" ]; then
   codesign --force --options runtime --sign "$identity" "$signed_binary"
   codesign --verify --strict --verbose=2 "$signed_binary"
   case "$identity" in
+    -) signature_state=ad-hoc ;;
     *"Developer ID Application"*) signature_state=developer-id ;;
     *) signature_state=apple-development ;;
   esac

@@ -10,7 +10,7 @@
     "kind": { "const": "worklouderctl-release-archive" },
     "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
     "target": { "enum": ["aarch64-apple-darwin", "x86_64-apple-darwin"] },
-    "signatureState": { "enum": ["unsigned", "apple-development", "developer-id", "developer-id-notarized"] },
+    "signatureState": { "enum": ["unsigned", "ad-hoc", "apple-development", "developer-id", "developer-id-notarized"] },
     "files": {
       "type": "array",
       "minItems": 6,

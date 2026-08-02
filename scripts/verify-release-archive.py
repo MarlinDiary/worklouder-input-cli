@@ -67,6 +67,7 @@ def main():
             or manifest.get("signatureState")
             not in {
                 "unsigned",
+                "ad-hoc",
                 "apple-development",
                 "developer-id",
                 "developer-id-notarized",

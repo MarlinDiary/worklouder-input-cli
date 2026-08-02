@@ -41,6 +41,7 @@ def main():
         "--signature-state",
         choices=[
             "unsigned",
+            "ad-hoc",
             "apple-development",
             "developer-id",
             "developer-id-notarized",
@@ -78,13 +79,17 @@ def main():
             capture_output=True,
             check=True,
         )
-        expected_authority = (
-            "Authority=Apple Development:"
-            if args.signature_state == "apple-development"
-            else "Authority=Developer ID Application:"
-        )
-        if expected_authority not in signature.stderr:
-            raise SystemExit("binary signing authority did not match signature state")
+        if args.signature_state == "ad-hoc":
+            if "Signature=adhoc" not in signature.stderr:
+                raise SystemExit("binary was not ad-hoc signed")
+        else:
+            expected_authority = (
+                "Authority=Apple Development:"
+                if args.signature_state == "apple-development"
+                else "Authority=Developer ID Application:"
+            )
+            if expected_authority not in signature.stderr:
+                raise SystemExit("binary signing authority did not match signature state")
     if args.signature_state == "developer-id-notarized":
         subprocess.run(
             ["spctl", "--assess", "--type", "execute", "--verbose=4", str(binary)],
