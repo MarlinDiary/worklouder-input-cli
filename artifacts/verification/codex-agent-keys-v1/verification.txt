@@ -217,5 +217,18 @@ Exit status: 0
 Rollback
 --------
 Path: artifacts/verification/codex-agent-keys-v1/rollback.sh
-SHA-256 before verification-result append: b1f079b387a1401fac6ec8edfb159f9be7e37663f90fef7ea0c591ff5572c084
-The isolated-worktree execution result is appended after the rollback test.
+SHA-256: b1f079b387a1401fac6ec8edfb159f9be7e37663f90fef7ea0c591ff5572c084
+Isolated worktree command:
+  artifacts/verification/codex-agent-keys-v1/rollback.sh WORKTREE
+Literal stdout:
+  rollback=verified
+  base=af5c7dd0bf077509e6ae0a4817a72ff395624f3f
+Literal stderr: (empty)
+Exit status: 0
+Postcondition command:
+  git -C WORKTREE diff --quiet af5c7dd0bf077509e6ae0a4817a72ff395624f3f -- . ':(exclude)artifacts/verification/codex-agent-keys-v1'
+Postcondition exit status: 0
+Diff-check command:
+  git -C WORKTREE diff --check
+Diff-check literal output: (empty)
+Diff-check exit status: 0
