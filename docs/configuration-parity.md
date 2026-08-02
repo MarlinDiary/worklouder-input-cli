@@ -52,7 +52,7 @@ the runtime reloaded the new value.
 | Layers | create, rename, select, delete, color, up to six | `layer` | candidate-verified for list/show/rename/color; create/select/delete pending |
 | Basic keys | all frozen Input 0.18.0 device tokens | `control list/show/set` | candidate-verified |
 | Layer/profile keys | normal/temp layers and profiles 1–6 | `control list/show/set` | candidate-verified |
-| Actions | simple/advanced events, delays, groups | `action` | researched |
+| Actions | simple/advanced events, delays, groups | `action` | list/show/create/rename/delete and event CRUD/reorder candidate-verified; group CRUD pending |
 | Multi Actions | tap, double tap, hold, tap-hold, timing | `multi-action` | researched |
 | Encoder | counter-clockwise, clockwise, click | `control list/show/set` | candidate/apply/restore fixture-verified |
 | Joystick sectors | existing radial sectors and targets | `control list/show/set` | candidate-verified; sector CRUD pending |

@@ -9,7 +9,7 @@
 > **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
 > provider 诊断、Codex Micro 设置检查/导出、Input 只读检查/原字节导出、
 > live device status/files、双哈希验证导出、带 revision 的 bridge snapshot、
-> live CAS 校验、离线 profile/layer/control candidate 生成、fixture 验证的
+> live CAS 校验、离线 profile/layer/control/Action candidate 生成、fixture 验证的
 > apply/restore transaction、结构化 diff、JSON 输出和 shell completion。
 > 尚未发布打包版本；bridge transaction 已通过隔离 writer fixture
 > 验证，真实设备写入仍以 Input writer adapter 与硬件 rollback 验证为启用条件。
@@ -78,6 +78,15 @@ worklouderctl layer color --input CONFIG.json [--profile PROFILE_ID] --id LAYER_
 worklouderctl control list --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID
 worklouderctl control show --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control key:ROW:COLUMN
 worklouderctl control set --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control encoder:INDEX:press --assignment KC_MUTE --output CANDIDATE.json
+worklouderctl action list --input CONFIG.json
+worklouderctl action show --input CONFIG.json --id ACTION_ID
+worklouderctl action create --input CONFIG.json --name NAME --output CANDIDATE.json
+worklouderctl action rename --input CONFIG.json --id ACTION_ID --name NAME --output CANDIDATE.json
+worklouderctl action event add --input CONFIG.json --id ACTION_ID --assignment KC_C --type press --delay 0 --output CANDIDATE.json
+worklouderctl action event set --input CONFIG.json --id ACTION_ID --index 0 --assignment KC_C --type click --delay 200 --output CANDIDATE.json
+worklouderctl action event delete --input CONFIG.json --id ACTION_ID --index 0 --output CANDIDATE.json
+worklouderctl action event move --input CONFIG.json --id ACTION_ID --from 1 --to 0 --output CANDIDATE.json
+worklouderctl action delete --input CONFIG.json --id ACTION_ID --output CANDIDATE.json
 worklouderctl device --transport direct --input-mode require-closed status
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
@@ -114,7 +123,7 @@ CAS、session-scoped idempotency、完整 revision readback 与 automatic rollba
 只有运行中的 Input 注入已验证 writer 时，bridge 才会公布这两个写能力；当前
 跨语言证据来自隔离 reference writer。
 
-`profile`、`layer` 与 `control` 是离线 semantic editor：先严格验证 snapshot 内每个
+`profile`、`layer`、`control` 与 `action` 是离线 semantic editor：先严格验证 snapshot 内每个
 size、SHA-1、SHA-256、canonical base64、safe path、keymap ID 与完整 revision，
 再只修改请求的 semantic field，保留未知 JSON 字段和其他文件的原字节，重算
 受影响的哈希与 revision，原子发布并重新打开 candidate。这个阶段不连接 Input
@@ -127,6 +136,12 @@ Input 0.18.0 assignment grammar，支持 `KC_*`、`KI_*` 以及已存在的
 按 read-only 类型读取和保留；可写 assignment 来自 catalog 与有效引用。引用发生变化时，candidate
 会按照 Input 的顺序同步 `macrosUsed` 与 `multiActionsUsed`，再完成全 snapshot
 rehash、原子发布和 reopen readback。
+
+`action` 已冻结 Input 0.18.0 的 Action 模型：ID 采用相同的 last-ID-plus-one
+分配规则；event 保留有序的 `release(0)`、`press(1)`、`click(2)` 与
+`0..9999 ms` delay；新 Action 使用 Input 默认的 `KC_NONE` press event。
+删除采用完整 cascade，同步处理 layer controls、其他 Action events、Multi Action
+branches、groups 与 profile `macrosUsed`，每个被移除的引用落为 `KC_NONE`。
 
 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
 adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
@@ -187,8 +202,9 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 `files`、双哈希 `export`、Companion Bridge v1 contract/client/reference server、
 revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
 Input 自动恢复，以及 profile list/select/rename 与 layer list/rename 的严格离线
-candidate 生成、profile/layer show、layer 24-bit RGB color candidate，以及 keys、
-encoder gestures、已有 joystick sectors 的 control list/show/set candidate 已经实现；Input
+candidate 生成、profile/layer show、layer 24-bit RGB color candidate，keys、
+encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
+list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
 release 集成、可安装 binary、Homebrew formula、
 Codex live settings bridge 写入与完整写入命令将在对应 transaction 和真实硬件
 readback 验证后发布。

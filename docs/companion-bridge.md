@@ -132,6 +132,12 @@ worklouderctl control show --input config-snapshot.json --profile 0 --layer 1 \
   --control encoder:0:press
 worklouderctl control set --input config-snapshot.json --profile 0 --layer 1 \
   --control encoder:0:press --assignment KC_MUTE --output control-candidate.json
+worklouderctl action list --input config-snapshot.json
+worklouderctl action show --input config-snapshot.json --id 3
+worklouderctl action event set --input config-snapshot.json --id 3 --index 0 \
+  --assignment KC_X --type click --delay 200 --output action-candidate.json
+worklouderctl action delete --input config-snapshot.json --id 3 \
+  --output action-delete-candidate.json
 ```
 
 Before publishing, the editor independently verifies every file's canonical
@@ -217,7 +223,7 @@ WorkLouderCTL maintains the executable reference pieces in this repository:
 - `companion/input-main-bridge.test.mjs` — authentication, dispatch, and service
   adapter tests;
 - `scripts/test-bridge-e2e.sh` — Rust CLI handshake, status, file list, exact
-  export, semantic profile/layer/control inspection and candidates, independent candidate rehash,
+  export, semantic profile/layer/control/Action inspection and candidates, independent candidate rehash,
   apply/readback, idempotent retry, stale-CAS rejection, restore, and dual-hash
   conformance test.
 

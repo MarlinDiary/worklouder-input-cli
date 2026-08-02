@@ -64,7 +64,8 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Existing joystick sector assignments
 - [x] Action and Multi Action reference validation plus profile usage synchronization
 - [ ] Layer lighting
-- [ ] Actions/macros and groups
+- [x] Actions/macros list/show/create/rename/delete and event CRUD/reorder
+- [ ] Action groups
 - [ ] Multi Action CRUD and timing
 - [ ] Linked apps
 

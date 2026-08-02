@@ -262,6 +262,37 @@ Validation must cover balanced modifier release, referenced IDs, maximum event
 counts, permitted keycodes, and preserved ordering. Hardware verification must
 observe the emitted chord rather than relying on the displayed Action name.
 
+The current offline Action interface is:
+
+```sh
+worklouderctl action list --input SNAPSHOT.json
+worklouderctl action show --input SNAPSHOT.json --id ID
+worklouderctl action create --input SNAPSHOT.json --name NAME --output CANDIDATE.json
+worklouderctl action rename --input SNAPSHOT.json --id ID --name NAME --output CANDIDATE.json
+worklouderctl action event add --input SNAPSHOT.json --id ID \
+  --assignment KC_C --type press --delay 0 --output CANDIDATE.json
+worklouderctl action event set --input SNAPSHOT.json --id ID --index INDEX \
+  [--assignment TOKEN] [--type release|press|click] [--delay MILLISECONDS] \
+  --output CANDIDATE.json
+worklouderctl action event delete --input SNAPSHOT.json --id ID \
+  --index INDEX --output CANDIDATE.json
+worklouderctl action event move --input SNAPSHOT.json --id ID \
+  --from INDEX --to INDEX --output CANDIDATE.json
+worklouderctl action delete --input SNAPSHOT.json --id ID --output CANDIDATE.json
+```
+
+`spec/input-actions-0.18.0.json` freezes the ASAR-derived model. Action IDs use
+Input's last-action-ID-plus-one allocation. Event types are release `0`, press
+`1`, and click `2`; delay is an integer from `0` through `9999` milliseconds.
+A sole deleted event resets to `{act:1,delay:0,kc:"KC_NONE"}`, matching the
+editor's one-event invariant.
+
+Action deletion is referentially complete across existing layer keys,
+encoders, joystick sectors, other Action events, four Multi Action branches,
+Action groups, and profile usage arrays. References become `KC_NONE`; empty
+Action groups are removed; `macrosUsed` is recomputed in Input string order.
+The candidate still preserves unrelated file bytes and unknown JSON fields.
+
 ### Multi Actions
 
 The UI offers tap, double tap, hold, and tap-then-hold branches. Timing includes
