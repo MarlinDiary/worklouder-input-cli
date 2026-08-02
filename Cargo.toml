@@ -18,26 +18,26 @@ name = "worklouderctl"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "=1.0.75"
+anyhow = "=1.0.104"
 # Keep deterministic, non-ANSI help output and exclude Clap 3's optional
 # unmaintained `atty` color dependency (GHSA-g98v-hv3f-hcfr).
-clap = { version = "=3.2.25", default-features = false, features = ["derive", "std", "suggestions"] }
-clap_complete = "=3.2.5"
+clap = { version = "=4.1.11", default-features = false, features = ["derive", "std", "suggestions"] }
+clap_complete = "=4.5.3"
 # Keep open-ended transitive ranges on versions that support our declared
 # Rust 1.61 MSRV. Remove these anchors only together with an MSRV bump.
-itoa = "=1.0.4"
-libc = "=0.2.137"
-once_cell = "=1.17.1"
-proc-macro2 = "=1.0.47"
-quote = "=1.0.21"
-ryu = "=1.0.11"
-smawk = "=0.3.1"
-serde = { version = "=1.0.145", features = ["derive"] }
-serde_json = { version = "=1.0.85", features = ["preserve_order"] }
-textwrap = "=0.16.0"
-toml = "=0.5.9"
-unicode-ident = "=1.0.5"
-unicode-width = "=0.1.10"
+itoa = "=1.0.18"
+libc = "=0.2.189"
+once_cell = "=1.21.4"
+proc-macro2 = "=1.0.107"
+quote = "=1.0.47"
+ryu = "=1.0.23"
+smawk = "=0.3.3"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["preserve_order"] }
+textwrap = "=0.16.2"
+toml = "=1.1.4"
+unicode-ident = "=1.0.24"
+unicode-width = "=0.2.2"
 
 [profile.release]
 lto = "thin"
