@@ -13,10 +13,13 @@
     ".": "./index.mjs",
     "./adapter": "./input-main-adapter.mjs",
     "./bridge": "./input-main-bridge.mjs",
+    "./codex-adapter": "./codex-main-adapter.mjs",
+    "./codex-bridge": "./codex-main-bridge.mjs",
+    "./codex-integration": "./codex-main-integration.mjs",
     "./conformance": "./conformance.mjs",
     "./integration": "./input-main-integration.mjs"
   },
   "scripts": {
-    "test": "node --test input-main-bridge.test.mjs"
+    "test": "node --test input-main-bridge.test.mjs codex-main-bridge.test.mjs"
   }
 }
