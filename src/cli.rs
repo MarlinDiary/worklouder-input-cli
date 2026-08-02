@@ -51,6 +51,10 @@ pub enum Command {
 
     /// Read live Codex Micro state through Input's bundled device provider.
     Device {
+        /// Select the Input-owned bridge or the direct compatibility provider.
+        #[clap(long, value_enum, default_value = "auto")]
+        transport: DeviceTransport,
+
         /// Coordinate access when the Input app currently owns the device.
         #[clap(long, value_enum, default_value = "require-closed")]
         input_mode: InputCoordinationMode,
@@ -59,8 +63,30 @@ pub enum Command {
         #[clap(long, value_parser)]
         app: Option<PathBuf>,
 
+        /// Override the Input Companion Bridge Unix socket path.
+        #[clap(long, value_parser)]
+        bridge_socket: Option<PathBuf>,
+
+        /// Override the Input Companion Bridge token file path.
+        #[clap(long, value_parser)]
+        bridge_token: Option<PathBuf>,
+
         #[clap(subcommand)]
         command: DeviceCommand,
+    },
+
+    /// Inspect the Input Companion Bridge transport.
+    Bridge {
+        /// Override the Input Companion Bridge Unix socket path.
+        #[clap(long, value_parser)]
+        socket: Option<PathBuf>,
+
+        /// Override the Input Companion Bridge token file path.
+        #[clap(long, value_parser)]
+        token: Option<PathBuf>,
+
+        #[clap(subcommand)]
+        command: BridgeCommand,
     },
 
     /// Validate or compare exported configuration.
@@ -149,6 +175,24 @@ pub enum DeviceCommand {
         #[clap(long, value_parser)]
         output: PathBuf,
     },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BridgeCommand {
+    /// Authenticate and report the negotiated bridge capabilities.
+    Status,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum DeviceTransport {
+    /// Prefer the bridge when its socket and token exist, otherwise use direct.
+    Auto,
+
+    /// Route through the running Input process and its existing device session.
+    Bridge,
+
+    /// Use Input's bundled device kit with explicit process coordination.
+    Direct,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]

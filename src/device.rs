@@ -584,7 +584,7 @@ fn provider_warnings(device_kit_version: &str) -> Result<Vec<String>> {
     }
 }
 
-fn safe_relative_path(value: &str) -> Result<PathBuf> {
+pub(crate) fn safe_relative_path(value: &str) -> Result<PathBuf> {
     ensure!(!value.is_empty(), "device file path was empty");
     ensure!(
         !value.contains('\\') && !value.contains('\0'),
@@ -606,7 +606,11 @@ fn safe_relative_path(value: &str) -> Result<PathBuf> {
     Ok(clean)
 }
 
-fn publish_snapshot(staging: &Path, output: &Path, manifest: &ExportManifest) -> Result<()> {
+pub(crate) fn publish_snapshot(
+    staging: &Path,
+    output: &Path,
+    manifest: &ExportManifest,
+) -> Result<()> {
     validate_snapshot_files(staging, &manifest.files)?;
     let manifest_path = staging.join("manifest.json");
     let mut bytes = serde_json::to_vec_pretty(manifest)?;
@@ -671,7 +675,7 @@ fn validate_snapshot_files(root: &Path, files: &[ExportFileRecord]) -> Result<()
     Ok(())
 }
 
-fn staging_path(output: &Path) -> Result<PathBuf> {
+pub(crate) fn staging_path(output: &Path) -> Result<PathBuf> {
     let parent = output
         .parent()
         .filter(|path| !path.as_os_str().is_empty())

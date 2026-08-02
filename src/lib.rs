@@ -1,3 +1,4 @@
+pub mod bridge;
 pub mod cli;
 pub mod codex;
 pub mod config;
@@ -10,8 +11,8 @@ pub mod input;
 use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
-    CapabilityCommand, Cli, CodexCommand, Command, CompletionShell, ConfigCommand, DeviceCommand,
-    InputCommand, TierCommand,
+    BridgeCommand, CapabilityCommand, Cli, CodexCommand, Command, CompletionShell, ConfigCommand,
+    DeviceCommand, DeviceTransport, InputCommand, TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -43,10 +44,29 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         Command::Codex { command } => run_codex(command, cli.json, &mut out)?,
         Command::Input { command } => run_input(command, cli.json, &mut out)?,
         Command::Device {
+            transport,
             input_mode,
             app,
+            bridge_socket,
+            bridge_token,
             command,
-        } => run_device(command, input_mode, app, cli.json, &mut out)?,
+        } => run_device(
+            command,
+            DeviceRunOptions {
+                transport,
+                input_mode,
+                app,
+                bridge_socket,
+                bridge_token,
+            },
+            cli.json,
+            &mut out,
+        )?,
+        Command::Bridge {
+            socket,
+            token,
+            command,
+        } => run_bridge(command, socket, token, cli.json, &mut out)?,
         Command::Config { command } => run_config(command, cli.json, &mut out)?,
         Command::Completion { shell } => run_completion(shell, &mut out),
     }
@@ -54,17 +74,34 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
     Ok(())
 }
 
-fn run_device(
-    command: DeviceCommand,
+struct DeviceRunOptions {
+    transport: DeviceTransport,
     input_mode: cli::InputCoordinationMode,
     app: Option<std::path::PathBuf>,
+    bridge_socket: Option<std::path::PathBuf>,
+    bridge_token: Option<std::path::PathBuf>,
+}
+
+fn run_device(
+    command: DeviceCommand,
+    options: DeviceRunOptions,
     json: bool,
     mut out: impl Write,
 ) -> Result<()> {
-    let app = device::app_path(app);
+    let app = device::app_path(options.app);
+    let bridge_paths = bridge::paths(options.bridge_socket, options.bridge_token);
+    let use_bridge = match options.transport {
+        DeviceTransport::Bridge => true,
+        DeviceTransport::Direct => false,
+        DeviceTransport::Auto => bridge::is_discoverable(&bridge_paths),
+    };
     match command {
         DeviceCommand::Status => {
-            let report = device::status(&app, input_mode)?;
+            let report = if use_bridge {
+                bridge::status(&bridge_paths)?
+            } else {
+                device::status(&app, options.input_mode)?
+            };
             if json {
                 write_json(&mut out, &report)?;
             } else {
@@ -97,7 +134,11 @@ fn run_device(
             }
         }
         DeviceCommand::Files { path, recursive } => {
-            let report = device::files(&app, input_mode, path.as_deref(), recursive)?;
+            let report = if use_bridge {
+                bridge::files(&bridge_paths, path.as_deref(), recursive)?
+            } else {
+                device::files(&app, options.input_mode, path.as_deref(), recursive)?
+            };
             if json {
                 write_json(&mut out, &report)?;
             } else {
@@ -117,7 +158,11 @@ fn run_device(
             }
         }
         DeviceCommand::Export { output } => {
-            let result = device::export(&app, input_mode, &output)?;
+            let result = if use_bridge {
+                bridge::export(&bridge_paths, &output)?
+            } else {
+                device::export(&app, options.input_mode, &output)?
+            };
             if json {
                 write_json(&mut out, &result)?;
             } else {
@@ -141,6 +186,41 @@ fn run_device(
                 )?;
                 for warning in result.manifest.warnings {
                     writeln!(out, "WARN\t{warning}")?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn run_bridge(
+    command: BridgeCommand,
+    socket: Option<std::path::PathBuf>,
+    token: Option<std::path::PathBuf>,
+    json: bool,
+    mut out: impl Write,
+) -> Result<()> {
+    let paths = bridge::paths(socket, token);
+    match command {
+        BridgeCommand::Status => {
+            let status = bridge::inspect(&paths)?;
+            if json {
+                write_json(&mut out, &status)?;
+            } else {
+                writeln!(
+                    out,
+                    "Input Companion Bridge protocol {}",
+                    status.protocol_version
+                )?;
+                writeln!(out, "socket={}", status.socket.display())?;
+                writeln!(
+                    out,
+                    "bridge={} input={}",
+                    status.bridge_version, status.input_version
+                )?;
+                writeln!(out, "session={}", status.session_id)?;
+                for capability in status.capabilities {
+                    writeln!(out, "CAPABILITY\t{capability}")?;
                 }
             }
         }
