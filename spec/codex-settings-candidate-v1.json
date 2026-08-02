@@ -87,6 +87,11 @@
       "command": "codex joystick clear --input SNAPSHOT.json DIRECTION --output CANDIDATE.json",
       "value": null
     },
+    "layoutReset": {
+      "command": "codex reset layout --input SNAPSHOT.json --output CANDIDATE.json",
+      "changedPath": "/settings/codex-micro-layout",
+      "source": "exact installed-build codex-micro-layout default"
+    },
     "lightingBrightnessGet": {
       "command": "codex lighting brightness get --input SNAPSHOT.json",
       "type": "integer",
@@ -175,6 +180,12 @@
     ],
     "oneDirectionPerCandidate": true,
     "preserveUntargetedDirections": true
+  },
+  "layoutResetRules": {
+    "replaceCompleteLayout": true,
+    "preserveOtherSettings": true,
+    "defaultSource": "frozen exact-version installed-build definition",
+    "inheritedDefaultIsNoop": true
   },
   "candidateBoundary": {
     "contactsCodex": false,
