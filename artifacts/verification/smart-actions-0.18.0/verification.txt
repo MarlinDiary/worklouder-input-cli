@@ -1,0 +1,138 @@
+WorkLouderCTL Smart Action 0.18.0 verification record
+=====================================================
+
+Scope
+-----
+Base commit: b9cc412789a046f06561fd4763801cf633c99276
+Feature commits:
+  490769f spec: freeze Input Smart Action model
+  7aad679 feat: add offline Smart Action candidates
+  5d8e3ba docs: document Smart Action candidate workflow
+  2ed7948 test: cover Smart Action bridge transaction
+  42e3f90 test: harden Smart Action integrity checks
+Input version (read from Info.plist, no app executable invocation): 0.18.0
+Input GUI/device mutation during current-cache probe: none; all candidates were written under /tmp.
+
+Source cache baseline and post-probe hashes
+-------------------------------------------
+Command:
+  shasum -a 256 "$HOME/Library/Application Support/input/devices/33632/keymap.json" "$HOME/Library/Application Support/input/devices/33632/smart_actions.json"
+Baseline literal output:
+  803779884034f0268339f3b227b550db043068403e5024cc5270bc229467a6c6  .../keymap.json
+  1db5d3ba2dfd678bde8d2dfe24167d28d1a5f94a849abaf8851722313bdce5c1  .../smart_actions.json
+Post-probe literal output:
+  803779884034f0268339f3b227b550db043068403e5024cc5270bc229467a6c6  .../keymap.json
+  1db5d3ba2dfd678bde8d2dfe24167d28d1a5f94a849abaf8851722313bdce5c1  .../smart_actions.json
+Exit status: 0
+
+Functional baseline-red
+-----------------------
+Input: /tmp/worklouder-smart-e2e.hMmQVX/baseline.json, constructed byte-exactly from the two cache files above.
+Command:
+  ./target/debug/worklouderctl --json smart-action show --input /tmp/worklouder-smart-e2e.hMmQVX/baseline.json --id 1
+Literal stderr:
+  error: Smart Action id 1 was not found
+Exit status: 1
+
+Modified behavior: four typed definitions
+-----------------------------------------
+Commands (each output becomes the next input):
+  worklouderctl smart-action create ... --type text --text 'hello fixture'
+  worklouderctl smart-action create ... --type command --command 'printf e2e'
+  worklouderctl smart-action create ... --type url --url 'https://example.invalid/e2e'
+  worklouderctl smart-action create ... --type app --app-name 'Fixture App' --app-path '/Applications/Fixture.app'
+  worklouderctl --json smart-action list --input /tmp/worklouder-smart-e2e.hMmQVX/04-app.json
+Literal JSON output:
+{"schemaVersion":1,"kind":"worklouderctl-smart-action-list","revision":"c7eadf41e2efefb918107e28c0678c5d6970c071c9faf36080d19294e5e05045","smartActions":[{"id":1,"name":"E2E Text","actionType":"TEXT_STEP","payload":{"text":"hello fixture"},"color":"#EDF6FF","physicalReferenceCount":0,"groupIds":[],"requiresCommandPermission":false},{"id":2,"name":"E2E Command","actionType":"CMD_STEP","payload":{"cmd":"printf e2e"},"physicalReferenceCount":0,"groupIds":[],"requiresCommandPermission":true},{"id":3,"name":"E2E URL","actionType":"URL_STEP","payload":{"url":"https://example.invalid/e2e"},"physicalReferenceCount":0,"groupIds":[],"requiresCommandPermission":false},{"id":4,"name":"E2E App","actionType":"APP_STEP","payload":{"name":"Fixture App","path":"/Applications/Fixture.app"},"icon":"fixture-app","physicalReferenceCount":0,"groupIds":[],"requiresCommandPermission":false}]}
+Exit status: 0
+
+Modified behavior: binding, group, and delete cascade
+-----------------------------------------------------
+Bind command:
+  worklouderctl control set --input 05-group.json --profile 0 --layer 1 --control key:0:0 --assignment SA_1 --output 06-bound.json
+Bind/show literal result fields:
+  physicalReferenceCount=1
+  groupIds=[0]
+Delete command:
+  worklouderctl --json smart-action delete --input 07-updated.json --id 1 --output 08-deleted.json
+Delete receipt literal output:
+{"schemaVersion":1,"kind":"worklouderctl-config-candidate","operation":"smart-action-delete","output":"/tmp/worklouder-smart-e2e.hMmQVX/08-deleted.json","changed":true,"changedPaths":["/keymap.json/profiles/0/layers/1/layout/keymap/0/0","/smart_actions.json/smartActionGroups/0/actionIds","/smart_actions.json/smartActions/SA_1"],"beforeRevision":"4ed31bf6f1c7c5cef0577260af23f7cd10a0873ff6fddc6d72f8c687e19d8231","afterRevision":"35e6149f82e78a5f251fb1840d1cc27b66f0d24162e84af865421a1b5cb294e4"}
+Readback literal results:
+  EMBEDDED_HASHES_VALID=true
+  KEYMAP_BYTE_EXACT_SMART_ONLY=true
+  DELETE_CASCADE_READBACK=true
+  FINAL_SMART_ACTION_IDS=SA_2,SA_3,SA_4
+Exit status: 0
+
+Automated quality gates
+-----------------------
+Command: cargo fmt --check
+Literal output: (empty)
+Exit status: 0
+
+Command: cargo test --locked
+Literal result:
+  45 passed; 0 failed (library)
+  11 passed; 0 failed (CLI integration)
+  0 failed (doc tests)
+Exit status: 0
+
+Command: cargo clippy --all-targets -- -D warnings
+Literal result:
+  Finished dev [unoptimized + debuginfo] target(s)
+Exit status: 0
+
+Command: cargo +1.61.0 test --offline --locked
+Literal result:
+  45 passed; 0 failed (library)
+  11 passed; 0 failed (CLI integration)
+  0 failed (doc tests)
+Exit status: 0
+
+Command: node --test companion/input-main-bridge.test.mjs
+Literal result:
+  tests 7
+  pass 7
+  fail 0
+Exit status: 0
+
+Command: ./scripts/test-bridge-e2e.sh
+Literal Smart Action result lines:
+  semantic_smart_action_typed_crud=verified
+  semantic_smart_action_group_crud=verified
+  semantic_smart_action_binding_cascade=verified
+  semantic_smart_action_apply_readback_restore=verified
+  config_apply_readback=verified
+  config_restore_readback=verified
+Exit status: 0
+
+Release artifact
+----------------
+Path: target/release/worklouderctl
+SHA-256: debb187649a8dd9f684c691b624c4e49ed2acece135dc17b4089a2fbeaa26c84
+Command: ./target/release/worklouderctl version
+Literal output: worklouderctl 0.1.0
+Exit status: 0
+
+Patch
+-----
+Path: artifacts/verification/smart-actions-0.18.0/smart-actions.patch
+SHA-256: 9e132ef1278c9a1fb813a6f898716f7aee88e7162f2c925216c452019b56209a
+Command: git apply --check --reverse artifacts/verification/smart-actions-0.18.0/smart-actions.patch
+Literal output: (empty)
+Exit status: 0
+
+Rollback
+--------
+Path: artifacts/verification/smart-actions-0.18.0/rollback.sh
+SHA-256: 7227d4c807da1f22b542a9eaba51c0c709c2be756226383e98bc013862f8b0a3
+The isolated-worktree execution result is appended after the rollback test.
+Isolated worktree command:
+  artifacts/verification/smart-actions-0.18.0/rollback.sh WORKTREE
+Literal output:
+  rollback=verified
+  base=b9cc412789a046f06561fd4763801cf633c99276
+Exit status: 0
+Postcondition command:
+  git -C WORKTREE diff --quiet b9cc412789a046f06561fd4763801cf633c99276 -- .
+Postcondition exit status: 0

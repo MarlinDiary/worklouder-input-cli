@@ -1,0 +1,2857 @@
+diff --git a/README.md b/README.md
+index efbd6e5..c21013d 100644
+--- a/README.md
++++ b/README.md
+@@ -23,7 +23,7 @@
+ > `worklouderctl` binary with provider diagnostics, Codex Micro settings
+ > inspection/export, Input inspection/exact-byte export, validation, structural
+ > diff, live device status/file reads, verified device export, revisioned bridge
+-> snapshots/CAS validation, offline profile/layer/AppSense/control/Action candidate generation,
++> snapshots/CAS validation, offline profile/layer/AppSense/control/Action/Smart Action candidate generation,
+ > fixture-verified apply/restore transactions, JSON output, and shell completions.
+ > There is no packaged release yet.
+ > The bridge transaction engine now verifies backup, apply, idempotent retry,
+@@ -119,6 +119,14 @@ worklouderctl appsense show --input CONFIG.json --id APP_ID
+ worklouderctl appsense link --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --name NAME [--process BUNDLE_ID] [--path APP_PATH] --output CANDIDATE.json
+ worklouderctl appsense set --input CONFIG.json --id APP_ID [--name NAME] [--process BUNDLE_ID|--clear-process] [--path APP_PATH|--clear-path] --output CANDIDATE.json
+ worklouderctl appsense unlink --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --output CANDIDATE.json
++worklouderctl smart-action list --input CONFIG.json
++worklouderctl smart-action show --input CONFIG.json --id SMART_ACTION_ID
++worklouderctl smart-action create --input CONFIG.json --name NAME --type text --text TEXT --output CANDIDATE.json
++worklouderctl smart-action set --input CONFIG.json --id SMART_ACTION_ID --type url --url URL --output CANDIDATE.json
++worklouderctl smart-action delete --input CONFIG.json --id SMART_ACTION_ID --output CANDIDATE.json
++worklouderctl smart-action group create --input CONFIG.json --name NAME --smart-action SMART_ACTION_ID --output CANDIDATE.json
++worklouderctl smart-action group member move --input CONFIG.json --id GROUP_ID --from 1 --to 0 --output CANDIDATE.json
++worklouderctl smart-action group delete --input CONFIG.json --id GROUP_ID --output CANDIDATE.json
+ worklouderctl control list --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID
+ worklouderctl control show --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control key:ROW:COLUMN
+ worklouderctl control set --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control encoder:INDEX:press --assignment KC_MUTE --output CANDIDATE.json
+@@ -187,7 +195,8 @@ full revision readback, and automatic rollback. These commands are advertised
+ only when the running Input version supplies a verified configuration writer;
+ the current cross-language evidence uses the isolated reference writer.
+ 
+-`profile`, `layer`, `appsense`, `control`, `action`, and `multi-action` commands are offline semantic editors. They strictly
++`profile`, `layer`, `appsense`, `control`, `action`, `multi-action`, and
++`smart-action` commands are offline semantic editors. They strictly
+ validate every embedded size, SHA-1, SHA-256, canonical base64 payload, safe
+ path, keymap ID, and the full snapshot revision before producing a new complete
+ candidate. A candidate preserves unknown JSON fields and unrelated file bytes,
+@@ -253,6 +262,16 @@ use Input's four `KC_NONE` assignments and `250 ms` default. Deletion clears
+ every physical, Action-event, nested Multi Action, group, and profile-usage
+ reference before removing the resource.
+ 
++`smart-action` covers Input 0.18.0 `TEXT_STEP`, `CMD_STEP`, `URL_STEP`, and
++`APP_STEP` records in `smart_actions.json`, including typed payloads, optional
++color/icon metadata, physical `SA_<ID>` bindings, and stored groups. New IDs
++use Input's maximum-ID-plus-one rule and start at 1. Group IDs start at 0 and
++empty groups are valid. Deleting a Smart Action clears every physical binding
++to `KC_NONE` and removes group membership while preserving the group container.
++Smart-only candidates preserve the exact `keymap.json` bytes. Command actions
++report `requiresCommandPermission`; the host gate remains Input's
++`smartActionCmdEnabled` setting and is not silently changed by definition CRUD.
++
+ The repository includes an executable Input-main reference server, a service
+ adapter for the Input 0.18.0 service shape, authentication tests, and a
+ cross-language Rust CLI conformance test:
+@@ -356,7 +375,8 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
+ | Semantic physical controls | List/show/set for keys, encoder gestures, and existing joystick sectors; candidate/apply/restore fixture-verified |
+ | Semantic Actions | List/show/create/rename/delete and event add/set/delete/move; cascade/apply/restore fixture-verified |
+ | Real-device mutation and rollback | Planned |
+-| Input cache/database and Smart Actions synchronization | Planned |
++| Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
++| Input cache/database synchronization | Planned |
+ | Signed macOS release and Homebrew installation | Planned |
+ 
+ ## Frequently asked questions
+@@ -365,7 +385,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
+ 
+ WorkLouderCTL is an open-source full-configuration CLI project for Codex, Work
+ Louder Input, and Codex Micro. The source alpha can inspect both apps,
+-read/export live Codex Micro state, generate validated profile/layer/lighting/control/Action/Multi Action/group candidates,
++read/export live Codex Micro state, generate validated profile/layer/lighting/control/Action/Multi Action/Smart Action/group candidates,
+ and exercise apply/restore against the isolated bridge writer; packaged
+ binaries and released-Input writer integration are upcoming.
+ 
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index 23449ad..5480296 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -9,7 +9,7 @@
+ > **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
+ > provider 诊断、Codex Micro 设置检查/导出、Input 只读检查/原字节导出、
+ > live device status/files、双哈希验证导出、带 revision 的 bridge snapshot、
+-> live CAS 校验、离线 profile/layer/AppSense/control/Action candidate 生成、fixture 验证的
++> live CAS 校验、离线 profile/layer/AppSense/control/Action/Smart Action candidate 生成、fixture 验证的
+ > apply/restore transaction、结构化 diff、JSON 输出和 shell completion。
+ > 尚未发布打包版本；bridge transaction 已通过隔离 writer fixture
+ > 验证，真实设备写入仍以 Input writer adapter 与硬件 rollback 验证为启用条件。
+@@ -112,6 +112,14 @@ worklouderctl multi-action set --input CONFIG.json --id MULTI_ACTION_ID --tap KC
+ worklouderctl multi-action delete --input CONFIG.json --id MULTI_ACTION_ID --output CANDIDATE.json
+ worklouderctl multi-action group create --input CONFIG.json --name NAME --multi-action MULTI_ACTION_ID --output CANDIDATE.json
+ worklouderctl multi-action group delete --input CONFIG.json --id GROUP_ID [--keep-members] --output CANDIDATE.json
++worklouderctl smart-action list --input CONFIG.json
++worklouderctl smart-action show --input CONFIG.json --id SMART_ACTION_ID
++worklouderctl smart-action create --input CONFIG.json --name NAME --type text --text TEXT --output CANDIDATE.json
++worklouderctl smart-action set --input CONFIG.json --id SMART_ACTION_ID --type url --url URL --output CANDIDATE.json
++worklouderctl smart-action delete --input CONFIG.json --id SMART_ACTION_ID --output CANDIDATE.json
++worklouderctl smart-action group create --input CONFIG.json --name NAME --smart-action SMART_ACTION_ID --output CANDIDATE.json
++worklouderctl smart-action group member move --input CONFIG.json --id GROUP_ID --from 1 --to 0 --output CANDIDATE.json
++worklouderctl smart-action group delete --input CONFIG.json --id GROUP_ID --output CANDIDATE.json
+ worklouderctl device --transport direct --input-mode require-closed status
+ worklouderctl config validate BACKUP_DIRECTORY
+ worklouderctl config diff BASE CANDIDATE
+@@ -148,7 +156,8 @@ CAS、session-scoped idempotency、完整 revision readback 与 automatic rollba
+ 只有运行中的 Input 注入已验证 writer 时，bridge 才会公布这两个写能力；当前
+ 跨语言证据来自隔离 reference writer。
+ 
+-`profile`、`layer`、`appsense`、`control`、`action` 与 `multi-action` 是离线 semantic editor：先严格验证 snapshot 内每个
++`profile`、`layer`、`appsense`、`control`、`action`、`multi-action` 与
++`smart-action` 是离线 semantic editor：先严格验证 snapshot 内每个
+ size、SHA-1、SHA-256、canonical base64、safe path、keymap ID 与完整 revision，
+ 再只修改请求的 semantic field，保留未知 JSON 字段和其他文件的原字节，重算
+ 受影响的哈希与 revision，原子发布并重新打开 candidate。这个阶段不连接 Input
+@@ -195,6 +204,14 @@ maximum-ID-plus-one 规则分配。
+ `250 ms` 默认值；删除时同步清理 physical controls、Action events、嵌套 Multi
+ Action、groups 和 profile usage 引用。
+ 
++`smart-action` 已覆盖 Input 0.18.0 的 `TEXT_STEP`、`CMD_STEP`、`URL_STEP`
++与 `APP_STEP`，包括 typed payload、color/icon、物理 `SA_<ID>` binding 和 stored
++groups。Action ID 按 maximum-ID-plus-one 分配并从 1 开始；group ID 从 0 开始，
++允许空 group。删除 Smart Action 会把物理引用清为 `KC_NONE`、移除 group
++membership，并保留 group container。只修改 Smart Action 的 candidate 会保持
++`keymap.json` 原字节不变。Command action 会显式报告 `requiresCommandPermission`；
++Input 的 `smartActionCmdEnabled` host permission 不会被 definition CRUD 隐式修改。
++
+ 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
+ adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
+ 
+@@ -254,7 +271,7 @@ WorkLouderCTL 是 **Full-configuration CLI**：
+ `files`、双哈希 `export`、Companion Bridge v1 contract/client/reference server、
+ revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
+ Input 自动恢复，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
+-与 per-layer lighting、AppSense linked-app lifecycle 的严格离线 candidate 生成，keys、
++与 per-layer lighting、AppSense linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线 candidate 生成，keys、
+ encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
+ list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
+ release 集成、可安装 binary、Homebrew formula、
+diff --git a/docs/companion-bridge.md b/docs/companion-bridge.md
+index b48f771..c86d12b 100644
+--- a/docs/companion-bridge.md
++++ b/docs/companion-bridge.md
+@@ -168,6 +168,14 @@ worklouderctl multi-action set --input config-snapshot.json --id 1 \
+   --output multi-action-candidate.json
+ worklouderctl multi-action group create --input config-snapshot.json --name Gestures \
+   --multi-action 1 --output multi-action-group-candidate.json
++worklouderctl smart-action create --input config-snapshot.json --name 'Insert text' \
++  --type text --text 'hello' --color '#EDF6FF' --output smart-text-candidate.json
++worklouderctl smart-action create --input smart-text-candidate.json --name 'Open URL' \
++  --type url --url 'https://example.com' --output smart-url-candidate.json
++worklouderctl smart-action group create --input smart-url-candidate.json --name Launchers \
++  --smart-action 1 --smart-action 2 --output smart-group-candidate.json
++worklouderctl control set --input smart-group-candidate.json --profile 0 --layer 1 \
++  --control key:0:0 --assignment SA_1 --output smart-bound-candidate.json
+ ```
+ 
+ Before publishing, the editor independently verifies every file's canonical
+diff --git a/docs/configuration-parity.md b/docs/configuration-parity.md
+index f089fc4..9366fd9 100644
+--- a/docs/configuration-parity.md
++++ b/docs/configuration-parity.md
+@@ -66,8 +66,8 @@ the runtime reloaded the new value.
+ 
+ | GUI surface | Configuration coverage | Planned command family | Current status |
+ | --- | --- | --- | --- |
+-| Smart Actions | text, command, URL, application | `smart-action` | researched |
+-| Smart Action groups | create, rename, move, delete | `smart-action group` | researched |
++| Smart Actions | text, command, URL, application | `smart-action` | typed list/show/create/set/delete, `SA_<ID>` control binding, and reference cascade candidate-verified against current Input 0.18.0 cache bytes |
++| Smart Action groups | create, rename, move, delete | `smart-action group` | metadata and ordered member CRUD, empty groups, and container-only delete candidate-verified |
+ | Command permission | explicit host command toggle | `input permission command` | researched |
+ | Cheat Sheet | show, hold, hide, toggle assignments | `cheat-sheet` | researched |
+ | Radial menu | sectors, labels, referenced actions | `radial` | researched |
+diff --git a/docs/configuration-reference.md b/docs/configuration-reference.md
+index 7cc5437..e46f01d 100644
+--- a/docs/configuration-reference.md
++++ b/docs/configuration-reference.md
+@@ -455,6 +455,21 @@ Input 0.18.0 advertises and implements:
+ - launch an application;
+ - name, group, search, reuse, and bind actions.
+ 
++The offline `smart-action` editor now validates and preserves the separate
++`smart_actions.json` authority. It supports list/show/create/set/delete for all
++four typed payloads and `smart-action group` metadata plus ordered member CRUD.
++Action keys use canonical `SA_<ID>` names; new IDs start at 1 and use
++maximum-plus-one. Groups start at ID 0, may be empty, and container deletion
++does not delete member actions. A Smart Action deletion replaces physical
++`SA_<ID>` assignments with `KC_NONE` and removes group membership while keeping
++the group valid. Unknown root, record, and payload fields survive edits, and a
++Smart-only candidate leaves the exact `keymap.json` bytes unchanged.
++
++`control set` accepts an existing `SA_<ID>` only for physical controls. Action
++events and Multi Action branches retain their own frozen assignment grammar.
++The CLI reports command definitions with `requiresCommandPermission: true`;
++definition editing does not toggle the host permission.
++
+ The Input database has a `smartActionCmdEnabled` permission field. Command
+ execution must remain explicitly enabled and must be reported separately from
+ device deployment.
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index cd5ca21..d747466 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -67,10 +67,11 @@ The roadmap prioritizes evidence and configuration safety over command count.
+ - [x] Action group metadata, ordered member CRUD, and Input orphan cascade
+ - [x] Multi Action field CRUD, timing, groups, and reference cascade
+ - [x] Linked-app/AppSense list/show/link/update/unlink candidates and fixture transaction
++- [x] Smart Action typed CRUD, groups, physical bindings, and delete cascade candidates
+ 
+ ## M4 — Full cross-authority transaction
+ 
+-- [ ] Smart Actions and groups
++- [x] Smart Actions and groups (offline candidate and current-cache format verified)
+ - [ ] Input cache adapter
+ - [ ] Input database adapter
+ - [ ] Input process coordination
+diff --git a/scripts/test-bridge-e2e.sh b/scripts/test-bridge-e2e.sh
+index a6da504..24eca88 100755
+--- a/scripts/test-bridge-e2e.sh
++++ b/scripts/test-bridge-e2e.sh
+@@ -28,6 +28,13 @@ action_group_deleted_snapshot=$root/config-action-group-deleted.json
+ multi_group_created_snapshot=$root/config-multi-group-created.json
+ multi_group_updated_snapshot=$root/config-multi-group-updated.json
+ multi_group_deleted_snapshot=$root/config-multi-group-deleted.json
++smart_text_snapshot=$root/config-smart-text.json
++smart_command_snapshot=$root/config-smart-command.json
++smart_url_snapshot=$root/config-smart-url.json
++smart_app_snapshot=$root/config-smart-app.json
++smart_group_snapshot=$root/config-smart-group.json
++smart_bound_snapshot=$root/config-smart-bound.json
++smart_deleted_snapshot=$root/config-smart-deleted.json
+ renamed_profile_snapshot=$root/config-profile-renamed.json
+ selected_snapshot=$root/config-selected.json
+ profile_created_snapshot=$root/config-profile-created.json
+@@ -225,27 +232,57 @@ revision=$(python3 -c \
+   --output "$multi_group_updated_snapshot" >"$root/multi-group-set.json"
+ "$bin" --json multi-action group delete --input "$config_snapshot" --id 0 \
+   --output "$multi_group_deleted_snapshot" >"$root/multi-group-delete.json"
++"$bin" --json smart-action list --input "$config_snapshot" \
++  >"$root/smart-list-empty.json"
++"$bin" --json smart-action create --input "$candidate_snapshot" \
++  --name 'Fixture Text' --type text --text 'hello fixture' --color '#EDF6FF' \
++  --output "$smart_text_snapshot" >"$root/smart-create-text.json"
++"$bin" --json smart-action create --input "$smart_text_snapshot" \
++  --name 'Fixture Command' --type command --command 'printf fixture' \
++  --output "$smart_command_snapshot" >"$root/smart-create-command.json"
++"$bin" --json smart-action create --input "$smart_command_snapshot" \
++  --name 'Fixture URL' --type url --url 'https://example.invalid/fixture' \
++  --output "$smart_url_snapshot" >"$root/smart-create-url.json"
++"$bin" --json smart-action create --input "$smart_url_snapshot" \
++  --name 'Fixture App' --type app --app-name 'Fixture App' \
++  --app-path '/Applications/Fixture.app' --icon fixture-app \
++  --output "$smart_app_snapshot" >"$root/smart-create-app.json"
++"$bin" --json smart-action group create --input "$smart_app_snapshot" \
++  --name 'Fixture Smart Group' --smart-action 1 --smart-action 2 \
++  --color '#010203' --tag fixture --output "$smart_group_snapshot" \
++  >"$root/smart-group-create.json"
++"$bin" --json control set --input "$smart_group_snapshot" --profile 0 --layer 1 \
++  --control key:0:0 --assignment SA_1 --output "$smart_bound_snapshot" \
++  >"$root/smart-bind.json"
++"$bin" --json smart-action list --input "$smart_bound_snapshot" \
++  >"$root/smart-list.json"
++"$bin" --json smart-action show --input "$smart_bound_snapshot" --id 1 \
++  >"$root/smart-show.json"
++"$bin" --json smart-action group show --input "$smart_bound_snapshot" --id 0 \
++  >"$root/smart-group-show.json"
++"$bin" --json smart-action delete --input "$smart_bound_snapshot" --id 1 \
++  --output "$smart_deleted_snapshot" >"$root/smart-delete.json"
+ "$bin" --json device --transport bridge \
+   --bridge-socket "$socket" --bridge-token "$token" config validate \
+   --input "$config_snapshot" --expected-revision "$revision" \
+   >"$root/config-bridge-validation.json"
+ candidate_revision=$(python3 -c \
+   'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
+-  "$candidate_snapshot")
++  "$smart_bound_snapshot")
+ "$bin" --json device --transport bridge \
+   --bridge-socket "$socket" --bridge-token "$token" config apply \
+-  --input "$candidate_snapshot" --backup "$root/pre-apply.json" \
++  --input "$smart_bound_snapshot" --backup "$root/pre-apply.json" \
+   --expected-revision "$revision" --idempotency-key e2e-apply-1 \
+   >"$root/config-apply.json"
+ "$bin" --json device --transport bridge \
+   --bridge-socket "$socket" --bridge-token "$token" config apply \
+-  --input "$candidate_snapshot" --backup "$root/pre-apply.json" \
++  --input "$smart_bound_snapshot" --backup "$root/pre-apply.json" \
+   --expected-revision "$revision" --idempotency-key e2e-apply-1 \
+   >"$root/config-apply-replay.json"
+ set +e
+ "$bin" --json device --transport bridge \
+   --bridge-socket "$socket" --bridge-token "$token" config apply \
+-  --input "$candidate_snapshot" --backup "$root/stale-attempt-backup.json" \
++  --input "$smart_bound_snapshot" --backup "$root/stale-attempt-backup.json" \
+   --expected-revision "$revision" --idempotency-key e2e-apply-stale \
+   >"$root/config-apply-stale.json" 2>"$root/config-apply-stale.err"
+ stale_status=$?
+@@ -287,6 +324,13 @@ bridge_validation = json.loads(
+     (root / "config-bridge-validation.json").read_text()
+ )
+ candidate = json.loads((root / "config-candidate.json").read_text())
++apply_candidate = json.loads((root / "config-smart-bound.json").read_text())
++smart_text_candidate = json.loads((root / "config-smart-text.json").read_text())
++smart_command_candidate = json.loads((root / "config-smart-command.json").read_text())
++smart_url_candidate = json.loads((root / "config-smart-url.json").read_text())
++smart_app_candidate = json.loads((root / "config-smart-app.json").read_text())
++smart_group_candidate = json.loads((root / "config-smart-group.json").read_text())
++smart_deleted_candidate = json.loads((root / "config-smart-deleted.json").read_text())
+ renamed_profile = json.loads((root / "config-profile-renamed.json").read_text())
+ selected = json.loads((root / "config-selected.json").read_text())
+ profile_created_candidate = json.loads((root / "config-profile-created.json").read_text())
+@@ -353,6 +397,17 @@ action_group_delete = json.loads((root / "action-group-delete.json").read_text()
+ multi_group_create = json.loads((root / "multi-group-create.json").read_text())
+ multi_group_set = json.loads((root / "multi-group-set.json").read_text())
+ multi_group_delete = json.loads((root / "multi-group-delete.json").read_text())
++smart_list_empty = json.loads((root / "smart-list-empty.json").read_text())
++smart_create_text = json.loads((root / "smart-create-text.json").read_text())
++smart_create_command = json.loads((root / "smart-create-command.json").read_text())
++smart_create_url = json.loads((root / "smart-create-url.json").read_text())
++smart_create_app = json.loads((root / "smart-create-app.json").read_text())
++smart_group_create = json.loads((root / "smart-group-create.json").read_text())
++smart_bind = json.loads((root / "smart-bind.json").read_text())
++smart_list = json.loads((root / "smart-list.json").read_text())
++smart_show = json.loads((root / "smart-show.json").read_text())
++smart_group_show = json.loads((root / "smart-group-show.json").read_text())
++smart_delete = json.loads((root / "smart-delete.json").read_text())
+ color_candidate = json.loads((root / "config-color.json").read_text())
+ control_candidate = json.loads((root / "config-control.json").read_text())
+ action_created_candidate = json.loads((root / "config-action-created.json").read_text())
+@@ -604,6 +659,25 @@ assert multi_group_set["changedPaths"] == [
+     "/keymap.json/multiActionsGroups/1/tags",
+ ]
+ assert "/keymap.json/multiActionsGroups/0" in multi_group_delete["changedPaths"]
++assert smart_list_empty["smartActions"] == []
++assert [smart_create_text["resourceId"], smart_create_command["resourceId"],
++        smart_create_url["resourceId"], smart_create_app["resourceId"]] == [1, 2, 3, 4]
++assert smart_group_create["resourceId"] == 0
++assert smart_bind["changedPaths"] == [
++    "/keymap.json/profiles/0/layers/1/layout/keymap/0/0",
++]
++assert [item["actionType"] for item in smart_list["smartActions"]] == [
++    "TEXT_STEP", "CMD_STEP", "URL_STEP", "APP_STEP",
++]
++assert smart_list["smartActions"][1]["requiresCommandPermission"] is True
++assert smart_show["smartAction"]["physicalReferenceCount"] == 1
++assert smart_show["smartAction"]["groupIds"] == [0]
++assert [item["id"] for item in smart_group_show["members"]] == [1, 2]
++assert smart_delete["changedPaths"] == [
++    "/keymap.json/profiles/0/layers/1/layout/keymap/0/0",
++    "/smart_actions.json/smartActionGroups/0/actionIds",
++    "/smart_actions.json/smartActions/SA_1",
++]
+ 
+ def payload(document, name):
+     record = next(item for item in document["files"] if item["relativePath"] == name)
+@@ -641,6 +715,30 @@ for document in [
+ ]:
+     verify_snapshot(document)
+     assert payload(document, "smart_actions.json") == payload(snapshot, "smart_actions.json")
++for document in [
++    smart_text_candidate, smart_command_candidate, smart_url_candidate,
++    smart_app_candidate, smart_group_candidate, apply_candidate,
++    smart_deleted_candidate,
++]:
++    verify_snapshot(document)
++
++assert payload(smart_app_candidate, "keymap.json") == payload(candidate, "keymap.json")
++smart_document = json.loads(payload(apply_candidate, "smart_actions.json"))
++assert set(smart_document["smartActions"]) == {"SA_1", "SA_2", "SA_3", "SA_4"}
++assert smart_document["smartActions"]["SA_1"]["payload"] == {"text": "hello fixture"}
++assert smart_document["smartActions"]["SA_2"]["payload"] == {"cmd": "printf fixture"}
++assert smart_document["smartActions"]["SA_3"]["payload"] == {
++    "url": "https://example.invalid/fixture",
++}
++assert smart_document["smartActions"]["SA_4"]["payload"] == {
++    "name": "Fixture App", "path": "/Applications/Fixture.app",
++}
++assert smart_document["smartActionGroups"][0]["actionIds"] == [1, 2]
++smart_deleted_document = json.loads(payload(smart_deleted_candidate, "smart_actions.json"))
++assert "SA_1" not in smart_deleted_document["smartActions"]
++assert smart_deleted_document["smartActionGroups"][0]["actionIds"] == [2]
++smart_deleted_keymap = json.loads(payload(smart_deleted_candidate, "keymap.json"))
++assert smart_deleted_keymap["profiles"][0]["layers"][1]["layout"]["keymap"][0][0] == "KC_NONE"
+ candidate_keymap = json.loads(payload(candidate, "keymap.json"))
+ color_keymap = json.loads(payload(color_candidate, "keymap.json"))
+ control_keymap = json.loads(payload(control_candidate, "keymap.json"))
+@@ -789,16 +887,16 @@ assert appsense_updated_keymap["linkedApps"][0] == {
+ }
+ assert appsense_unlinked_keymap["linkedApps"] == []
+ assert "linkedAppId" not in appsense_unlinked_keymap["profiles"][0]["layers"][1]
+-assert candidate["revision"] != snapshot["revision"]
++assert apply_candidate["revision"] != snapshot["revision"]
+ assert pre_apply["revision"] == snapshot["revision"]
+ assert apply["operation"] == "apply"
+ assert apply["changed"] is True
+ assert apply["idempotentReplay"] is False
+ assert apply["beforeRevision"] == snapshot["revision"]
+-assert apply["afterRevision"] == candidate["revision"]
++assert apply["afterRevision"] == apply_candidate["revision"]
+ assert replay["idempotentReplay"] is True
+-assert replay["afterRevision"] == candidate["revision"]
+-assert post_apply["revision"] == candidate["revision"]
++assert replay["afterRevision"] == apply_candidate["revision"]
++assert post_apply["revision"] == apply_candidate["revision"]
+ post_apply_keymap = json.loads(payload(post_apply, "keymap.json"))
+ assert post_apply_keymap["profiles"][2]["name"] == "CLI Profile"
+ assert post_apply_keymap["profiles"][0]["layers"][2]["name"] == "CLI Layer"
+@@ -807,12 +905,15 @@ assert post_apply_keymap["profiles"][0]["layers"][0]["linkedAppId"] == 0
+ for layer in post_apply_keymap["profiles"][0]["layers"]:
+     assert layer["lights"]["backlight"]["effect"] == "breath"
+     assert layer["lights"]["backlight"]["color"] == 0x102030
++assert payload(post_apply, "smart_actions.json") == payload(apply_candidate, "smart_actions.json")
++post_apply_smart = json.loads(payload(post_apply, "smart_actions.json"))
++assert post_apply_smart["smartActions"]["SA_1"]["payload"] == {"text": "hello fixture"}
+ assert (root / "config-apply-stale.status").read_text().strip() != "0"
+ assert "revision conflict" in (root / "config-apply-stale.err").read_text()
+-assert pre_restore["revision"] == candidate["revision"]
++assert pre_restore["revision"] == apply_candidate["revision"]
+ assert restore["operation"] == "restore"
+ assert restore["changed"] is True
+-assert restore["beforeRevision"] == candidate["revision"]
++assert restore["beforeRevision"] == apply_candidate["revision"]
+ assert restore["afterRevision"] == snapshot["revision"]
+ assert post_restore["revision"] == snapshot["revision"]
+ assert payload(post_restore, "keymap.json") == payload(snapshot, "keymap.json")
+@@ -855,6 +956,10 @@ print("semantic_multi_action_create_set=verified")
+ print("semantic_multi_action_delete_cascade=verified")
+ print("semantic_multi_action_group_crud=verified")
+ print("semantic_multi_action_group_orphan_cascade=verified")
++print("semantic_smart_action_typed_crud=verified")
++print("semantic_smart_action_group_crud=verified")
++print("semantic_smart_action_binding_cascade=verified")
++print("semantic_smart_action_apply_readback_restore=verified")
+ print("semantic_unknown_fields=preserved")
+ print("semantic_unrelated_file_bytes=preserved")
+ print("config_live_cas=verified")
+diff --git a/spec/input-smart-actions-0.18.0.json b/spec/input-smart-actions-0.18.0.json
+new file mode 100644
+index 0000000..2d1eef0
+--- /dev/null
++++ b/spec/input-smart-actions-0.18.0.json
+@@ -0,0 +1,57 @@
++{
++  "schemaVersion": 1,
++  "kind": "worklouder-input-smart-action-model",
++  "inputVersion": "0.18.0",
++  "source": {
++    "asarPath": "/Applications/input.app/Contents/Resources/app.asar",
++    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
++    "mainChunk": "index.js",
++    "mainChunkSha256": "7c16191956acb8d0d89c50eb940dc9b757bf6966b19c56499ca2d60d8743154a",
++    "rendererChunk": "device_config_data-BMUs-0m4.js",
++    "rendererChunkSha256": "c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e"
++  },
++  "storage": {
++    "file": "smart_actions.json",
++    "version": 1,
++    "actionsField": "smartActions",
++    "actionsShape": "object keyed by SA_<canonical non-negative integer>",
++    "groupsField": "smartActionGroups",
++    "groupsShape": "array of {id,name,tags,color,actionIds}",
++    "keymapReference": "SA_<id>",
++    "newActionIdRule": "maximum existing id plus one, starting at 1 when empty",
++    "newGroupIdRule": "maximum existing id plus one, starting at 0 when empty"
++  },
++  "types": {
++    "TEXT_STEP": {"payload": ["text"], "defaults": {"text": ""}},
++    "CMD_STEP": {"payload": ["cmd"], "defaults": {"cmd": ""}},
++    "URL_STEP": {"payload": ["url"], "defaults": {"url": ""}},
++    "APP_STEP": {"payload": ["name", "path"], "defaults": {"name": "", "path": ""}}
++  },
++  "guiRules": {
++    "newAction": {"name": "My Smart action", "type": "TEXT_STEP", "payload": {"text": ""}},
++    "saveRule": "replace an existing id or append the new action",
++    "deleteRule": "replace matching physical SA_<id> layer assignments with KC_NONE and remove the action record",
++    "deleteGroupRule": "remove only the selected group container",
++    "groupEditing": "stored groups are displayed and can be deleted; profile/layer import can add deduplicated groups",
++    "importGroupIdRule": "maximum existing id plus one"
++  },
++  "runtime": {
++    "authority": "Input main process and device firmware",
++    "notifications": {
++      "TEXT_STEP": "kb.sa.inserttext",
++      "CMD_STEP": "kb.sa.exec",
++      "URL_STEP": "kb.sa.openurl",
++      "APP_STEP": "kb.sa.openapp"
++    },
++    "commandPermissionField": "input_storage.json app_settings.smartActionCmdEnabled",
++    "commandPermissionDefault": false,
++    "commandPermissionScope": "host runtime gate; independent from the stored CMD_STEP definition"
++  },
++  "cliIntegrityPolicy": {
++    "validateAllGroupReferences": true,
++    "deleteActionRemovesGroupMembership": true,
++    "allowEmptyGroups": true,
++    "preserveUnknownRootAndRecordFields": true,
++    "preserveUnchangedKeymapBytes": true
++  }
++}
+diff --git a/src/cli.rs b/src/cli.rs
+index 9e743d9..dd1ed63 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -125,6 +125,12 @@ pub enum Command {
+         command: MultiActionCommand,
+     },
+ 
++    /// Inspect or edit Input-hosted Smart Actions in an offline snapshot.
++    SmartAction {
++        #[clap(subcommand)]
++        command: SmartActionCommand,
++    },
++
+     /// Inspect or edit AppSense linked applications in an offline snapshot.
+     Appsense {
+         #[clap(subcommand)]
+@@ -688,6 +694,215 @@ pub enum AppSenseCommand {
+     },
+ }
+ 
++#[derive(Debug, Subcommand)]
++pub enum SmartActionCommand {
++    /// List Smart Actions, types, groups, and physical reference counts.
++    List {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++    },
++
++    /// Show one Smart Action and its typed payload.
++    Show {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        id: u64,
++    },
++
++    /// Create a typed Smart Action in smart_actions.json.
++    Create {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long, default_value = "My Smart action")]
++        name: String,
++        #[clap(long = "type", value_enum, default_value = "text")]
++        action_type: SmartActionType,
++        #[clap(long)]
++        text: Option<String>,
++        #[clap(long)]
++        command: Option<String>,
++        #[clap(long)]
++        url: Option<String>,
++        #[clap(long)]
++        app_name: Option<String>,
++        #[clap(long)]
++        app_path: Option<String>,
++        #[clap(long)]
++        color: Option<String>,
++        #[clap(long)]
++        icon: Option<String>,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Update Smart Action metadata, type, or typed payload.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        id: u64,
++        #[clap(long)]
++        name: Option<String>,
++        #[clap(long = "type", value_enum)]
++        action_type: Option<SmartActionType>,
++        #[clap(long)]
++        text: Option<String>,
++        #[clap(long)]
++        command: Option<String>,
++        #[clap(long)]
++        url: Option<String>,
++        #[clap(long)]
++        app_name: Option<String>,
++        #[clap(long)]
++        app_path: Option<String>,
++        #[clap(long, conflicts_with = "clear-color")]
++        color: Option<String>,
++        #[clap(long)]
++        clear_color: bool,
++        #[clap(long, conflicts_with = "clear-icon")]
++        icon: Option<String>,
++        #[clap(long)]
++        clear_icon: bool,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Delete a Smart Action and clear physical/group references.
++    Delete {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        id: u64,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Inspect or edit stored Smart Action groups.
++    Group {
++        #[clap(subcommand)]
++        command: SmartActionGroupCommand,
++    },
++}
++
++#[derive(Debug, Subcommand)]
++pub enum SmartActionGroupCommand {
++    /// List stored Smart Action groups.
++    List {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++    },
++
++    /// Show one Smart Action group and its ordered members.
++    Show {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        id: u64,
++    },
++
++    /// Create a Smart Action group; an empty group is valid in Input.
++    Create {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        name: String,
++        #[clap(long)]
++        smart_action: Vec<u64>,
++        #[clap(long)]
++        color: Option<String>,
++        #[clap(long)]
++        tag: Vec<String>,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Update Smart Action group name, color, or tags.
++    Set {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        id: u64,
++        #[clap(long)]
++        name: Option<String>,
++        #[clap(long, conflicts_with = "clear-color")]
++        color: Option<String>,
++        #[clap(long)]
++        clear_color: bool,
++        #[clap(long, conflicts_with = "clear-tags")]
++        tag: Vec<String>,
++        #[clap(long)]
++        clear_tags: bool,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Add, remove, or reorder Smart Action group members.
++    Member {
++        #[clap(subcommand)]
++        command: SmartActionGroupMemberCommand,
++    },
++
++    /// Delete only the group container, matching Input's Smart Action UI.
++    Delete {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        id: u64,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++}
++
++#[derive(Debug, Subcommand)]
++pub enum SmartActionGroupMemberCommand {
++    /// Append an existing Smart Action to a group.
++    Add {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        id: u64,
++        #[clap(long)]
++        smart_action: u64,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Remove a member while keeping the Smart Action itself.
++    Remove {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        id: u64,
++        #[clap(long)]
++        smart_action: u64,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++
++    /// Move one member by zero-based index.
++    Move {
++        #[clap(long, value_parser)]
++        input: PathBuf,
++        #[clap(long)]
++        id: u64,
++        #[clap(long)]
++        from: usize,
++        #[clap(long)]
++        to: usize,
++        #[clap(long, value_parser)]
++        output: PathBuf,
++    },
++}
++
++#[derive(Clone, Copy, Debug, ValueEnum)]
++pub enum SmartActionType {
++    Text,
++    Command,
++    Url,
++    App,
++}
++
+ #[derive(Debug, Subcommand)]
+ pub enum ControlCommand {
+     /// List keys, encoder gestures, and joystick sectors in one layer.
+diff --git a/src/lib.rs b/src/lib.rs
+index 7a798f0..48a2ae9 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -17,7 +17,8 @@ use cli::{
+     ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
+     InputCommand, LayerCommand, LayerLightingCommand, LightingEffect, LightingZone,
+     MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand,
+-    TierCommand,
++    SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
++    SmartActionType as CliSmartActionType, TierCommand,
+ };
+ use serde::Serialize;
+ use std::io::Write;
+@@ -78,6 +79,7 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
+         Command::Control { command } => run_control(command, cli.json, &mut out)?,
+         Command::Action { command } => run_action(command, cli.json, &mut out)?,
+         Command::MultiAction { command } => run_multi_action(command, cli.json, &mut out)?,
++        Command::SmartAction { command } => run_smart_action(command, cli.json, &mut out)?,
+         Command::Appsense { command } => run_appsense(command, cli.json, &mut out)?,
+         Command::Completion { shell } => run_completion(shell, &mut out),
+     }
+@@ -85,6 +87,283 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
+     Ok(())
+ }
+ 
++fn semantic_smart_action_type(value: CliSmartActionType) -> semantic::SmartActionType {
++    match value {
++        CliSmartActionType::Text => semantic::SmartActionType::Text,
++        CliSmartActionType::Command => semantic::SmartActionType::Command,
++        CliSmartActionType::Url => semantic::SmartActionType::Url,
++        CliSmartActionType::App => semantic::SmartActionType::App,
++    }
++}
++
++fn run_smart_action(command: SmartActionCommand, json: bool, mut out: impl Write) -> Result<()> {
++    match command {
++        SmartActionCommand::List { input } => {
++            let result = semantic::smart_action_list(&input)?;
++            if json {
++                write_json(&mut out, &result)?;
++            } else {
++                for item in result.smart_actions {
++                    writeln!(
++                        out,
++                        "{}\t{}\t{}\t{} physical reference(s)\tgroups={}{}",
++                        item.id,
++                        item.name,
++                        item.action_type,
++                        item.physical_reference_count,
++                        item.group_ids
++                            .iter()
++                            .map(u64::to_string)
++                            .collect::<Vec<_>>()
++                            .join(","),
++                        if item.requires_command_permission {
++                            "\trequires command permission"
++                        } else {
++                            ""
++                        }
++                    )?;
++                }
++            }
++        }
++        SmartActionCommand::Show { input, id } => {
++            let result = semantic::smart_action_show(&input, id)?;
++            if json {
++                write_json(&mut out, &result)?;
++            } else {
++                let item = result.smart_action;
++                writeln!(
++                    out,
++                    "smart-action={}\t{}\t{}\t{} physical reference(s)",
++                    item.id, item.name, item.action_type, item.physical_reference_count
++                )?;
++                writeln!(out, "payload={}", serde_json::to_string(&item.payload)?)?;
++                writeln!(
++                    out,
++                    "groups={}",
++                    item.group_ids
++                        .iter()
++                        .map(u64::to_string)
++                        .collect::<Vec<_>>()
++                        .join(",")
++                )?;
++            }
++        }
++        SmartActionCommand::Create {
++            input,
++            name,
++            action_type,
++            text,
++            command,
++            url,
++            app_name,
++            app_path,
++            color,
++            icon,
++            output,
++        } => write_candidate_result(
++            semantic::smart_action_create(
++                &input,
++                &name,
++                semantic_smart_action_type(action_type),
++                semantic::SmartActionPayload {
++                    text: text.as_deref(),
++                    command: command.as_deref(),
++                    url: url.as_deref(),
++                    app_name: app_name.as_deref(),
++                    app_path: app_path.as_deref(),
++                },
++                color.as_deref(),
++                icon.as_deref(),
++                &output,
++            )?,
++            json,
++            &mut out,
++        )?,
++        SmartActionCommand::Set {
++            input,
++            id,
++            name,
++            action_type,
++            text,
++            command,
++            url,
++            app_name,
++            app_path,
++            color,
++            clear_color,
++            icon,
++            clear_icon,
++            output,
++        } => write_candidate_result(
++            semantic::smart_action_set(
++                &input,
++                id,
++                semantic::SmartActionUpdate {
++                    name: name.as_deref(),
++                    action_type: action_type.map(semantic_smart_action_type),
++                    payload: semantic::SmartActionPayload {
++                        text: text.as_deref(),
++                        command: command.as_deref(),
++                        url: url.as_deref(),
++                        app_name: app_name.as_deref(),
++                        app_path: app_path.as_deref(),
++                    },
++                    color: color.as_deref(),
++                    clear_color,
++                    icon: icon.as_deref(),
++                    clear_icon,
++                },
++                &output,
++            )?,
++            json,
++            &mut out,
++        )?,
++        SmartActionCommand::Delete { input, id, output } => write_candidate_result(
++            semantic::smart_action_delete(&input, id, &output)?,
++            json,
++            &mut out,
++        )?,
++        SmartActionCommand::Group { command } => run_smart_action_group(command, json, &mut out)?,
++    }
++    Ok(())
++}
++
++fn run_smart_action_group(
++    command: SmartActionGroupCommand,
++    json: bool,
++    mut out: impl Write,
++) -> Result<()> {
++    match command {
++        SmartActionGroupCommand::List { input } => {
++            let result = semantic::smart_action_group_list(&input)?;
++            if json {
++                write_json(&mut out, &result)?;
++            } else {
++                for group in result.groups {
++                    writeln!(
++                        out,
++                        "{}\t{}\t{} member(s)\t{}",
++                        group.id,
++                        group.name,
++                        group.member_count,
++                        group.tags.join(",")
++                    )?;
++                }
++            }
++        }
++        SmartActionGroupCommand::Show { input, id } => {
++            let result = semantic::smart_action_group_show(&input, id)?;
++            if json {
++                write_json(&mut out, &result)?;
++            } else {
++                writeln!(
++                    out,
++                    "group={}\t{}\t{} member(s)",
++                    result.group.id, result.group.name, result.group.member_count
++                )?;
++                for member in result.members {
++                    writeln!(
++                        out,
++                        "{}\t{}\t{}\t{}",
++                        member.index, member.id, member.name, member.action_type
++                    )?;
++                }
++            }
++        }
++        SmartActionGroupCommand::Create {
++            input,
++            name,
++            smart_action,
++            color,
++            tag,
++            output,
++        } => write_candidate_result(
++            semantic::smart_action_group_create(
++                &input,
++                &name,
++                &smart_action,
++                color.as_deref(),
++                &tag,
++                &output,
++            )?,
++            json,
++            &mut out,
++        )?,
++        SmartActionGroupCommand::Set {
++            input,
++            id,
++            name,
++            color,
++            clear_color,
++            tag,
++            clear_tags,
++            output,
++        } => {
++            let tags = if clear_tags {
++                Some(Vec::new())
++            } else if tag.is_empty() {
++                None
++            } else {
++                Some(tag)
++            };
++            write_candidate_result(
++                semantic::smart_action_group_set(
++                    &input,
++                    id,
++                    semantic::GroupUpdate {
++                        name: name.as_deref(),
++                        color: color.as_deref(),
++                        clear_color,
++                        tags: tags.as_deref(),
++                    },
++                    &output,
++                )?,
++                json,
++                &mut out,
++            )?;
++        }
++        SmartActionGroupCommand::Member { command } => match command {
++            SmartActionGroupMemberCommand::Add {
++                input,
++                id,
++                smart_action,
++                output,
++            } => write_candidate_result(
++                semantic::smart_action_group_member_add(&input, id, smart_action, &output)?,
++                json,
++                &mut out,
++            )?,
++            SmartActionGroupMemberCommand::Remove {
++                input,
++                id,
++                smart_action,
++                output,
++            } => write_candidate_result(
++                semantic::smart_action_group_member_remove(&input, id, smart_action, &output)?,
++                json,
++                &mut out,
++            )?,
++            SmartActionGroupMemberCommand::Move {
++                input,
++                id,
++                from,
++                to,
++                output,
++            } => write_candidate_result(
++                semantic::smart_action_group_member_move(&input, id, from, to, &output)?,
++                json,
++                &mut out,
++            )?,
++        },
++        SmartActionGroupCommand::Delete { input, id, output } => write_candidate_result(
++            semantic::smart_action_group_delete(&input, id, &output)?,
++            json,
++            &mut out,
++        )?,
++    }
++    Ok(())
++}
++
+ fn run_appsense(command: AppSenseCommand, json: bool, mut out: impl Write) -> Result<()> {
+     match command {
+         AppSenseCommand::List { input } => {
+diff --git a/src/semantic.rs b/src/semantic.rs
+index d32a9ce..9a0e60c 100644
+--- a/src/semantic.rs
++++ b/src/semantic.rs
+@@ -29,6 +29,7 @@ const ACTION_SPEC_JSON: &str = include_str!("../spec/input-actions-0.18.0.json")
+ const MULTI_ACTION_SPEC_JSON: &str = include_str!("../spec/input-multi-actions-0.18.0.json");
+ const PROFILE_LAYER_SPEC_JSON: &str = include_str!("../spec/input-profile-layers-0.18.0.json");
+ const APPSENSE_SPEC_JSON: &str = include_str!("../spec/input-appsense-0.18.0.json");
++const SMART_ACTION_SPEC_JSON: &str = include_str!("../spec/input-smart-actions-0.18.0.json");
+ static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
+ 
+ #[derive(Debug, Serialize)]
+@@ -222,6 +223,128 @@ pub struct AppSenseUpdate<'a> {
+     pub clear_path: bool,
+ }
+ 
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum SmartActionType {
++    Text,
++    Command,
++    Url,
++    App,
++}
++
++impl SmartActionType {
++    fn as_str(self) -> &'static str {
++        match self {
++            Self::Text => "TEXT_STEP",
++            Self::Command => "CMD_STEP",
++            Self::Url => "URL_STEP",
++            Self::App => "APP_STEP",
++        }
++    }
++
++    fn from_str(value: &str) -> Result<Self> {
++        match value {
++            "TEXT_STEP" => Ok(Self::Text),
++            "CMD_STEP" => Ok(Self::Command),
++            "URL_STEP" => Ok(Self::Url),
++            "APP_STEP" => Ok(Self::App),
++            _ => bail!("Smart Action type {value} was not supported"),
++        }
++    }
++}
++
++#[derive(Clone, Copy, Debug)]
++pub struct SmartActionPayload<'a> {
++    pub text: Option<&'a str>,
++    pub command: Option<&'a str>,
++    pub url: Option<&'a str>,
++    pub app_name: Option<&'a str>,
++    pub app_path: Option<&'a str>,
++}
++
++#[derive(Debug)]
++pub struct SmartActionUpdate<'a> {
++    pub name: Option<&'a str>,
++    pub action_type: Option<SmartActionType>,
++    pub payload: SmartActionPayload<'a>,
++    pub color: Option<&'a str>,
++    pub clear_color: bool,
++    pub icon: Option<&'a str>,
++    pub clear_icon: bool,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SmartActionList {
++    pub schema_version: u64,
++    pub kind: &'static str,
++    pub revision: String,
++    pub smart_actions: Vec<SmartActionEntry>,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SmartActionShow {
++    pub schema_version: u64,
++    pub kind: &'static str,
++    pub revision: String,
++    pub smart_action: SmartActionEntry,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SmartActionEntry {
++    pub id: u64,
++    pub name: String,
++    pub action_type: String,
++    pub payload: Value,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub color: Option<String>,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub icon: Option<String>,
++    pub physical_reference_count: usize,
++    pub group_ids: Vec<u64>,
++    pub requires_command_permission: bool,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SmartActionGroupList {
++    pub schema_version: u64,
++    pub kind: &'static str,
++    pub revision: String,
++    pub groups: Vec<SmartActionGroupEntry>,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SmartActionGroupShow {
++    pub schema_version: u64,
++    pub kind: &'static str,
++    pub revision: String,
++    pub group: SmartActionGroupEntry,
++    pub members: Vec<SmartActionGroupMemberEntry>,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SmartActionGroupEntry {
++    pub id: u64,
++    pub name: String,
++    pub tags: Vec<String>,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub color: Option<String>,
++    pub member_count: usize,
++}
++
++#[derive(Debug, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SmartActionGroupMemberEntry {
++    pub index: usize,
++    pub id: u64,
++    pub name: String,
++    pub action_type: String,
++}
++
+ #[derive(Debug, Serialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct ControlList {
+@@ -485,6 +608,8 @@ struct SemanticSnapshot {
+     file_bytes: Vec<Vec<u8>>,
+     keymap_index: usize,
+     keymap: Value,
++    smart_actions_index: Option<usize>,
++    smart_actions: Option<Value>,
+     revision: String,
+ }
+ 
+@@ -652,7 +777,8 @@ pub fn control_set(
+         .assignment;
+     let assignment_changed = previous != assignment;
+     if assignment_changed {
+-        validate_writable_assignment(&snapshot.keymap, assignment)?;
++        let smart_action_ids = snapshot.smart_action_ids()?;
++        validate_writable_control_assignment(&snapshot.keymap, &smart_action_ids, assignment)?;
+     }
+     let layer = snapshot
+         .keymap
+@@ -2107,59 +2233,472 @@ pub fn appsense_unlink(
+     snapshot.publish(output, "appsense-unlink", true, paths)
+ }
+ 
+-impl SemanticSnapshot {
+-    fn read(input: &Path) -> Result<Self> {
+-        let raw = fs::read(input).with_context(|| {
+-            format!("failed to read configuration snapshot {}", input.display())
+-        })?;
+-        let document: Value = serde_json::from_slice(&raw).with_context(|| {
+-            format!(
+-                "configuration snapshot was invalid JSON: {}",
+-                input.display()
+-            )
+-        })?;
+-        Self::validate(document)
++pub fn smart_action_list(input: &Path) -> Result<SmartActionList> {
++    let snapshot = SemanticSnapshot::read(input)?;
++    let mut smart_actions = smart_action_records(snapshot.smart_actions()?)?
++        .iter()
++        .map(|(key, record)| smart_action_entry(&snapshot, smart_action_key_id(key)?, record))
++        .collect::<Result<Vec<_>>>()?;
++    smart_actions.sort_by_key(|entry| entry.id);
++    Ok(SmartActionList {
++        schema_version: 1,
++        kind: "worklouderctl-smart-action-list",
++        revision: snapshot.revision,
++        smart_actions,
++    })
++}
++
++pub fn smart_action_show(input: &Path, id: u64) -> Result<SmartActionShow> {
++    let snapshot = SemanticSnapshot::read(input)?;
++    let record = find_smart_action(snapshot.smart_actions()?, id)?;
++    Ok(SmartActionShow {
++        schema_version: 1,
++        kind: "worklouderctl-smart-action",
++        revision: snapshot.revision.clone(),
++        smart_action: smart_action_entry(&snapshot, id, record)?,
++    })
++}
++
++pub fn smart_action_create(
++    input: &Path,
++    name: &str,
++    action_type: SmartActionType,
++    payload: SmartActionPayload<'_>,
++    color: Option<&str>,
++    icon: Option<&str>,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    validate_smart_name(name, "Smart Action name")?;
++    let payload = build_smart_action_payload(action_type, payload, None, true)?;
++    let color = color.map(normalize_resource_color).transpose()?;
++    if let Some(value) = icon {
++        validate_icon_input(value)?;
++    }
++    let mut snapshot = SemanticSnapshot::read(input)?;
++    let id = next_smart_action_id(snapshot.smart_actions()?)?;
++    let key = smart_action_key(id);
++    let mut record = Map::new();
++    record.insert("name".into(), Value::String(name.to_owned()));
++    if let Some(value) = icon {
++        record.insert("icon".into(), Value::String(value.to_owned()));
++    }
++    if let Some(value) = color {
++        record.insert("color".into(), Value::String(value));
+     }
++    record.insert("type".into(), Value::String(action_type.as_str().into()));
++    record.insert("payload".into(), payload);
++    smart_action_records_mut(snapshot.smart_actions_mut()?)?
++        .insert(key.clone(), Value::Object(record));
++    let mut receipt = snapshot.publish(
++        output,
++        "smart-action-create",
++        true,
++        vec![format!("/smart_actions.json/smartActions/{key}")],
++    )?;
++    receipt.resource_id = Some(id);
++    Ok(receipt)
++}
+ 
+-    fn validate(document: Value) -> Result<Self> {
+-        let object = document
+-            .as_object()
+-            .context("configuration snapshot was not an object")?;
+-        ensure!(
+-            object.get("schemaVersion").and_then(Value::as_u64) == Some(SNAPSHOT_SCHEMA_VERSION),
+-            "configuration snapshot schemaVersion was not supported"
+-        );
+-        ensure!(
+-            object.get("kind").and_then(Value::as_str) == Some(SNAPSHOT_KIND),
+-            "configuration snapshot kind was not supported"
+-        );
++pub fn smart_action_set(
++    input: &Path,
++    id: u64,
++    update: SmartActionUpdate<'_>,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    ensure!(
++        update.name.is_some()
++            || update.action_type.is_some()
++            || smart_action_payload_supplied(&update.payload)
++            || update.color.is_some()
++            || update.clear_color
++            || update.icon.is_some()
++            || update.clear_icon,
++        "at least one Smart Action field must be supplied"
++    );
++    if let Some(value) = update.name {
++        validate_smart_name(value, "Smart Action name")?;
++    }
++    let color = update.color.map(normalize_resource_color).transpose()?;
++    if let Some(value) = update.icon {
++        validate_icon_input(value)?;
++    }
++    let mut snapshot = SemanticSnapshot::read(input)?;
++    let key = smart_action_key(id);
++    let existing = find_smart_action(snapshot.smart_actions()?, id)?;
++    let current_type = SmartActionType::from_str(object_string(existing, "type", "Smart Action")?)?;
++    let action_type = update.action_type.unwrap_or(current_type);
++    let payload = build_smart_action_payload(
++        action_type,
++        update.payload,
++        existing.get("payload"),
++        action_type != current_type,
++    )?;
++    let record = smart_action_records_mut(snapshot.smart_actions_mut()?)?
++        .get_mut(&key)
++        .context("Smart Action disappeared during candidate generation")?;
++    let object = record
++        .as_object_mut()
++        .context("Smart Action was not an object")?;
++    let before = Value::Object(object.clone());
++    if let Some(value) = update.name {
++        object.insert("name".into(), Value::String(value.to_owned()));
++    }
++    if update.action_type.is_some() {
++        object.insert("type".into(), Value::String(action_type.as_str().into()));
++    }
++    if update.action_type.is_some() || smart_action_payload_supplied(&update.payload) {
++        object.insert("payload".into(), payload);
++    }
++    if update.clear_color {
++        object.remove("color");
++    } else if let Some(value) = color {
++        object.insert("color".into(), Value::String(value));
++    }
++    if update.clear_icon {
++        object.remove("icon");
++    } else if let Some(value) = update.icon {
++        object.insert("icon".into(), Value::String(value.to_owned()));
++    }
++    let changed = before != Value::Object(object.clone());
++    snapshot.publish(
++        output,
++        "smart-action-set",
++        changed,
++        if changed {
++            vec![format!("/smart_actions.json/smartActions/{key}")]
++        } else {
++            Vec::new()
++        },
++    )
++}
++
++pub fn smart_action_delete(input: &Path, id: u64, output: &Path) -> Result<CandidateReceipt> {
++    let mut snapshot = SemanticSnapshot::read(input)?;
++    find_smart_action(snapshot.smart_actions()?, id)?;
++    let key = smart_action_key(id);
++    let token = key.clone();
++    let mut paths = Vec::new();
++    replace_assignment_references(&mut snapshot.keymap, &token, &mut paths)?;
++    remove_smart_action_from_groups(snapshot.smart_actions_mut()?, id, &mut paths)?;
++    smart_action_records_mut(snapshot.smart_actions_mut()?)?
++        .remove(&key)
++        .context("Smart Action disappeared during deletion")?;
++    paths.push(format!("/smart_actions.json/smartActions/{key}"));
++    snapshot.publish(output, "smart-action-delete", true, paths)
++}
++
++pub fn smart_action_group_list(input: &Path) -> Result<SmartActionGroupList> {
++    let snapshot = SemanticSnapshot::read(input)?;
++    let groups = smart_action_groups(snapshot.smart_actions()?)?
++        .iter()
++        .map(smart_action_group_entry)
++        .collect::<Result<Vec<_>>>()?;
++    Ok(SmartActionGroupList {
++        schema_version: 1,
++        kind: "worklouderctl-smart-action-group-list",
++        revision: snapshot.revision,
++        groups,
++    })
++}
++
++pub fn smart_action_group_show(input: &Path, id: u64) -> Result<SmartActionGroupShow> {
++    let snapshot = SemanticSnapshot::read(input)?;
++    let index = smart_action_group_index(snapshot.smart_actions()?, id)?;
++    let group = &smart_action_groups(snapshot.smart_actions()?)?[index];
++    let members = smart_action_group_member_ids(group)?
++        .into_iter()
++        .enumerate()
++        .map(|(index, member_id)| {
++            let record = find_smart_action(snapshot.smart_actions()?, member_id)?;
++            Ok(SmartActionGroupMemberEntry {
++                index,
++                id: member_id,
++                name: object_string(record, "name", "Smart Action")?.to_owned(),
++                action_type: object_string(record, "type", "Smart Action")?.to_owned(),
++            })
++        })
++        .collect::<Result<Vec<_>>>()?;
++    Ok(SmartActionGroupShow {
++        schema_version: 1,
++        kind: "worklouderctl-smart-action-group",
++        revision: snapshot.revision.clone(),
++        group: smart_action_group_entry(group)?,
++        members,
++    })
++}
++
++pub fn smart_action_group_create(
++    input: &Path,
++    name: &str,
++    members: &[u64],
++    color: Option<&str>,
++    tags: &[String],
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    validate_smart_name(name, "Smart Action group name")?;
++    validate_smart_action_group_inputs(tags, members)?;
++    let color = color.map(normalize_resource_color).transpose()?;
++    let mut snapshot = SemanticSnapshot::read(input)?;
++    let valid_ids = snapshot.smart_action_ids()?;
++    for member in members {
+         ensure!(
+-            object.get("revisionAlgorithm").and_then(Value::as_str) == Some(REVISION_ALGORITHM),
+-            "configuration snapshot revisionAlgorithm was not supported"
++            valid_ids.contains(member),
++            "Smart Action id {member} was not found"
+         );
+-        ensure!(
+-            object
+-                .get("deviceId")
+-                .and_then(Value::as_str)
+-                .map(|value| !value.is_empty())
+-                == Some(true),
+-            "configuration snapshot omitted deviceId"
++    }
++    let id = next_smart_action_group_id(snapshot.smart_actions()?)?;
++    let index = smart_action_groups(snapshot.smart_actions()?)?.len();
++    let group = serde_json::json!({
++        "id": id,
++        "name": name,
++        "tags": tags,
++        "color": color,
++        "actionIds": members,
++    });
++    smart_action_groups_mut(snapshot.smart_actions_mut()?)?.push(group);
++    let mut receipt = snapshot.publish(
++        output,
++        "smart-action-group-create",
++        true,
++        vec![format!("/smart_actions.json/smartActionGroups/{index}")],
++    )?;
++    receipt.resource_id = Some(id);
++    Ok(receipt)
++}
++
++pub fn smart_action_group_set(
++    input: &Path,
++    id: u64,
++    update: GroupUpdate<'_>,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    ensure!(
++        update.name.is_some()
++            || update.color.is_some()
++            || update.clear_color
++            || update.tags.is_some(),
++        "at least one Smart Action group field must be supplied"
++    );
++    if let Some(value) = update.name {
++        validate_smart_name(value, "Smart Action group name")?;
++    }
++    if let Some(tags) = update.tags {
++        validate_smart_action_group_inputs(tags, &[])?;
++    }
++    let color = update.color.map(normalize_resource_color).transpose()?;
++    let mut snapshot = SemanticSnapshot::read(input)?;
++    let index = smart_action_group_index(snapshot.smart_actions()?, id)?;
++    let group = smart_action_groups_mut(snapshot.smart_actions_mut()?)?
++        .get_mut(index)
++        .context("Smart Action group disappeared")?;
++    let before = group.clone();
++    let object = group
++        .as_object_mut()
++        .context("Smart Action group was not an object")?;
++    if let Some(value) = update.name {
++        object.insert("name".into(), Value::String(value.to_owned()));
++    }
++    if update.clear_color {
++        object.insert("color".into(), Value::Null);
++    } else if let Some(value) = color {
++        object.insert("color".into(), Value::String(value));
++    }
++    if let Some(tags) = update.tags {
++        object.insert(
++            "tags".into(),
++            Value::Array(tags.iter().cloned().map(Value::String).collect()),
+         );
+-        let claimed_revision = object
+-            .get("revision")
+-            .and_then(Value::as_str)
+-            .filter(|value| is_digest(value, 64))
+-            .context("configuration snapshot revision was invalid")?
+-            .to_owned();
+-        let files = object
+-            .get("files")
+-            .and_then(Value::as_array)
+-            .filter(|files| !files.is_empty() && files.len() <= MAX_FILES)
+-            .context("configuration snapshot file count was outside supported limits")?;
++    }
++    let changed = before != *group;
++    snapshot.publish(
++        output,
++        "smart-action-group-set",
++        changed,
++        if changed {
++            vec![format!("/smart_actions.json/smartActionGroups/{index}")]
++        } else {
++            Vec::new()
++        },
++    )
++}
++
++pub fn smart_action_group_member_add(
++    input: &Path,
++    id: u64,
++    smart_action: u64,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    let mut snapshot = SemanticSnapshot::read(input)?;
++    find_smart_action(snapshot.smart_actions()?, smart_action)?;
++    let index = smart_action_group_index(snapshot.smart_actions()?, id)?;
++    let members = smart_action_groups_mut(snapshot.smart_actions_mut()?)?[index]
++        .get_mut("actionIds")
++        .and_then(Value::as_array_mut)
++        .context("Smart Action group actionIds was invalid")?;
++    ensure!(
++        !members
++            .iter()
++            .any(|value| value.as_u64() == Some(smart_action)),
++        "Smart Action group id {id} already contained Smart Action id {smart_action}"
++    );
++    members.push(Value::from(smart_action));
++    snapshot.publish(
++        output,
++        "smart-action-group-member-add",
++        true,
++        vec![format!(
++            "/smart_actions.json/smartActionGroups/{index}/actionIds"
++        )],
++    )
++}
++
++pub fn smart_action_group_member_remove(
++    input: &Path,
++    id: u64,
++    smart_action: u64,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    let mut snapshot = SemanticSnapshot::read(input)?;
++    let index = smart_action_group_index(snapshot.smart_actions()?, id)?;
++    let members = smart_action_groups_mut(snapshot.smart_actions_mut()?)?[index]
++        .get_mut("actionIds")
++        .and_then(Value::as_array_mut)
++        .context("Smart Action group actionIds was invalid")?;
++    let member_index = members
++        .iter()
++        .position(|value| value.as_u64() == Some(smart_action))
++        .with_context(|| {
++            format!("Smart Action group id {id} did not contain Smart Action id {smart_action}")
++        })?;
++    members.remove(member_index);
++    snapshot.publish(
++        output,
++        "smart-action-group-member-remove",
++        true,
++        vec![format!(
++            "/smart_actions.json/smartActionGroups/{index}/actionIds"
++        )],
++    )
++}
++
++pub fn smart_action_group_member_move(
++    input: &Path,
++    id: u64,
++    from: usize,
++    to: usize,
++    output: &Path,
++) -> Result<CandidateReceipt> {
++    let mut snapshot = SemanticSnapshot::read(input)?;
++    let index = smart_action_group_index(snapshot.smart_actions()?, id)?;
++    let members = smart_action_groups_mut(snapshot.smart_actions_mut()?)?[index]
++        .get_mut("actionIds")
++        .and_then(Value::as_array_mut)
++        .context("Smart Action group actionIds was invalid")?;
++    ensure!(
++        from < members.len(),
++        "source member position was out of range"
++    );
++    ensure!(
++        to < members.len(),
++        "target member position was out of range"
++    );
++    if from == to {
++        return snapshot.publish(output, "smart-action-group-member-move", false, Vec::new());
++    }
++    let member = members.remove(from);
++    members.insert(to, member);
++    snapshot.publish(
++        output,
++        "smart-action-group-member-move",
++        true,
++        vec![format!(
++            "/smart_actions.json/smartActionGroups/{index}/actionIds"
++        )],
++    )
++}
++
++pub fn smart_action_group_delete(input: &Path, id: u64, output: &Path) -> Result<CandidateReceipt> {
++    let mut snapshot = SemanticSnapshot::read(input)?;
++    let index = smart_action_group_index(snapshot.smart_actions()?, id)?;
++    smart_action_groups_mut(snapshot.smart_actions_mut()?)?.remove(index);
++    snapshot.publish(
++        output,
++        "smart-action-group-delete",
++        true,
++        vec![format!("/smart_actions.json/smartActionGroups/{index}")],
++    )
++}
++
++impl SemanticSnapshot {
++    fn read(input: &Path) -> Result<Self> {
++        let raw = fs::read(input).with_context(|| {
++            format!("failed to read configuration snapshot {}", input.display())
++        })?;
++        let document: Value = serde_json::from_slice(&raw).with_context(|| {
++            format!(
++                "configuration snapshot was invalid JSON: {}",
++                input.display()
++            )
++        })?;
++        Self::validate(document)
++    }
++
++    fn smart_actions(&self) -> Result<&Value> {
++        self.smart_actions
++            .as_ref()
++            .context("configuration snapshot omitted smart_actions.json")
++    }
++
++    fn smart_actions_mut(&mut self) -> Result<&mut Value> {
++        self.smart_actions
++            .as_mut()
++            .context("configuration snapshot omitted smart_actions.json")
++    }
++
++    fn smart_action_ids(&self) -> Result<HashSet<u64>> {
++        validate_smart_actions(self.smart_actions()?)
++    }
++
++    fn validate(document: Value) -> Result<Self> {
++        let object = document
++            .as_object()
++            .context("configuration snapshot was not an object")?;
++        ensure!(
++            object.get("schemaVersion").and_then(Value::as_u64) == Some(SNAPSHOT_SCHEMA_VERSION),
++            "configuration snapshot schemaVersion was not supported"
++        );
++        ensure!(
++            object.get("kind").and_then(Value::as_str) == Some(SNAPSHOT_KIND),
++            "configuration snapshot kind was not supported"
++        );
++        ensure!(
++            object.get("revisionAlgorithm").and_then(Value::as_str) == Some(REVISION_ALGORITHM),
++            "configuration snapshot revisionAlgorithm was not supported"
++        );
++        ensure!(
++            object
++                .get("deviceId")
++                .and_then(Value::as_str)
++                .map(|value| !value.is_empty())
++                == Some(true),
++            "configuration snapshot omitted deviceId"
++        );
++        let claimed_revision = object
++            .get("revision")
++            .and_then(Value::as_str)
++            .filter(|value| is_digest(value, 64))
++            .context("configuration snapshot revision was invalid")?
++            .to_owned();
++        let files = object
++            .get("files")
++            .and_then(Value::as_array)
++            .filter(|files| !files.is_empty() && files.len() <= MAX_FILES)
++            .context("configuration snapshot file count was outside supported limits")?;
+         let mut seen = HashSet::new();
+         let mut decoded = Vec::with_capacity(files.len());
+         let mut total = 0_usize;
+         let mut keymap_index = None;
++        let mut smart_actions_index = None;
+         for (index, file) in files.iter().enumerate() {
+             let object = file
+                 .as_object()
+@@ -2221,6 +2760,12 @@ impl SemanticSnapshot {
+                     "configuration snapshot contained duplicate keymap.json"
+                 );
+                 keymap_index = Some(index);
++            } else if path == "smart_actions.json" {
++                ensure!(
++                    smart_actions_index.is_none(),
++                    "configuration snapshot contained duplicate smart_actions.json"
++                );
++                smart_actions_index = Some(index);
+             }
+             decoded.push(bytes);
+         }
+@@ -2232,12 +2777,25 @@ impl SemanticSnapshot {
+         let keymap_index = keymap_index.context("configuration snapshot omitted keymap.json")?;
+         let keymap: Value = serde_json::from_slice(&decoded[keymap_index])
+             .context("keymap.json was invalid JSON")?;
+-        validate_keymap(&keymap)?;
++        let smart_actions = match smart_actions_index {
++            Some(index) => Some(
++                serde_json::from_slice(&decoded[index])
++                    .context("smart_actions.json was invalid JSON")?,
++            ),
++            None => None,
++        };
++        let smart_action_ids = match smart_actions.as_ref() {
++            Some(document) => validate_smart_actions(document)?,
++            None => HashSet::new(),
++        };
++        validate_keymap(&keymap, &smart_action_ids)?;
+         Ok(Self {
+             document,
+             file_bytes: decoded,
+             keymap_index,
+             keymap,
++            smart_actions_index,
++            smart_actions,
+             revision: computed_revision,
+         })
+     }
+@@ -2250,8 +2808,24 @@ impl SemanticSnapshot {
+         changed_paths: Vec<String>,
+     ) -> Result<CandidateReceipt> {
+         let before_revision = self.revision.clone();
++        let keymap_changed = changed_paths
++            .iter()
++            .any(|path| path.starts_with("/keymap.json"));
++        let smart_actions_changed = changed_paths
++            .iter()
++            .any(|path| path.starts_with("/smart_actions.json"));
++        ensure!(
++            changed == (keymap_changed || smart_actions_changed),
++            "candidate changed flag did not match its changed paths"
++        );
+         if changed {
+-            validate_keymap(&self.keymap)?;
++            let smart_action_ids = match self.smart_actions.as_ref() {
++                Some(document) => validate_smart_actions(document)?,
++                None => HashSet::new(),
++            };
++            validate_keymap(&self.keymap, &smart_action_ids)?;
++        }
++        if keymap_changed {
+             self.file_bytes[self.keymap_index] = serde_json::to_vec(&self.keymap)?;
+             let bytes = &self.file_bytes[self.keymap_index];
+             let record = self
+@@ -2263,68 +2837,558 @@ impl SemanticSnapshot {
+                 .context("keymap.json file record disappeared")?;
+             update_file_record(record, bytes)?;
+         }
+-        let files = self
+-            .document
+-            .get("files")
+-            .and_then(Value::as_array)
+-            .context("configuration snapshot files disappeared")?;
+-        let after_revision = compute_revision(files, &self.file_bytes)?;
+-        self.document
+-            .as_object_mut()
+-            .context("configuration snapshot was not an object")?
+-            .insert("revision".into(), Value::String(after_revision.clone()));
+-        write_atomic_json(output, &self.document)?;
+-        let reopened = Self::read(output)?;
+-        ensure!(
+-            reopened.revision == after_revision,
+-            "published candidate revision readback differed"
+-        );
+-        ensure!(
+-            changed == (before_revision != after_revision),
+-            "candidate changed flag did not match its revisions"
+-        );
+-        Ok(CandidateReceipt {
+-            schema_version: 1,
+-            kind: "worklouderctl-config-candidate",
+-            operation,
+-            output: output.to_path_buf(),
+-            changed,
+-            changed_paths,
+-            before_revision,
+-            after_revision,
+-            resource_id: None,
+-        })
++        if smart_actions_changed {
++            let index = self
++                .smart_actions_index
++                .context("configuration snapshot omitted smart_actions.json")?;
++            let document = self
++                .smart_actions
++                .as_ref()
++                .context("smart_actions.json disappeared")?;
++            self.file_bytes[index] = serde_json::to_vec(document)?;
++            let bytes = &self.file_bytes[index];
++            let record = self
++                .document
++                .get_mut("files")
++                .and_then(Value::as_array_mut)
++                .and_then(|files| files.get_mut(index))
++                .and_then(Value::as_object_mut)
++                .context("smart_actions.json file record disappeared")?;
++            update_file_record(record, bytes)?;
++        }
++        let files = self
++            .document
++            .get("files")
++            .and_then(Value::as_array)
++            .context("configuration snapshot files disappeared")?;
++        let after_revision = compute_revision(files, &self.file_bytes)?;
++        self.document
++            .as_object_mut()
++            .context("configuration snapshot was not an object")?
++            .insert("revision".into(), Value::String(after_revision.clone()));
++        write_atomic_json(output, &self.document)?;
++        let reopened = Self::read(output)?;
++        ensure!(
++            reopened.revision == after_revision,
++            "published candidate revision readback differed"
++        );
++        ensure!(
++            changed == (before_revision != after_revision),
++            "candidate changed flag did not match its revisions"
++        );
++        Ok(CandidateReceipt {
++            schema_version: 1,
++            kind: "worklouderctl-config-candidate",
++            operation,
++            output: output.to_path_buf(),
++            changed,
++            changed_paths,
++            before_revision,
++            after_revision,
++            resource_id: None,
++        })
++    }
++}
++
++fn validate_action_model_spec() -> Result<()> {
++    let spec: Value = serde_json::from_str(ACTION_SPEC_JSON)
++        .context("embedded Input Action model was invalid")?;
++    ensure!(
++        spec.get("schemaVersion").and_then(Value::as_u64) == Some(1)
++            && spec.get("kind").and_then(Value::as_str) == Some("worklouder-input-action-model")
++            && spec.get("inputVersion").and_then(Value::as_str) == Some("0.18.0")
++            && spec
++                .get("sourceAsarSha256")
++                .and_then(Value::as_str)
++                .map(|value| is_digest(value, 64))
++                == Some(true),
++        "embedded Input Action model identity was invalid"
++    );
++    let multi: Value = serde_json::from_str(MULTI_ACTION_SPEC_JSON)
++        .context("embedded Input Multi Action model was invalid")?;
++    ensure!(
++        multi.get("schemaVersion").and_then(Value::as_u64) == Some(1)
++            && multi.get("kind").and_then(Value::as_str)
++                == Some("worklouder-input-multi-action-model")
++            && multi.get("inputVersion").and_then(Value::as_str) == Some("0.18.0")
++            && multi
++                .get("sourceAsarSha256")
++                .and_then(Value::as_str)
++                .map(|value| is_digest(value, 64))
++                == Some(true),
++        "embedded Input Multi Action model identity was invalid"
++    );
++    Ok(())
++}
++
++fn validate_smart_action_model_spec() -> Result<()> {
++    let spec: Value = serde_json::from_str(SMART_ACTION_SPEC_JSON)
++        .context("embedded Input Smart Action model was invalid")?;
++    ensure!(
++        spec.get("schemaVersion").and_then(Value::as_u64) == Some(1)
++            && spec.get("kind").and_then(Value::as_str)
++                == Some("worklouder-input-smart-action-model")
++            && spec.get("inputVersion").and_then(Value::as_str) == Some("0.18.0")
++            && spec
++                .get("source")
++                .and_then(|value| value.get("asarSha256"))
++                .and_then(Value::as_str)
++                .map(|value| is_digest(value, 64))
++                == Some(true)
++            && spec
++                .get("storage")
++                .and_then(|value| value.get("file"))
++                .and_then(Value::as_str)
++                == Some("smart_actions.json"),
++        "embedded Input Smart Action model identity was invalid"
++    );
++    Ok(())
++}
++
++fn validate_smart_actions(document: &Value) -> Result<HashSet<u64>> {
++    validate_smart_action_model_spec()?;
++    let object = document
++        .as_object()
++        .context("smart_actions.json was not an object")?;
++    ensure!(
++        object.get("version").and_then(Value::as_u64) == Some(1),
++        "smart_actions.json version was not supported"
++    );
++    let records = match object.get("smartActions") {
++        Some(value) => value
++            .as_object()
++            .context("smart_actions.json smartActions was not an object")?,
++        None => return validate_smart_action_groups(document, &HashSet::new()),
++    };
++    let mut ids = HashSet::new();
++    for (key, record) in records {
++        let id = reference_id(key, "SA_")?
++            .with_context(|| format!("Smart Action key {key} was not canonical"))?;
++        ensure!(
++            ids.insert(id),
++            "smart_actions.json contained duplicate Smart Action id {id}"
++        );
++        validate_smart_action_record(id, record)?;
++    }
++    validate_smart_action_groups(document, &ids)
++}
++
++fn validate_smart_action_record(id: u64, record: &Value) -> Result<()> {
++    let object = record
++        .as_object()
++        .with_context(|| format!("Smart Action id {id} was not an object"))?;
++    validate_smart_name(
++        object
++            .get("name")
++            .and_then(Value::as_str)
++            .with_context(|| format!("Smart Action id {id} name was invalid"))?,
++        "Smart Action name",
++    )?;
++    validate_resource_color(record, "Smart Action")?;
++    validate_optional_icon(record, "Smart Action")?;
++    let action_type = SmartActionType::from_str(
++        object
++            .get("type")
++            .and_then(Value::as_str)
++            .with_context(|| format!("Smart Action id {id} type was invalid"))?,
++    )?;
++    let payload = object
++        .get("payload")
++        .and_then(Value::as_object)
++        .with_context(|| format!("Smart Action id {id} payload was invalid"))?;
++    let required = match action_type {
++        SmartActionType::Text => &["text"][..],
++        SmartActionType::Command => &["cmd"][..],
++        SmartActionType::Url => &["url"][..],
++        SmartActionType::App => &["name", "path"][..],
++    };
++    for field in required {
++        payload
++            .get(*field)
++            .and_then(Value::as_str)
++            .with_context(|| format!("Smart Action id {id} payload.{field} was invalid"))?;
++    }
++    Ok(())
++}
++
++fn validate_smart_action_groups(
++    document: &Value,
++    smart_action_ids: &HashSet<u64>,
++) -> Result<HashSet<u64>> {
++    let groups = match document.get("smartActionGroups") {
++        Some(value) => value
++            .as_array()
++            .context("smart_actions.json smartActionGroups was not an array")?,
++        None => return Ok(smart_action_ids.clone()),
++    };
++    let mut group_ids = HashSet::new();
++    for group in groups {
++        let id = object_u64(group, "id", "Smart Action group")?;
++        ensure!(
++            group_ids.insert(id),
++            "smartActionGroups contained duplicate id {id}"
++        );
++        validate_smart_name(
++            object_string(group, "name", "Smart Action group")?,
++            "Smart Action group name",
++        )?;
++        validate_resource_color(group, "Smart Action group")?;
++        if let Some(tags) = group.get("tags") {
++            for tag in tags
++                .as_array()
++                .context("Smart Action group tags was not an array")?
++            {
++                let tag = tag
++                    .as_str()
++                    .context("Smart Action group tag was not a string")?;
++                validate_smart_name(tag, "Smart Action group tag")?;
++            }
++        }
++        let members = group
++            .get("actionIds")
++            .and_then(Value::as_array)
++            .context("Smart Action group actionIds was invalid")?;
++        let mut seen = HashSet::new();
++        for value in members {
++            let action_id = value
++                .as_u64()
++                .context("Smart Action group contained a non-integer action id")?;
++            ensure!(
++                seen.insert(action_id),
++                "Smart Action group id {id} contained duplicate action id {action_id}"
++            );
++            ensure!(
++                smart_action_ids.contains(&action_id),
++                "Smart Action group id {id} referenced missing Smart Action id {action_id}"
++            );
++        }
++    }
++    Ok(smart_action_ids.clone())
++}
++
++fn validate_smart_name(value: &str, kind: &str) -> Result<()> {
++    ensure!(value.len() <= MAX_NAME_BYTES, "{kind} exceeded 64 bytes");
++    ensure!(
++        !value.chars().any(char::is_control),
++        "{kind} contained a control character"
++    );
++    Ok(())
++}
++
++fn smart_action_records(document: &Value) -> Result<&Map<String, Value>> {
++    static EMPTY: once_cell::sync::Lazy<Map<String, Value>> = once_cell::sync::Lazy::new(Map::new);
++    match document.get("smartActions") {
++        Some(value) => value
++            .as_object()
++            .context("smart_actions.json smartActions was not an object"),
++        None => Ok(&EMPTY),
++    }
++}
++
++fn smart_action_records_mut(document: &mut Value) -> Result<&mut Map<String, Value>> {
++    let object = document
++        .as_object_mut()
++        .context("smart_actions.json was not an object")?;
++    if !object.contains_key("smartActions") {
++        object.insert("smartActions".into(), Value::Object(Map::new()));
++    }
++    object
++        .get_mut("smartActions")
++        .and_then(Value::as_object_mut)
++        .context("smart_actions.json smartActions was not an object")
++}
++
++fn smart_action_groups(document: &Value) -> Result<&Vec<Value>> {
++    static EMPTY: once_cell::sync::Lazy<Vec<Value>> = once_cell::sync::Lazy::new(Vec::new);
++    match document.get("smartActionGroups") {
++        Some(value) => value
++            .as_array()
++            .context("smart_actions.json smartActionGroups was not an array"),
++        None => Ok(&EMPTY),
++    }
++}
++
++fn smart_action_groups_mut(document: &mut Value) -> Result<&mut Vec<Value>> {
++    let object = document
++        .as_object_mut()
++        .context("smart_actions.json was not an object")?;
++    if !object.contains_key("smartActionGroups") {
++        object.insert("smartActionGroups".into(), Value::Array(Vec::new()));
++    }
++    object
++        .get_mut("smartActionGroups")
++        .and_then(Value::as_array_mut)
++        .context("smart_actions.json smartActionGroups was not an array")
++}
++
++fn smart_action_key(id: u64) -> String {
++    format!("SA_{id}")
++}
++
++fn smart_action_key_id(key: &str) -> Result<u64> {
++    reference_id(key, "SA_")?.with_context(|| format!("Smart Action key {key} was invalid"))
++}
++
++fn find_smart_action(document: &Value, id: u64) -> Result<&Value> {
++    smart_action_records(document)?
++        .get(&smart_action_key(id))
++        .with_context(|| format!("Smart Action id {id} was not found"))
++}
++
++fn next_smart_action_id(document: &Value) -> Result<u64> {
++    match smart_action_records(document)?
++        .keys()
++        .map(|key| smart_action_key_id(key))
++        .collect::<Result<Vec<_>>>()?
++        .into_iter()
++        .max()
++    {
++        Some(id) => id.checked_add(1).context("Smart Action id overflowed"),
++        None => Ok(1),
++    }
++}
++
++fn smart_action_group_index(document: &Value, id: u64) -> Result<usize> {
++    smart_action_groups(document)?
++        .iter()
++        .position(|group| {
++            matches!(object_u64(group, "id", "Smart Action group"), Ok(candidate) if candidate == id)
++        })
++        .with_context(|| format!("Smart Action group id {id} was not found"))
++}
++
++fn next_smart_action_group_id(document: &Value) -> Result<u64> {
++    match smart_action_groups(document)?
++        .iter()
++        .map(|group| object_u64(group, "id", "Smart Action group"))
++        .collect::<Result<Vec<_>>>()?
++        .into_iter()
++        .max()
++    {
++        Some(id) => id
++            .checked_add(1)
++            .context("Smart Action group id overflowed"),
++        None => Ok(0),
++    }
++}
++
++fn smart_action_group_member_ids(group: &Value) -> Result<Vec<u64>> {
++    group
++        .get("actionIds")
++        .and_then(Value::as_array)
++        .context("Smart Action group actionIds was invalid")?
++        .iter()
++        .map(|value| {
++            value
++                .as_u64()
++                .context("Smart Action group member id was invalid")
++        })
++        .collect()
++}
++
++fn smart_action_group_tags(group: &Value) -> Result<Vec<String>> {
++    match group.get("tags") {
++        None => Ok(Vec::new()),
++        Some(tags) => tags
++            .as_array()
++            .context("Smart Action group tags was not an array")?
++            .iter()
++            .map(|tag| {
++                tag.as_str()
++                    .context("Smart Action group tag was not a string")
++                    .map(str::to_owned)
++            })
++            .collect(),
++    }
++}
++
++fn smart_action_group_entry(group: &Value) -> Result<SmartActionGroupEntry> {
++    Ok(SmartActionGroupEntry {
++        id: object_u64(group, "id", "Smart Action group")?,
++        name: object_string(group, "name", "Smart Action group")?.to_owned(),
++        tags: smart_action_group_tags(group)?,
++        color: normalized_color_value(group.get("color"))?,
++        member_count: smart_action_group_member_ids(group)?.len(),
++    })
++}
++
++fn validate_smart_action_group_inputs(tags: &[String], members: &[u64]) -> Result<()> {
++    let mut seen_tags = HashSet::new();
++    for tag in tags {
++        validate_smart_name(tag, "Smart Action group tag")?;
++        ensure!(
++            seen_tags.insert(tag),
++            "Smart Action group tags contained a duplicate"
++        );
++    }
++    let mut seen_members = HashSet::new();
++    for member in members {
++        ensure!(
++            seen_members.insert(member),
++            "Smart Action group contained duplicate Smart Action id {member}"
++        );
++    }
++    Ok(())
++}
++
++fn smart_action_payload_supplied(payload: &SmartActionPayload<'_>) -> bool {
++    payload.text.is_some()
++        || payload.command.is_some()
++        || payload.url.is_some()
++        || payload.app_name.is_some()
++        || payload.app_path.is_some()
++}
++
++fn build_smart_action_payload(
++    action_type: SmartActionType,
++    update: SmartActionPayload<'_>,
++    existing: Option<&Value>,
++    reset: bool,
++) -> Result<Value> {
++    let allowed = match action_type {
++        SmartActionType::Text => {
++            ensure!(
++                update.command.is_none()
++                    && update.url.is_none()
++                    && update.app_name.is_none()
++                    && update.app_path.is_none(),
++                "TEXT_STEP accepts only --text"
++            );
++            &["text"][..]
++        }
++        SmartActionType::Command => {
++            ensure!(
++                update.text.is_none()
++                    && update.url.is_none()
++                    && update.app_name.is_none()
++                    && update.app_path.is_none(),
++                "CMD_STEP accepts only --command"
++            );
++            &["cmd"][..]
++        }
++        SmartActionType::Url => {
++            ensure!(
++                update.text.is_none()
++                    && update.command.is_none()
++                    && update.app_name.is_none()
++                    && update.app_path.is_none(),
++                "URL_STEP accepts only --url"
++            );
++            &["url"][..]
++        }
++        SmartActionType::App => {
++            ensure!(
++                update.text.is_none() && update.command.is_none() && update.url.is_none(),
++                "APP_STEP accepts only --app-name and --app-path"
++            );
++            &["name", "path"][..]
++        }
++    };
++    let mut payload = if reset {
++        Map::new()
++    } else {
++        existing
++            .and_then(Value::as_object)
++            .cloned()
++            .context("existing Smart Action payload was invalid")?
++    };
++    for field in allowed {
++        if reset && !payload.contains_key(*field) {
++            payload.insert((*field).into(), Value::String(String::new()));
++        }
++    }
++    match action_type {
++        SmartActionType::Text => {
++            if let Some(value) = update.text {
++                payload.insert("text".into(), Value::String(value.to_owned()));
++            }
++        }
++        SmartActionType::Command => {
++            if let Some(value) = update.command {
++                payload.insert("cmd".into(), Value::String(value.to_owned()));
++            }
++        }
++        SmartActionType::Url => {
++            if let Some(value) = update.url {
++                payload.insert("url".into(), Value::String(value.to_owned()));
++            }
++        }
++        SmartActionType::App => {
++            if let Some(value) = update.app_name {
++                payload.insert("name".into(), Value::String(value.to_owned()));
++            }
++            if let Some(value) = update.app_path {
++                payload.insert("path".into(), Value::String(value.to_owned()));
++            }
++        }
++    }
++    Ok(Value::Object(payload))
++}
++
++fn smart_action_entry(
++    snapshot: &SemanticSnapshot,
++    id: u64,
++    record: &Value,
++) -> Result<SmartActionEntry> {
++    let action_type = object_string(record, "type", "Smart Action")?;
++    let token = smart_action_key(id);
++    let mut physical_reference_count = 0_usize;
++    for profile in profiles(&snapshot.keymap)? {
++        for layer in profile_layers(profile)? {
++            for_each_assignment(layer, |assignment| {
++                if assignment == token {
++                    physical_reference_count += 1;
++                }
++                Ok(())
++            })?;
++        }
++    }
++    let mut group_ids = Vec::new();
++    for group in smart_action_groups(snapshot.smart_actions()?)? {
++        if smart_action_group_member_ids(group)?.contains(&id) {
++            group_ids.push(object_u64(group, "id", "Smart Action group")?);
++        }
+     }
++    Ok(SmartActionEntry {
++        id,
++        name: object_string(record, "name", "Smart Action")?.to_owned(),
++        action_type: action_type.to_owned(),
++        payload: record
++            .get("payload")
++            .cloned()
++            .context("Smart Action payload was missing")?,
++        color: normalized_color_value(record.get("color"))?,
++        icon: optional_string(record, "icon", "Smart Action")?.map(str::to_owned),
++        physical_reference_count,
++        group_ids,
++        requires_command_permission: action_type == SmartActionType::Command.as_str(),
++    })
+ }
+ 
+-fn validate_action_model_spec() -> Result<()> {
+-    let spec: Value = serde_json::from_str(ACTION_SPEC_JSON)
+-        .context("embedded Input Action model was invalid")?;
+-    ensure!(
+-        spec.get("schemaVersion").and_then(Value::as_u64) == Some(1)
+-            && spec.get("kind").and_then(Value::as_str) == Some("worklouder-input-action-model")
+-            && spec.get("inputVersion").and_then(Value::as_str) == Some("0.18.0")
+-            && spec
+-                .get("sourceAsarSha256")
+-                .and_then(Value::as_str)
+-                .map(|value| is_digest(value, 64))
+-                == Some(true),
+-        "embedded Input Action model identity was invalid"
+-    );
+-    let multi: Value = serde_json::from_str(MULTI_ACTION_SPEC_JSON)
+-        .context("embedded Input Multi Action model was invalid")?;
+-    ensure!(
+-        multi.get("schemaVersion").and_then(Value::as_u64) == Some(1)
+-            && multi.get("kind").and_then(Value::as_str)
+-                == Some("worklouder-input-multi-action-model")
+-            && multi.get("inputVersion").and_then(Value::as_str) == Some("0.18.0")
+-            && multi
+-                .get("sourceAsarSha256")
+-                .and_then(Value::as_str)
+-                .map(|value| is_digest(value, 64))
+-                == Some(true),
+-        "embedded Input Multi Action model identity was invalid"
+-    );
++fn remove_smart_action_from_groups(
++    document: &mut Value,
++    id: u64,
++    paths: &mut Vec<String>,
++) -> Result<()> {
++    let groups = match document.get_mut("smartActionGroups") {
++        None => return Ok(()),
++        Some(value) => value
++            .as_array_mut()
++            .context("smart_actions.json smartActionGroups was not an array")?,
++    };
++    for (index, group) in groups.iter_mut().enumerate() {
++        let members = group
++            .get_mut("actionIds")
++            .and_then(Value::as_array_mut)
++            .context("Smart Action group actionIds was invalid")?;
++        let before = members.len();
++        members.retain(|value| value.as_u64() != Some(id));
++        if members.len() != before {
++            paths.push(format!(
++                "/smart_actions.json/smartActionGroups/{index}/actionIds"
++            ));
++        }
++    }
+     Ok(())
+ }
+ 
+@@ -3629,6 +4693,23 @@ fn validate_assignment_token(
+     bail!("assignment token {token} was not in the Input 0.18.0 catalog")
+ }
+ 
++fn validate_physical_assignment_token(
++    token: &str,
++    spec: &AssignmentSpec,
++    action_ids: &HashSet<u64>,
++    multi_action_ids: &HashSet<u64>,
++    smart_action_ids: &HashSet<u64>,
++) -> Result<()> {
++    if let Some(id) = reference_id(token, "SA_")? {
++        ensure!(
++            smart_action_ids.contains(&id),
++            "assignment referenced missing Smart Action id {id}"
++        );
++        return Ok(());
++    }
++    validate_assignment_token(token, spec, action_ids, multi_action_ids)
++}
++
+ fn validate_writable_assignment(keymap: &Value, token: &str) -> Result<()> {
+     let spec = assignment_spec()?;
+     ensure!(
+@@ -3646,6 +4727,28 @@ fn validate_writable_assignment(keymap: &Value, token: &str) -> Result<()> {
+     )
+ }
+ 
++fn validate_writable_control_assignment(
++    keymap: &Value,
++    smart_action_ids: &HashSet<u64>,
++    token: &str,
++) -> Result<()> {
++    let spec = assignment_spec()?;
++    ensure!(
++        !spec
++            .read_only_prefixes
++            .iter()
++            .any(|prefix| token.starts_with(prefix)),
++        "vendor-reserved assignment token {token} is read-only"
++    );
++    validate_physical_assignment_token(
++        token,
++        &spec,
++        &resource_ids(keymap, "macros")?,
++        &resource_ids(keymap, "multiActions")?,
++        smart_action_ids,
++    )
++}
++
+ fn assignment_kind(token: &str) -> Result<&'static str> {
+     let spec = assignment_spec()?;
+     if spec.basic_tokens.iter().any(|item| item == token) {
+@@ -3656,6 +4759,8 @@ fn assignment_kind(token: &str) -> Result<&'static str> {
+         Ok("action")
+     } else if reference_id(token, "KA_M")?.is_some() {
+         Ok("multiAction")
++    } else if reference_id(token, "SA_")?.is_some() {
++        Ok("smartAction")
+     } else if spec
+         .read_only_prefixes
+         .iter()
+@@ -3801,7 +4906,7 @@ fn sync_usage_field(
+     Ok(())
+ }
+ 
+-fn validate_keymap(keymap: &Value) -> Result<()> {
++fn validate_keymap(keymap: &Value, smart_action_ids: &HashSet<u64>) -> Result<()> {
+     let object = keymap
+         .as_object()
+         .context("keymap.json was not an object")?;
+@@ -3870,7 +4975,13 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
+                 );
+             }
+             for_each_assignment(layer, |token| {
+-                validate_assignment_token(token, &spec, &action_ids, &multi_action_ids)
++                validate_physical_assignment_token(
++                    token,
++                    &spec,
++                    &action_ids,
++                    &multi_action_ids,
++                    smart_action_ids,
++                )
+             })?;
+         }
+         validate_usage_field(profile, "macrosUsed", &action_ids)?;
+@@ -4546,7 +5657,7 @@ mod tests {
+                             {"a1": 1.5, "a2": 3.0, "k": "KA_M1"}
+                         ]}
+                     }},
+-                    {"id": 1, "name": "Tools", "color": 4478310, "linkedAppId": 5, "layout": {"keymap": [["KI_LM2", "KC_NONE"]], "encoders": [], "joystick": {"type": "VENDOR", "sectors": []}}, "lights": {
++                    {"id": 1, "name": "Tools", "color": 4478310, "linkedAppId": 5, "layout": {"keymap": [["KI_LM2", "SA_2"]], "encoders": [], "joystick": {"type": "VENDOR", "sectors": []}}, "lights": {
+                         "backlight": {"effect": "solid", "brightness": 1.0, "speed": 0.5, "magic": 1.0, "color": 16777215},
+                         "underglow": {"effect": "gradient", "brightness": 0.8, "speed": 0.4, "magic": 0.3, "color": 15595263}
+                     }}
+@@ -4557,7 +5668,29 @@ mod tests {
+             ]
+         }))
+         .unwrap();
+-        let smart = br#"{"version":1,"future":{"byteExact":true}}"#.to_vec();
++        let smart = serde_json::to_vec(&json!({
++            "version": 1,
++            "future": {"byteExact": true},
++            "smartActions": {
++                "SA_2": {
++                    "name": "Fixture Text",
++                    "icon": "icon-fixture",
++                    "color": "#112233",
++                    "type": "TEXT_STEP",
++                    "payload": {"text": "hello", "futurePayload": true},
++                    "futureRecord": {"kept": true}
++                },
++                "SA_7": {
++                    "name": "Fixture Command",
++                    "type": "CMD_STEP",
++                    "payload": {"cmd": "printf fixture"}
++                }
++            },
++            "smartActionGroups": [
++                {"id": 3, "name": "Fixture Smart", "tags": ["fixture"], "color": null, "actionIds": [2, 7]}
++            ]
++        }))
++        .unwrap();
+         let files = vec![
+             file("keymap.json", &keymap),
+             file("smart_actions.json", &smart),
+@@ -5644,6 +6777,299 @@ mod tests {
+         fs::remove_file(source).unwrap();
+     }
+ 
++    #[test]
++    fn smart_actions_are_typed_referenced_and_mutated_without_rewriting_keymap() {
++        let source = root("smart-action-source");
++        let created = root("smart-action-created");
++        let updated = root("smart-action-updated");
++        let bound = root("smart-action-bound");
++        let deleted = root("smart-action-deleted");
++        write_fixture(&source);
++
++        let listed = smart_action_list(&source).unwrap();
++        assert_eq!(
++            listed
++                .smart_actions
++                .iter()
++                .map(|item| item.id)
++                .collect::<Vec<_>>(),
++            vec![2, 7]
++        );
++        assert_eq!(listed.smart_actions[0].physical_reference_count, 1);
++        assert_eq!(listed.smart_actions[0].group_ids, vec![3]);
++        assert!(!listed.smart_actions[0].requires_command_permission);
++        assert!(listed.smart_actions[1].requires_command_permission);
++        let shown = smart_action_show(&source, 2).unwrap();
++        assert_eq!(shown.smart_action.action_type, "TEXT_STEP");
++        assert_eq!(shown.smart_action.payload["text"], "hello");
++
++        let original = SemanticSnapshot::read(&source).unwrap();
++        let keymap_before = original.file_bytes[0].clone();
++        let receipt = smart_action_create(
++            &source,
++            "Fixture App Launcher",
++            SmartActionType::App,
++            SmartActionPayload {
++                text: None,
++                command: None,
++                url: None,
++                app_name: Some("Fixture App"),
++                app_path: Some("/Applications/Fixture.app"),
++            },
++            Some("#edf6ff"),
++            Some("fixture-app"),
++            &created,
++        )
++        .unwrap();
++        assert_eq!(receipt.resource_id, Some(8));
++        assert_eq!(
++            receipt.changed_paths,
++            vec!["/smart_actions.json/smartActions/SA_8"]
++        );
++        let candidate = SemanticSnapshot::read(&created).unwrap();
++        assert_eq!(candidate.file_bytes[0], keymap_before);
++        assert_eq!(
++            candidate.smart_actions.as_ref().unwrap()["future"]["byteExact"],
++            true
++        );
++        assert_eq!(
++            candidate.smart_actions.as_ref().unwrap()["smartActions"]["SA_8"]["payload"],
++            json!({"name": "Fixture App", "path": "/Applications/Fixture.app"})
++        );
++        assert_eq!(
++            candidate.smart_actions.as_ref().unwrap()["smartActions"]["SA_8"]["color"],
++            "#EDF6FF"
++        );
++
++        smart_action_set(
++            &source,
++            2,
++            SmartActionUpdate {
++                name: Some("Fixture URL"),
++                action_type: Some(SmartActionType::Url),
++                payload: SmartActionPayload {
++                    text: None,
++                    command: None,
++                    url: Some("https://example.invalid/fixture"),
++                    app_name: None,
++                    app_path: None,
++                },
++                color: None,
++                clear_color: true,
++                icon: None,
++                clear_icon: false,
++            },
++            &updated,
++        )
++        .unwrap();
++        let candidate = SemanticSnapshot::read(&updated).unwrap();
++        let record = &candidate.smart_actions.as_ref().unwrap()["smartActions"]["SA_2"];
++        assert_eq!(record["name"], "Fixture URL");
++        assert_eq!(record["type"], "URL_STEP");
++        assert_eq!(
++            record["payload"],
++            json!({"url": "https://example.invalid/fixture"})
++        );
++        assert!(record.get("color").is_none());
++        assert_eq!(record["futureRecord"]["kept"], true);
++
++        let receipt = control_set(&source, Some(0), 0, "key:0:0", "SA_7", &bound).unwrap();
++        assert_eq!(
++            receipt.changed_paths,
++            vec!["/keymap.json/profiles/0/layers/0/layout/keymap/0/0"]
++        );
++        assert_eq!(
++            control_show(&bound, Some(0), 0, "key:0:0")
++                .unwrap()
++                .control
++                .assignment_kind,
++            "smartAction"
++        );
++
++        let receipt = smart_action_delete(&source, 2, &deleted).unwrap();
++        assert!(receipt
++            .changed_paths
++            .contains(&"/keymap.json/profiles/0/layers/1/layout/keymap/0/1".into()));
++        assert!(receipt
++            .changed_paths
++            .contains(&"/smart_actions.json/smartActionGroups/0/actionIds".into()));
++        let candidate = SemanticSnapshot::read(&deleted).unwrap();
++        assert_eq!(
++            candidate.keymap["profiles"][0]["layers"][1]["layout"]["keymap"][0][1],
++            "KC_NONE"
++        );
++        assert!(candidate.smart_actions.as_ref().unwrap()["smartActions"]
++            .get("SA_2")
++            .is_none());
++        assert_eq!(
++            candidate.smart_actions.as_ref().unwrap()["smartActionGroups"][0]["actionIds"],
++            json!([7])
++        );
++
++        for path in [&source, &created, &updated, &bound, &deleted] {
++            fs::remove_file(path).unwrap();
++        }
++    }
++
++    #[test]
++    fn smart_action_groups_allow_empty_containers_and_member_crud() {
++        let source = root("smart-group-source");
++        let created = root("smart-group-created");
++        let added = root("smart-group-added");
++        let added_again = root("smart-group-added-again");
++        let moved = root("smart-group-moved");
++        let removed = root("smart-group-removed");
++        let updated = root("smart-group-updated");
++        let deleted = root("smart-group-deleted");
++        write_fixture(&source);
++
++        let receipt = smart_action_group_create(
++            &source,
++            "Empty CLI Group",
++            &[],
++            None,
++            &["cli".into()],
++            &created,
++        )
++        .unwrap();
++        assert_eq!(receipt.resource_id, Some(4));
++        assert_eq!(
++            smart_action_group_show(&created, 4).unwrap().members.len(),
++            0
++        );
++
++        smart_action_group_member_add(&created, 4, 2, &added).unwrap();
++        smart_action_group_member_add(&added, 4, 7, &added_again).unwrap();
++        smart_action_group_member_move(&added_again, 4, 1, 0, &moved).unwrap();
++        assert_eq!(
++            smart_action_group_show(&moved, 4)
++                .unwrap()
++                .members
++                .iter()
++                .map(|member| member.id)
++                .collect::<Vec<_>>(),
++            vec![7, 2]
++        );
++        smart_action_group_member_remove(&moved, 4, 7, &removed).unwrap();
++        smart_action_group_set(
++            &removed,
++            4,
++            GroupUpdate {
++                name: Some("Configured CLI Group"),
++                color: Some("#010203"),
++                clear_color: false,
++                tags: Some(&[]),
++            },
++            &updated,
++        )
++        .unwrap();
++        let group = smart_action_group_show(&updated, 4).unwrap().group;
++        assert_eq!(group.name, "Configured CLI Group");
++        assert_eq!(group.color.as_deref(), Some("#010203"));
++        assert!(group.tags.is_empty());
++
++        smart_action_group_delete(&updated, 4, &deleted).unwrap();
++        assert!(smart_action_show(&deleted, 2).is_ok());
++        assert!(smart_action_group_show(&deleted, 4).is_err());
++
++        for path in [
++            &source,
++            &created,
++            &added,
++            &added_again,
++            &moved,
++            &removed,
++            &updated,
++            &deleted,
++        ] {
++            fs::remove_file(path).unwrap();
++        }
++    }
++
++    #[test]
++    fn smart_action_mutations_reject_mismatched_payloads_and_missing_references() {
++        let source = root("smart-invalid-source");
++        write_fixture(&source);
++        let output = root("smart-invalid-payload");
++        let error = smart_action_create(
++            &source,
++            "Mismatch",
++            SmartActionType::Text,
++            SmartActionPayload {
++                text: None,
++                command: Some("printf mismatch"),
++                url: None,
++                app_name: None,
++                app_path: None,
++            },
++            None,
++            None,
++            &output,
++        )
++        .unwrap_err()
++        .to_string();
++        assert!(error.contains("only --text"));
++        assert!(!output.exists());
++
++        let output = root("smart-missing-reference");
++        let error = control_set(&source, Some(0), 0, "key:0:0", "SA_99", &output)
++            .unwrap_err()
++            .to_string();
++        assert!(error.contains("missing Smart Action"));
++        assert!(!output.exists());
++        fs::remove_file(source).unwrap();
++    }
++
++    #[test]
++    fn smart_action_validation_rejects_noncanonical_ids_payloads_and_stale_groups() {
++        for (document, needle) in [
++            (
++                json!({
++                    "version": 1,
++                    "smartActions": {
++                        "SA_01": {"name": "Bad ID", "type": "TEXT_STEP", "payload": {"text": ""}}
++                    }
++                }),
++                "canonical",
++            ),
++            (
++                json!({
++                    "version": 1,
++                    "smartActions": {
++                        "SA_1": {"name": "Bad Payload", "type": "APP_STEP", "payload": {"name": "App"}}
++                    }
++                }),
++                "payload.path",
++            ),
++            (
++                json!({
++                    "version": 1,
++                    "smartActions": {
++                        "SA_1": {"name": "Text", "type": "TEXT_STEP", "payload": {"text": ""}}
++                    },
++                    "smartActionGroups": [
++                        {"id": 0, "name": "Stale", "tags": [], "color": null, "actionIds": [2]}
++                    ]
++                }),
++                "missing Smart Action",
++            ),
++        ] {
++            let error = validate_smart_actions(&document).unwrap_err().to_string();
++            assert!(error.contains(needle), "unexpected error: {error}");
++        }
++
++        let mut document = json!({
++            "version": 1,
++            "smartActions": {
++                "SA_1": {"name": "Text", "type": "TEXT_STEP", "payload": {"text": ""}}
++            }
++        });
++        let mut paths = Vec::new();
++        remove_smart_action_from_groups(&mut document, 1, &mut paths).unwrap();
++        assert!(document.get("smartActionGroups").is_none());
++        assert!(paths.is_empty());
++    }
++
+     #[test]
+     fn rejects_tampered_snapshots_and_unsafe_names() {
+         let source = root("tampered");
+diff --git a/tests/cli.rs b/tests/cli.rs
+index 84ab6a6..385bb59 100644
+--- a/tests/cli.rs
++++ b/tests/cli.rs
+@@ -42,6 +42,7 @@ fn help_lists_the_binary_and_version_command() {
+     assert!(stdout.contains("control"));
+     assert!(stdout.contains("action"));
+     assert!(stdout.contains("multi-action"));
++    assert!(stdout.contains("smart-action"));
+     assert!(stdout.contains("completion"));
+ }
+ 
+@@ -138,6 +139,23 @@ fn semantic_help_exposes_offline_candidate_workflow() {
+         assert!(appsense_stdout.contains(command));
+     }
+ 
++    let smart = binary().args(["smart-action", "--help"]).output().unwrap();
++    let smart_stdout = String::from_utf8(smart.stdout).unwrap();
++    assert!(smart.status.success());
++    for command in ["list", "show", "create", "set", "delete", "group"] {
++        assert!(smart_stdout.contains(command));
++    }
++
++    let smart_group = binary()
++        .args(["smart-action", "group", "--help"])
++        .output()
++        .unwrap();
++    let smart_group_stdout = String::from_utf8(smart_group.stdout).unwrap();
++    assert!(smart_group.status.success());
++    for command in ["list", "show", "create", "set", "member", "delete"] {
++        assert!(smart_group_stdout.contains(command));
++    }
++
+     let multi_group = binary()
+         .args(["multi-action", "group", "--help"])
+         .output()
