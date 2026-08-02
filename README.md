@@ -23,7 +23,7 @@
 > `worklouderctl` binary with provider diagnostics, Codex Micro settings
 > inspection/export, Input inspection/exact-byte export, validation, structural
 > diff, live device status/file reads, verified device export, revisioned bridge
-> snapshots/CAS validation, offline profile/layer/AppSense/control/Action candidate generation,
+> snapshots/CAS validation, offline profile/layer/AppSense/control/Action/Smart Action candidate generation,
 > fixture-verified apply/restore transactions, JSON output, and shell completions.
 > There is no packaged release yet.
 > The bridge transaction engine now verifies backup, apply, idempotent retry,
@@ -119,6 +119,14 @@ worklouderctl appsense show --input CONFIG.json --id APP_ID
 worklouderctl appsense link --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --name NAME [--process BUNDLE_ID] [--path APP_PATH] --output CANDIDATE.json
 worklouderctl appsense set --input CONFIG.json --id APP_ID [--name NAME] [--process BUNDLE_ID|--clear-process] [--path APP_PATH|--clear-path] --output CANDIDATE.json
 worklouderctl appsense unlink --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --output CANDIDATE.json
+worklouderctl smart-action list --input CONFIG.json
+worklouderctl smart-action show --input CONFIG.json --id SMART_ACTION_ID
+worklouderctl smart-action create --input CONFIG.json --name NAME --type text --text TEXT --output CANDIDATE.json
+worklouderctl smart-action set --input CONFIG.json --id SMART_ACTION_ID --type url --url URL --output CANDIDATE.json
+worklouderctl smart-action delete --input CONFIG.json --id SMART_ACTION_ID --output CANDIDATE.json
+worklouderctl smart-action group create --input CONFIG.json --name NAME --smart-action SMART_ACTION_ID --output CANDIDATE.json
+worklouderctl smart-action group member move --input CONFIG.json --id GROUP_ID --from 1 --to 0 --output CANDIDATE.json
+worklouderctl smart-action group delete --input CONFIG.json --id GROUP_ID --output CANDIDATE.json
 worklouderctl control list --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID
 worklouderctl control show --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control key:ROW:COLUMN
 worklouderctl control set --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --control encoder:INDEX:press --assignment KC_MUTE --output CANDIDATE.json
@@ -187,7 +195,8 @@ full revision readback, and automatic rollback. These commands are advertised
 only when the running Input version supplies a verified configuration writer;
 the current cross-language evidence uses the isolated reference writer.
 
-`profile`, `layer`, `appsense`, `control`, `action`, and `multi-action` commands are offline semantic editors. They strictly
+`profile`, `layer`, `appsense`, `control`, `action`, `multi-action`, and
+`smart-action` commands are offline semantic editors. They strictly
 validate every embedded size, SHA-1, SHA-256, canonical base64 payload, safe
 path, keymap ID, and the full snapshot revision before producing a new complete
 candidate. A candidate preserves unknown JSON fields and unrelated file bytes,
@@ -252,6 +261,16 @@ maximum-ID-plus-one import rule.
 use Input's four `KC_NONE` assignments and `250 ms` default. Deletion clears
 every physical, Action-event, nested Multi Action, group, and profile-usage
 reference before removing the resource.
+
+`smart-action` covers Input 0.18.0 `TEXT_STEP`, `CMD_STEP`, `URL_STEP`, and
+`APP_STEP` records in `smart_actions.json`, including typed payloads, optional
+color/icon metadata, physical `SA_<ID>` bindings, and stored groups. New IDs
+use Input's maximum-ID-plus-one rule and start at 1. Group IDs start at 0 and
+empty groups are valid. Deleting a Smart Action clears every physical binding
+to `KC_NONE` and removes group membership while preserving the group container.
+Smart-only candidates preserve the exact `keymap.json` bytes. Command actions
+report `requiresCommandPermission`; the host gate remains Input's
+`smartActionCmdEnabled` setting and is not silently changed by definition CRUD.
 
 The repository includes an executable Input-main reference server, a service
 adapter for the Input 0.18.0 service shape, authentication tests, and a
@@ -356,7 +375,8 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Semantic physical controls | List/show/set for keys, encoder gestures, and existing joystick sectors; candidate/apply/restore fixture-verified |
 | Semantic Actions | List/show/create/rename/delete and event add/set/delete/move; cascade/apply/restore fixture-verified |
 | Real-device mutation and rollback | Planned |
-| Input cache/database and Smart Actions synchronization | Planned |
+| Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
+| Input cache/database synchronization | Planned |
 | Signed macOS release and Homebrew installation | Planned |
 
 ## Frequently asked questions
@@ -365,7 +385,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 
 WorkLouderCTL is an open-source full-configuration CLI project for Codex, Work
 Louder Input, and Codex Micro. The source alpha can inspect both apps,
-read/export live Codex Micro state, generate validated profile/layer/lighting/control/Action/Multi Action/group candidates,
+read/export live Codex Micro state, generate validated profile/layer/lighting/control/Action/Multi Action/Smart Action/group candidates,
 and exercise apply/restore against the isolated bridge writer; packaged
 binaries and released-Input writer integration are upcoming.
 

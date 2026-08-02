@@ -168,6 +168,14 @@ worklouderctl multi-action set --input config-snapshot.json --id 1 \
   --output multi-action-candidate.json
 worklouderctl multi-action group create --input config-snapshot.json --name Gestures \
   --multi-action 1 --output multi-action-group-candidate.json
+worklouderctl smart-action create --input config-snapshot.json --name 'Insert text' \
+  --type text --text 'hello' --color '#EDF6FF' --output smart-text-candidate.json
+worklouderctl smart-action create --input smart-text-candidate.json --name 'Open URL' \
+  --type url --url 'https://example.com' --output smart-url-candidate.json
+worklouderctl smart-action group create --input smart-url-candidate.json --name Launchers \
+  --smart-action 1 --smart-action 2 --output smart-group-candidate.json
+worklouderctl control set --input smart-group-candidate.json --profile 0 --layer 1 \
+  --control key:0:0 --assignment SA_1 --output smart-bound-candidate.json
 ```
 
 Before publishing, the editor independently verifies every file's canonical

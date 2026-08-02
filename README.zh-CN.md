@@ -9,7 +9,7 @@
 > **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
 > provider 诊断、Codex Micro 设置检查/导出、Input 只读检查/原字节导出、
 > live device status/files、双哈希验证导出、带 revision 的 bridge snapshot、
-> live CAS 校验、离线 profile/layer/AppSense/control/Action candidate 生成、fixture 验证的
+> live CAS 校验、离线 profile/layer/AppSense/control/Action/Smart Action candidate 生成、fixture 验证的
 > apply/restore transaction、结构化 diff、JSON 输出和 shell completion。
 > 尚未发布打包版本；bridge transaction 已通过隔离 writer fixture
 > 验证，真实设备写入仍以 Input writer adapter 与硬件 rollback 验证为启用条件。
@@ -112,6 +112,14 @@ worklouderctl multi-action set --input CONFIG.json --id MULTI_ACTION_ID --tap KC
 worklouderctl multi-action delete --input CONFIG.json --id MULTI_ACTION_ID --output CANDIDATE.json
 worklouderctl multi-action group create --input CONFIG.json --name NAME --multi-action MULTI_ACTION_ID --output CANDIDATE.json
 worklouderctl multi-action group delete --input CONFIG.json --id GROUP_ID [--keep-members] --output CANDIDATE.json
+worklouderctl smart-action list --input CONFIG.json
+worklouderctl smart-action show --input CONFIG.json --id SMART_ACTION_ID
+worklouderctl smart-action create --input CONFIG.json --name NAME --type text --text TEXT --output CANDIDATE.json
+worklouderctl smart-action set --input CONFIG.json --id SMART_ACTION_ID --type url --url URL --output CANDIDATE.json
+worklouderctl smart-action delete --input CONFIG.json --id SMART_ACTION_ID --output CANDIDATE.json
+worklouderctl smart-action group create --input CONFIG.json --name NAME --smart-action SMART_ACTION_ID --output CANDIDATE.json
+worklouderctl smart-action group member move --input CONFIG.json --id GROUP_ID --from 1 --to 0 --output CANDIDATE.json
+worklouderctl smart-action group delete --input CONFIG.json --id GROUP_ID --output CANDIDATE.json
 worklouderctl device --transport direct --input-mode require-closed status
 worklouderctl config validate BACKUP_DIRECTORY
 worklouderctl config diff BASE CANDIDATE
@@ -148,7 +156,8 @@ CAS、session-scoped idempotency、完整 revision readback 与 automatic rollba
 只有运行中的 Input 注入已验证 writer 时，bridge 才会公布这两个写能力；当前
 跨语言证据来自隔离 reference writer。
 
-`profile`、`layer`、`appsense`、`control`、`action` 与 `multi-action` 是离线 semantic editor：先严格验证 snapshot 内每个
+`profile`、`layer`、`appsense`、`control`、`action`、`multi-action` 与
+`smart-action` 是离线 semantic editor：先严格验证 snapshot 内每个
 size、SHA-1、SHA-256、canonical base64、safe path、keymap ID 与完整 revision，
 再只修改请求的 semantic field，保留未知 JSON 字段和其他文件的原字节，重算
 受影响的哈希与 revision，原子发布并重新打开 candidate。这个阶段不连接 Input
@@ -194,6 +203,14 @@ maximum-ID-plus-one 规则分配。
 以及 name、color、icon、tapping term。新 Multi Action 使用四个 `KC_NONE` 与
 `250 ms` 默认值；删除时同步清理 physical controls、Action events、嵌套 Multi
 Action、groups 和 profile usage 引用。
+
+`smart-action` 已覆盖 Input 0.18.0 的 `TEXT_STEP`、`CMD_STEP`、`URL_STEP`
+与 `APP_STEP`，包括 typed payload、color/icon、物理 `SA_<ID>` binding 和 stored
+groups。Action ID 按 maximum-ID-plus-one 分配并从 1 开始；group ID 从 0 开始，
+允许空 group。删除 Smart Action 会把物理引用清为 `KC_NONE`、移除 group
+membership，并保留 group container。只修改 Smart Action 的 candidate 会保持
+`keymap.json` 原字节不变。Command action 会显式报告 `requiresCommandPermission`；
+Input 的 `smartActionCmdEnabled` host permission 不会被 definition CRUD 隐式修改。
 
 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
 adapter、认证测试，以及 Rust CLI 跨语言 conformance test：
@@ -254,7 +271,7 @@ WorkLouderCTL 是 **Full-configuration CLI**：
 `files`、双哈希 `export`、Companion Bridge v1 contract/client/reference server、
 revisioned config snapshot、live CAS 预检、fixture apply/restore/rollback 和
 Input 自动恢复，以及 profile/layer lifecycle、selection、ordering、24-bit RGB color
-与 per-layer lighting、AppSense linked-app lifecycle 的严格离线 candidate 生成，keys、
+与 per-layer lighting、AppSense linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线 candidate 生成，keys、
 encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
 list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
 release 集成、可安装 binary、Homebrew formula、

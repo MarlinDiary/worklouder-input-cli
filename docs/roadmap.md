@@ -67,10 +67,11 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Action group metadata, ordered member CRUD, and Input orphan cascade
 - [x] Multi Action field CRUD, timing, groups, and reference cascade
 - [x] Linked-app/AppSense list/show/link/update/unlink candidates and fixture transaction
+- [x] Smart Action typed CRUD, groups, physical bindings, and delete cascade candidates
 
 ## M4 — Full cross-authority transaction
 
-- [ ] Smart Actions and groups
+- [x] Smart Actions and groups (offline candidate and current-cache format verified)
 - [ ] Input cache adapter
 - [ ] Input database adapter
 - [ ] Input process coordination

@@ -455,6 +455,21 @@ Input 0.18.0 advertises and implements:
 - launch an application;
 - name, group, search, reuse, and bind actions.
 
+The offline `smart-action` editor now validates and preserves the separate
+`smart_actions.json` authority. It supports list/show/create/set/delete for all
+four typed payloads and `smart-action group` metadata plus ordered member CRUD.
+Action keys use canonical `SA_<ID>` names; new IDs start at 1 and use
+maximum-plus-one. Groups start at ID 0, may be empty, and container deletion
+does not delete member actions. A Smart Action deletion replaces physical
+`SA_<ID>` assignments with `KC_NONE` and removes group membership while keeping
+the group valid. Unknown root, record, and payload fields survive edits, and a
+Smart-only candidate leaves the exact `keymap.json` bytes unchanged.
+
+`control set` accepts an existing `SA_<ID>` only for physical controls. Action
+events and Multi Action branches retain their own frozen assignment grammar.
+The CLI reports command definitions with `requiresCommandPermission: true`;
+definition editing does not toggle the host permission.
+
 The Input database has a `smartActionCmdEnabled` permission field. Command
 execution must remain explicitly enabled and must be reported separately from
 device deployment.
