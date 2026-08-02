@@ -28,6 +28,13 @@ pub enum Command {
         #[clap(subcommand)]
         command: CapabilityCommand,
     },
+
+    /// Diagnose Codex, Input, and cached device configuration providers.
+    Doctor {
+        /// Treat warnings as a failing exit status.
+        #[clap(long)]
+        strict: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]

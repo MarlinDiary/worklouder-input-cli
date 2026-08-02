@@ -1,5 +1,6 @@
 pub mod cli;
 pub mod contract;
+pub mod doctor;
 
 use anyhow::Result;
 use cli::{CapabilityCommand, Cli, Command, TierCommand};
@@ -29,8 +30,37 @@ pub fn run(cli: Cli, mut out: impl Write) -> Result<()> {
         }
         Command::Tier { command } => run_tier(command, cli.json, &mut out)?,
         Command::Capability { command } => run_capability(command, cli.json, &mut out)?,
+        Command::Doctor { strict } => run_doctor(strict, cli.json, &mut out)?,
     }
 
+    Ok(())
+}
+
+fn run_doctor(strict: bool, json: bool, mut out: impl Write) -> Result<()> {
+    let report = doctor::inspect();
+    if json {
+        write_json(&mut out, &report)?;
+    } else {
+        writeln!(
+            out,
+            "doctor: {:?} ({} pass, {} warn, {} fail)",
+            report.status,
+            report.pass_count(),
+            report.warning_count(),
+            report.failure_count()
+        )?;
+        for check in &report.checks {
+            writeln!(out, "{:?}\t{}\t{}", check.status, check.id, check.summary)?;
+        }
+    }
+
+    if report.strict_failure(strict) {
+        anyhow::bail!(
+            "doctor found {} warning(s) and {} failure(s)",
+            report.warning_count(),
+            report.failure_count()
+        );
+    }
     Ok(())
 }
 

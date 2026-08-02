@@ -14,6 +14,16 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("version"));
     assert!(stdout.contains("tier"));
     assert!(stdout.contains("capability"));
+    assert!(stdout.contains("doctor"));
+}
+
+#[test]
+fn doctor_help_documents_strict_mode() {
+    let output = binary().args(["doctor", "--help"]).output().unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+
+    assert!(output.status.success());
+    assert!(stdout.contains("--strict"));
 }
 
 #[test]
