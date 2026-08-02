@@ -10,7 +10,11 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
   package:
+    needs: test
     name: Package ${{ matrix.target }}
     runs-on: macos-14
     strategy:
@@ -57,6 +61,9 @@ jobs:
           test -n "$CERTIFICATE_P12_BASE64"
           test -n "$CERTIFICATE_PASSWORD"
           test -n "$SIGNING_IDENTITY"
+          matches=$(security find-identity -v -p codesigning | \
+            grep -F 'Developer ID Application' | grep -F -c "$SIGNING_IDENTITY" || true)
+          test "$matches" -eq 1
           keychain="$RUNNER_TEMP/worklouderctl-signing.keychain-db"
           password=$(openssl rand -hex 24)
           security create-keychain -p "$password" "$keychain"
