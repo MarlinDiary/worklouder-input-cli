@@ -32,6 +32,7 @@ export async function installInputCompanionBridge({
     deviceKitVersion,
     configurationWriter: services.configurationWriter,
     hostSettingsAuthority,
+    presetCatalogAuthority: services.presetCatalogAuthority,
   });
   const bridge = await startInputCompanionBridge({
     adapter,

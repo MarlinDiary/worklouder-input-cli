@@ -219,6 +219,21 @@ pub enum InputCommand {
         #[clap(subcommand)]
         command: InputPermissionCommand,
     },
+
+    /// Snapshot the Input-owned preset catalog through the companion bridge.
+    Preset {
+        #[clap(subcommand)]
+        command: InputPresetCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum InputPresetCommand {
+    /// Save the merged saved/default preset catalog without editing Input storage.
+    Snapshot {
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
 }
 
 #[derive(Debug, Subcommand)]

@@ -35,6 +35,7 @@ const METHOD_DEFINITIONS = new Map([
     "input.host-settings.restore",
     ["input.host-settings.restore.v1", "restoreHostSettings"],
   ],
+  ["input.presets.snapshot", ["input.presets.snapshot.v1", "snapshotPresets"]],
 ]);
 
 const MUTATION_METHODS = new Set([

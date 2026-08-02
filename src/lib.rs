@@ -25,11 +25,12 @@ use cli::{
     CodexResetCommand, CodexRuntimeCommand, CodexVoiceCommand, CodexVoiceMode, Command,
     CompletionShell, ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand,
     DeviceTransport, InputCommand, InputCommandPermissionCommand, InputCommandPermissionValue,
-    InputConfigCommand, InputPermissionCommand, LayerCommand, LayerJoystickCommand,
-    LayerJoystickMode, LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand,
-    LightingEffect, LightingZone, MultiActionCommand, MultiActionGroupCommand,
-    MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand, SmartActionGroupCommand,
-    SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType, TierCommand,
+    InputConfigCommand, InputPermissionCommand, InputPresetCommand, LayerCommand,
+    LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand, LayerJoystickSectorCommand,
+    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
+    MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand, SmartActionCommand,
+    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
+    TierCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -2838,6 +2839,22 @@ fn run_input(
                     write_input_host_settings_mutation(result, json, &mut out)?;
                 }
             },
+        },
+        InputCommand::Preset { command } => match command {
+            InputPresetCommand::Snapshot { output } => {
+                let result = bridge::preset_catalog_snapshot(&bridge_paths, &output)?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "Saved {} Input preset(s) to {}",
+                        result.preset_count,
+                        result.output.display()
+                    )?;
+                    writeln!(out, "revision={}", result.revision)?;
+                }
+            }
         },
     }
     Ok(())

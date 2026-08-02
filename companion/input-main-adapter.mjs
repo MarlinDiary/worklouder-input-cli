@@ -9,16 +9,23 @@ export const HOST_SETTINGS_SCHEMA_VERSION = 1;
 export const HOST_SETTINGS_KIND = "worklouder-input-host-settings";
 export const HOST_SETTINGS_REVISION_ALGORITHM =
   "sha256:input-host-settings-three-booleans-v1";
+export const PRESET_CATALOG_SCHEMA_VERSION = 1;
+export const PRESET_CATALOG_KIND = "worklouder-input-preset-catalog";
+export const PRESET_CATALOG_REVISION_ALGORITHM =
+  "sha256:recursive-key-sorted-presets-json-v1";
 
 const MAX_CONFIG_FILES = 4096;
 const MAX_CONFIG_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_CONFIG_TOTAL_BYTES = 32 * 1024 * 1024;
+const MAX_PRESETS = 1024;
+const MAX_PRESET_CATALOG_BYTES = 32 * 1024 * 1024;
 
 export function createInputMainAdapter({
   devicesCommManager,
   deviceKitVersion,
   configurationWriter,
   hostSettingsAuthority,
+  presetCatalogAuthority,
 }) {
   if (
     !devicesCommManager ||
@@ -47,6 +54,13 @@ export function createInputMainAdapter({
     throw new TypeError(
       "hostSettingsAuthority must provide readSettings and replaceSettings",
     );
+  }
+  if (
+    presetCatalogAuthority !== undefined &&
+    (!presetCatalogAuthority ||
+      typeof presetCatalogAuthority.listPresets !== "function")
+  ) {
+    throw new TypeError("presetCatalogAuthority.listPresets must be a function");
   }
   const idempotencyCache = new Map();
   const hostSettingsIdempotencyCache = new Map();
@@ -575,6 +589,10 @@ export function createInputMainAdapter({
         candidate: snapshot,
       });
   }
+  if (presetCatalogAuthority) {
+    adapter.snapshotPresets = async () =>
+      presetCatalogSnapshot(await presetCatalogAuthority.listPresets());
+  }
   return adapter;
 }
 
@@ -681,6 +699,61 @@ export function hostSettingsRevision(settings) {
       ]),
     )
     .digest("hex");
+}
+
+function presetCatalogSnapshot(presets) {
+  const normalized = normalizePresetCatalog(presets);
+  return {
+    schemaVersion: PRESET_CATALOG_SCHEMA_VERSION,
+    kind: PRESET_CATALOG_KIND,
+    revisionAlgorithm: PRESET_CATALOG_REVISION_ALGORITHM,
+    revision: presetCatalogRevision(normalized),
+    presets: normalized,
+  };
+}
+
+function normalizePresetCatalog(presets) {
+  if (!Array.isArray(presets) || presets.length > MAX_PRESETS) {
+    throw new BridgeError(-32008, "Input returned an invalid preset catalog");
+  }
+  for (const preset of presets) {
+    if (!preset || typeof preset !== "object" || Array.isArray(preset)) {
+      throw new BridgeError(-32008, "Input returned an invalid preset entry");
+    }
+  }
+  let normalized;
+  try {
+    normalized = JSON.parse(JSON.stringify(presets));
+  } catch (error) {
+    throw new BridgeError(-32008, "Input preset catalog was not JSON", {
+      error: errorMessage(error),
+    });
+  }
+  const bytes = Buffer.byteLength(canonicalJson(normalized), "utf8");
+  if (bytes > MAX_PRESET_CATALOG_BYTES) {
+    throw new BridgeError(-32008, "Input preset catalog exceeded size limits");
+  }
+  return normalized;
+}
+
+export function presetCatalogRevision(presets) {
+  return createHash("sha256")
+    .update("worklouder-input-preset-catalog-revision-v1\0", "utf8")
+    .update(canonicalJson(presets), "utf8")
+    .digest("hex");
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function hostSettingsMutationResult({

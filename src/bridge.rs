@@ -25,6 +25,9 @@ const CONFIG_SNAPSHOT_KIND: &str = "worklouder-input-config-snapshot";
 const CONFIG_REVISION_ALGORITHM: &str = "sha256:path-u32be-path-bytes-size-u64be-content-v1";
 const HOST_SETTINGS_KIND: &str = "worklouder-input-host-settings";
 const HOST_SETTINGS_REVISION_ALGORITHM: &str = "sha256:input-host-settings-three-booleans-v1";
+const PRESET_CATALOG_KIND: &str = "worklouder-input-preset-catalog";
+const PRESET_CATALOG_REVISION_ALGORITHM: &str = "sha256:recursive-key-sorted-presets-json-v1";
+const MAX_PRESET_CATALOG_BYTES: usize = 32 * 1024 * 1024;
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug)]
@@ -135,6 +138,24 @@ pub struct HostSettingsMutationReceipt {
     pub before_revision: String,
     pub after_revision: String,
     pub target_revision: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetCatalogSnapshot {
+    pub schema_version: u64,
+    pub kind: String,
+    pub revision_algorithm: String,
+    pub revision: String,
+    pub presets: Vec<Value>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetCatalogSnapshotReceipt {
+    pub output: PathBuf,
+    pub revision: String,
+    pub preset_count: usize,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -569,6 +590,30 @@ pub fn host_settings_snapshot(
     })
 }
 
+pub fn preset_catalog_snapshot(
+    paths: &BridgePaths,
+    output: &Path,
+) -> Result<PresetCatalogSnapshotReceipt> {
+    let mut client = BridgeClient::connect(paths)?;
+    let snapshot: PresetCatalogSnapshot = client.call(
+        "input.presets.snapshot",
+        "input.presets.snapshot.v1",
+        json!({}),
+    )?;
+    validate_preset_catalog_snapshot(&snapshot)?;
+    write_atomic_json(output, &serde_json::to_value(&snapshot)?)?;
+    let reopened = read_preset_catalog_snapshot(output)?;
+    ensure!(
+        reopened.revision == snapshot.revision && reopened.presets == snapshot.presets,
+        "published preset catalog snapshot readback differed"
+    );
+    Ok(PresetCatalogSnapshotReceipt {
+        output: output.to_path_buf(),
+        revision: snapshot.revision,
+        preset_count: snapshot.presets.len(),
+    })
+}
+
 pub fn host_settings_show(input: &Path) -> Result<HostSettingsSnapshot> {
     read_host_settings_snapshot(input)
 }
@@ -933,6 +978,71 @@ fn read_host_settings_snapshot(input: &Path) -> Result<HostSettingsSnapshot> {
     })?;
     validate_host_settings_snapshot(&snapshot)?;
     Ok(snapshot)
+}
+
+pub fn read_preset_catalog_snapshot(input: &Path) -> Result<PresetCatalogSnapshot> {
+    let metadata = fs::symlink_metadata(input)
+        .with_context(|| format!("failed to inspect preset catalog {}", input.display()))?;
+    ensure!(
+        metadata.file_type().is_file() && !metadata.file_type().is_symlink(),
+        "preset catalog must be a regular file"
+    );
+    let bytes = fs::read(input)
+        .with_context(|| format!("failed to read preset catalog {}", input.display()))?;
+    ensure!(
+        bytes.len() <= MAX_PRESET_CATALOG_BYTES,
+        "preset catalog exceeded 32 MiB"
+    );
+    let snapshot: PresetCatalogSnapshot = serde_json::from_slice(&bytes)
+        .with_context(|| format!("preset catalog was invalid JSON: {}", input.display()))?;
+    validate_preset_catalog_snapshot(&snapshot)?;
+    Ok(snapshot)
+}
+
+fn validate_preset_catalog_snapshot(snapshot: &PresetCatalogSnapshot) -> Result<()> {
+    ensure!(
+        snapshot.schema_version == 1
+            && snapshot.kind == PRESET_CATALOG_KIND
+            && snapshot.revision_algorithm == PRESET_CATALOG_REVISION_ALGORITHM,
+        "preset catalog snapshot header was invalid"
+    );
+    ensure!(
+        snapshot.presets.len() <= 1024,
+        "preset catalog contained too many entries"
+    );
+    ensure!(
+        snapshot.presets.iter().all(Value::is_object),
+        "preset catalog contained a non-object entry"
+    );
+    ensure!(
+        snapshot.revision == preset_catalog_revision(&snapshot.presets)?,
+        "preset catalog revision did not match content"
+    );
+    Ok(())
+}
+
+fn preset_catalog_revision(presets: &[Value]) -> Result<String> {
+    let mut bytes = b"worklouder-input-preset-catalog-revision-v1\0".to_vec();
+    bytes.extend(serde_json::to_vec(&canonical_json(&Value::Array(
+        presets.to_vec(),
+    )))?);
+    fsutil::sha256_bytes(&bytes)
+}
+
+fn canonical_json(value: &Value) -> Value {
+    match value {
+        Value::Object(object) => {
+            let mut keys = object.keys().collect::<Vec<_>>();
+            keys.sort();
+            let mut canonical = serde_json::Map::new();
+            for key in keys {
+                canonical.insert(key.clone(), canonical_json(&object[key]));
+            }
+            Value::Object(canonical)
+        }
+        Value::Array(values) => Value::Array(values.iter().map(canonical_json).collect()),
+        _ => value.clone(),
+    }
 }
 
 fn validate_host_settings_snapshot(snapshot: &HostSettingsSnapshot) -> Result<()> {

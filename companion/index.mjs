@@ -10,8 +10,12 @@ export {
   HOST_SETTINGS_KIND,
   HOST_SETTINGS_REVISION_ALGORITHM,
   HOST_SETTINGS_SCHEMA_VERSION,
+  PRESET_CATALOG_KIND,
+  PRESET_CATALOG_REVISION_ALGORITHM,
+  PRESET_CATALOG_SCHEMA_VERSION,
   createInputMainAdapter,
   hostSettingsRevision,
+  presetCatalogRevision,
 } from "./input-main-adapter.mjs";
 export { installInputCompanionBridge } from "./input-main-integration.mjs";
 export { inspectInputCompanionBridge } from "./conformance.mjs";
