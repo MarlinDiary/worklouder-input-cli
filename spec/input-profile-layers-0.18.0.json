@@ -62,5 +62,25 @@
       "underglow": {"effect": "rainbow", "brightness": 1.0, "speed": 0.55, "magic": 1.0, "color": 16777215}
     },
     "applyToAllRule": "replace the selected zone on existing lighting and initialize both zones on layers without lighting"
+  },
+  "joystick": {
+    "types": ["RADIAL", "JOYSTICK"],
+    "radialMinimumSectors": 2,
+    "radialMaximumSectors": 8,
+    "newSectorAssignment": "KC_NONE",
+    "insertRule": "insert before the requested zero-based index, then rebalance every sector",
+    "deleteRule": "remove the requested zero-based index only while more than two sectors exist, then rebalance every sector",
+    "rebalance": {
+      "reservedFirstSectorDegrees": 45.0,
+      "firstStartTurns": 0.1875,
+      "firstEndTurns": 0.3125,
+      "remainingArcTurns": 0.875,
+      "remainingSectors": "divide remainingArcTurns equally among sector count minus one, starting at firstEndTurns and modulo one"
+    },
+    "radialInitialization": [
+      {"k": "KI_X", "a1": 0.1875, "a2": 0.3125},
+      {"k": "KC_NONE", "a1": 0.3125, "a2": 0.1875}
+    ],
+    "modeRule": "switching to RADIAL with fewer than two sectors installs radialInitialization; switching to JOYSTICK preserves sectors"
   }
 }
