@@ -125,6 +125,10 @@ worklouderctl layer rename --input CONFIG.json [--profile PROFILE_ID] --id LAYER
 worklouderctl layer color --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --color '#RRGGBB' --output CANDIDATE.json
 worklouderctl layer lighting show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
 worklouderctl layer lighting set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --zone backlight --effect breath --brightness 0.5 --color '#RRGGBB' [--apply-to-all] --output CANDIDATE.json
+worklouderctl layer joystick show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
+worklouderctl layer joystick mode set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID radial --output CANDIDATE.json
+worklouderctl layer joystick sector add --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --index INDEX --output CANDIDATE.json
+worklouderctl layer joystick sector delete --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --index INDEX --output CANDIDATE.json
 worklouderctl appsense list --input CONFIG.json
 worklouderctl appsense show --input CONFIG.json --id APP_ID
 worklouderctl appsense link --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --name NAME [--process BUNDLE_ID] [--path APP_PATH] --output CANDIDATE.json
@@ -283,6 +287,12 @@ move，也不作为直接 lighting target。普通 layer duplicate 会移除 `li
 `breath`、`gradient`，brightness/speed/magic 范围为 `0..1`，并支持 24-bit color
 与按 zone 的 `--apply-to-all`。
 
+`layer joystick show/mode/sector` 与 Input 0.18.0 released radial editor
+一致：开放当前可编辑的 `RADIAL` mode，在需要时写入观察到的双 sector 默认值，
+新增 `KC_NONE` sector，严格限制为 2–8 个，并以固定 45 度首 sector 的算法重算
+全部 `a1`/`a2` 边界。assignment 仍通过
+`control set --control joystick:INDEX` 修改。
+
 `appsense` 管理 Input 0.18.0 的 `linkedApps` 记录与 layer 的 `linkedAppId`。
 新 ID 遵循 Input 的 first-missing-nonnegative 规则；macOS 的 `process` 是 bundle
 identifier，并且 `process`/`path` 至少一个非空。`list/show` 会返回所有
@@ -390,7 +400,8 @@ lighting brightness/auto-off candidate 与 fixture transaction、Codex voice
 lifecycle、selection、ordering、24-bit RGB color 与 per-layer lighting、AppSense
 linked-app lifecycle、Smart Action definitions/groups/bindings/cascade 的严格离线
 candidate 生成，keys、
-encoder gestures、已有 joystick sectors 的 control list/show/set，以及 Action
+encoder gestures 的 control list/show/set、joystick mode 与 2–8 sector
+lifecycle/assignment/精确 angle rebalance，以及 Action
 list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
 release 集成、Codex released-app bridge 集成、可安装 binary 与 Homebrew formula
 仍在后续里程碑中。

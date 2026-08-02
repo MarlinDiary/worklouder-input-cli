@@ -323,6 +323,13 @@ worklouderctl layer lighting set --input SNAPSHOT.json [--profile ID] \
   --id ID --zone backlight --effect breath --brightness 0.5 \
   --speed 0.5 --magic 0.5 --color '#RRGGBB' [--apply-to-all] \
   --output CANDIDATE.json
+worklouderctl layer joystick show --input SNAPSHOT.json [--profile ID] --id ID
+worklouderctl layer joystick mode set --input SNAPSHOT.json [--profile ID] \
+  --id ID radial --output CANDIDATE.json
+worklouderctl layer joystick sector add --input SNAPSHOT.json [--profile ID] \
+  --id ID --index INDEX --output CANDIDATE.json
+worklouderctl layer joystick sector delete --input SNAPSHOT.json [--profile ID] \
+  --id ID --index INDEX --output CANDIDATE.json
 worklouderctl appsense list --input SNAPSHOT.json
 worklouderctl appsense show --input SNAPSHOT.json --id APP_ID
 worklouderctl appsense link --input SNAPSHOT.json [--profile ID] \
@@ -376,8 +383,16 @@ metadata; backlight and underglow objects remain separate lighting surfaces.
 The implemented physical IDs are `key:ROW:COLUMN`,
 `encoder:INDEX:ccw|cw|press`, and `joystick:SECTOR`. List/show report the exact
 device token and classify it as `basic`, `internal`, `action`, `multiAction`,
-or `vendor`. Set modifies only an existing physical slot; joystick sector
-angles remain byte-for-byte equivalent in the semantic document.
+or `vendor`. Set modifies only an existing physical slot; assignment-only edits
+leave joystick angles unchanged.
+
+`layer joystick show/mode/sector` implements the released Input 0.18.0 radial
+editor contract. `mode set ... radial` installs the observed `KI_X`/`KC_NONE`
+two-sector seed when fewer than two sectors exist. Sector add inserts
+`KC_NONE`; add/delete enforce the inclusive 2–8 count range. Both operations
+recompute every angle: sector zero remains `0.1875..0.3125` turns and the
+remaining `0.875` turns are divided equally among the other sectors, modulo
+one. The GUI's disabled `JOYSTICK` option is not advertised as writable.
 
 `spec/input-assignment-tokens-0.18.0.json` freezes 184 `KC_*` tokens and 43
 `KI_*` tokens recovered from the Input 0.18.0 ASAR, plus `KA_A<ID>` and

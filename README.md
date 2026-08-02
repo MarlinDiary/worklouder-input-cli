@@ -156,6 +156,10 @@ worklouderctl layer rename --input CONFIG.json [--profile PROFILE_ID] --id LAYER
 worklouderctl layer color --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --color '#RRGGBB' --output CANDIDATE.json
 worklouderctl layer lighting show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
 worklouderctl layer lighting set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --zone backlight --effect breath --brightness 0.5 --color '#RRGGBB' [--apply-to-all] --output CANDIDATE.json
+worklouderctl layer joystick show --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID
+worklouderctl layer joystick mode set --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID radial --output CANDIDATE.json
+worklouderctl layer joystick sector add --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --index INDEX --output CANDIDATE.json
+worklouderctl layer joystick sector delete --input CONFIG.json [--profile PROFILE_ID] --id LAYER_ID --index INDEX --output CANDIDATE.json
 worklouderctl appsense list --input CONFIG.json
 worklouderctl appsense show --input CONFIG.json --id APP_ID
 worklouderctl appsense link --input CONFIG.json [--profile PROFILE_ID] --layer LAYER_ID --name NAME [--process BUNDLE_ID] [--path APP_PATH] --output CANDIDATE.json
@@ -327,6 +331,12 @@ worklouderctl device --transport bridge config apply \
 The apply-side live CAS compares `REVISION` with a fresh bridge snapshot, so a
 cache snapshot that became stale is detected before the first device write.
 
+`layer joystick show/mode/sector` matches Input 0.18.0's released radial
+editor. It exposes the editable `RADIAL` mode, seeds the observed two-sector
+default, inserts `KC_NONE`, enforces the 2–8 sector range, and recomputes every
+`a1`/`a2` boundary with Input's fixed 45-degree first sector. Assignment changes
+continue through `control set --control joystick:INDEX`.
+
 Profile and layer lifecycle commands follow the frozen Input 0.18.0 Codex
 Micro model: at most six profiles and six layers, maximum-ID-plus-one object
 allocation, and a zero-based persisted `activeProfileId` index even though CLI
@@ -488,7 +498,7 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 | Companion Bridge integration in a released Input build | Upstream integration pending |
 | Codex Companion Bridge client/reference integration | Complete; released Codex integration pending |
 | Semantic profile/layer candidates | Full lifecycle, selection, ordering, color, and lighting candidate-verified; combined profile-create/layer-create/lighting apply/readback/restore fixture-verified |
-| Semantic physical controls | List/show/set for keys, encoder gestures, and existing joystick sectors; candidate/apply/restore fixture-verified |
+| Semantic physical controls | List/show/set for keys and encoder gestures; joystick mode, 2–8-sector lifecycle, assignments, and exact angle rebalance; candidate-verified with Input cache hashes unchanged |
 | Semantic Actions | List/show/create/rename/delete and event add/set/delete/move; cascade/apply/restore fixture-verified |
 | Real-device mutation and rollback | Planned |
 | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |

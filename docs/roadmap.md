@@ -67,6 +67,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Existing keys and frozen Input 0.18.0 assignment tokens
 - [x] Encoder rotation and press assignments
 - [x] Existing joystick sector assignments
+- [x] Input 0.18.0 radial joystick mode, two-sector seed, sector add/delete limits, and exact angle rebalance
 - [x] Action and Multi Action reference validation plus profile usage synchronization
 - [x] Layer backlight/underglow inspection, updates, and apply-to-all
 - [x] Actions/macros list/show/create/rename/delete and event CRUD/reorder
