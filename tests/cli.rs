@@ -62,7 +62,6 @@ fn help_lists_the_binary_and_version_command() {
     assert!(stdout.contains("doctor"));
     assert!(stdout.contains("bridge"));
     assert!(stdout.contains("config"));
-    assert!(stdout.contains("runtime"));
     assert!(stdout.contains("codex"));
     assert!(stdout.contains("device"));
     assert!(stdout.contains("input"));

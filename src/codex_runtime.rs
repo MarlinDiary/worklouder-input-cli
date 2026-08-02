@@ -865,7 +865,7 @@ mod tests {
         let healthy = state();
         assert!(is_healthy(&healthy, &contract));
 
-        let mut stuck = healthy.clone();
+        let mut stuck = healthy;
         stuck.device_state.status = "detected".into();
         stuck.has_connect_promise = true;
         stuck.has_topology_promise = true;
