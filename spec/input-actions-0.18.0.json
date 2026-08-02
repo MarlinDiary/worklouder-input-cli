@@ -40,6 +40,8 @@
     "color",
     "actionIds"
   ],
+  "groupIdAllocation": "maximum-group-id-plus-one",
+  "groupDelete": "delete-members-that-are-not-shared-with-another-stored-group",
   "deleteCascade": [
     "profile-control-references-to-KC_NONE",
     "action-event-references-to-KC_NONE",

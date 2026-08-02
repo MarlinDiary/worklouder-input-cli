@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouder-input-multi-action-model",
+  "inputVersion": "0.18.0",
+  "sourceAsarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
+  "deviceCollection": "multiActions",
+  "deviceShape": [
+    "id",
+    "name",
+    "color",
+    "kcOnTap",
+    "kcOnHold",
+    "kcOnDoubleTap",
+    "kcOnTapHold",
+    "tt"
+  ],
+  "default": {
+    "name": "My Multiaction",
+    "color": null,
+    "kcOnTap": "KC_NONE",
+    "kcOnHold": "KC_NONE",
+    "kcOnDoubleTap": "KC_NONE",
+    "kcOnTapHold": "KC_NONE",
+    "tt": 250
+  },
+  "gestureFields": {
+    "tap": "kcOnTap",
+    "double-tap": "kcOnDoubleTap",
+    "hold": "kcOnHold",
+    "tap-hold": "kcOnTapHold"
+  },
+  "idAllocation": "last-multi-action-id-plus-one",
+  "tappingTerm": {
+    "default": 250,
+    "unit": "milliseconds",
+    "input0180GuiEditable": false,
+    "cliMaximum": 60000
+  },
+  "groupsCollection": "multiActionsGroups",
+  "groupShape": [
+    "id",
+    "name",
+    "tags",
+    "color",
+    "actionIds"
+  ],
+  "groupIdAllocation": "maximum-group-id-plus-one",
+  "groupDelete": "delete-members-that-are-not-shared-with-another-stored-group",
+  "deleteCascade": [
+    "profile-control-references-to-KC_NONE",
+    "action-event-references-to-KC_NONE",
+    "multi-action-branch-references-to-KC_NONE",
+    "remove-from-groups-and-drop-empty-groups",
+    "recompute-profile-multiActionsUsed"
+  ],
+  "currentCachedDevice": {
+    "deviceId": "33632",
+    "multiActions": 0,
+    "multiActionsGroups": 0,
+    "macrosGroups": 0,
+    "evidenceBoundary": "read-only-root-counts-and-field-shapes"
+  }
+}
