@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouder-input-joystick-sector-model",
+  "inputVersion": "0.18.0",
+  "source": {
+    "asarPath": "/Applications/input.app/Contents/Resources/app.asar",
+    "asarSha256": "8e530188bc693ca1b9950bdc0515adfc349a3563e1841fe61ff2d692dc6b2da8",
+    "rendererChunk": "device_config_data-BMUs-0m4.js",
+    "rendererChunkSha256": "c8eba0d7eb069289d6c2a9d649477e1150647cd4fdc1f262784cc518a190573e"
+  },
+  "mode": {
+    "editable": "RADIAL",
+    "disabledInGui": "JOYSTICK",
+    "radialSeedWhenSectorCountBelow": 2,
+    "seed": [
+      {
+        "k": "KI_X",
+        "a1": 0.1875,
+        "a2": 0.3125
+      },
+      {
+        "k": "KC_NONE",
+        "a1": 0.3125,
+        "a2": 0.1875
+      }
+    ]
+  },
+  "sectorCount": {
+    "minimum": 2,
+    "maximum": 8
+  },
+  "add": {
+    "indexRange": "zero through current sector count inclusive",
+    "newAssignment": "KC_NONE",
+    "rebalanceAllAngles": true
+  },
+  "delete": {
+    "indexRange": "existing zero-based sector index",
+    "requiresCurrentCountAbove": 2,
+    "rebalanceAllAngles": true
+  },
+  "rebalance": {
+    "fixedFirstSectorDegrees": 45.0,
+    "anchorDegrees": 67.5,
+    "algorithm": [
+      "width = 45 / 360",
+      "remainder = 1 - width",
+      "anchor = (90 - 45 / 2) / 360",
+      "one sector uses anchor through anchor plus width",
+      "two or more sectors keep sector zero at anchor through anchor plus width",
+      "remaining step = remainder / (count - 1)",
+      "sector i above zero uses anchor plus width plus step times (i - 1) through that value plus step, modulo 1"
+    ]
+  },
+  "candidateBoundary": {
+    "writesInputCache": false,
+    "contactsInput": false,
+    "contactsDevice": false,
+    "applyAuthority": "Input Companion Bridge"
+  }
+}
