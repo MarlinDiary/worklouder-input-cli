@@ -20,14 +20,14 @@ const files = new Map([
             id: 0,
             name: "Fixture Default",
             layers: [
-              { id: 0, name: "Base", color: "#112233", layout: {} },
-              { id: 1, name: "Tools", color: "#445566", layout: {} },
+              { id: 0, name: "Base", color: 0x112233, layout: {} },
+              { id: 1, name: "Tools", color: 0x445566, layout: {} },
             ],
           },
           {
             id: 7,
             name: "Fixture Alternate",
-            layers: [{ id: 9, name: "Other", color: "#778899", layout: {} }],
+            layers: [{ id: 9, name: "Other", color: 0x778899, layout: {} }],
           },
         ],
       }),

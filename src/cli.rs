@@ -367,6 +367,14 @@ pub enum ProfileCommand {
         input: PathBuf,
     },
 
+    /// Show one profile and its layer metadata.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        id: u64,
+    },
+
     /// Select the active profile and write a complete candidate snapshot.
     Select {
         #[clap(long, value_parser)]
@@ -400,6 +408,16 @@ pub enum LayerCommand {
         profile: Option<u64>,
     },
 
+    /// Show one layer without exposing its key assignments.
+    Show {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        id: u64,
+    },
+
     /// Rename one layer and write a complete candidate snapshot.
     Rename {
         #[clap(long, value_parser)]
@@ -410,6 +428,21 @@ pub enum LayerCommand {
         id: u64,
         #[clap(long)]
         name: String,
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Set one layer's RGB metadata and write a complete candidate snapshot.
+    Color {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+        #[clap(long)]
+        profile: Option<u64>,
+        #[clap(long)]
+        id: u64,
+        /// RGB as #RRGGBB, 0xRRGGBB, or a decimal integer.
+        #[clap(long)]
+        color: String,
         #[clap(long, value_parser)]
         output: PathBuf,
     },

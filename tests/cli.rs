@@ -48,6 +48,7 @@ fn semantic_help_exposes_offline_candidate_workflow() {
     let profile_stdout = String::from_utf8(profile.stdout).unwrap();
     assert!(profile.status.success());
     assert!(profile_stdout.contains("list"));
+    assert!(profile_stdout.contains("show"));
     assert!(profile_stdout.contains("select"));
     assert!(profile_stdout.contains("rename"));
 
@@ -55,7 +56,9 @@ fn semantic_help_exposes_offline_candidate_workflow() {
     let layer_stdout = String::from_utf8(layer.stdout).unwrap();
     assert!(layer.status.success());
     assert!(layer_stdout.contains("list"));
+    assert!(layer_stdout.contains("show"));
     assert!(layer_stdout.contains("rename"));
+    assert!(layer_stdout.contains("color"));
 }
 
 #[test]

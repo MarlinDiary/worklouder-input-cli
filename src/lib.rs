@@ -97,6 +97,33 @@ fn run_profile(command: ProfileCommand, json: bool, mut out: impl Write) -> Resu
                 }
             }
         }
+        ProfileCommand::Show { input, id } => {
+            let result = semantic::profile_show(&input, id)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "profile={}\t{}{}",
+                    result.profile.id,
+                    result.profile.name,
+                    if result.profile.active {
+                        "\tactive"
+                    } else {
+                        ""
+                    }
+                )?;
+                for layer in result.layers {
+                    writeln!(
+                        out,
+                        "LAYER\t{}\t{}\t{}",
+                        layer.id,
+                        layer.name,
+                        layer.color_hex.as_deref().unwrap_or("unset")
+                    )?;
+                }
+            }
+        }
         ProfileCommand::Select { input, id, output } => {
             let result = semantic::profile_select(&input, id, &output)?;
             write_candidate_result(result, json, &mut out)?;
@@ -127,8 +154,36 @@ fn run_layer(command: LayerCommand, json: bool, mut out: impl Write) -> Result<(
                     result.profile_id, result.profile_name
                 )?;
                 for layer in result.layers {
-                    writeln!(out, "{}\t{}", layer.id, layer.name)?;
+                    writeln!(
+                        out,
+                        "{}\t{}\t{}",
+                        layer.id,
+                        layer.name,
+                        layer.color_hex.as_deref().unwrap_or("unset")
+                    )?;
                 }
+            }
+        }
+        LayerCommand::Show { input, profile, id } => {
+            let result = semantic::layer_show(&input, profile, id)?;
+            if json {
+                write_json(&mut out, &result)?;
+            } else {
+                writeln!(
+                    out,
+                    "profile={}\t{}",
+                    result.profile_id, result.profile_name
+                )?;
+                writeln!(out, "layer={}\t{}", result.layer.id, result.layer.name)?;
+                writeln!(
+                    out,
+                    "color={} lights={} keymapRows={} encoders={} joystickFields={}",
+                    result.layer.color_hex.as_deref().unwrap_or("unset"),
+                    result.layer.has_lights,
+                    result.layout.keymap_rows,
+                    result.layout.encoder_entries,
+                    result.layout.joystick_fields
+                )?;
             }
         }
         LayerCommand::Rename {
@@ -139,6 +194,16 @@ fn run_layer(command: LayerCommand, json: bool, mut out: impl Write) -> Result<(
             output,
         } => {
             let result = semantic::layer_rename(&input, profile, id, &name, &output)?;
+            write_candidate_result(result, json, &mut out)?;
+        }
+        LayerCommand::Color {
+            input,
+            profile,
+            id,
+            color,
+            output,
+        } => {
+            let result = semantic::layer_color(&input, profile, id, &color, &output)?;
             write_candidate_result(result, json, &mut out)?;
         }
     }

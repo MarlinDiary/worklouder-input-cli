@@ -8,6 +8,7 @@ token=$root/bridge.token
 export_dir=$root/export
 config_snapshot=$root/config-snapshot.json
 candidate_snapshot=$root/config-candidate.json
+renamed_profile_snapshot=$root/config-profile-renamed.json
 selected_snapshot=$root/config-selected.json
 layer_snapshot=$root/config-layer.json
 server_log=$root/server.log
@@ -69,15 +70,21 @@ revision=$(python3 -c \
   "$config_snapshot")
 "$bin" --json profile list --input "$config_snapshot" \
   >"$root/profile-list.json"
+"$bin" --json profile show --input "$config_snapshot" --id 0 \
+  >"$root/profile-show.json"
 "$bin" --json layer list --input "$config_snapshot" \
   >"$root/layer-list.json"
+"$bin" --json layer show --input "$config_snapshot" --id 0 \
+  >"$root/layer-show.json"
 "$bin" --json profile rename --input "$config_snapshot" --id 7 \
-  --name Research --output "$candidate_snapshot" \
+  --name Research --output "$renamed_profile_snapshot" \
   >"$root/profile-rename.json"
 "$bin" --json profile select --input "$config_snapshot" --id 7 \
   --output "$selected_snapshot" >"$root/profile-select.json"
 "$bin" --json layer rename --input "$config_snapshot" --profile 0 --id 1 \
   --name Build --output "$layer_snapshot" >"$root/layer-rename.json"
+"$bin" --json layer color --input "$config_snapshot" --profile 0 --id 1 \
+  --color '#A1B2C3' --output "$candidate_snapshot" >"$root/layer-color.json"
 "$bin" --json device --transport bridge \
   --bridge-socket "$socket" --bridge-token "$token" config validate \
   --input "$config_snapshot" --expected-revision "$revision" \
@@ -140,13 +147,17 @@ bridge_validation = json.loads(
     (root / "config-bridge-validation.json").read_text()
 )
 candidate = json.loads((root / "config-candidate.json").read_text())
+renamed_profile = json.loads((root / "config-profile-renamed.json").read_text())
 selected = json.loads((root / "config-selected.json").read_text())
 layer_candidate = json.loads((root / "config-layer.json").read_text())
 profile_list = json.loads((root / "profile-list.json").read_text())
+profile_show = json.loads((root / "profile-show.json").read_text())
 layer_list = json.loads((root / "layer-list.json").read_text())
+layer_show = json.loads((root / "layer-show.json").read_text())
 profile_rename = json.loads((root / "profile-rename.json").read_text())
 profile_select = json.loads((root / "profile-select.json").read_text())
 layer_rename = json.loads((root / "layer-rename.json").read_text())
+layer_color = json.loads((root / "layer-color.json").read_text())
 apply = json.loads((root / "config-apply.json").read_text())
 replay = json.loads((root / "config-apply-replay.json").read_text())
 pre_apply = json.loads((root / "pre-apply.json").read_text())
@@ -203,15 +214,23 @@ assert [(item["id"], item["name"], item["active"]) for item in profile_list["pro
     (0, "Fixture Default", True),
     (7, "Fixture Alternate", False),
 ]
+assert profile_show["profile"]["id"] == 0
+assert profile_show["profile"]["active"] is True
+assert len(profile_show["layers"]) == 2
 assert layer_list["profileId"] == 0
 assert [(item["id"], item["name"]) for item in layer_list["layers"]] == [
     (0, "Base"),
     (1, "Tools"),
 ]
+assert [item["colorHex"] for item in layer_list["layers"]] == ["#112233", "#445566"]
+assert layer_show["layer"]["id"] == 0
+assert layer_show["layer"]["color"] == 0x112233
+assert layer_show["layer"]["colorHex"] == "#112233"
 assert profile_rename["changed"] is True
 assert profile_rename["changedPaths"] == ["/keymap.json/profiles/1/name"]
 assert profile_select["changedPaths"] == ["/keymap.json/activeProfileId"]
 assert layer_rename["changedPaths"] == ["/keymap.json/profiles/0/layers/1/name"]
+assert layer_color["changedPaths"] == ["/keymap.json/profiles/0/layers/1/color"]
 
 def payload(document, name):
     record = next(item for item in document["files"] if item["relativePath"] == name)
@@ -231,14 +250,16 @@ def verify_snapshot(document):
         digest.update(data)
     assert digest.hexdigest() == document["revision"]
 
-for document in [candidate, selected, layer_candidate]:
+for document in [candidate, renamed_profile, selected, layer_candidate]:
     verify_snapshot(document)
     assert payload(document, "smart_actions.json") == payload(snapshot, "smart_actions.json")
 candidate_keymap = json.loads(payload(candidate, "keymap.json"))
+renamed_profile_keymap = json.loads(payload(renamed_profile, "keymap.json"))
 selected_keymap = json.loads(payload(selected, "keymap.json"))
 layer_keymap = json.loads(payload(layer_candidate, "keymap.json"))
-assert candidate_keymap["profiles"][1]["name"] == "Research"
+assert renamed_profile_keymap["profiles"][1]["name"] == "Research"
 assert candidate_keymap["fixtureExtension"] == {"preserved": True}
+assert candidate_keymap["profiles"][0]["layers"][1]["color"] == 0xA1B2C3
 assert selected_keymap["activeProfileId"] == 7
 assert layer_keymap["profiles"][0]["layers"][1]["name"] == "Build"
 assert candidate["revision"] != snapshot["revision"]
@@ -269,10 +290,13 @@ print("sha1_sha256_readback=verified")
 print("config_validation=verified")
 print("config_snapshot_revision=verified")
 print("semantic_profile_list=verified")
+print("semantic_profile_show=verified")
 print("semantic_layer_list=verified")
+print("semantic_layer_show=verified")
 print("semantic_profile_rename=verified")
 print("semantic_profile_select=verified")
 print("semantic_layer_rename=verified")
+print("semantic_layer_color=verified")
 print("semantic_unknown_fields=preserved")
 print("semantic_unrelated_file_bytes=preserved")
 print("config_live_cas=verified")

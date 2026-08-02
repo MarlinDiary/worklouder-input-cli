@@ -18,6 +18,7 @@ const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_TOTAL_BYTES: usize = 32 * 1024 * 1024;
 const MAX_LAYERS: usize = 6;
 const MAX_NAME_BYTES: usize = 64;
+const MAX_RGB: u64 = 0x00ff_ffff;
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize)]
@@ -41,6 +42,17 @@ pub struct ProfileEntry {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ProfileShow {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub active_profile_id: u64,
+    pub profile: ProfileEntry,
+    pub layers: Vec<LayerEntry>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LayerList {
     pub schema_version: u64,
     pub kind: &'static str,
@@ -55,6 +67,29 @@ pub struct LayerList {
 pub struct LayerEntry {
     pub id: u64,
     pub name: String,
+    pub color: Option<u64>,
+    pub color_hex: Option<String>,
+    pub has_lights: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayerShow {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub revision: String,
+    pub profile_id: u64,
+    pub profile_name: String,
+    pub layer: LayerEntry,
+    pub layout: LayoutSummary,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutSummary {
+    pub keymap_rows: usize,
+    pub encoder_entries: usize,
+    pub joystick_fields: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -102,18 +137,36 @@ pub fn profile_list(input: &Path) -> Result<ProfileList> {
     })
 }
 
+pub fn profile_show(input: &Path, id: u64) -> Result<ProfileShow> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let active_profile_id = active_profile_id(&snapshot.keymap)?;
+    let profile = find_profile(&snapshot.keymap, id)?;
+    let layers = profile_layers(profile)?
+        .iter()
+        .map(layer_entry)
+        .collect::<Result<Vec<_>>>()?;
+    Ok(ProfileShow {
+        schema_version: 1,
+        kind: "worklouderctl-profile",
+        revision: snapshot.revision,
+        active_profile_id,
+        profile: ProfileEntry {
+            id,
+            name: object_string(profile, "name", "profile")?.to_owned(),
+            layer_count: layers.len(),
+            active: id == active_profile_id,
+        },
+        layers,
+    })
+}
+
 pub fn layer_list(input: &Path, profile_id: Option<u64>) -> Result<LayerList> {
     let snapshot = SemanticSnapshot::read(input)?;
     let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
     let profile = find_profile(&snapshot.keymap, selected_id)?;
     let layers = profile_layers(profile)?
         .iter()
-        .map(|layer| {
-            Ok(LayerEntry {
-                id: object_u64(layer, "id", "layer")?,
-                name: object_string(layer, "name", "layer")?.to_owned(),
-            })
-        })
+        .map(layer_entry)
         .collect::<Result<Vec<_>>>()?;
     Ok(LayerList {
         schema_version: 1,
@@ -122,6 +175,25 @@ pub fn layer_list(input: &Path, profile_id: Option<u64>) -> Result<LayerList> {
         profile_id: selected_id,
         profile_name: object_string(profile, "name", "profile")?.to_owned(),
         layers,
+    })
+}
+
+pub fn layer_show(input: &Path, profile_id: Option<u64>, layer_id: u64) -> Result<LayerShow> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
+    let profile = find_profile(&snapshot.keymap, selected_id)?;
+    let (_, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let layer = profile_layers(profile)?
+        .get(layer_index)
+        .context("layer disappeared during lookup")?;
+    Ok(LayerShow {
+        schema_version: 1,
+        kind: "worklouderctl-layer",
+        revision: snapshot.revision,
+        profile_id: selected_id,
+        profile_name: object_string(profile, "name", "profile")?.to_owned(),
+        layer: layer_entry(layer)?,
+        layout: layout_summary(layer),
     })
 }
 
@@ -186,16 +258,7 @@ pub fn layer_rename(
     validate_name(name)?;
     let mut snapshot = SemanticSnapshot::read(input)?;
     let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
-    let profile_index = profile_index(&snapshot.keymap, selected_id)?;
-    let layer_index = {
-        let profile = find_profile(&snapshot.keymap, selected_id)?;
-        profile_layers(profile)?
-            .iter()
-            .position(|layer| matches!(object_u64(layer, "id", "layer"), Ok(id) if id == layer_id))
-            .with_context(|| {
-                format!("layer id {layer_id} was not found in profile {selected_id}")
-            })?
-    };
+    let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
     let layer = snapshot
         .keymap
         .get_mut("profiles")
@@ -221,6 +284,44 @@ pub fn layer_rename(
         Vec::new()
     };
     snapshot.publish(output, "layer-rename", changed, paths)
+}
+
+pub fn layer_color(
+    input: &Path,
+    profile_id: Option<u64>,
+    layer_id: u64,
+    color: &str,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    let color = parse_color(color)?;
+    let mut snapshot = SemanticSnapshot::read(input)?;
+    let selected_id = profile_id.unwrap_or(active_profile_id(&snapshot.keymap)?);
+    let (profile_index, layer_index) = layer_indices(&snapshot.keymap, selected_id, layer_id)?;
+    let layer = snapshot
+        .keymap
+        .get_mut("profiles")
+        .and_then(Value::as_array_mut)
+        .and_then(|items| items.get_mut(profile_index))
+        .and_then(|profile| profile.get_mut("layers"))
+        .and_then(Value::as_array_mut)
+        .and_then(|items| items.get_mut(layer_index))
+        .context("layer disappeared during candidate generation")?;
+    let previous = optional_color(layer)?;
+    let changed = previous != Some(color);
+    if changed {
+        layer
+            .as_object_mut()
+            .context("layer was not an object")?
+            .insert("color".into(), Value::from(color));
+    }
+    let paths = if changed {
+        vec![format!(
+            "/keymap.json/profiles/{profile_index}/layers/{layer_index}/color"
+        )]
+    } else {
+        Vec::new()
+    };
+    snapshot.publish(output, "layer-color", changed, paths)
 }
 
 impl SemanticSnapshot {
@@ -446,6 +547,7 @@ fn validate_keymap(keymap: &Value) -> Result<()> {
                 "profile {id} contained duplicate layer id {layer_id}"
             );
             object_string(layer, "name", "layer")?;
+            optional_color(layer)?;
         }
     }
     ensure!(
@@ -490,6 +592,84 @@ fn find_profile(keymap: &Value, id: u64) -> Result<&Value> {
     profiles(keymap)?
         .get(index)
         .context("profile disappeared during lookup")
+}
+
+fn layer_indices(keymap: &Value, profile_id: u64, layer_id: u64) -> Result<(usize, usize)> {
+    let profile_index = profile_index(keymap, profile_id)?;
+    let profile = find_profile(keymap, profile_id)?;
+    let layer_index = profile_layers(profile)?
+        .iter()
+        .position(|layer| matches!(object_u64(layer, "id", "layer"), Ok(id) if id == layer_id))
+        .with_context(|| format!("layer id {layer_id} was not found in profile {profile_id}"))?;
+    Ok((profile_index, layer_index))
+}
+
+fn layer_entry(layer: &Value) -> Result<LayerEntry> {
+    let color = optional_color(layer)?;
+    Ok(LayerEntry {
+        id: object_u64(layer, "id", "layer")?,
+        name: object_string(layer, "name", "layer")?.to_owned(),
+        color,
+        color_hex: color.map(format_color),
+        has_lights: layer.get("lights").is_some(),
+    })
+}
+
+fn layout_summary(layer: &Value) -> LayoutSummary {
+    let layout = layer.get("layout");
+    LayoutSummary {
+        keymap_rows: layout
+            .and_then(|value| value.get("keymap"))
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or(0),
+        encoder_entries: layout
+            .and_then(|value| value.get("encoders"))
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or(0),
+        joystick_fields: layout
+            .and_then(|value| value.get("joystick"))
+            .and_then(Value::as_object)
+            .map(Map::len)
+            .unwrap_or(0),
+    }
+}
+
+fn optional_color(layer: &Value) -> Result<Option<u64>> {
+    match layer.get("color") {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => {
+            let color = value
+                .as_u64()
+                .context("layer color was not an RGB integer")?;
+            ensure!(color <= MAX_RGB, "layer color exceeded 24-bit RGB");
+            Ok(Some(color))
+        }
+    }
+}
+
+fn parse_color(value: &str) -> Result<u64> {
+    let color = if let Some(hex) = value.strip_prefix('#') {
+        ensure!(hex.len() == 6, "hex color must use exactly #RRGGBB");
+        u64::from_str_radix(hex, 16).context("hex color contained a non-hex digit")?
+    } else if let Some(hex) = value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"))
+    {
+        ensure!(hex.len() == 6, "hex color must use exactly 0xRRGGBB");
+        u64::from_str_radix(hex, 16).context("hex color contained a non-hex digit")?
+    } else {
+        value
+            .parse::<u64>()
+            .context("color must be #RRGGBB, 0xRRGGBB, or a decimal integer")?
+    };
+    ensure!(color <= MAX_RGB, "color exceeded 24-bit RGB");
+    Ok(color)
+}
+
+fn format_color(color: u64) -> String {
+    format!("#{color:06X}")
 }
 
 fn object_u64(value: &Value, field: &str, kind: &str) -> Result<u64> {
@@ -725,10 +905,10 @@ mod tests {
             "vendorFutureField": {"kept": true},
             "profiles": [
                 {"id": 0, "name": "Alpha", "layers": [
-                    {"id": 0, "name": "Base", "color": "#112233", "layout": {"keys": []}},
-                    {"id": 1, "name": "Tools", "layout": {"keys": []}}
+                    {"id": 0, "name": "Base", "color": 1122867, "layout": {"keymap": [[], []], "encoders": [{}], "joystick": {"x": 0, "y": 0}}},
+                    {"id": 1, "name": "Tools", "color": 4478310, "layout": {"keymap": [], "encoders": [], "joystick": {}}}
                 ]},
-                {"id": 7, "name": "Beta", "layers": [{"id": 9, "name": "Other", "layout": {}}]}
+                {"id": 7, "name": "Beta", "layers": [{"id": 9, "name": "Other", "color": 7833753, "layout": {}}]}
             ]
         }))
         .unwrap();
@@ -783,6 +963,14 @@ mod tests {
         let layers = layer_list(&source, Some(7)).unwrap();
         assert_eq!(layers.profile_name, "Beta");
         assert_eq!(layers.layers[0].id, 9);
+        assert_eq!(layers.layers[0].color_hex.as_deref(), Some("#778899"));
+        let profile = profile_show(&source, 0).unwrap();
+        assert_eq!(profile.layers.len(), 2);
+        let layer = layer_show(&source, None, 0).unwrap();
+        assert_eq!(layer.layer.color, Some(0x112233));
+        assert_eq!(layer.layout.keymap_rows, 2);
+        assert_eq!(layer.layout.encoder_entries, 1);
+        assert_eq!(layer.layout.joystick_fields, 2);
         fs::remove_file(source).unwrap();
     }
 
@@ -792,6 +980,7 @@ mod tests {
         let renamed_profile = root("profile");
         let renamed_layer = root("layer");
         let selected = root("selected");
+        let recolored = root("color");
         write_fixture(&source);
         let original = SemanticSnapshot::read(&source).unwrap();
         let smart_before = original.file_bytes[1].clone();
@@ -822,7 +1011,26 @@ mod tests {
         let selected_candidate = SemanticSnapshot::read(&selected).unwrap();
         assert_eq!(selected_candidate.keymap["activeProfileId"], 7);
 
-        for path in [&source, &renamed_profile, &renamed_layer, &selected] {
+        let color_receipt = layer_color(&source, Some(0), 1, "#A1B2C3", &recolored).unwrap();
+        assert_eq!(color_receipt.operation, "layer-color");
+        assert_eq!(
+            color_receipt.changed_paths,
+            vec!["/keymap.json/profiles/0/layers/1/color"]
+        );
+        let color_candidate = SemanticSnapshot::read(&recolored).unwrap();
+        assert_eq!(
+            color_candidate.keymap["profiles"][0]["layers"][1]["color"],
+            0xA1B2C3
+        );
+        assert_eq!(color_candidate.file_bytes[1], smart_before);
+
+        for path in [
+            &source,
+            &renamed_profile,
+            &renamed_layer,
+            &selected,
+            &recolored,
+        ] {
             fs::remove_file(path).unwrap();
         }
     }
@@ -856,5 +1064,15 @@ mod tests {
         }
         assert!(decode_base64("Zg=").is_err());
         assert!(decode_base64("=m9v").is_err());
+    }
+
+    #[test]
+    fn color_parser_accepts_documented_forms_and_rejects_overflow() {
+        assert_eq!(parse_color("#A1b2C3").unwrap(), 0xA1B2C3);
+        assert_eq!(parse_color("0x010203").unwrap(), 0x010203);
+        assert_eq!(parse_color("16777215").unwrap(), MAX_RGB);
+        assert!(parse_color("#12345").is_err());
+        assert!(parse_color("16777216").is_err());
+        assert!(parse_color("rgb(1,2,3)").is_err());
     }
 }
