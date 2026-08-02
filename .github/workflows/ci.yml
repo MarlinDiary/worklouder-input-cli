@@ -41,6 +41,8 @@ jobs:
         run: npm test --prefix companion
       - name: Verify deterministic sanitized fixtures
         run: ./scripts/verify-sanitized-fixtures.sh
+      - name: Verify JSON contracts and unique object keys
+        run: ./scripts/verify-json-contracts.py
       - name: Verify per-release compatibility matrix
         run: ./scripts/verify-compatibility-matrix.sh
       - name: Verify generated completions and command reference
