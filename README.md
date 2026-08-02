@@ -140,6 +140,8 @@ worklouderctl input permissions [--device DEVICE_ID]
 worklouderctl input firmware check [--device DEVICE_ID]
 worklouderctl input firmware plan --output FIRMWARE_PLAN.json [--device DEVICE_ID]
 worklouderctl input firmware update --plan FIRMWARE_PLAN.json --backup FIRMWARE_CONFIG_BEFORE.json --receipt FIRMWARE_UPDATE.json --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
+worklouderctl input reset plan --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json
+worklouderctl input reset apply --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json --backup RESET_BEFORE.json --receipt RESET_RECEIPT.json --expected-revision CONFIG_REVISION --idempotency-key RESET_KEY
 worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
 worklouderctl input preset snapshot --output PRESET_CATALOG.json
 worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
@@ -495,6 +497,16 @@ bounded suffix of Input's 5,000-entry in-memory log ring, redacts home paths,
 emails, and credential-shaped values inside Input, then atomically publishes
 and reopens a `0700` bundle of `0600` JSON/text files with SHA-256 records.
 
+`input reset plan` asks an injected Input-owned authority to build the exact default
+configuration for the current app/device/device-kit/firmware/layout tuple; the
+CLI does not freeze its own keymap. `input reset apply` binds that candidate to
+the source revision, rechecks the Input version immediately before writing,
+captures or reuses a complete backup, executes the existing
+authenticated configuration transaction, verifies exact readback, supports
+idempotent retry, and leaves an inspectable receipt plus the normal exact
+`device config restore` rollback path. See the
+[Input-owned reset guide](docs/input-default-reset.md).
+
 `transaction plan/show/apply/restore` now coordinates Codex settings, Codex
 Agent Keys, Input device configuration, and Input host settings behind one
 canonical revision and rollback boundary. It preflights all authorities before
@@ -618,6 +630,7 @@ CLI semantic parser.
 | Input presets | Catalog snapshot/list/show/preview plus exact offline install remapping; all 17 bundled defaults candidate-verified and fixture apply/readback/restore verified |
 | Input radial menu | Sector/angle inspection and referenced resource resolution verified; edits reuse joystick/control transactions and the overlay remains Input-owned |
 | Tier 4 permissions, firmware check, and diagnostic logs | Exact Input 0.18.0 authority paths frozen; bridge/CLI fixture verified with private sanitized bundle |
+| Input-owned reset | Complete per-version/device/layout default candidate, immutable plan, CAS apply, exact readback, idempotent replay, and rollback fixture verified |
 | Real-device mutation and rollback | Planned |
 | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
 | Input cache read adapter | Complete; byte-exact bridge-equivalent semantic snapshot |
@@ -666,6 +679,7 @@ Read the complete [FAQ](docs/faq.md).
 - [Shell-free agent JSON protocol](docs/agent-protocol.md)
 - [Generated command reference](docs/command-reference.md)
 - [Delegated firmware update](docs/delegated-firmware-update.md)
+- [Input-owned default reset](docs/input-default-reset.md)
 - [Configuration parity matrix](docs/configuration-parity.md)
 - [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
 - [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)

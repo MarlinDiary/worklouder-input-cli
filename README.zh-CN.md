@@ -109,6 +109,8 @@ worklouderctl input permissions [--device DEVICE_ID]
 worklouderctl input firmware check [--device DEVICE_ID]
 worklouderctl input firmware plan --output FIRMWARE_PLAN.json [--device DEVICE_ID]
 worklouderctl input firmware update --plan FIRMWARE_PLAN.json --backup FIRMWARE_CONFIG_BEFORE.json --receipt FIRMWARE_UPDATE.json --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
+worklouderctl input reset plan --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json [--device DEVICE_ID]
+worklouderctl input reset apply --plan RESET_PLAN.json --candidate RESET_CANDIDATE.json --backup RESET_BEFORE.json --receipt RESET_RECEIPT.json --expected-revision CONFIG_REVISION --idempotency-key RESET_KEY
 worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
 worklouderctl input preset snapshot --output PRESET_CATALOG.json
 worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
@@ -412,6 +414,13 @@ recovery-required error，但不实现 programmer 或 firmware downgrade。`inpu
 内存 log ring 读取有界后缀，先在 Input 内遮蔽 home path、email 与 credential-shaped
 值，再原子发布并 reopen 一个 `0700` bundle；其中 JSON/text 与 SHA-256 manifest 均为
 `0600`。
+
+`input reset plan` 只在 Input 注入自己的精确 device/layout/version default factory 时
+出现；它冻结当前 Input version、device identity、layout version、firmware、source
+revision 和完整 candidate。`input reset apply` 会在写入前再次核对 Input version，随后
+完全复用现有 configuration CAS/backup/readback/automatic-rollback transaction。receipt
+与原始 backup 都会严格 reopen；精确回滚继续使用普通的 `device config restore`。CLI
+不会复制 Input renderer 的 reset flow。
 
 仓库已经包含可执行的 Input-main reference server、Input 0.18.0 service
 adapter、认证测试，以及 Rust CLI 跨语言 conformance test：

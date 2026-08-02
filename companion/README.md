@@ -103,6 +103,15 @@ the verified receipt. An ambiguous provider error is accepted only when this
 same postflight proves completion; every other ambiguous state returns
 `recoveryRequired` rather than attempting a CLI-owned downgrade.
 
+When `resetAuthority.buildDefaultConfiguration()` is injected, the adapter
+advertises `input.reset.plan.v1`. Planning captures the current complete
+configuration and asks Input for the exact app/device/device-kit/firmware/layout
+default without mutating state. The CLI publishes the versioned plan and
+candidate separately, then applies the candidate through the existing
+`device.config.apply.v1` transaction with source CAS, complete backup,
+idempotency, exact readback, immutable receipt, and standard restore. The CLI
+rechecks the exact Input version immediately before the transaction.
+
 The reference adapter owns the surrounding transaction: validate every byte
 and digest, capture a pre-mutation snapshot, compare the live revision, invoke
 the writer, read back the complete revision, and automatically restore and
@@ -129,6 +138,7 @@ node companion/conformance.mjs \
   --require input.firmware.status.v1 \
   --require input.firmware.plan.v1 \
   --require input.firmware.update.v1 \
+  --require input.reset.plan.v1 \
   --require input.logs.snapshot.v1
 ```
 
@@ -142,6 +152,7 @@ Run the full reference suite before each Input release:
 npm --prefix companion test
 ./scripts/test-bridge-e2e.sh
 ./scripts/test-firmware-update-e2e.sh
+./scripts/test-reset-e2e.sh
 ```
 
 The first command checks server, adapter, lifecycle, authentication, and path

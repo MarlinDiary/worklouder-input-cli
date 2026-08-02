@@ -110,7 +110,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Hash-pinned Input 0.18.0 permission, firmware-read, log, reset, and update-flow inventory
 - [x] Optional permission, firmware status/plan, and sanitized log bridge authorities
 - [x] Input-owned high-level firmware update authority with backup, USB/bootloader flash, reconnect, restore, and postflight
-- [ ] Complete default/reset candidate per device/layout/version through the existing configuration transaction
+- [x] Input-owned complete default/reset candidate per device/layout/version through the existing configuration transaction, with immutable plan, idempotent apply, readback, and exact rollback
 - [ ] Bootloader recovery authority and exact post-recovery configuration restore
 
 ## Later tracks

@@ -144,6 +144,16 @@ newest in-memory renderer entries, with home paths, email addresses, and common
 credential forms redacted before bridge transport. Each capability is advertised
 only when its matching Input-owned authority is available.
 
+`input.reset.plan` calls an injected Input-owned default-configuration builder.
+It freezes the Input version, connected device identity, device-kit and firmware
+versions, layout version, exact source revision, and the complete candidate
+revision. The read-only plan does not change renderer or device state. Applying
+the plan reuses `device.config.apply`: WorkLouderCTL captures a complete backup,
+enforces source CAS, sends the exact Input-produced candidate, verifies readback,
+publishes an immutable receipt, and supports exact restore through the normal
+configuration transaction. The CLI rechecks the exact Input version immediately
+before apply. No default keymap is duplicated in the CLI.
+
 ```sh
 worklouderctl input config snapshot --output config-snapshot.json
 worklouderctl device config snapshot --output config-snapshot.json
@@ -156,6 +166,12 @@ worklouderctl input firmware plan --output firmware-plan.json
 worklouderctl input firmware update --plan firmware-plan.json \
   --backup firmware-config-before.json --receipt firmware-update.json \
   --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
+worklouderctl input reset plan --plan reset-plan.json \
+  --candidate reset-candidate.json
+worklouderctl input reset apply --plan reset-plan.json \
+  --candidate reset-candidate.json --backup reset-before.json \
+  --receipt reset-receipt.json --expected-revision CONFIG_REVISION \
+  --idempotency-key RESET_KEY
 worklouderctl input logs collect --output input-log-bundle
 ```
 

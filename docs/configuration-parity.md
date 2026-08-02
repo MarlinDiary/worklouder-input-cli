@@ -94,7 +94,7 @@ Promises as failures even when the USB interface still enumerates.
 | Firmware check | compatible release and Input-selected `.bin` metadata | `input firmware check` | Input authority/bridge/CLI fixture-verified; read-only |
 | Firmware plan | release, exact config revision, USB readiness, ordered update/reconnect/restore phases | `input firmware plan` | deterministic bridge/CLI plan plus USB blocked/ready fixtures verified |
 | Firmware update | immutable plan, complete configuration backup, Input-owned download/USB flash/reconnect/restore, idempotent retry, exact postflight | `input firmware update` | high-level authority/bridge/CLI fixture-verified; driver and programmer remain Input-owned |
-| Reset settings | full backup, complete default candidate, post-state | `device reset` | renderer-only GUI flow classified; transaction adapter pending |
+| Reset settings | Input-selected complete default candidate, immutable plan, full backup, idempotent apply, exact post-state and rollback | `input reset plan/apply` | high-level Input authority/bridge/CLI fixture-verified; default layout remains version/device/layout-owned by Input |
 | Logs | collect and sanitize diagnostic bundle | `input logs collect` | private `0700`/`0600` bundle and SHA-256 readback fixture-verified |
 | Recovery | restore files or firmware recovery | `device recover` | adapter-pending |
 

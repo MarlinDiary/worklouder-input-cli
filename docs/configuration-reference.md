@@ -741,7 +741,25 @@ configuration revision, USB blocker, and seven Input-owned update phases without
 flashing. When Input injects the complete high-level update authority, the CLI
 adds immutable backup, plan/config CAS, idempotent delegation, exact firmware
 and configuration postflight, and an inspectable receipt around that provider.
-Reset and bootloader recovery remain separate Input-owned mutation authorities.
+Reset and bootloader recovery use separate Input-owned authorities.
+The reset authority is implemented as a read-only, versioned default candidate
+builder plus the existing configuration transaction:
+
+```sh
+worklouderctl input reset plan --plan RESET_PLAN.json \
+  --candidate RESET_CANDIDATE.json
+worklouderctl input reset apply --plan RESET_PLAN.json \
+  --candidate RESET_CANDIDATE.json --backup RESET_BEFORE.json \
+  --receipt RESET_RECEIPT.json --expected-revision CONFIG_REVISION \
+  --idempotency-key RESET_KEY
+```
+
+Input owns the exact default layout for the connected
+app/device/device-kit/firmware/layout tuple. The CLI freezes its revision,
+captures a complete backup, applies it through `device.config.apply`, verifies
+the exact Input version immediately before mutation, performs exact readback,
+and restores through `device config restore`. Bootloader
+recovery remains the next distinct high-level authority.
 
 ## Verification levels
 
