@@ -4,6 +4,7 @@
 
 [English](README.md) · [常见问题](docs/faq.md) ·
 [兼容性](docs/compatibility.md) · [架构](docs/architecture.md) ·
+[发行](docs/releases.md) ·
 [路线图](docs/roadmap.md)
 
 > **当前状态：source alpha。** 仓库现在可构建真实的 `worklouderctl`：已经支持
@@ -13,7 +14,10 @@
 > 生成、fixture 验证的 Input/Codex apply/restore transaction、六个 Codex Agent
 > Key assignment 的 snapshot/get/set/clear/apply/restore、结构化 diff、JSON 输出和
 > shell completion。
-> 尚未发布打包版本；bridge transaction 已通过隔离 writer fixture
+> 双架构 deterministic archive、明确的 signature-state verification、
+> fail-closed Developer ID/notarization workflow 与 Homebrew formula generation
+> 已实现并完成本地验证，但尚未发布正式打包版本；详见
+> [macOS 发行指南](docs/releases.md)。bridge transaction 已通过隔离 writer fixture
 > 验证，真实设备写入仍以 Input writer adapter 与硬件 rollback 验证为启用条件。
 
 ## 简单来说，它是什么？
@@ -47,6 +51,10 @@ cd worklouder-input-cli
 cargo build --release --locked
 ./target/release/worklouderctl doctor
 ```
+
+[macOS 发行指南](docs/releases.md)记录了 deterministic local archive、
+checksum/signature verification、tagged Developer ID notarization 与生成的
+Homebrew formula。首个 signed tag 发布前，仍以以上 source build 为公开安装方式。
 
 当前已经实现：
 
@@ -513,9 +521,10 @@ encoder gestures 的 control list/show/set、joystick mode 与 2–8 sector
 lifecycle/assignment/精确 angle rebalance，以及 Action
 list/show/create/rename/delete 和 event add/set/delete/move candidate 已经实现；Input
 permission status、firmware check 与 sanitized diagnostic log bundle 也已通过 bridge/CLI
-fixture；Input
-release 集成、Codex released-app bridge 集成、可安装 binary 与 Homebrew formula
-仍在后续里程碑中。
+fixture；Input release 集成与 Codex released-app bridge 集成仍在后续里程碑中。
+deterministic macOS packaging、signature-state verification、Developer ID/
+notarization workflow 与 Homebrew formula generation 已完成；首个正式 signed
+binary 与 stable Homebrew tap 尚未发布。
 
 `transaction plan/show/apply/restore` 已把 Codex settings、六键 Agent
 assignments、Input device configuration 与 Input host settings 纳入同一个 canonical

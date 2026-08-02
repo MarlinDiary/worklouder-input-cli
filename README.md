@@ -9,6 +9,7 @@
   <a href="docs/faq.md">FAQ</a> ·
   <a href="docs/compatibility.md">Compatibility</a> ·
   <a href="docs/architecture.md">Architecture</a> ·
+  <a href="docs/releases.md">Releases</a> ·
   <a href="docs/roadmap.md">Roadmap</a>
 </p>
 
@@ -27,7 +28,10 @@
 > Action candidate generation, fixture-verified Input and Codex apply/restore
 > transactions, six-slot Codex Agent Key candidates and transactions, JSON output, and
 > shell completions.
-> There is no packaged release yet.
+> Deterministic dual-architecture archives, explicit signature-state
+> verification, a fail-closed Developer ID/notarization workflow, and Homebrew
+> formula generation are implemented and locally verified. There is no
+> published packaged release yet; see the [release guide](docs/releases.md).
 > The bridge transaction engine now verifies backup, apply, idempotent retry,
 > readback, restore, and automatic rollback against an isolated writer fixture.
 > Released-app mutation remains gated on Codex/Input integrations that supply
@@ -78,6 +82,11 @@ cd worklouder-input-cli
 cargo build --release --locked
 ./target/release/worklouderctl doctor
 ```
+
+The [macOS release guide](docs/releases.md) documents deterministic local
+archives, checksum/signature verification, tagged Developer ID notarization,
+and the generated Homebrew formula. Until the first signed tag is published,
+the source build above remains the advertised installation path.
 
 Currently implemented commands:
 
@@ -651,7 +660,9 @@ CLI semantic parser.
 | Smart Action definitions, groups, bindings, and cascade | Candidate-verified against current Input 0.18.0 cache bytes; released writer pending |
 | Input cache read adapter | Complete; byte-exact bridge-equivalent semantic snapshot |
 | Input database synchronization | Planned |
-| Signed macOS release and Homebrew installation | Planned |
+| Deterministic macOS archives and signature-state verification | Complete; unsigned and ad-hoc builds locally executed |
+| Developer ID signing/notarization and Homebrew formula pipeline | Complete and fail-closed; tagged publication credentials pending |
+| First signed macOS release and stable Homebrew tap | Not published yet |
 
 ## Frequently asked questions
 
@@ -660,8 +671,10 @@ CLI semantic parser.
 WorkLouderCTL is an open-source full-configuration CLI project for Codex, Work
 Louder Input, and Codex Micro. The source alpha can inspect both apps,
 read/export live Codex Micro state, generate validated profile/layer/lighting/control/Action/Multi Action/Smart Action/group candidates,
-and exercise apply/restore against the isolated bridge writer; packaged
-binaries and released-Input writer integration are upcoming.
+and exercise apply/restore against the isolated bridge writer. Deterministic
+release packaging and the signed/notarized Homebrew pipeline are implemented;
+the first published signed binaries and released-Input writer integration are
+upcoming.
 
 ### Does WorkLouderCTL replace the Codex and Input configuration GUIs?
 

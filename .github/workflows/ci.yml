@@ -50,8 +50,6 @@ jobs:
         run: ./scripts/verify-cli-assets.sh
       - name: Verify release archive and Homebrew packaging
         run: ./scripts/test-release-packaging.sh
-      - name: Test deterministic release packaging and formula rendering
-        run: ./scripts/test-release-packaging.sh
       - name: Test Input bridge CLI end to end
         run: ./scripts/test-bridge-e2e.sh
       - name: Test delegated firmware update end to end
