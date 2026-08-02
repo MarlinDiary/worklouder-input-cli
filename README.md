@@ -568,6 +568,11 @@ guarantee. See the [compatibility policy](docs/compatibility.md), the vendor's
 [Codex Micro product page](https://worklouder.cc/codex-micro), and the official
 [Codex Micro setup guide](https://worklouder.cc/openai-micro-setup).
 
+The checked-in [`fixtures/`](fixtures/) tree is deterministic and sanitized;
+`./scripts/verify-sanitized-fixtures.sh` regenerates it, recomputes all manifest
+hashes, scans sensitive patterns, and reopens both Input snapshots through the
+CLI semantic parser.
+
 ## Project status
 
 | Milestone | Status |

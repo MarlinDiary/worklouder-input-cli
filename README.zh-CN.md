@@ -446,6 +446,10 @@ worklouderctl backup restore BACKUP_ID
 
 以上是当前研究基线；正式支持范围会通过版本适配器、fixtures 和真实硬件 readback 明确记录。
 
+仓库中的 [`fixtures/`](fixtures/) 为确定性、已脱敏的 synthetic 最小样例；
+`./scripts/verify-sanitized-fixtures.sh` 会重新生成全部文件、复算 manifest SHA-256、
+扫描敏感模式，并通过 CLI 语义解析器重新打开两个 Input snapshot。
+
 ## 与 Codex 和 Input 的关系
 
 WorkLouderCTL 是 **Full-configuration CLI**：

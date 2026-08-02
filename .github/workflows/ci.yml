@@ -39,6 +39,8 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       - name: Test companion bridge reference servers
         run: npm test --prefix companion
+      - name: Verify deterministic sanitized fixtures
+        run: ./scripts/verify-sanitized-fixtures.sh
       - name: Test Input bridge CLI end to end
         run: ./scripts/test-bridge-e2e.sh
       - name: Test Codex bridge CLI end to end
