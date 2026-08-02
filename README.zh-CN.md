@@ -108,6 +108,7 @@ worklouderctl input permission command restore --input HOST_SETTINGS.json --back
 worklouderctl input permissions [--device DEVICE_ID]
 worklouderctl input firmware check [--device DEVICE_ID]
 worklouderctl input firmware plan --output FIRMWARE_PLAN.json [--device DEVICE_ID]
+worklouderctl input firmware update --plan FIRMWARE_PLAN.json --backup FIRMWARE_CONFIG_BEFORE.json --receipt FIRMWARE_UPDATE.json --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
 worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
 worklouderctl input preset snapshot --output PRESET_CATALOG.json
 worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
@@ -402,7 +403,12 @@ transition 仍是 compatibility gate。
 对应 selected HID path 的读写权限。`input firmware check` 把 release 选择完全委派给已安装
 Input 的 `DeviceFlashService`，不会执行 flash。`input firmware plan` 还会冻结 release、
 完整 configuration revision、USB gate，以及 backup/download/bootloader/flash/reconnect/
-restore/postflight 七个阶段，但仍不执行 mutation。`input logs collect` 从 Input 的 5,000 条
+restore/postflight 七个阶段，但仍不执行 mutation。`input firmware update` 只接受 ready
+且未漂移的 plan，先保存完整 configuration backup，
+再把七阶段整体委派给注入的 Input-owned high-level authority；CLI 外围提供 15 分钟 timeout、
+session idempotency、firmware/config exact postflight、原子 receipt readback 与 typed
+recovery-required error，但不实现 programmer 或 firmware downgrade。`input logs collect`
+从 Input 的 5,000 条
 内存 log ring 读取有界后缀，先在 Input 内遮蔽 home path、email 与 credential-shaped
 值，再原子发布并 reopen 一个 `0700` bundle；其中 JSON/text 与 SHA-256 manifest 均为
 `0600`。
@@ -452,6 +458,9 @@ worklouderctl backup restore BACKUP_ID
 仓库中的 [`fixtures/`](fixtures/) 为确定性、已脱敏的 synthetic 最小样例；
 `./scripts/verify-sanitized-fixtures.sh` 会重新生成全部文件、复算 manifest SHA-256、
 扫描敏感模式，并通过 CLI 语义解析器重新打开两个 Input snapshot。
+
+仓库也发布由同一 Clap command tree 确定性生成的 Bash、Zsh、Fish 补全文件与
+[完整命令参考](docs/command-reference.md)；`./scripts/verify-cli-assets.sh` 会重新生成并比较。
 
 ## 与 Codex 和 Input 的关系
 

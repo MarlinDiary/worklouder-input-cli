@@ -139,6 +139,7 @@ worklouderctl input permission command restore --input HOST_SETTINGS.json --back
 worklouderctl input permissions [--device DEVICE_ID]
 worklouderctl input firmware check [--device DEVICE_ID]
 worklouderctl input firmware plan --output FIRMWARE_PLAN.json [--device DEVICE_ID]
+worklouderctl input firmware update --plan FIRMWARE_PLAN.json --backup FIRMWARE_CONFIG_BEFORE.json --receipt FIRMWARE_UPDATE.json --expected-revision CONFIG_REVISION --idempotency-key UPDATE_KEY
 worklouderctl input logs collect --output INPUT_LOG_BUNDLE [--max-entries 5000]
 worklouderctl input preset snapshot --output PRESET_CATALOG.json
 worklouderctl preset list --catalog PRESET_CATALOG.json --device codex_micro --layout universal --os mac
@@ -230,6 +231,11 @@ worklouderctl --json agent validate --input COMMAND_ENVELOPE.json
 worklouderctl --json agent execute --input COMMAND_ENVELOPE.json
 worklouderctl completion bash|zsh|fish
 ```
+
+Generated Bash, Zsh, and Fish scripts are checked into [`completions/`](completions/).
+The exhaustive [command reference](docs/command-reference.md) is generated from
+the same Clap command tree. `./scripts/verify-cli-assets.sh` regenerates and
+compares all four artifacts.
 
 `codex inspect` reads only the five `codex-micro-*` settings from the
 `[desktop]` table in Codex's `config.toml`, validates them against the frozen
@@ -478,7 +484,13 @@ path. `input firmware check` delegates release selection to Input's installed
 `DeviceFlashService`, and performs no flash. `input firmware plan` additionally
 freezes that release, the exact configuration revision, the USB gate, and the
 seven backup/download/bootloader/flash/reconnect/restore/postflight phases; it
-still performs no mutation. `input logs collect` requests a
+still performs no mutation. `input firmware update` accepts only a ready,
+unchanged plan, captures a complete configuration backup, then delegates the
+whole operation to an injected Input-owned high-level authority. A 15-minute
+bridge timeout, session idempotency, exact target-firmware/config-revision
+postflight, an atomically reopened receipt, and typed recovery-required errors
+surround that call; the CLI never implements the programmer or a downgrade.
+`input logs collect` requests a
 bounded suffix of Input's 5,000-entry in-memory log ring, redacts home paths,
 emails, and credential-shaped values inside Input, then atomically publishes
 and reopens a `0700` bundle of `0600` JSON/text files with SHA-256 records.
@@ -652,6 +664,8 @@ Read the complete [FAQ](docs/faq.md).
 - [JSON Schemas and agent invocation contract](docs/json-schemas.md)
 - [Backup inspection and migration](docs/backups-and-migrations.md)
 - [Shell-free agent JSON protocol](docs/agent-protocol.md)
+- [Generated command reference](docs/command-reference.md)
+- [Delegated firmware update](docs/delegated-firmware-update.md)
 - [Configuration parity matrix](docs/configuration-parity.md)
 - [2026-08-02 Codex Micro and Input audit](docs/research/2026-08-02-codex-micro-audit.md)
 - [Codex settings read contract](docs/research/2026-08-02-codex-settings-read-contract.md)

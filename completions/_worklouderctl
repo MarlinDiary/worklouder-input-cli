@@ -1,0 +1,5226 @@
+#compdef worklouderctl
+
+autoload -U is-at-least
+
+_worklouderctl() {
+    typeset -A opt_args
+    typeset -a _arguments_options
+    local ret=1
+
+    if is-at-least 5.2; then
+        _arguments_options=(-s -S -C)
+    else
+        _arguments_options=(-s -C)
+    fi
+
+    local context curcontext="$curcontext" state line
+    _arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl_commands" \
+"*::: :->worklouderctl" \
+&& ret=0
+    case $state in
+    (worklouderctl)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-command-$line[1]:"
+        case $line[1] in
+            (version)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(tier)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__tier_commands" \
+"*::: :->tier" \
+&& ret=0
+
+    case $state in
+    (tier)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-tier-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(explain)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':id -- Tier number (1 through 4):' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(capability)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__capability_commands" \
+"*::: :->capability" \
+&& ret=0
+
+    case $state in
+    (capability)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-capability-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'--tier=[Only show capabilities owned by this tier]:TIER: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" \
+'--strict[Treat warnings as a failing exit status]' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(codex)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex_commands" \
+"*::: :->codex" \
+&& ret=0
+
+    case $state in
+    (codex)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-command-$line[1]:"
+        case $line[1] in
+            (bridge)
+_arguments "${_arguments_options[@]}" \
+'*--socket=[Override the Codex Companion Bridge Unix socket path]:SOCKET:_files' \
+'*--token=[Override the Codex Companion Bridge token file path]:TOKEN:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__bridge_commands" \
+"*::: :->bridge" \
+&& ret=0
+
+    case $state in
+    (bridge)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-bridge-command-$line[1]:"
+        case $line[1] in
+            (inspect)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(config)
+_arguments "${_arguments_options[@]}" \
+'*--socket=[Override the Codex Companion Bridge Unix socket path]:SOCKET:_files' \
+'*--token=[Override the Codex Companion Bridge token file path]:TOKEN:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__config_commands" \
+"*::: :->config" \
+&& ret=0
+
+    case $state in
+    (config)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-config-command-$line[1]:"
+        case $line[1] in
+            (snapshot)
+_arguments "${_arguments_options[@]}" \
+'*--output=[Destination JSON file. It must not already exist]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(diff)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':base -- Baseline from `codex config snapshot` or an offline Codex editor:_files' \
+':candidate -- Candidate from `codex config snapshot` or an offline Codex editor:_files' \
+&& ret=0
+;;
+(apply)
+_arguments "${_arguments_options[@]}" \
+'*--input=[Candidate from `codex config snapshot` or an offline Codex editor]:INPUT:_files' \
+'*--backup=[Immutable pre-apply snapshot; an existing file is reused for retry]:BACKUP:_files' \
+'--expected-source-sha256=[Require this exact settings source SHA-256 before mutation]:EXPECTED_SOURCE_SHA256: ' \
+'--expected-settings-revision=[Require this exact canonical settings revision before mutation]:EXPECTED_SETTINGS_REVISION: ' \
+'--idempotency-key=[Stable retry key; reuse it only with the exact same mutation]:IDEMPOTENCY_KEY: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(restore)
+_arguments "${_arguments_options[@]}" \
+'*--input=[Snapshot to restore]:INPUT:_files' \
+'*--backup=[Immutable pre-restore snapshot; an existing file is reused for retry]:BACKUP:_files' \
+'--expected-source-sha256=[Require this exact settings source SHA-256 before mutation]:EXPECTED_SOURCE_SHA256: ' \
+'--expected-settings-revision=[Require this exact canonical settings revision before mutation]:EXPECTED_SETTINGS_REVISION: ' \
+'--idempotency-key=[Stable retry key; reuse it only with the exact same mutation]:IDEMPOTENCY_KEY: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(runtime)
+_arguments "${_arguments_options[@]}" \
+'*--app=[Override the Codex application bundle path]:APP:_files' \
+'*--input-app=[Override the Work Louder Input application bundle path]:INPUT_APP:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__runtime_commands" \
+"*::: :->runtime" \
+&& ret=0
+
+    case $state in
+    (runtime)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-runtime-command-$line[1]:"
+        case $line[1] in
+            (status)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(recover)
+_arguments "${_arguments_options[@]}" \
+'--timeout-seconds=[Maximum seconds to wait for connected HID and joystick subscriptions]:TIMEOUT_SECONDS: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" \
+'*--config=[Override the Codex config.toml path]:CONFIG:_files' \
+'*--app=[Override the Codex application bundle path]:APP:_files' \
+'--strict[Treat warnings as a failing exit status]' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(inspect)
+_arguments "${_arguments_options[@]}" \
+'*--config=[Override the Codex config.toml path]:CONFIG:_files' \
+'*--app=[Override the Codex application bundle path]:APP:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(export)
+_arguments "${_arguments_options[@]}" \
+'*--output=[Destination JSON file. It must not already exist]:OUTPUT:_files' \
+'*--config=[Override the Codex config.toml path]:CONFIG:_files' \
+'*--app=[Override the Codex application bundle path]:APP:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(agent-source)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__agent-source_commands" \
+"*::: :->agent-source" \
+&& ret=0
+
+    case $state in
+    (agent-source)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-agent-source-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':value:(pinned recent priority custom)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(agent-key)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__agent-key_commands" \
+"*::: :->agent-key" \
+&& ret=0
+
+    case $state in
+    (agent-key)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-agent-key-command-$line[1]:"
+        case $line[1] in
+            (assignments)
+_arguments "${_arguments_options[@]}" \
+'*--socket=[Override the Codex Companion Bridge Unix socket path]:SOCKET:_files' \
+'*--token=[Override the Codex Companion Bridge token file path]:TOKEN:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(snapshot)
+_arguments "${_arguments_options[@]}" \
+'*--output=[Destination JSON file. It must not already exist]:OUTPUT:_files' \
+'*--socket=[Override the Codex Companion Bridge Unix socket path]:SOCKET:_files' \
+'*--token=[Override the Codex Companion Bridge token file path]:TOKEN:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(get)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':slot -- Logical slot\: AG00 through AG05:' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--command=[Assign a Codex command ID]:COMMAND: ' \
+'--skill-name=[Assign a Skill display name; pair with --skill-path]:SKILL_NAME: ' \
+'--skill-path=[Assign a Skill path; pair with --skill-name]:SKILL_PATH: ' \
+'--thread-host=[Assign a task host ID; pair with --thread-key and --title]:THREAD_HOST: ' \
+'--thread-key=[Assign a task thread key; pair with --thread-host and --title]:THREAD_KEY: ' \
+'--title=[Assign a task title; pair with --thread-host and --thread-key]:TITLE: ' \
+'--keycap=[Assign a frozen keycap ID]:KEYCAP: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':slot -- Logical slot\: AG00 through AG05:' \
+&& ret=0
+;;
+(clear)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':slot -- Logical slot\: AG00 through AG05:' \
+&& ret=0
+;;
+(apply)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--backup=[]:BACKUP:_files' \
+'--expected-global-state-revision=[]:EXPECTED_GLOBAL_STATE_REVISION: ' \
+'--idempotency-key=[]:IDEMPOTENCY_KEY: ' \
+'*--socket=[]:SOCKET:_files' \
+'*--token=[]:TOKEN:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(restore)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--backup=[]:BACKUP:_files' \
+'--expected-global-state-revision=[]:EXPECTED_GLOBAL_STATE_REVISION: ' \
+'--idempotency-key=[]:IDEMPOTENCY_KEY: ' \
+'*--socket=[]:SOCKET:_files' \
+'*--token=[]:TOKEN:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(tap-mode)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__agent-key__tap-mode_commands" \
+"*::: :->tap-mode" \
+&& ret=0
+
+    case $state in
+    (tap-mode)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-agent-key-tap-mode-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':mode:(enabled disabled)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(command-key)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__command-key_commands" \
+"*::: :->command-key" \
+&& ret=0
+
+    case $state in
+    (command-key)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-command-key-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':slot -- Logical slot\: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12:' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--keycap=[Optional frozen keycap identifier]:KEYCAP: ' \
+'--command=[Assign a Codex command ID]:COMMAND: ' \
+'--skill-name=[Assign a Skill display name; pair with --skill-path]:SKILL_NAME: ' \
+'--skill-path=[Assign a Skill path; pair with --skill-name]:SKILL_PATH: ' \
+'*--output=[]:OUTPUT:_files' \
+'--clear-action[Clear command/Skill assignment while preserving the keycap]' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':slot -- Logical slot\: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12:' \
+&& ret=0
+;;
+(reset)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':slot -- Logical slot\: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12:' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(dial)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__dial_commands" \
+"*::: :->dial" \
+&& ret=0
+
+    case $state in
+    (dial)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-dial-command-$line[1]:"
+        case $line[1] in
+            (mode)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__dial__mode_commands" \
+"*::: :->mode" \
+&& ret=0
+
+    case $state in
+    (mode)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-dial-mode-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':value:(composer-navigation reasoning conversation-scroll custom)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(gesture)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__dial__gesture_commands" \
+"*::: :->gesture" \
+&& ret=0
+
+    case $state in
+    (gesture)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-dial-gesture-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':gesture:(left right click long-press)' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--command=[Assign a Codex command ID]:COMMAND: ' \
+'--skill-name=[Assign a Skill display name; pair with --skill-path]:SKILL_NAME: ' \
+'--skill-path=[Assign a Skill path; pair with --skill-name]:SKILL_PATH: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':gesture:(left right click long-press)' \
+&& ret=0
+;;
+(clear)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':gesture:(left right click long-press)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(joystick)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__joystick_commands" \
+"*::: :->joystick" \
+&& ret=0
+
+    case $state in
+    (joystick)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-joystick-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':direction:(up right down left)' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--command=[Assign a Codex command ID]:COMMAND: ' \
+'--skill-name=[Assign a Skill display name; pair with --skill-path]:SKILL_NAME: ' \
+'--skill-path=[Assign a Skill path; pair with --skill-name]:SKILL_PATH: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':direction:(up right down left)' \
+&& ret=0
+;;
+(clear)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':direction:(up right down left)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(reset)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__reset_commands" \
+"*::: :->reset" \
+&& ret=0
+
+    case $state in
+    (reset)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-reset-command-$line[1]:"
+        case $line[1] in
+            (layout)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(lighting)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__lighting_commands" \
+"*::: :->lighting" \
+&& ret=0
+
+    case $state in
+    (lighting)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-lighting-command-$line[1]:"
+        case $line[1] in
+            (brightness)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__lighting__brightness_commands" \
+"*::: :->brightness" \
+&& ret=0
+
+    case $state in
+    (brightness)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-lighting-brightness-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':value -- Global intensity from 0 through 100:' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(auto-off)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__lighting__auto-off_commands" \
+"*::: :->auto-off" \
+&& ret=0
+
+    case $state in
+    (auto-off)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-lighting-auto-off-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':value:(off 30-seconds 1-minute 3-minutes 10-minutes 30-minutes 1-hour)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(voice)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__voice_commands" \
+"*::: :->voice" \
+&& ret=0
+
+    case $state in
+    (voice)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-voice-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':value:(push-to-talk realtime)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(input)
+_arguments "${_arguments_options[@]}" \
+'*--bridge-socket=[Override the Input Companion Bridge Unix socket path]:BRIDGE_SOCKET:_files' \
+'*--bridge-token=[Override the Input Companion Bridge token file path]:BRIDGE_TOKEN:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__input_commands" \
+"*::: :->input" \
+&& ret=0
+
+    case $state in
+    (input)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-input-command-$line[1]:"
+        case $line[1] in
+            (inspect)
+_arguments "${_arguments_options[@]}" \
+'--device=[Select a cached device ID. Required when multiple devices exist]:DEVICE: ' \
+'*--support-root=[Override Input'\''s application support directory]:SUPPORT_ROOT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(export)
+_arguments "${_arguments_options[@]}" \
+'*--output=[Destination directory for the export bundle]:OUTPUT:_files' \
+'--device=[Select a cached device ID. Required when multiple devices exist]:DEVICE: ' \
+'*--support-root=[Override Input'\''s application support directory]:SUPPORT_ROOT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(config)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__input__config_commands" \
+"*::: :->config" \
+&& ret=0
+
+    case $state in
+    (config)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-input-config-command-$line[1]:"
+        case $line[1] in
+            (snapshot)
+_arguments "${_arguments_options[@]}" \
+'*--output=[Destination JSON file. It must not already exist]:OUTPUT:_files' \
+'--device=[Select a cached device ID. Required when multiple devices exist]:DEVICE: ' \
+'*--support-root=[Override Input'\''s application support directory]:SUPPORT_ROOT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(permission)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__input__permission_commands" \
+"*::: :->permission" \
+&& ret=0
+
+    case $state in
+    (permission)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-input-permission-command-$line[1]:"
+        case $line[1] in
+            (command)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__input__permission__command_commands" \
+"*::: :->command" \
+&& ret=0
+
+    case $state in
+    (command)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-input-permission-command-command-$line[1]:"
+        case $line[1] in
+            (snapshot)
+_arguments "${_arguments_options[@]}" \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(get)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':value:(enabled disabled)' \
+&& ret=0
+;;
+(apply)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--backup=[]:BACKUP:_files' \
+'--expected-revision=[]:EXPECTED_REVISION: ' \
+'--idempotency-key=[]:IDEMPOTENCY_KEY: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(restore)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--backup=[]:BACKUP:_files' \
+'--expected-revision=[]:EXPECTED_REVISION: ' \
+'--idempotency-key=[]:IDEMPOTENCY_KEY: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(permissions)
+_arguments "${_arguments_options[@]}" \
+'--device=[Select a connected device ID; defaults to the single Codex Micro]:DEVICE: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(firmware)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__input__firmware_commands" \
+"*::: :->firmware" \
+&& ret=0
+
+    case $state in
+    (firmware)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-input-firmware-command-$line[1]:"
+        case $line[1] in
+            (check)
+_arguments "${_arguments_options[@]}" \
+'--device=[Select a connected device ID; defaults to the single Codex Micro]:DEVICE: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(plan)
+_arguments "${_arguments_options[@]}" \
+'*--output=[Destination JSON plan. It must not already exist]:OUTPUT:_files' \
+'--device=[Select a connected device ID; defaults to the single Codex Micro]:DEVICE: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(update)
+_arguments "${_arguments_options[@]}" \
+'*--plan=[Immutable plan produced by `input firmware plan`]:PLAN:_files' \
+'*--backup=[Immutable complete pre-update configuration snapshot]:BACKUP:_files' \
+'*--receipt=[Destination for the verified update receipt]:RECEIPT:_files' \
+'--expected-revision=[Require the live configuration to have this exact revision]:EXPECTED_REVISION: ' \
+'--idempotency-key=[Stable retry key; reuse it only with the exact same plan]:IDEMPOTENCY_KEY: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(logs)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__input__logs_commands" \
+"*::: :->logs" \
+&& ret=0
+
+    case $state in
+    (logs)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-input-logs-command-$line[1]:"
+        case $line[1] in
+            (collect)
+_arguments "${_arguments_options[@]}" \
+'*--output=[Destination directory. It must not already exist]:OUTPUT:_files' \
+'*--max-entries=[Maximum newest log entries to request from Input]:MAX_ENTRIES: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(preset)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__input__preset_commands" \
+"*::: :->preset" \
+&& ret=0
+
+    case $state in
+    (preset)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-input-preset-command-$line[1]:"
+        case $line[1] in
+            (snapshot)
+_arguments "${_arguments_options[@]}" \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(device)
+_arguments "${_arguments_options[@]}" \
+'--transport=[Select the Input-owned bridge or the direct compatibility provider]:TRANSPORT:((auto\:"Prefer the bridge when its socket and token exist, otherwise use direct"
+bridge\:"Route through the running Input process and its existing device session"
+direct\:"Use Input'\''s bundled device kit with explicit process coordination"))' \
+'--input-mode=[Coordinate access when the Input app currently owns the device]:INPUT_MODE:((require-closed\:"Stop if Input is running, preserving explicit process ownership"
+restart\:"Gracefully quit Input for the read, then reopen it afterward"))' \
+'*--app=[Override the Work Louder Input application bundle path]:APP:_files' \
+'*--bridge-socket=[Override the Input Companion Bridge Unix socket path]:BRIDGE_SOCKET:_files' \
+'*--bridge-token=[Override the Input Companion Bridge token file path]:BRIDGE_TOKEN:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__device_commands" \
+"*::: :->device" \
+&& ret=0
+
+    case $state in
+    (device)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-device-command-$line[1]:"
+        case $line[1] in
+            (status)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(files)
+_arguments "${_arguments_options[@]}" \
+'--path=[List a specific device filesystem path]:PATH: ' \
+'--recursive[Include files in nested directories]' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(export)
+_arguments "${_arguments_options[@]}" \
+'*--output=[Destination directory. It must not already exist]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(config)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__device__config_commands" \
+"*::: :->config" \
+&& ret=0
+
+    case $state in
+    (config)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-device-config-command-$line[1]:"
+        case $line[1] in
+            (snapshot)
+_arguments "${_arguments_options[@]}" \
+'*--output=[Destination JSON file. It must not already exist]:OUTPUT:_files' \
+'--device=[Select a connected device ID; defaults to the single Codex Micro]:DEVICE: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(validate)
+_arguments "${_arguments_options[@]}" \
+'*--input=[Snapshot JSON produced by `device config snapshot`]:INPUT:_files' \
+'--device=[Select a connected device ID; defaults to the snapshot device]:DEVICE: ' \
+'--expected-revision=[Require the live device to have this exact revision]:EXPECTED_REVISION: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(apply)
+_arguments "${_arguments_options[@]}" \
+'*--input=[Candidate snapshot JSON to apply]:INPUT:_files' \
+'*--backup=[Immutable pre-apply snapshot; an existing file is reused for retry]:BACKUP:_files' \
+'--device=[Select a connected device ID; defaults to the candidate device]:DEVICE: ' \
+'--expected-revision=[Require the live device to have this revision before the write]:EXPECTED_REVISION: ' \
+'--idempotency-key=[Stable retry key; reuse it only with the exact same mutation]:IDEMPOTENCY_KEY: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(restore)
+_arguments "${_arguments_options[@]}" \
+'*--input=[Snapshot JSON to restore]:INPUT:_files' \
+'*--backup=[Immutable pre-restore snapshot; an existing file is reused for retry]:BACKUP:_files' \
+'--device=[Select a connected device ID; defaults to the snapshot device]:DEVICE: ' \
+'--expected-revision=[Require the live device to have this revision before the write]:EXPECTED_REVISION: ' \
+'--idempotency-key=[Stable retry key; reuse it only with the exact same mutation]:IDEMPOTENCY_KEY: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(bridge)
+_arguments "${_arguments_options[@]}" \
+'*--socket=[Override the Input Companion Bridge Unix socket path]:SOCKET:_files' \
+'*--token=[Override the Input Companion Bridge token file path]:TOKEN:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__bridge_commands" \
+"*::: :->bridge" \
+&& ret=0
+
+    case $state in
+    (bridge)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-bridge-command-$line[1]:"
+        case $line[1] in
+            (status)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(config)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__config_commands" \
+"*::: :->config" \
+&& ret=0
+
+    case $state in
+    (config)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-config-command-$line[1]:"
+        case $line[1] in
+            (validate)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':path:_files' \
+&& ret=0
+;;
+(diff)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':base:_files' \
+':candidate:_files' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(schema)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__schema_commands" \
+"*::: :->schema" \
+&& ret=0
+
+    case $state in
+    (schema)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-schema-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':name -- Schema registry name, for example configuration-v1:' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(backup)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__backup_commands" \
+"*::: :->backup" \
+&& ret=0
+
+    case $state in
+    (backup)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-backup-command-$line[1]:"
+        case $line[1] in
+            (inspect)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(migration-plan)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(agent)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__agent_commands" \
+"*::: :->agent" \
+&& ret=0
+
+    case $state in
+    (agent)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-agent-command-$line[1]:"
+        case $line[1] in
+            (validate)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(execute)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(transaction)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__transaction_commands" \
+"*::: :->transaction" \
+&& ret=0
+
+    case $state in
+    (transaction)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-transaction-command-$line[1]:"
+        case $line[1] in
+            (plan)
+_arguments "${_arguments_options[@]}" \
+'*--codex-settings-base=[]:CODEX_SETTINGS_BASE:_files' \
+'*--codex-settings-candidate=[]:CODEX_SETTINGS_CANDIDATE:_files' \
+'*--codex-agent-keys-base=[]:CODEX_AGENT_KEYS_BASE:_files' \
+'*--codex-agent-keys-candidate=[]:CODEX_AGENT_KEYS_CANDIDATE:_files' \
+'*--input-config-base=[]:INPUT_CONFIG_BASE:_files' \
+'*--input-config-candidate=[]:INPUT_CONFIG_CANDIDATE:_files' \
+'*--input-host-settings-base=[]:INPUT_HOST_SETTINGS_BASE:_files' \
+'*--input-host-settings-candidate=[]:INPUT_HOST_SETTINGS_CANDIDATE:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(apply)
+_arguments "${_arguments_options[@]}" \
+'*--plan=[]:PLAN:_files' \
+'*--backup-dir=[]:BACKUP_DIR:_files' \
+'*--receipt=[]:RECEIPT:_files' \
+'--idempotency-key=[]:IDEMPOTENCY_KEY: ' \
+'*--codex-socket=[]:CODEX_SOCKET:_files' \
+'*--codex-token=[]:CODEX_TOKEN:_files' \
+'*--input-socket=[]:INPUT_SOCKET:_files' \
+'*--input-token=[]:INPUT_TOKEN:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(restore)
+_arguments "${_arguments_options[@]}" \
+'*--apply-receipt=[]:APPLY_RECEIPT:_files' \
+'*--backup-dir=[]:BACKUP_DIR:_files' \
+'*--receipt=[]:RECEIPT:_files' \
+'--idempotency-key=[]:IDEMPOTENCY_KEY: ' \
+'*--codex-socket=[]:CODEX_SOCKET:_files' \
+'*--codex-token=[]:CODEX_TOKEN:_files' \
+'*--input-socket=[]:INPUT_SOCKET:_files' \
+'*--input-token=[]:INPUT_TOKEN:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(profile)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__profile_commands" \
+"*::: :->profile" \
+&& ret=0
+
+    case $state in
+    (profile)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-profile-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(create)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--name=[]:NAME: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(duplicate)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--name=[]:NAME: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(select)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(rename)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--name=[]:NAME: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(layer)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__layer_commands" \
+"*::: :->layer" \
+&& ret=0
+
+    case $state in
+    (layer)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-layer-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--id=[]:ID: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(create)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--name=[]:NAME: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(duplicate)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--id=[]:ID: ' \
+'--name=[]:NAME: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--id=[]:ID: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(move)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--id=[]:ID: ' \
+'--to=[]:TO: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(rename)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--id=[]:ID: ' \
+'--name=[]:NAME: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(color)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--id=[]:ID: ' \
+'--color=[RGB as #RRGGBB, 0xRRGGBB, or a decimal integer]:COLOR: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(lighting)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__layer__lighting_commands" \
+"*::: :->lighting" \
+&& ret=0
+
+    case $state in
+    (lighting)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-layer-lighting-command-$line[1]:"
+        case $line[1] in
+            (show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--id=[]:ID: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--id=[]:ID: ' \
+'--zone=[]:ZONE:(backlight underglow)' \
+'--effect=[]:EFFECT:(off solid snake rainbow breath gradient)' \
+'--brightness=[]:BRIGHTNESS: ' \
+'--speed=[]:SPEED: ' \
+'--magic=[]:MAGIC: ' \
+'--color=[RGB as #RRGGBB, 0xRRGGBB, or a decimal integer]:COLOR: ' \
+'*--output=[]:OUTPUT:_files' \
+'--apply-to-all[Apply this zone to every layer in the selected profile]' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(joystick)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__layer__joystick_commands" \
+"*::: :->joystick" \
+&& ret=0
+
+    case $state in
+    (joystick)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-layer-joystick-command-$line[1]:"
+        case $line[1] in
+            (show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--id=[]:ID: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(mode)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__layer__joystick__mode_commands" \
+"*::: :->mode" \
+&& ret=0
+
+    case $state in
+    (mode)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-layer-joystick-mode-command-$line[1]:"
+        case $line[1] in
+            (set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--id=[]:ID: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':value:(radial)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(sector)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__layer__joystick__sector_commands" \
+"*::: :->sector" \
+&& ret=0
+
+    case $state in
+    (sector)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-layer-joystick-sector-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--id=[]:ID: ' \
+'--index=[]:INDEX: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--id=[]:ID: ' \
+'--index=[]:INDEX: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(control)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__control_commands" \
+"*::: :->control" \
+&& ret=0
+
+    case $state in
+    (control)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-control-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--layer=[]:LAYER: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--layer=[]:LAYER: ' \
+'--control=[key:ROW:COLUMN, encoder:INDEX:ccw|cw|press, or joystick:SECTOR]:CONTROL: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--layer=[]:LAYER: ' \
+'--control=[key:ROW:COLUMN, encoder:INDEX:ccw|cw|press, or joystick:SECTOR]:CONTROL: ' \
+'--assignment=[Input device token such as KC_C, KI_LM2, KA_A3, or KA_M1]:ASSIGNMENT: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(action)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__action_commands" \
+"*::: :->action" \
+&& ret=0
+
+    case $state in
+    (action)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-action-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(create)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--name=[]:NAME: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(rename)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--name=[]:NAME: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(event)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__action__event_commands" \
+"*::: :->event" \
+&& ret=0
+
+    case $state in
+    (event)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-action-event-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--assignment=[]:ASSIGNMENT: ' \
+'--type=[]:EVENT_TYPE:(release press click)' \
+'--delay=[]:DELAY: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--index=[]:INDEX: ' \
+'--assignment=[]:ASSIGNMENT: ' \
+'--type=[]:EVENT_TYPE:(release press click)' \
+'--delay=[]:DELAY: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--index=[]:INDEX: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(move)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--from=[]:FROM: ' \
+'--to=[]:TO: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(group)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__action__group_commands" \
+"*::: :->group" \
+&& ret=0
+
+    case $state in
+    (group)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-action-group-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(create)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--name=[]:NAME: ' \
+'*--action=[]:ACTION: ' \
+'--color=[]:COLOR: ' \
+'*--tag=[]:TAG: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--name=[]:NAME: ' \
+'(--clear-color)--color=[]:COLOR: ' \
+'(--clear-tags)*--tag=[]:TAG: ' \
+'*--output=[]:OUTPUT:_files' \
+'--clear-color[]' \
+'--clear-tags[]' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(member)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__action__group__member_commands" \
+"*::: :->member" \
+&& ret=0
+
+    case $state in
+    (member)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-action-group-member-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--action=[]:ACTION: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--action=[]:ACTION: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(move)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--from=[]:FROM: ' \
+'--to=[]:TO: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(delete)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'*--output=[]:OUTPUT:_files' \
+'--keep-members[Keep every member resource and remove only the group container]' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(multi-action)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__multi-action_commands" \
+"*::: :->multi-action" \
+&& ret=0
+
+    case $state in
+    (multi-action)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-multi-action-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(create)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--name=[]:NAME: ' \
+'--color=[]:COLOR: ' \
+'--icon=[]:ICON: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--name=[]:NAME: ' \
+'(--clear-color)--color=[]:COLOR: ' \
+'(--clear-icon)--icon=[]:ICON: ' \
+'--tap=[]:TAP: ' \
+'--double-tap=[]:DOUBLE_TAP: ' \
+'--hold=[]:HOLD: ' \
+'--tap-hold=[]:TAP_HOLD: ' \
+'--tapping-term=[]:TAPPING_TERM: ' \
+'*--output=[]:OUTPUT:_files' \
+'--clear-color[]' \
+'--clear-icon[]' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(group)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__multi-action__group_commands" \
+"*::: :->group" \
+&& ret=0
+
+    case $state in
+    (group)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-multi-action-group-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(create)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--name=[]:NAME: ' \
+'*--multi-action=[]:MULTI_ACTION: ' \
+'--color=[]:COLOR: ' \
+'*--tag=[]:TAG: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--name=[]:NAME: ' \
+'(--clear-color)--color=[]:COLOR: ' \
+'(--clear-tags)*--tag=[]:TAG: ' \
+'*--output=[]:OUTPUT:_files' \
+'--clear-color[]' \
+'--clear-tags[]' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(member)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__multi-action__group__member_commands" \
+"*::: :->member" \
+&& ret=0
+
+    case $state in
+    (member)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-multi-action-group-member-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--multi-action=[]:MULTI_ACTION: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--multi-action=[]:MULTI_ACTION: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(move)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--from=[]:FROM: ' \
+'--to=[]:TO: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(delete)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'*--output=[]:OUTPUT:_files' \
+'--keep-members[Keep every member resource and remove only the group container]' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(smart-action)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__smart-action_commands" \
+"*::: :->smart-action" \
+&& ret=0
+
+    case $state in
+    (smart-action)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-smart-action-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(create)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--name=[]:NAME: ' \
+'--type=[]:ACTION_TYPE:(text command url app)' \
+'--text=[]:TEXT: ' \
+'--command=[]:COMMAND: ' \
+'--url=[]:URL: ' \
+'--app-name=[]:APP_NAME: ' \
+'--app-path=[]:APP_PATH: ' \
+'--color=[]:COLOR: ' \
+'--icon=[]:ICON: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--name=[]:NAME: ' \
+'--type=[]:ACTION_TYPE:(text command url app)' \
+'--text=[]:TEXT: ' \
+'--command=[]:COMMAND: ' \
+'--url=[]:URL: ' \
+'--app-name=[]:APP_NAME: ' \
+'--app-path=[]:APP_PATH: ' \
+'(--clear-color)--color=[]:COLOR: ' \
+'(--clear-icon)--icon=[]:ICON: ' \
+'*--output=[]:OUTPUT:_files' \
+'--clear-color[]' \
+'--clear-icon[]' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(group)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__smart-action__group_commands" \
+"*::: :->group" \
+&& ret=0
+
+    case $state in
+    (group)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-smart-action-group-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(create)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--name=[]:NAME: ' \
+'*--smart-action=[]:SMART_ACTION: ' \
+'--color=[]:COLOR: ' \
+'*--tag=[]:TAG: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--name=[]:NAME: ' \
+'(--clear-color)--color=[]:COLOR: ' \
+'(--clear-tags)*--tag=[]:TAG: ' \
+'*--output=[]:OUTPUT:_files' \
+'--clear-color[]' \
+'--clear-tags[]' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(member)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__smart-action__group__member_commands" \
+"*::: :->member" \
+&& ret=0
+
+    case $state in
+    (member)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-smart-action-group-member-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--smart-action=[]:SMART_ACTION: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--smart-action=[]:SMART_ACTION: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(move)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--from=[]:FROM: ' \
+'--to=[]:TO: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(delete)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(cheat-sheet)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__cheat-sheet_commands" \
+"*::: :->cheat-sheet" \
+&& ret=0
+
+    case $state in
+    (cheat-sheet)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-cheat-sheet-command-$line[1]:"
+        case $line[1] in
+            (catalog)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(bindings)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--layer=[]:LAYER: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(bind)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--layer=[]:LAYER: ' \
+'--control=[key:ROW:COLUMN, encoder:INDEX:ccw|cw|press, or joystick:SECTOR]:CONTROL: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':behavior:(show hold hide toggle)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(preset)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__preset_commands" \
+"*::: :->preset" \
+&& ret=0
+
+    case $state in
+    (preset)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-preset-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'*--catalog=[]:CATALOG:_files' \
+'--device=[]:DEVICE: ' \
+'--layout=[]:LAYOUT: ' \
+'--os=[]:OS:(mac windows)' \
+'--search=[]:SEARCH: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'*--catalog=[]:CATALOG:_files' \
+'--id=[]:ID: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(preview)
+_arguments "${_arguments_options[@]}" \
+'*--catalog=[]:CATALOG:_files' \
+'--id=[]:ID: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(install)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--catalog=[]:CATALOG:_files' \
+'--id=[]:ID: ' \
+'--profile=[]:PROFILE: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(radial)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__radial_commands" \
+"*::: :->radial" \
+&& ret=0
+
+    case $state in
+    (radial)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-radial-command-$line[1]:"
+        case $line[1] in
+            (show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--layer=[]:LAYER: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(appsense)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__appsense_commands" \
+"*::: :->appsense" \
+&& ret=0
+
+    case $state in
+    (appsense)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-appsense-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(link)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--layer=[]:LAYER: ' \
+'--name=[]:NAME: ' \
+'--process=[macOS bundle identifier or Windows process identity]:PROCESS: ' \
+'--path=[Application path when supplied by the Input focus detector]:PATH: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--id=[]:ID: ' \
+'--name=[]:NAME: ' \
+'(--clear-process)--process=[]:PROCESS: ' \
+'(--clear-path)--path=[]:PATH: ' \
+'*--output=[]:OUTPUT:_files' \
+'--clear-process[]' \
+'--clear-path[]' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(unlink)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'--profile=[]:PROFILE: ' \
+'--layer=[]:LAYER: ' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(test)
+_arguments "${_arguments_options[@]}" \
+'*--bridge-socket=[]:BRIDGE_SOCKET:_files' \
+'*--bridge-token=[]:BRIDGE_TOKEN:_files' \
+'--device=[]:DEVICE: ' \
+'--expected-app-name=[]:EXPECTED_APP_NAME: ' \
+'--expected-process=[]:EXPECTED_PROCESS: ' \
+'--expected-path=[]:EXPECTED_PATH: ' \
+'--expected-profile-index=[Raw firmware profile index reported by Input]:EXPECTED_PROFILE_INDEX: ' \
+'--expected-layer-index=[Raw one-based firmware layer index reported by Input]:EXPECTED_LAYER_INDEX: ' \
+'--timeout-ms=[]:TIMEOUT_MS: ' \
+'--poll-ms=[]:POLL_MS: ' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(completion)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+':shell:(bash zsh fish)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+}
+
+(( $+functions[_worklouderctl_commands] )) ||
+_worklouderctl_commands() {
+    local commands; commands=(
+'version:Print CLI version information' \
+'tier:Inspect the configuration authority tiers' \
+'capability:Inspect capabilities covered by the CLI contract' \
+'doctor:Diagnose Codex, Input, and cached device configuration providers' \
+'codex:Inspect or export Codex-owned Codex Micro settings' \
+'input:Inspect or export Input-owned configuration' \
+'device:Read live Codex Micro state through Input or its compatibility provider' \
+'bridge:Inspect the Input Companion Bridge transport' \
+'config:Validate or compare exported configuration' \
+'schema:Discover the versioned JSON Schemas used by automation clients' \
+'backup:Verify backup integrity and report version migration requirements' \
+'agent:Validate or execute a shell-free JSON command envelope for agents' \
+'transaction:Plan coordinated Codex and Input mutations with one unified diff' \
+'profile:Inspect or edit profiles in an offline configuration snapshot' \
+'layer:Inspect or edit layers in an offline configuration snapshot' \
+'control:Inspect or edit physical controls in an offline configuration snapshot' \
+'action:Inspect or edit Actions in an offline configuration snapshot' \
+'multi-action:Inspect or edit Multi Actions in an offline configuration snapshot' \
+'smart-action:Inspect or edit Input-hosted Smart Actions in an offline snapshot' \
+'cheat-sheet:Inspect or bind Input Cheat Sheet behaviors in an offline snapshot' \
+'preset:Inspect, preview, or install Input layer presets' \
+'radial:Inspect the Input-hosted joystick radial menu without opening its window' \
+'appsense:Inspect or edit AppSense linked applications in an offline snapshot' \
+'completion:Generate a shell completion script on standard output' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action_commands] )) ||
+_worklouderctl__action_commands() {
+    local commands; commands=(
+'list:List Actions and their reference counts' \
+'show:Show one Action and its ordered key-input events' \
+'create:Create an Action with Input'\''s default KC_NONE press event' \
+'rename:Rename one Action' \
+'delete:Delete an Action and replace every live reference with KC_NONE' \
+'event:Add, update, delete, or reorder Action events' \
+'group:Inspect or edit stored Action groups' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl action commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__event__add_commands] )) ||
+_worklouderctl__action__event__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action event add commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__group__member__add_commands] )) ||
+_worklouderctl__action__group__member__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action group member add commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__joystick__sector__add_commands] )) ||
+_worklouderctl__layer__joystick__sector__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer joystick sector add commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__group__member__add_commands] )) ||
+_worklouderctl__multi-action__group__member__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action group member add commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__group__member__add_commands] )) ||
+_worklouderctl__smart-action__group__member__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action group member add commands' commands "$@"
+}
+(( $+functions[_worklouderctl__agent_commands] )) ||
+_worklouderctl__agent_commands() {
+    local commands; commands=(
+'validate:Validate and normalize a command envelope without executing it' \
+'execute:Execute an envelope through the same in-process CLI and transaction core' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl agent commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-key_commands] )) ||
+_worklouderctl__codex__agent-key_commands() {
+    local commands; commands=(
+'assignments:Read all six live Agent Key assignments through Codex' \
+'snapshot:Save all six live Agent Key assignments as a revisioned snapshot' \
+'get:Read one assignment from an offline Agent Key snapshot' \
+'set:Set one assignment in an offline Agent Key candidate' \
+'clear:Clear one assignment in an offline Agent Key candidate' \
+'apply:Apply all six Agent Key assignments with backup, CAS, and readback' \
+'restore:Restore all six Agent Key assignments with backup, CAS, and readback' \
+'tap-mode:Inspect or edit the single-tap focus behavior' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex agent-key commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-source_commands] )) ||
+_worklouderctl__codex__agent-source_commands() {
+    local commands; commands=(
+'get:Read the effective Agent Key source ordering' \
+'set:Write an offline candidate with a new Agent Key source ordering' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex agent-source commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-key__apply_commands] )) ||
+_worklouderctl__codex__agent-key__apply_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-key apply commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__config__apply_commands] )) ||
+_worklouderctl__codex__config__apply_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex config apply commands' commands "$@"
+}
+(( $+functions[_worklouderctl__device__config__apply_commands] )) ||
+_worklouderctl__device__config__apply_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl device config apply commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__permission__command__apply_commands] )) ||
+_worklouderctl__input__permission__command__apply_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input permission command apply commands' commands "$@"
+}
+(( $+functions[_worklouderctl__transaction__apply_commands] )) ||
+_worklouderctl__transaction__apply_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl transaction apply commands' commands "$@"
+}
+(( $+functions[_worklouderctl__appsense_commands] )) ||
+_worklouderctl__appsense_commands() {
+    local commands; commands=(
+'list:List linked applications and every layer binding' \
+'show:Show one linked application and every layer binding' \
+'link:Create a linked application and bind it to one layer' \
+'set:Update linked-application label or detection identity' \
+'unlink:Remove one layer binding and its now-unreferenced application record' \
+'test:Observe Input'\''s focus forwarding and wait for an optional device layer state' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl appsense commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-key__assignments_commands] )) ||
+_worklouderctl__codex__agent-key__assignments_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-key assignments commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__lighting__auto-off_commands] )) ||
+_worklouderctl__codex__lighting__auto-off_commands() {
+    local commands; commands=(
+'get:Read the effective idle lighting auto-off policy' \
+'set:Write an offline candidate with a new idle lighting auto-off policy' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex lighting auto-off commands' commands "$@"
+}
+(( $+functions[_worklouderctl__backup_commands] )) ||
+_worklouderctl__backup_commands() {
+    local commands; commands=(
+'inspect:Detect and fully verify a supported backup, receipt, catalog, or snapshot' \
+'migration-plan:Report whether a verified artifact requires a schema migration' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl backup commands' commands "$@"
+}
+(( $+functions[_worklouderctl__cheat-sheet__bind_commands] )) ||
+_worklouderctl__cheat-sheet__bind_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl cheat-sheet bind commands' commands "$@"
+}
+(( $+functions[_worklouderctl__cheat-sheet__bindings_commands] )) ||
+_worklouderctl__cheat-sheet__bindings_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl cheat-sheet bindings commands' commands "$@"
+}
+(( $+functions[_worklouderctl__bridge_commands] )) ||
+_worklouderctl__bridge_commands() {
+    local commands; commands=(
+'status:Authenticate and report the negotiated bridge capabilities' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl bridge commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__bridge_commands] )) ||
+_worklouderctl__codex__bridge_commands() {
+    local commands; commands=(
+'inspect:Authenticate and print the negotiated Codex bridge capabilities' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex bridge commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__lighting__brightness_commands] )) ||
+_worklouderctl__codex__lighting__brightness_commands() {
+    local commands; commands=(
+'get:Read effective global lighting intensity from 0 through 100' \
+'set:Write an offline candidate with a new global lighting intensity' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex lighting brightness commands' commands "$@"
+}
+(( $+functions[_worklouderctl__capability_commands] )) ||
+_worklouderctl__capability_commands() {
+    local commands; commands=(
+'list:List capabilities, optionally filtered by tier' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl capability commands' commands "$@"
+}
+(( $+functions[_worklouderctl__cheat-sheet__catalog_commands] )) ||
+_worklouderctl__cheat-sheet__catalog_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl cheat-sheet catalog commands' commands "$@"
+}
+(( $+functions[_worklouderctl__cheat-sheet_commands] )) ||
+_worklouderctl__cheat-sheet_commands() {
+    local commands; commands=(
+'catalog:List the four frozen Input 0.18.0 Cheat Sheet behaviors and tokens' \
+'bindings:List Cheat Sheet assignments currently bound in one layer' \
+'bind:Bind one physical control to show, hold, hide, or toggle Cheat Sheet' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl cheat-sheet commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__firmware__check_commands] )) ||
+_worklouderctl__input__firmware__check_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input firmware check commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-key__clear_commands] )) ||
+_worklouderctl__codex__agent-key__clear_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-key clear commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__dial__gesture__clear_commands] )) ||
+_worklouderctl__codex__dial__gesture__clear_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex dial gesture clear commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__joystick__clear_commands] )) ||
+_worklouderctl__codex__joystick__clear_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex joystick clear commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex_commands] )) ||
+_worklouderctl__codex_commands() {
+    local commands; commands=(
+'bridge:Inspect the authenticated Codex Companion Bridge' \
+'config:Snapshot, diff, apply, or restore Codex settings' \
+'runtime:Inspect or recover the live Codex Micro service without restarting windows' \
+'doctor:Diagnose the Codex app and Codex Micro settings source' \
+'inspect:Inspect Codex Micro settings without changing them' \
+'export:Export a stable Codex Micro settings snapshot as JSON' \
+'agent-source:Inspect or edit the Agent Key source ordering in an offline snapshot' \
+'agent-key:Inspect or edit Agent Key behavior in an offline snapshot' \
+'command-key:Inspect or edit Codex-native Command Keys in an offline snapshot' \
+'dial:Inspect or edit Codex-native dial behavior in an offline snapshot' \
+'joystick:Inspect or edit Codex-native joystick directions in an offline snapshot' \
+'reset:Restore Codex Micro configuration surfaces to frozen defaults' \
+'lighting:Inspect or edit Codex-native global lighting in an offline snapshot' \
+'voice:Inspect or edit Codex-native voice-button behavior in an offline snapshot' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__logs__collect_commands] )) ||
+_worklouderctl__input__logs__collect_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input logs collect commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__color_commands] )) ||
+_worklouderctl__layer__color_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer color commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__permission__command_commands] )) ||
+_worklouderctl__input__permission__command_commands() {
+    local commands; commands=(
+'snapshot:Snapshot all Input host settings through the running Input bridge' \
+'get:Read command permission from an offline host-settings snapshot' \
+'set:Build an offline candidate while preserving both analytics settings' \
+'apply:Apply a complete host-settings candidate with backup, CAS, and rollback' \
+'restore:Restore a complete host-settings snapshot with a new backup' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl input permission command commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__command-key_commands] )) ||
+_worklouderctl__codex__command-key_commands() {
+    local commands; commands=(
+'get:Read one effective Command Key assignment' \
+'set:Write one Command Key assignment into an offline candidate' \
+'reset:Restore one Command Key slot to the frozen Codex default' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex command-key commands' commands "$@"
+}
+(( $+functions[_worklouderctl__completion_commands] )) ||
+_worklouderctl__completion_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl completion commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__config_commands] )) ||
+_worklouderctl__codex__config_commands() {
+    local commands; commands=(
+'snapshot:Save a frozen-contract settings snapshot from the running Codex process' \
+'diff:Compare only the explicit settings in two validated Codex snapshots' \
+'apply:Apply a complete settings candidate with backup, CAS, and exact readback' \
+'restore:Restore a complete settings snapshot with backup, CAS, and exact readback' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex config commands' commands "$@"
+}
+(( $+functions[_worklouderctl__config_commands] )) ||
+_worklouderctl__config_commands() {
+    local commands; commands=(
+'validate:Validate an export bundle or JSON configuration file' \
+'diff:Compare two export bundles or JSON configuration files' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl config commands' commands "$@"
+}
+(( $+functions[_worklouderctl__device__config_commands] )) ||
+_worklouderctl__device__config_commands() {
+    local commands; commands=(
+'snapshot:Save a revisioned, byte-exact configuration snapshot as JSON' \
+'validate:Validate a snapshot and optionally compare it with the live revision' \
+'apply:Apply a complete snapshot with backup, CAS, readback, and rollback' \
+'restore:Restore a complete snapshot with a new pre-restore backup' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl device config commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__config_commands] )) ||
+_worklouderctl__input__config_commands() {
+    local commands; commands=(
+'snapshot:Save a revisioned, byte-exact snapshot without contacting Input or the device' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl input config commands' commands "$@"
+}
+(( $+functions[_worklouderctl__control_commands] )) ||
+_worklouderctl__control_commands() {
+    local commands; commands=(
+'list:List keys, encoder gestures, and joystick sectors in one layer' \
+'show:Show one control and its exact Input assignment token' \
+'set:Set one control token and write a complete candidate snapshot' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl control commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__create_commands] )) ||
+_worklouderctl__action__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action create commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__group__create_commands] )) ||
+_worklouderctl__action__group__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action group create commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__create_commands] )) ||
+_worklouderctl__layer__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer create commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__create_commands] )) ||
+_worklouderctl__multi-action__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action create commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__group__create_commands] )) ||
+_worklouderctl__multi-action__group__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action group create commands' commands "$@"
+}
+(( $+functions[_worklouderctl__profile__create_commands] )) ||
+_worklouderctl__profile__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl profile create commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__create_commands] )) ||
+_worklouderctl__smart-action__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action create commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__group__create_commands] )) ||
+_worklouderctl__smart-action__group__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action group create commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__delete_commands] )) ||
+_worklouderctl__action__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action delete commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__event__delete_commands] )) ||
+_worklouderctl__action__event__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action event delete commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__group__delete_commands] )) ||
+_worklouderctl__action__group__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action group delete commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__delete_commands] )) ||
+_worklouderctl__layer__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer delete commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__joystick__sector__delete_commands] )) ||
+_worklouderctl__layer__joystick__sector__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer joystick sector delete commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__delete_commands] )) ||
+_worklouderctl__multi-action__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action delete commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__group__delete_commands] )) ||
+_worklouderctl__multi-action__group__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action group delete commands' commands "$@"
+}
+(( $+functions[_worklouderctl__profile__delete_commands] )) ||
+_worklouderctl__profile__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl profile delete commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__delete_commands] )) ||
+_worklouderctl__smart-action__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action delete commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__group__delete_commands] )) ||
+_worklouderctl__smart-action__group__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action group delete commands' commands "$@"
+}
+(( $+functions[_worklouderctl__device_commands] )) ||
+_worklouderctl__device_commands() {
+    local commands; commands=(
+'status:Read firmware, active profile/layer, and power state from the device' \
+'files:List files on the live device filesystem without changing them' \
+'export:Export exact live device files into a verified atomic bundle' \
+'config:Snapshot or validate configuration through Input'\''s live session' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl device commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__dial_commands] )) ||
+_worklouderctl__codex__dial_commands() {
+    local commands; commands=(
+'mode:Inspect or edit the built-in/custom dial mode' \
+'gesture:Inspect or edit one custom dial gesture' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex dial commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__config__diff_commands] )) ||
+_worklouderctl__codex__config__diff_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex config diff commands' commands "$@"
+}
+(( $+functions[_worklouderctl__config__diff_commands] )) ||
+_worklouderctl__config__diff_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl config diff commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__doctor_commands] )) ||
+_worklouderctl__codex__doctor_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex doctor commands' commands "$@"
+}
+(( $+functions[_worklouderctl__doctor_commands] )) ||
+_worklouderctl__doctor_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl doctor commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__duplicate_commands] )) ||
+_worklouderctl__layer__duplicate_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer duplicate commands' commands "$@"
+}
+(( $+functions[_worklouderctl__profile__duplicate_commands] )) ||
+_worklouderctl__profile__duplicate_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl profile duplicate commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__event_commands] )) ||
+_worklouderctl__action__event_commands() {
+    local commands; commands=(
+'add:Append one key-input event' \
+'set:Update selected fields of one existing event' \
+'delete:Delete one event; a sole event resets to Input'\''s default' \
+'move:Move one event while preserving its fields' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl action event commands' commands "$@"
+}
+(( $+functions[_worklouderctl__agent__execute_commands] )) ||
+_worklouderctl__agent__execute_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl agent execute commands' commands "$@"
+}
+(( $+functions[_worklouderctl__tier__explain_commands] )) ||
+_worklouderctl__tier__explain_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl tier explain commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__export_commands] )) ||
+_worklouderctl__codex__export_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex export commands' commands "$@"
+}
+(( $+functions[_worklouderctl__device__export_commands] )) ||
+_worklouderctl__device__export_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl device export commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__export_commands] )) ||
+_worklouderctl__input__export_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input export commands' commands "$@"
+}
+(( $+functions[_worklouderctl__device__files_commands] )) ||
+_worklouderctl__device__files_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl device files commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__firmware_commands] )) ||
+_worklouderctl__input__firmware_commands() {
+    local commands; commands=(
+'check:Check the connected device and the current compatible release' \
+'plan:Freeze the release, configuration revision, USB gate, and update phases' \
+'update:Delegate the complete update workflow to Input and verify firmware/config postflight' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl input firmware commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__dial__gesture_commands] )) ||
+_worklouderctl__codex__dial__gesture_commands() {
+    local commands; commands=(
+'get:Read one effective custom dial gesture assignment' \
+'set:Assign one command or Skill while the dial mode is custom' \
+'clear:Clear one custom dial gesture while preserving the other gestures' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex dial gesture commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-key__get_commands] )) ||
+_worklouderctl__codex__agent-key__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-key get commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-key__tap-mode__get_commands] )) ||
+_worklouderctl__codex__agent-key__tap-mode__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-key tap-mode get commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-source__get_commands] )) ||
+_worklouderctl__codex__agent-source__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-source get commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__command-key__get_commands] )) ||
+_worklouderctl__codex__command-key__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex command-key get commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__dial__gesture__get_commands] )) ||
+_worklouderctl__codex__dial__gesture__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex dial gesture get commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__dial__mode__get_commands] )) ||
+_worklouderctl__codex__dial__mode__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex dial mode get commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__joystick__get_commands] )) ||
+_worklouderctl__codex__joystick__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex joystick get commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__lighting__auto-off__get_commands] )) ||
+_worklouderctl__codex__lighting__auto-off__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex lighting auto-off get commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__lighting__brightness__get_commands] )) ||
+_worklouderctl__codex__lighting__brightness__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex lighting brightness get commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__voice__get_commands] )) ||
+_worklouderctl__codex__voice__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex voice get commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__permission__command__get_commands] )) ||
+_worklouderctl__input__permission__command__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input permission command get commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__group_commands] )) ||
+_worklouderctl__action__group_commands() {
+    local commands; commands=(
+'list:List stored Action groups' \
+'show:Show one Action group and its ordered members' \
+'create:Create an Action group containing one or more existing Actions' \
+'set:Update Action group name, color, or tags' \
+'member:Add, remove, or reorder Action group members' \
+'delete:Delete a group using Input'\''s orphan-member cascade' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl action group commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__group_commands] )) ||
+_worklouderctl__multi-action__group_commands() {
+    local commands; commands=(
+'list:List stored Multi Action groups' \
+'show:Show one Multi Action group and its ordered members' \
+'create:Create a group containing one or more existing Multi Actions' \
+'set:Update Multi Action group name, color, or tags' \
+'member:Add, remove, or reorder Multi Action group members' \
+'delete:Delete a group using Input'\''s orphan-member cascade' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl multi-action group commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__group_commands] )) ||
+_worklouderctl__smart-action__group_commands() {
+    local commands; commands=(
+'list:List stored Smart Action groups' \
+'show:Show one Smart Action group and its ordered members' \
+'create:Create a Smart Action group; an empty group is valid in Input' \
+'set:Update Smart Action group name, color, or tags' \
+'member:Add, remove, or reorder Smart Action group members' \
+'delete:Delete only the group container, matching Input'\''s Smart Action UI' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl smart-action group commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__event__help_commands] )) ||
+_worklouderctl__action__event__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action event help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__group__help_commands] )) ||
+_worklouderctl__action__group__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action group help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__group__member__help_commands] )) ||
+_worklouderctl__action__group__member__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action group member help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__help_commands] )) ||
+_worklouderctl__action__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__agent__help_commands] )) ||
+_worklouderctl__agent__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl agent help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__appsense__help_commands] )) ||
+_worklouderctl__appsense__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl appsense help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__backup__help_commands] )) ||
+_worklouderctl__backup__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl backup help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__bridge__help_commands] )) ||
+_worklouderctl__bridge__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl bridge help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__capability__help_commands] )) ||
+_worklouderctl__capability__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl capability help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__cheat-sheet__help_commands] )) ||
+_worklouderctl__cheat-sheet__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl cheat-sheet help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-key__help_commands] )) ||
+_worklouderctl__codex__agent-key__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-key help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-key__tap-mode__help_commands] )) ||
+_worklouderctl__codex__agent-key__tap-mode__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-key tap-mode help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-source__help_commands] )) ||
+_worklouderctl__codex__agent-source__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-source help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__bridge__help_commands] )) ||
+_worklouderctl__codex__bridge__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex bridge help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__command-key__help_commands] )) ||
+_worklouderctl__codex__command-key__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex command-key help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__config__help_commands] )) ||
+_worklouderctl__codex__config__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex config help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__dial__gesture__help_commands] )) ||
+_worklouderctl__codex__dial__gesture__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex dial gesture help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__dial__help_commands] )) ||
+_worklouderctl__codex__dial__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex dial help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__dial__mode__help_commands] )) ||
+_worklouderctl__codex__dial__mode__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex dial mode help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__help_commands] )) ||
+_worklouderctl__codex__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__joystick__help_commands] )) ||
+_worklouderctl__codex__joystick__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex joystick help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__lighting__auto-off__help_commands] )) ||
+_worklouderctl__codex__lighting__auto-off__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex lighting auto-off help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__lighting__brightness__help_commands] )) ||
+_worklouderctl__codex__lighting__brightness__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex lighting brightness help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__lighting__help_commands] )) ||
+_worklouderctl__codex__lighting__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex lighting help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__reset__help_commands] )) ||
+_worklouderctl__codex__reset__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex reset help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__runtime__help_commands] )) ||
+_worklouderctl__codex__runtime__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex runtime help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__voice__help_commands] )) ||
+_worklouderctl__codex__voice__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex voice help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__config__help_commands] )) ||
+_worklouderctl__config__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl config help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__control__help_commands] )) ||
+_worklouderctl__control__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl control help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__device__config__help_commands] )) ||
+_worklouderctl__device__config__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl device config help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__device__help_commands] )) ||
+_worklouderctl__device__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl device help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__help_commands] )) ||
+_worklouderctl__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__config__help_commands] )) ||
+_worklouderctl__input__config__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input config help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__firmware__help_commands] )) ||
+_worklouderctl__input__firmware__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input firmware help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__help_commands] )) ||
+_worklouderctl__input__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__logs__help_commands] )) ||
+_worklouderctl__input__logs__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input logs help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__permission__command__help_commands] )) ||
+_worklouderctl__input__permission__command__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input permission command help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__permission__help_commands] )) ||
+_worklouderctl__input__permission__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input permission help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__preset__help_commands] )) ||
+_worklouderctl__input__preset__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input preset help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__help_commands] )) ||
+_worklouderctl__layer__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__joystick__help_commands] )) ||
+_worklouderctl__layer__joystick__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer joystick help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__joystick__mode__help_commands] )) ||
+_worklouderctl__layer__joystick__mode__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer joystick mode help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__joystick__sector__help_commands] )) ||
+_worklouderctl__layer__joystick__sector__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer joystick sector help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__lighting__help_commands] )) ||
+_worklouderctl__layer__lighting__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer lighting help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__group__help_commands] )) ||
+_worklouderctl__multi-action__group__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action group help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__group__member__help_commands] )) ||
+_worklouderctl__multi-action__group__member__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action group member help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__help_commands] )) ||
+_worklouderctl__multi-action__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__preset__help_commands] )) ||
+_worklouderctl__preset__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl preset help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__profile__help_commands] )) ||
+_worklouderctl__profile__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl profile help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__radial__help_commands] )) ||
+_worklouderctl__radial__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl radial help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__schema__help_commands] )) ||
+_worklouderctl__schema__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl schema help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__group__help_commands] )) ||
+_worklouderctl__smart-action__group__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action group help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__group__member__help_commands] )) ||
+_worklouderctl__smart-action__group__member__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action group member help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__help_commands] )) ||
+_worklouderctl__smart-action__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__tier__help_commands] )) ||
+_worklouderctl__tier__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl tier help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__transaction__help_commands] )) ||
+_worklouderctl__transaction__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl transaction help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input_commands] )) ||
+_worklouderctl__input_commands() {
+    local commands; commands=(
+'inspect:Inspect cached Input configuration without changing it' \
+'export:Export exact Input configuration bytes into an atomic bundle' \
+'config:Build standard semantic snapshots from Input'\''s cached device files' \
+'permission:Inspect or change Input-owned host permission settings' \
+'permissions:Check the Input-owned OS permission required for device access' \
+'firmware:Inspect firmware availability through Input'\''s released update service' \
+'logs:Collect a bounded, sanitized diagnostic log bundle from Input' \
+'preset:Snapshot the Input-owned preset catalog through the companion bridge' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl input commands' commands "$@"
+}
+(( $+functions[_worklouderctl__backup__inspect_commands] )) ||
+_worklouderctl__backup__inspect_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl backup inspect commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__bridge__inspect_commands] )) ||
+_worklouderctl__codex__bridge__inspect_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex bridge inspect commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__inspect_commands] )) ||
+_worklouderctl__codex__inspect_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex inspect commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__inspect_commands] )) ||
+_worklouderctl__input__inspect_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input inspect commands' commands "$@"
+}
+(( $+functions[_worklouderctl__preset__install_commands] )) ||
+_worklouderctl__preset__install_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl preset install commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__joystick_commands] )) ||
+_worklouderctl__codex__joystick_commands() {
+    local commands; commands=(
+'get:Read one effective joystick direction assignment' \
+'set:Assign one Codex command or Skill to a joystick direction' \
+'clear:Clear one joystick direction while preserving the other directions' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex joystick commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__joystick_commands] )) ||
+_worklouderctl__layer__joystick_commands() {
+    local commands; commands=(
+'show:Show joystick mode and every ordered radial sector' \
+'mode:Inspect or change the released editable joystick mode' \
+'sector:Add or delete radial sectors using Input'\''s angle rebalancer' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl layer joystick commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer_commands] )) ||
+_worklouderctl__layer_commands() {
+    local commands; commands=(
+'list:List layers in the active or selected profile' \
+'show:Show one layer without exposing its key assignments' \
+'create:Create Input'\''s empty Codex Micro layer' \
+'duplicate:Duplicate one non-Codex layer with a new layer ID' \
+'delete:Delete one non-Codex layer while preserving at least one layer' \
+'move:Move one layer to a zero-based position' \
+'rename:Rename one layer and write a complete candidate snapshot' \
+'color:Set one layer'\''s RGB metadata and write a complete candidate snapshot' \
+'lighting:Inspect or edit per-layer backlight and underglow settings' \
+'joystick:Inspect or edit Input radial-joystick sectors in one layer' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl layer commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__reset__layout_commands] )) ||
+_worklouderctl__codex__reset__layout_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex reset layout commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__lighting_commands] )) ||
+_worklouderctl__codex__lighting_commands() {
+    local commands; commands=(
+'brightness:Inspect or edit global lighting intensity' \
+'auto-off:Inspect or edit the idle lighting auto-off policy' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex lighting commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__lighting_commands] )) ||
+_worklouderctl__layer__lighting_commands() {
+    local commands; commands=(
+'show:Show both lighting zones for one layer' \
+'set:Set one lighting zone and write a complete candidate snapshot' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl layer lighting commands' commands "$@"
+}
+(( $+functions[_worklouderctl__appsense__link_commands] )) ||
+_worklouderctl__appsense__link_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl appsense link commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__group__list_commands] )) ||
+_worklouderctl__action__group__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action group list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__list_commands] )) ||
+_worklouderctl__action__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__appsense__list_commands] )) ||
+_worklouderctl__appsense__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl appsense list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__capability__list_commands] )) ||
+_worklouderctl__capability__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl capability list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__control__list_commands] )) ||
+_worklouderctl__control__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl control list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__list_commands] )) ||
+_worklouderctl__layer__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__group__list_commands] )) ||
+_worklouderctl__multi-action__group__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action group list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__list_commands] )) ||
+_worklouderctl__multi-action__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__preset__list_commands] )) ||
+_worklouderctl__preset__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl preset list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__profile__list_commands] )) ||
+_worklouderctl__profile__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl profile list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__schema__list_commands] )) ||
+_worklouderctl__schema__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl schema list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__group__list_commands] )) ||
+_worklouderctl__smart-action__group__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action group list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__list_commands] )) ||
+_worklouderctl__smart-action__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__tier__list_commands] )) ||
+_worklouderctl__tier__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl tier list commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__logs_commands] )) ||
+_worklouderctl__input__logs_commands() {
+    local commands; commands=(
+'collect:Write sanitized JSON/text logs and a checksum manifest atomically' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl input logs commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__group__member_commands] )) ||
+_worklouderctl__action__group__member_commands() {
+    local commands; commands=(
+'add:Append an existing Action to a group' \
+'remove:Remove an Action from a group while keeping the Action itself' \
+'move:Move one member by zero-based index' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl action group member commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__group__member_commands] )) ||
+_worklouderctl__multi-action__group__member_commands() {
+    local commands; commands=(
+'add:Append an existing Multi Action to a group' \
+'remove:Remove a Multi Action from a group while keeping the resource itself' \
+'move:Move one member by zero-based index' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl multi-action group member commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__group__member_commands] )) ||
+_worklouderctl__smart-action__group__member_commands() {
+    local commands; commands=(
+'add:Append an existing Smart Action to a group' \
+'remove:Remove a member while keeping the Smart Action itself' \
+'move:Move one member by zero-based index' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl smart-action group member commands' commands "$@"
+}
+(( $+functions[_worklouderctl__backup__migration-plan_commands] )) ||
+_worklouderctl__backup__migration-plan_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl backup migration-plan commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__dial__mode_commands] )) ||
+_worklouderctl__codex__dial__mode_commands() {
+    local commands; commands=(
+'get:Read the effective dial mode' \
+'set:Write an offline candidate with a new dial mode' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex dial mode commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__joystick__mode_commands] )) ||
+_worklouderctl__layer__joystick__mode_commands() {
+    local commands; commands=(
+'set:Set RADIAL mode and seed two sectors when the current list is too short' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl layer joystick mode commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__event__move_commands] )) ||
+_worklouderctl__action__event__move_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action event move commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__group__member__move_commands] )) ||
+_worklouderctl__action__group__member__move_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action group member move commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__move_commands] )) ||
+_worklouderctl__layer__move_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer move commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__group__member__move_commands] )) ||
+_worklouderctl__multi-action__group__member__move_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action group member move commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__group__member__move_commands] )) ||
+_worklouderctl__smart-action__group__member__move_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action group member move commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action_commands] )) ||
+_worklouderctl__multi-action_commands() {
+    local commands; commands=(
+'list:List Multi Actions and their reference counts' \
+'show:Show one Multi Action and all four gesture assignments' \
+'create:Create a Multi Action with four KC_NONE assignments and a 250ms term' \
+'set:Update Multi Action metadata, assignments, or tapping term' \
+'delete:Delete a Multi Action and replace every live reference with KC_NONE' \
+'group:Inspect or edit stored Multi Action groups' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl multi-action commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__permission_commands] )) ||
+_worklouderctl__input__permission_commands() {
+    local commands; commands=(
+'command:Manage the host gate for command Smart Actions' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl input permission commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__permissions_commands] )) ||
+_worklouderctl__input__permissions_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input permissions commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__firmware__plan_commands] )) ||
+_worklouderctl__input__firmware__plan_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input firmware plan commands' commands "$@"
+}
+(( $+functions[_worklouderctl__transaction__plan_commands] )) ||
+_worklouderctl__transaction__plan_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl transaction plan commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__preset_commands] )) ||
+_worklouderctl__input__preset_commands() {
+    local commands; commands=(
+'snapshot:Save the merged saved/default preset catalog without editing Input storage' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl input preset commands' commands "$@"
+}
+(( $+functions[_worklouderctl__preset_commands] )) ||
+_worklouderctl__preset_commands() {
+    local commands; commands=(
+'list:List preset metadata with the same device/layout/OS/search filters as Input' \
+'show:Show one preset without printing its multi-megabyte image payloads' \
+'preview:Decode one preset preview image into a verified file' \
+'install:Install one preset into an offline complete configuration candidate' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl preset commands' commands "$@"
+}
+(( $+functions[_worklouderctl__preset__preview_commands] )) ||
+_worklouderctl__preset__preview_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl preset preview commands' commands "$@"
+}
+(( $+functions[_worklouderctl__profile_commands] )) ||
+_worklouderctl__profile_commands() {
+    local commands; commands=(
+'list:List profiles from a revisioned configuration snapshot' \
+'show:Show one profile and its layer metadata' \
+'create:Create Input'\''s default Codex Micro profile' \
+'duplicate:Duplicate one profile with a new profile ID' \
+'delete:Delete one profile while keeping the active index valid' \
+'select:Select the active profile and write a complete candidate snapshot' \
+'rename:Rename one profile and write a complete candidate snapshot' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl profile commands' commands "$@"
+}
+(( $+functions[_worklouderctl__radial_commands] )) ||
+_worklouderctl__radial_commands() {
+    local commands; commands=(
+'show:Show radial sectors with the Action, Multi Action, or Smart Action labels Input resolves' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl radial commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__runtime__recover_commands] )) ||
+_worklouderctl__codex__runtime__recover_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex runtime recover commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__group__member__remove_commands] )) ||
+_worklouderctl__action__group__member__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action group member remove commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__group__member__remove_commands] )) ||
+_worklouderctl__multi-action__group__member__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action group member remove commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__group__member__remove_commands] )) ||
+_worklouderctl__smart-action__group__member__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action group member remove commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__rename_commands] )) ||
+_worklouderctl__action__rename_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action rename commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__rename_commands] )) ||
+_worklouderctl__layer__rename_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer rename commands' commands "$@"
+}
+(( $+functions[_worklouderctl__profile__rename_commands] )) ||
+_worklouderctl__profile__rename_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl profile rename commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__command-key__reset_commands] )) ||
+_worklouderctl__codex__command-key__reset_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex command-key reset commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__reset_commands] )) ||
+_worklouderctl__codex__reset_commands() {
+    local commands; commands=(
+'layout:Restore the complete Codex Micro layout to the installed-build default' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex reset commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-key__restore_commands] )) ||
+_worklouderctl__codex__agent-key__restore_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-key restore commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__config__restore_commands] )) ||
+_worklouderctl__codex__config__restore_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex config restore commands' commands "$@"
+}
+(( $+functions[_worklouderctl__device__config__restore_commands] )) ||
+_worklouderctl__device__config__restore_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl device config restore commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__permission__command__restore_commands] )) ||
+_worklouderctl__input__permission__command__restore_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input permission command restore commands' commands "$@"
+}
+(( $+functions[_worklouderctl__transaction__restore_commands] )) ||
+_worklouderctl__transaction__restore_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl transaction restore commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__runtime_commands] )) ||
+_worklouderctl__codex__runtime_commands() {
+    local commands; commands=(
+'status:Read the one live CodexMicroService instance and its subscriptions' \
+'recover:Restart only a stuck CodexMicroService with automatic Input coordination' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex runtime commands' commands "$@"
+}
+(( $+functions[_worklouderctl__schema_commands] )) ||
+_worklouderctl__schema_commands() {
+    local commands; commands=(
+'list:List every embedded public schema and its stable identifier' \
+'show:Print one complete JSON Schema document' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl schema commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__joystick__sector_commands] )) ||
+_worklouderctl__layer__joystick__sector_commands() {
+    local commands; commands=(
+'add:Insert KC_NONE at a zero-based position, then rebalance all angles' \
+'delete:Delete one sector while retaining at least two, then rebalance angles' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl layer joystick sector commands' commands "$@"
+}
+(( $+functions[_worklouderctl__profile__select_commands] )) ||
+_worklouderctl__profile__select_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl profile select commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__event__set_commands] )) ||
+_worklouderctl__action__event__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action event set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__group__set_commands] )) ||
+_worklouderctl__action__group__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action group set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__appsense__set_commands] )) ||
+_worklouderctl__appsense__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl appsense set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-key__set_commands] )) ||
+_worklouderctl__codex__agent-key__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-key set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-key__tap-mode__set_commands] )) ||
+_worklouderctl__codex__agent-key__tap-mode__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-key tap-mode set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-source__set_commands] )) ||
+_worklouderctl__codex__agent-source__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-source set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__command-key__set_commands] )) ||
+_worklouderctl__codex__command-key__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex command-key set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__dial__gesture__set_commands] )) ||
+_worklouderctl__codex__dial__gesture__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex dial gesture set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__dial__mode__set_commands] )) ||
+_worklouderctl__codex__dial__mode__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex dial mode set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__joystick__set_commands] )) ||
+_worklouderctl__codex__joystick__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex joystick set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__lighting__auto-off__set_commands] )) ||
+_worklouderctl__codex__lighting__auto-off__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex lighting auto-off set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__lighting__brightness__set_commands] )) ||
+_worklouderctl__codex__lighting__brightness__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex lighting brightness set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__voice__set_commands] )) ||
+_worklouderctl__codex__voice__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex voice set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__control__set_commands] )) ||
+_worklouderctl__control__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl control set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__permission__command__set_commands] )) ||
+_worklouderctl__input__permission__command__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input permission command set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__joystick__mode__set_commands] )) ||
+_worklouderctl__layer__joystick__mode__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer joystick mode set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__lighting__set_commands] )) ||
+_worklouderctl__layer__lighting__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer lighting set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__group__set_commands] )) ||
+_worklouderctl__multi-action__group__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action group set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__set_commands] )) ||
+_worklouderctl__multi-action__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__group__set_commands] )) ||
+_worklouderctl__smart-action__group__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action group set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__set_commands] )) ||
+_worklouderctl__smart-action__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__group__show_commands] )) ||
+_worklouderctl__action__group__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action group show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__action__show_commands] )) ||
+_worklouderctl__action__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl action show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__appsense__show_commands] )) ||
+_worklouderctl__appsense__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl appsense show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__control__show_commands] )) ||
+_worklouderctl__control__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl control show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__joystick__show_commands] )) ||
+_worklouderctl__layer__joystick__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer joystick show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__lighting__show_commands] )) ||
+_worklouderctl__layer__lighting__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer lighting show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__layer__show_commands] )) ||
+_worklouderctl__layer__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl layer show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__group__show_commands] )) ||
+_worklouderctl__multi-action__group__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action group show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__multi-action__show_commands] )) ||
+_worklouderctl__multi-action__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl multi-action show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__preset__show_commands] )) ||
+_worklouderctl__preset__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl preset show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__profile__show_commands] )) ||
+_worklouderctl__profile__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl profile show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__radial__show_commands] )) ||
+_worklouderctl__radial__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl radial show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__schema__show_commands] )) ||
+_worklouderctl__schema__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl schema show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__group__show_commands] )) ||
+_worklouderctl__smart-action__group__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action group show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action__show_commands] )) ||
+_worklouderctl__smart-action__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl smart-action show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__transaction__show_commands] )) ||
+_worklouderctl__transaction__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl transaction show commands' commands "$@"
+}
+(( $+functions[_worklouderctl__smart-action_commands] )) ||
+_worklouderctl__smart-action_commands() {
+    local commands; commands=(
+'list:List Smart Actions, types, groups, and physical reference counts' \
+'show:Show one Smart Action and its typed payload' \
+'create:Create a typed Smart Action in smart_actions.json' \
+'set:Update Smart Action metadata, type, or typed payload' \
+'delete:Delete a Smart Action and clear physical/group references' \
+'group:Inspect or edit stored Smart Action groups' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl smart-action commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-key__snapshot_commands] )) ||
+_worklouderctl__codex__agent-key__snapshot_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex agent-key snapshot commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__config__snapshot_commands] )) ||
+_worklouderctl__codex__config__snapshot_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex config snapshot commands' commands "$@"
+}
+(( $+functions[_worklouderctl__device__config__snapshot_commands] )) ||
+_worklouderctl__device__config__snapshot_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl device config snapshot commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__config__snapshot_commands] )) ||
+_worklouderctl__input__config__snapshot_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input config snapshot commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__permission__command__snapshot_commands] )) ||
+_worklouderctl__input__permission__command__snapshot_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input permission command snapshot commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__preset__snapshot_commands] )) ||
+_worklouderctl__input__preset__snapshot_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input preset snapshot commands' commands "$@"
+}
+(( $+functions[_worklouderctl__bridge__status_commands] )) ||
+_worklouderctl__bridge__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl bridge status commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__runtime__status_commands] )) ||
+_worklouderctl__codex__runtime__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex runtime status commands' commands "$@"
+}
+(( $+functions[_worklouderctl__device__status_commands] )) ||
+_worklouderctl__device__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl device status commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__agent-key__tap-mode_commands] )) ||
+_worklouderctl__codex__agent-key__tap-mode_commands() {
+    local commands; commands=(
+'get:Read the effective single-tap focus behavior' \
+'set:Write an offline candidate with single-tap focus enabled or disabled' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex agent-key tap-mode commands' commands "$@"
+}
+(( $+functions[_worklouderctl__appsense__test_commands] )) ||
+_worklouderctl__appsense__test_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl appsense test commands' commands "$@"
+}
+(( $+functions[_worklouderctl__tier_commands] )) ||
+_worklouderctl__tier_commands() {
+    local commands; commands=(
+'list:List all configuration tiers' \
+'explain:Explain one configuration tier' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl tier commands' commands "$@"
+}
+(( $+functions[_worklouderctl__transaction_commands] )) ||
+_worklouderctl__transaction_commands() {
+    local commands; commands=(
+'plan:Validate authority baselines/candidates and publish an immutable coordinated plan' \
+'show:Reopen and print a validated coordinated plan and unified diff' \
+'apply:Preflight every live authority, create a private backup catalog, then apply in order' \
+'restore:Restore every authority from an apply receipt with global preflight and roll-forward' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl transaction commands' commands "$@"
+}
+(( $+functions[_worklouderctl__appsense__unlink_commands] )) ||
+_worklouderctl__appsense__unlink_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl appsense unlink commands' commands "$@"
+}
+(( $+functions[_worklouderctl__input__firmware__update_commands] )) ||
+_worklouderctl__input__firmware__update_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl input firmware update commands' commands "$@"
+}
+(( $+functions[_worklouderctl__agent__validate_commands] )) ||
+_worklouderctl__agent__validate_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl agent validate commands' commands "$@"
+}
+(( $+functions[_worklouderctl__config__validate_commands] )) ||
+_worklouderctl__config__validate_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl config validate commands' commands "$@"
+}
+(( $+functions[_worklouderctl__device__config__validate_commands] )) ||
+_worklouderctl__device__config__validate_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl device config validate commands' commands "$@"
+}
+(( $+functions[_worklouderctl__version_commands] )) ||
+_worklouderctl__version_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl version commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__voice_commands] )) ||
+_worklouderctl__codex__voice_commands() {
+    local commands; commands=(
+'get:Read the effective voice-button behavior' \
+'set:Write an offline candidate with a new voice-button behavior' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex voice commands' commands "$@"
+}
+
+_worklouderctl "$@"

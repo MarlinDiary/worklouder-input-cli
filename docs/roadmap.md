@@ -100,7 +100,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 
 - [ ] Signed macOS binaries
 - [ ] Homebrew formula
-- [ ] Shell completions and generated command reference
+- [x] Deterministic Bash/Zsh/Fish completions and exhaustive generated command reference
 - [ ] Compatibility matrix for every release
 - [x] Strict backup inspection and schema migration assessment tools
 - [x] Shell-free agent JSON envelope over the same parser, typed statuses, and transaction core
@@ -109,7 +109,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 
 - [x] Hash-pinned Input 0.18.0 permission, firmware-read, log, reset, and update-flow inventory
 - [x] Optional permission, firmware status/plan, and sanitized log bridge authorities
-- [ ] Input-owned high-level firmware update authority with backup, USB/bootloader flash, reconnect, restore, and postflight
+- [x] Input-owned high-level firmware update authority with backup, USB/bootloader flash, reconnect, restore, and postflight
 - [ ] Complete default/reset candidate per device/layout/version through the existing configuration transaction
 - [ ] Bootloader recovery authority and exact post-recovery configuration restore
 

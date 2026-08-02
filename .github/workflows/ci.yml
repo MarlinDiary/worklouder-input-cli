@@ -41,8 +41,12 @@ jobs:
         run: npm test --prefix companion
       - name: Verify deterministic sanitized fixtures
         run: ./scripts/verify-sanitized-fixtures.sh
+      - name: Verify generated completions and command reference
+        run: ./scripts/verify-cli-assets.sh
       - name: Test Input bridge CLI end to end
         run: ./scripts/test-bridge-e2e.sh
+      - name: Test delegated firmware update end to end
+        run: ./scripts/test-firmware-update-e2e.sh
       - name: Test Codex bridge CLI end to end
         run: ./scripts/test-codex-bridge-e2e.sh
       - name: Test four-authority transactions and rollback
