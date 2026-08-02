@@ -15,9 +15,9 @@ use cli::{
     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand,
     AppSenseCommand, BridgeCommand, CapabilityCommand, Cli, CodexCommand, Command, CompletionShell,
     ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
-    InputCommand, LayerCommand, LayerLightingCommand, LightingEffect, LightingZone,
-    MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand, ProfileCommand,
-    SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+    InputCommand, InputConfigCommand, LayerCommand, LayerLightingCommand, LightingEffect,
+    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
+    ProfileCommand, SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
     SmartActionType as CliSmartActionType, TierCommand,
 };
 use serde::Serialize;
@@ -1713,6 +1713,28 @@ fn run_input(command: InputCommand, json: bool, mut out: impl Write) -> Result<(
                 }
             }
         }
+        InputCommand::Config { command } => match command {
+            InputConfigCommand::Snapshot {
+                output,
+                device,
+                support_root,
+            } => {
+                let root = input::support_root(support_root);
+                let result = input::config_snapshot(&root, device.as_deref(), &output)?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "Saved {} cached configuration file(s) for device {} to {}",
+                        result.file_count,
+                        result.device_id,
+                        result.output.display()
+                    )?;
+                    writeln!(out, "revision={}", result.revision)?;
+                }
+            }
+        },
     }
     Ok(())
 }

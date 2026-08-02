@@ -5414,6 +5414,48 @@ fn update_file_record(record: &mut Map<String, Value>, bytes: &[u8]) -> Result<(
     Ok(())
 }
 
+pub(crate) fn build_config_snapshot(device_id: &str, files: &[(String, Vec<u8>)]) -> Result<Value> {
+    ensure!(
+        !device_id.is_empty(),
+        "configuration snapshot deviceId was empty"
+    );
+    ensure!(
+        !files.is_empty(),
+        "configuration snapshot contained no files"
+    );
+    let mut records = Vec::with_capacity(files.len());
+    let mut bytes = Vec::with_capacity(files.len());
+    for (path, payload) in files {
+        device::safe_relative_path(path)?;
+        let mut record = Map::new();
+        record.insert("relativePath".into(), Value::String(path.clone()));
+        update_file_record(&mut record, payload)?;
+        records.push(Value::Object(record));
+        bytes.push(payload.clone());
+    }
+    let revision = compute_revision(&records, &bytes)?;
+    let snapshot = serde_json::json!({
+        "schemaVersion": SNAPSHOT_SCHEMA_VERSION,
+        "kind": SNAPSHOT_KIND,
+        "revisionAlgorithm": REVISION_ALGORITHM,
+        "revision": revision,
+        "deviceId": device_id,
+        "files": records,
+    });
+    SemanticSnapshot::validate(snapshot.clone())?;
+    Ok(snapshot)
+}
+
+pub(crate) fn publish_config_snapshot(output: &Path, snapshot: &Value) -> Result<()> {
+    SemanticSnapshot::validate(snapshot.clone())?;
+    write_atomic_json(output, snapshot)?;
+    if let Err(error) = SemanticSnapshot::read(output) {
+        let _ = fs::remove_file(output);
+        return Err(error.context("published configuration snapshot semantic readback failed"));
+    }
+    Ok(())
+}
+
 fn compute_revision(files: &[Value], bytes: &[Vec<u8>]) -> Result<String> {
     ensure!(
         files.len() == bytes.len(),

@@ -193,6 +193,30 @@ pub enum InputCommand {
         #[clap(long, value_parser)]
         support_root: Option<PathBuf>,
     },
+
+    /// Build standard semantic snapshots from Input's cached device files.
+    Config {
+        #[clap(subcommand)]
+        command: InputConfigCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum InputConfigCommand {
+    /// Save a revisioned, byte-exact snapshot without contacting Input or the device.
+    Snapshot {
+        /// Destination JSON file. It must not already exist.
+        #[clap(long, value_parser)]
+        output: PathBuf,
+
+        /// Select a cached device ID. Required when multiple devices exist.
+        #[clap(long)]
+        device: Option<String>,
+
+        /// Override Input's application support directory.
+        #[clap(long, value_parser)]
+        support_root: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]

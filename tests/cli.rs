@@ -22,6 +22,33 @@ fn fixture_root() -> PathBuf {
     ))
 }
 
+fn semantic_keymap_bytes() -> Vec<u8> {
+    serde_json::to_vec(&serde_json::json!({
+        "version": 1,
+        "activeProfileId": 0,
+        "linkedApps": [],
+        "macros": [],
+        "macrosGroups": [],
+        "multiActions": [],
+        "multiActionsGroups": [],
+        "profiles": [{
+            "id": 0,
+            "name": "CLI Fixture",
+            "layers": [{
+                "id": 0,
+                "name": "Base",
+                "color": 0,
+                "layout": {
+                    "keymap": [["KC_NONE"]],
+                    "encoders": [],
+                    "joystick": {"type": "VENDOR", "sectors": []}
+                }
+            }]
+        }]
+    }))
+    .unwrap()
+}
+
 #[test]
 fn help_lists_the_binary_and_version_command() {
     let output = binary().arg("--help").output().unwrap();
@@ -184,12 +211,102 @@ fn input_and_config_help_expose_read_only_workflow() {
     assert!(input.status.success());
     assert!(input_stdout.contains("inspect"));
     assert!(input_stdout.contains("export"));
+    assert!(input_stdout.contains("config"));
+
+    let input_config = binary()
+        .args(["input", "config", "--help"])
+        .output()
+        .unwrap();
+    let input_config_stdout = String::from_utf8(input_config.stdout).unwrap();
+    assert!(input_config.status.success());
+    assert!(input_config_stdout.contains("snapshot"));
 
     let config = binary().args(["config", "--help"]).output().unwrap();
     let config_stdout = String::from_utf8(config.stdout).unwrap();
     assert!(config.status.success());
     assert!(config_stdout.contains("validate"));
     assert!(config_stdout.contains("diff"));
+}
+
+#[test]
+fn input_cache_snapshot_runs_into_semantic_candidates_end_to_end() {
+    let root = fixture_root();
+    let support = root.join("support");
+    let device = support.join("devices/33632");
+    let snapshot = root.join("snapshot.json");
+    let candidate = root.join("candidate.json");
+    fs::create_dir_all(&device).unwrap();
+    let keymap = semantic_keymap_bytes();
+    let smart_actions = b"{\"version\":1,\"smartActions\":{}}";
+    fs::write(device.join("keymap.json"), &keymap).unwrap();
+    fs::write(device.join("smart_actions.json"), smart_actions).unwrap();
+    fs::write(support.join("input_storage.json"), b"{\"hostOnly\":true}").unwrap();
+    let keymap_before = worklouderctl::fsutil::sha256_bytes(&keymap).unwrap();
+    let smart_before = worklouderctl::fsutil::sha256_bytes(smart_actions).unwrap();
+
+    let captured = binary()
+        .args(["--json", "input", "config", "snapshot", "--support-root"])
+        .arg(&support)
+        .arg("--output")
+        .arg(&snapshot)
+        .output()
+        .unwrap();
+    assert!(
+        captured.status.success(),
+        "{}",
+        String::from_utf8_lossy(&captured.stderr)
+    );
+    let receipt: serde_json::Value = serde_json::from_slice(&captured.stdout).unwrap();
+    assert_eq!(receipt["adapter"], "input-cache-v1");
+    assert_eq!(receipt["deviceId"], "33632");
+    assert_eq!(receipt["fileCount"], 2);
+    assert_eq!(receipt["sourceFiles"][0]["sha256"], keymap_before);
+    assert_eq!(receipt["sourceFiles"][1]["sha256"], smart_before);
+
+    let document: serde_json::Value =
+        serde_json::from_slice(&fs::read(&snapshot).unwrap()).unwrap();
+    assert_eq!(document["kind"], "worklouder-input-config-snapshot");
+    assert_eq!(document["files"].as_array().unwrap().len(), 2);
+    assert!(document["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|file| file["relativePath"] != "input_storage.json"));
+
+    let profiles = binary()
+        .args(["--json", "profile", "list", "--input"])
+        .arg(&snapshot)
+        .output()
+        .unwrap();
+    assert!(profiles.status.success());
+    let profiles: serde_json::Value = serde_json::from_slice(&profiles.stdout).unwrap();
+    assert_eq!(profiles["profiles"][0]["name"], "CLI Fixture");
+
+    let created = binary()
+        .args(["--json", "smart-action", "create", "--input"])
+        .arg(&snapshot)
+        .args(["--name", "CLI Text", "--type", "text", "--text", "hello"])
+        .arg("--output")
+        .arg(&candidate)
+        .output()
+        .unwrap();
+    assert!(created.status.success());
+    let created: serde_json::Value = serde_json::from_slice(&created.stdout).unwrap();
+    assert_eq!(created["resourceId"], 1);
+    assert_eq!(
+        created["changedPaths"],
+        serde_json::json!(["/smart_actions.json/smartActions/SA_1"])
+    );
+
+    assert_eq!(
+        worklouderctl::fsutil::sha256(&device.join("keymap.json")).unwrap(),
+        keymap_before
+    );
+    assert_eq!(
+        worklouderctl::fsutil::sha256(&device.join("smart_actions.json")).unwrap(),
+        smart_before
+    );
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
