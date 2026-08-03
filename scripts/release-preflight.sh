@@ -88,6 +88,7 @@ if command -v gh >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     APPLE_ID
     APPLE_TEAM_ID
     APPLE_APP_SPECIFIC_PASSWORD
+    HOMEBREW_TAP_DEPLOY_KEY
   )
   if secrets=$(gh secret list --app actions --json name --jq '.[].name' 2>/dev/null); then
     for secret in "${required_secrets[@]}"; do

@@ -5,6 +5,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A checksum-, inventory-, manifest-, signature-, and version-verifying binary
+  installer plus a stable `MarlinDiary/tap/worklouderctl` Homebrew distribution
+  path with automatic formula publication from tagged releases.
+
 ### Fixed
 
 - `config diff` now compares validated files embedded in Input configuration
@@ -46,7 +52,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Promoted the public project status to configuration-parity prerelease,
+- Promoted the public project status to a configuration-parity release,
   condensed both READMEs around real workflows, and aligned repository metadata,
   compatibility state, contributor guidance, security policy, and agent-facing
   documentation with the implemented feature boundary.
@@ -76,9 +82,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Known limitations
 
-- The first signed and notarized GitHub release awaits project credentials and
-  the `v0.1.0` publication tag; source builds and verified local packages are
-  available now.
 - Drivers, firmware programmers, device discovery, and runtime ownership remain
   delegated to the installed Codex and Input applications.
 - Input `0.18.0` can trap in its native `node-hid` re-enumeration path on the

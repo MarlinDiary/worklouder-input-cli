@@ -31,8 +31,8 @@ Codex 和 Input 继续负责 HID/BLE、固件、AppSense、Smart Actions 与 Cod
 > [!NOTE]
 > 当前已在经过验证的 macOS/Codex Micro 边界内实现完整配置覆盖。Codex
 > `26.727.51351` 与 Input `0.18.0` 已通过真实设备写入、读回、精确恢复以及
-> 双向 provider handoff。源码安装现在即可使用；首个签名与公证版本等待项目
-> 发布凭据和版本标签。
+> 双向 provider handoff。正式 `v0.1.0` 已提供签名且通过 Apple 公证的 Apple
+> Silicon 与 Intel 二进制；可以通过稳定 Homebrew tap 或下方校验型安装器安装。
 
 ## 功能覆盖
 
@@ -47,7 +47,34 @@ Codex 和 Input 继续负责 HID/BLE、固件、AppSense、Smart Actions 与 Cod
 
 逐项验收结果参见[配置覆盖矩阵](docs/configuration-parity.md)。
 
-## 从源码安装
+## 安装
+
+### Homebrew
+
+[Homebrew 6 对非官方 tap 要求显式信任](https://docs.brew.sh/Tap-Trust)。使用完整
+formula 名只信任 WorkLouderCTL 这一项：
+
+```console
+brew tap MarlinDiary/tap
+brew install MarlinDiary/tap/worklouderctl
+worklouderctl version
+```
+
+### 校验型二进制安装器
+
+先下载并查看安装器，再运行。安装器会在写入 `~/.local` 前校验 release
+checksum、固定压缩包清单、manifest、Developer ID 签名与二进制版本：
+
+```console
+curl -fsSLO https://raw.githubusercontent.com/MarlinDiary/worklouder-input-cli/main/install.sh
+sh install.sh
+~/.local/bin/worklouderctl version
+```
+
+使用 `sh install.sh --help` 选择版本或安装前缀。如果尚未配置，请把
+`$HOME/.local/bin` 加入 `PATH`。
+
+### 从源码安装
 
 需要：
 
@@ -75,8 +102,8 @@ cargo build --release --locked
 当 `configurationReady: true` 时，两个 provider bridge 都已经为当前安装版本
 提供完整的 apply 和 restore 能力。
 
-双架构确定性压缩包、签名检查、公证 workflow 与 Homebrew formula 均已实现。
-本地打包和签名发布边界参见[发布指南](docs/releases.md)。
+双架构确定性压缩包、签名检查、公证 workflow、安装器与自动更新的 Homebrew
+formula 均已投入使用。验证和本地打包边界参见[发布指南](docs/releases.md)。
 
 ## 核心工作流
 

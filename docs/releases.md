@@ -5,10 +5,35 @@ Apple Silicon and Intel Macs. A release archive contains the CLI, generated
 Bash/Zsh/Fish completions, the license, the README, and a machine-readable
 manifest with the SHA-256 and mode of every file.
 
-The packaging pipeline is complete and fixture-verified. Source builds and
-local packages are available now; the first public version tag will add signed,
-notarized distribution. A local unsigned or ad-hoc build remains distinct from
-an official signed release.
+The packaging pipeline is complete and fixture-verified. The official
+[`v0.1.0`](https://github.com/MarlinDiary/worklouder-input-cli/releases/tag/v0.1.0)
+release publishes signed and notarized Apple Silicon and Intel archives. A
+local unsigned or ad-hoc build remains distinct from an official signed release.
+
+## Install an official release
+
+The stable tap installs the formula with
+[item-scoped trust on Homebrew 6](https://docs.brew.sh/Tap-Trust):
+
+```console
+brew tap MarlinDiary/tap
+brew install MarlinDiary/tap/worklouderctl
+worklouderctl version
+```
+
+The standalone installer downloads the correct architecture and checks the
+sidecar checksum, exact inventory, manifest identity, `developer-id-notarized`
+state, code signature, and reported version before writing the binary and
+shell completions:
+
+```console
+curl -fsSLO https://raw.githubusercontent.com/MarlinDiary/worklouder-input-cli/main/install.sh
+sh install.sh
+~/.local/bin/worklouderctl version
+```
+
+The default prefix is `~/.local`. Run `sh install.sh --help` to pin a release
+or choose another prefix.
 
 The same tagged release also contains a deterministic Companion Bridge `.tgz`
 integration kit. That package lets Codex/Input maintainers install the exact
@@ -107,14 +132,16 @@ tagged release:
 - `APPLE_ID`
 - `APPLE_TEAM_ID`
 - `APPLE_APP_SPECIFIC_PASSWORD`
+- `HOMEBREW_TAP_DEPLOY_KEY`
 
 The workflow imports the certificate into an ephemeral keychain, signs both
 architectures, submits each binary to Apple notarization, verifies the release
 archives, builds and independently installs the Companion integration kit,
 emits build-provenance attestations for all three packages, renders the
 release-specific Homebrew formula, recomputes `SHA256SUMS`, and finally creates
-the GitHub release. Missing credentials or any verification mismatch stops
-publication.
+the GitHub release. It then pushes the checksum-pinned formula with the scoped
+`MarlinDiary/homebrew-tap` deploy key. Missing credentials or any verification
+mismatch stops the affected publication step.
 
 ## Homebrew formula
 
@@ -124,16 +151,16 @@ archives have been built and verified. The generated formula installs the
 binary and all three shell completions and runs `worklouderctl version` in its
 test block.
 
-After a formula has been published in a tap, install it with:
+The generated formula is published to
+[`MarlinDiary/homebrew-tap`](https://github.com/MarlinDiary/homebrew-tap). Use
+the fully qualified name so Homebrew trusts only this formula rather than every
+current and future item in the tap:
 
 ```console
-brew tap OWNER/TAP
-brew install worklouderctl
+brew tap MarlinDiary/tap
+brew install MarlinDiary/tap/worklouderctl
 worklouderctl version
 ```
-
-Until that first tap publication, use the source build or a verified archive;
-there is no stable `brew install` command to advertise yet.
 
 ## Release checklist
 
@@ -154,8 +181,9 @@ there is no stable `brew install` command to advertise yet.
 6. Download and independently verify both published archives and checksums.
 7. Verify, install, import, and execute the Companion `.tgz` with
    `./scripts/test-companion-package.py`'s exact inventory/export boundary.
-8. Install the generated formula into an isolated Homebrew prefix and run its
-   test before promoting it to a stable tap.
+8. Confirm the release workflow committed the generated formula to the stable
+   tap, then run `brew install MarlinDiary/tap/worklouderctl` and `brew test
+   MarlinDiary/tap/worklouderctl` from a clean tap state.
 
 Rollback for an unpublished release is deletion of the local output directory.
 For a faulty published version, mark the GitHub release as withdrawn, remove

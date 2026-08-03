@@ -34,9 +34,9 @@ back.
 > Configuration parity is implemented for the verified macOS/Codex Micro
 > boundary. Codex `26.727.51351` and Input `0.18.0` have completed real-device
 > apply/readback/exact-restore transactions and bidirectional provider handoff.
-> Source installation is available today. The Developer ID release path and
-> repository credentials are configured; signed and notarized public binaries
-> will be produced by the first version tag.
+> The official `v0.1.0` release provides signed and notarized Apple Silicon and
+> Intel binaries. Install it from the stable Homebrew tap or with the verified
+> binary installer below.
 
 ## What it covers
 
@@ -52,7 +52,36 @@ back.
 The complete row-by-row acceptance record is in the
 [configuration parity matrix](docs/configuration-parity.md).
 
-## Install from source
+## Install
+
+### Homebrew
+
+[Homebrew 6 requires explicit trust](https://docs.brew.sh/Tap-Trust) for
+non-official taps. Using the fully qualified formula grants trust only to
+WorkLouderCTL:
+
+```console
+brew tap MarlinDiary/tap
+brew install MarlinDiary/tap/worklouderctl
+worklouderctl version
+```
+
+### Verified binary installer
+
+Download the installer for review, then run it. It verifies the release
+checksum, fixed archive inventory, manifest, Developer ID signature, and binary
+version before installing to `~/.local`:
+
+```console
+curl -fsSLO https://raw.githubusercontent.com/MarlinDiary/worklouder-input-cli/main/install.sh
+sh install.sh
+~/.local/bin/worklouderctl version
+```
+
+Use `sh install.sh --help` to select a version or prefix. Add
+`$HOME/.local/bin` to `PATH` if it is not already present.
+
+### From source
 
 Requirements:
 
@@ -81,9 +110,8 @@ Install the authenticated provider integrations and verify the machine:
 apply and restore capability for the installed versions.
 
 The deterministic dual-architecture archives, signature checks, notarization
-workflow and Homebrew formula are implemented. See the
-[release guide](docs/releases.md) for local packaging and the signed-release
-boundary.
+workflow, installer, and automatically updated Homebrew formula are live. See
+the [release guide](docs/releases.md) for verification and packaging details.
 
 ## Core workflows
 

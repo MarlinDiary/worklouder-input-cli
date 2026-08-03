@@ -61,6 +61,8 @@ jobs:
         run: ./scripts/verify-cli-assets.sh
       - name: Verify release archive and Homebrew packaging
         run: ./scripts/test-release-packaging.sh
+      - name: Test published binary installer
+        run: ./scripts/test-install.sh
       - name: Test Input bridge CLI end to end
         run: ./scripts/test-bridge-e2e.sh
       - name: Test delegated firmware update end to end

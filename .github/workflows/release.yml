@@ -197,3 +197,33 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* \
             --verify-tag --notes-file "$RUNNER_TEMP/release-notes.md" \
             --title "WorkLouderCTL $GITHUB_REF_NAME"
+      - name: Publish formula to stable Homebrew tap
+        env:
+          TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$TAP_DEPLOY_KEY"
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$TAP_DEPLOY_KEY" > "$HOME/.ssh/worklouderctl-tap"
+          chmod 0600 "$HOME/.ssh/worklouderctl-tap"
+          cat > "$HOME/.ssh/known_hosts" <<'EOF'
+          github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+          EOF
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/worklouderctl-tap -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+          git clone git@github.com:MarlinDiary/homebrew-tap.git "$RUNNER_TEMP/homebrew-tap"
+          install -m 0644 dist/worklouderctl.rb \
+            "$RUNNER_TEMP/homebrew-tap/Formula/worklouderctl.rb"
+          ruby -c "$RUNNER_TEMP/homebrew-tap/Formula/worklouderctl.rb"
+          brew style "$RUNNER_TEMP/homebrew-tap/Formula/worklouderctl.rb"
+          cd "$RUNNER_TEMP/homebrew-tap"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add Formula/worklouderctl.rb
+          if git diff --cached --quiet; then
+            echo "Homebrew formula is already current."
+            exit 0
+          fi
+          git commit -m "worklouderctl ${GITHUB_REF_NAME#v}"
+          git push origin HEAD:main
