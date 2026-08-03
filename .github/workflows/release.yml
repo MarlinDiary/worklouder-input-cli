@@ -5,6 +5,12 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      signed_validation:
+        description: "Sign and notarize both architectures without publishing a release"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -33,6 +39,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Validate tag and Cargo version
         id: version
+        env:
+          SIGNED_VALIDATION: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_validation }}
         shell: bash
         run: |
           set -euo pipefail
@@ -40,6 +48,8 @@ jobs:
           test -n "$version"
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             test "${GITHUB_REF_NAME}" = "v$version"
+            echo "signature_state=developer-id-notarized" >> "$GITHUB_OUTPUT"
+          elif [[ "$SIGNED_VALIDATION" == "true" ]]; then
             echo "signature_state=developer-id-notarized" >> "$GITHUB_OUTPUT"
           else
             echo "signature_state=unsigned" >> "$GITHUB_OUTPUT"
@@ -52,7 +62,7 @@ jobs:
       - name: Build release binary
         run: cargo build --release --locked --target "${{ matrix.target }}"
       - name: Import Developer ID certificate
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.signed_validation)
         env:
           CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
@@ -89,7 +99,7 @@ jobs:
           codesign --verify --strict --verbose=2 \
             "target/${{ matrix.target }}/release/worklouderctl"
       - name: Notarize signed binary
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.signed_validation)
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

@@ -64,7 +64,9 @@ The release workflow fails closed: a `v*` tag must exactly match the Cargo
 version, have one matching Developer ID Application identity, pass signing and
 notarization, and produce an archive whose signature state is
 `developer-id-notarized`. A manual untagged workflow run produces unsigned test
-artifacts and does not publish a GitHub release.
+artifacts by default. Enable its `signed_validation` input to exercise the real
+Developer ID import, signing, and Apple notarization path for both architectures
+without creating a tag or publishing a GitHub release.
 
 ## Build a local archive
 
@@ -139,9 +141,10 @@ there is no stable `brew install` command to advertise yet.
    secret values.
 2. Keep the working tree clean and run every required gate in
    `spec/compatibility-matrix-v1.json`.
-3. Before creating the tag, run the `Release` workflow manually on `main`. This
-   exercises both native architecture package jobs with unsigned artifacts but
-   intentionally skips publication.
+3. Before creating the tag, run the `Release` workflow manually on `main` with
+   `signed_validation` enabled. This exercises both native architecture package
+   jobs, repository secrets, Developer ID signing, Apple notarization, archive
+   verification, and attestations while intentionally skipping publication.
 4. Push an annotated version tag only after the preflight and manual package
    rehearsal pass.
 5. Require both architecture jobs, notarization, archive verification, and

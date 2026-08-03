@@ -34,8 +34,9 @@ back.
 > Configuration parity is implemented for the verified macOS/Codex Micro
 > boundary. Codex `26.727.51351` and Input `0.18.0` have completed real-device
 > apply/readback/exact-restore transactions and bidirectional provider handoff.
-> Source installation is available today; the first signed and notarized release
-> awaits the project release credentials and version tag.
+> Source installation is available today. The Developer ID release path and
+> repository credentials are configured; signed and notarized public binaries
+> will be produced by the first version tag.
 
 ## What it covers
 
