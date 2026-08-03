@@ -115,7 +115,9 @@ jobs:
             "$RUNNER_TEMP/worklouderctl-notarization.zip"
           xcrun notarytool submit "$RUNNER_TEMP/worklouderctl-notarization.zip" \
             --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait \
+            --output-format json | tee \
+            "$RUNNER_TEMP/worklouderctl-notarization-${{ matrix.target }}.json"
       - name: Build and verify deterministic release archive
         env:
           SOURCE_DATE_EPOCH: "0"
@@ -123,10 +125,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir dist
+          notarization_args=()
+          if [[ "${{ steps.version.outputs.signature_state }}" == \
+            "developer-id-notarized" ]]; then
+            notarization_result="$RUNNER_TEMP/worklouderctl-notarization-${{ matrix.target }}.json"
+            test -s "$notarization_result"
+            notarization_args=(--notarization-result "$notarization_result")
+          fi
           ./scripts/build-release-archive.py \
             --binary "target/${{ matrix.target }}/release/worklouderctl" \
             --target "${{ matrix.target }}" \
             --signature-state "${{ steps.version.outputs.signature_state }}" \
+            "${notarization_args[@]}" \
             --output dist
           archive="dist/worklouderctl-v${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz"
           ./scripts/verify-release-archive.py "$archive" \

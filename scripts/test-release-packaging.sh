@@ -23,6 +23,8 @@ else
   bin=$repo/target/release/worklouderctl
 fi
 test -x "$bin"
+python3 "$repo/scripts/test-notarization-evidence.py" \
+  >"$root/notarization-evidence.txt"
 
 SOURCE_DATE_EPOCH=0 "$repo/scripts/build-release-archive.py" \
   --binary "$bin" --target "$target" --output "$root/one" \

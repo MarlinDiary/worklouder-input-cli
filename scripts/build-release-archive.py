@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import subprocess
 import tarfile
+import uuid
 
 
 KIND = "worklouderctl-release-archive"
@@ -18,6 +19,25 @@ SCHEMA_VERSION = 1
 
 def sha256(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def validate_notarization_result(path):
+    if path is None:
+        raise SystemExit("accepted notarization result is required")
+    if not path.is_file() or path.is_symlink():
+        raise SystemExit("notarization result must be a regular non-symlink file")
+    try:
+        result = json.loads(path.read_text())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise SystemExit("notarization result was not valid JSON") from error
+    submission_id = result.get("id") if isinstance(result, dict) else None
+    try:
+        uuid.UUID(submission_id)
+    except (AttributeError, TypeError, ValueError) as error:
+        raise SystemExit("notarization result had an invalid submission id") from error
+    if result.get("status") != "Accepted":
+        raise SystemExit("notarization result was not accepted")
+    return result
 
 
 def add_bytes(archive, path, data, mode, mtime):
@@ -37,6 +57,7 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--target", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--notarization-result", type=Path)
     parser.add_argument(
         "--signature-state",
         choices=[
@@ -91,10 +112,16 @@ def main():
             if expected_authority not in signature.stderr:
                 raise SystemExit("binary signing authority did not match signature state")
     if args.signature_state == "developer-id-notarized":
-        subprocess.run(
-            ["spctl", "--assess", "--type", "execute", "--verbose=4", str(binary)],
-            check=True,
-        )
+        if (
+            "Timestamp=" not in signature.stderr
+            or "flags=0x10000(runtime)" not in signature.stderr
+        ):
+            raise SystemExit(
+                "notarized binary lacked a secure timestamp or hardened runtime"
+            )
+        validate_notarization_result(args.notarization_result)
+    elif args.notarization_result is not None:
+        raise SystemExit("notarization result requires developer-id-notarized state")
 
     root = f"worklouderctl-v{version}-{args.target}"
     sources = [

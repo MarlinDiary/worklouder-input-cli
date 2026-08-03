@@ -63,10 +63,12 @@ interchangeable:
 The release workflow fails closed: a `v*` tag must exactly match the Cargo
 version, have one matching Developer ID Application identity, pass signing and
 notarization, and produce an archive whose signature state is
-`developer-id-notarized`. A manual untagged workflow run produces unsigned test
-artifacts by default. Enable its `signed_validation` input to exercise the real
-Developer ID import, signing, and Apple notarization path for both architectures
-without creating a tag or publishing a GitHub release.
+`developer-id-notarized`. That state requires the accepted JSON result emitted
+by the exact `notarytool submit --wait` invocation; a declared state alone is
+rejected. A manual untagged workflow run produces unsigned test artifacts by
+default. Enable its `signed_validation` input to exercise the real Developer ID
+import, signing, and Apple notarization path for both architectures without
+creating a tag or publishing a GitHub release.
 
 ## Build a local archive
 
