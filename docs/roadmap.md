@@ -99,7 +99,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Deterministic Apple Silicon and Intel archives with exact manifest, checksum, and executable verification
 - [x] Explicit unsigned, ad-hoc, Apple Development, Developer ID, and notarized signature-state validation
 - [x] Fail-closed Developer ID signing, Apple notarization, and build-provenance release workflow
-- [x] Checksum-pinned Homebrew formula generation, syntax/style checks, isolated-prefix install, and execution test
+- [x] Checksum-pinned Homebrew formula generation, version derivation, strict audit, independent Tap CI, clean install, and execution test
 - [x] Deterministic Companion integration bundle with exact inventory, installed exports, conformance binary, checksum, and provenance workflow
 - [x] Deterministic Bash/Zsh/Fish completions and exhaustive generated command reference
 - [x] Machine-readable compatibility matrix and Cargo-version gate for every release

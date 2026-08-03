@@ -1,7 +1,6 @@
 class Worklouderctl < Formula
   desc "Full-configuration CLI for Codex Micro and Work Louder Input"
   homepage "https://github.com/MarlinDiary/worklouder-input-cli"
-  version "@VERSION@"
   license "MIT"
 
   on_macos do

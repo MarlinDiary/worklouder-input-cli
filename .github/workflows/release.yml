@@ -217,6 +217,9 @@ jobs:
             "$RUNNER_TEMP/homebrew-tap/Formula/worklouderctl.rb"
           ruby -c "$RUNNER_TEMP/homebrew-tap/Formula/worklouderctl.rb"
           brew style "$RUNNER_TEMP/homebrew-tap/Formula/worklouderctl.rb"
+          brew tap MarlinDiary/tap "$RUNNER_TEMP/homebrew-tap"
+          brew trust --formula MarlinDiary/tap/worklouderctl
+          brew audit --strict MarlinDiary/tap/worklouderctl
           cd "$RUNNER_TEMP/homebrew-tap"
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com

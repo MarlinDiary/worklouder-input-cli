@@ -10,6 +10,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A checksum-, inventory-, manifest-, signature-, and version-verifying binary
   installer plus a stable `MarlinDiary/tap/worklouderctl` Homebrew distribution
   path with automatic formula publication from tagged releases.
+- Independent Homebrew Tap CI that audits, installs, verifies the Developer ID
+  signature, and tests the public formula on every change and on a weekly
+  schedule.
 
 ### Fixed
 
@@ -19,6 +22,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Input `control set` and the commands that delegate to it now keep the Codex
   protected layer read-only, preserving its reserved `KV_OAI_*` protocol
   assignments and routing customization to the Codex-native command family.
+- The generated Homebrew formula now derives its version from the release URL,
+  removing the redundant explicit `version` rejected by `brew audit --strict`.
 
 ## [0.1.0]
 

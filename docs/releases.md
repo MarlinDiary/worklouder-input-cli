@@ -115,7 +115,7 @@ name in `WORKLOUDERCTL_CODESIGN_IDENTITY`. The script signs a staging copy; it
 does not modify `target/.../release/worklouderctl`.
 
 To test deterministic packaging, archive verification, local-prefix install,
-and Homebrew formula syntax/style together:
+and Homebrew formula version derivation, syntax, and style together:
 
 ```console
 ./scripts/test-release-packaging.sh
@@ -140,8 +140,9 @@ archives, builds and independently installs the Companion integration kit,
 emits build-provenance attestations for all three packages, renders the
 release-specific Homebrew formula, recomputes `SHA256SUMS`, and finally creates
 the GitHub release. It then pushes the checksum-pinned formula with the scoped
-`MarlinDiary/homebrew-tap` deploy key. Missing credentials or any verification
-mismatch stops the affected publication step.
+`MarlinDiary/homebrew-tap` deploy key after `brew audit --strict` passes.
+Missing credentials or any verification mismatch stops the affected
+publication step.
 
 ## Homebrew formula
 
@@ -150,6 +151,10 @@ template. A tagged workflow renders `worklouderctl.rb` only after both release
 archives have been built and verified. The generated formula installs the
 binary and all three shell completions and runs `worklouderctl version` in its
 test block.
+
+The tap has an independent macOS workflow that runs Ruby syntax, `brew style`,
+`brew audit --strict`, a clean formula install, Developer ID signature
+verification, and `brew test` on every push and pull request and once weekly.
 
 The generated formula is published to
 [`MarlinDiary/homebrew-tap`](https://github.com/MarlinDiary/homebrew-tap). Use
