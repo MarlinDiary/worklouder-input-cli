@@ -58,9 +58,11 @@ provide explicit test/runtime overrides; `WORKLOUDERCTL_PROVIDER_RUNTIME` and
 directly without a shell and rejects non-JSON, oversized, wrong-action, or
 wrong-provider helper responses.
 
-The two applications can stay open, but only one provider owns the physical
-HID session at a time. Host-only bridge methods remain available while the
-other provider owns the device. Every attach uses the loopback inspector only,
+The two applications can stay open and may both report a connection (for
+example, Codex over Bluetooth while Input discovery also sees the device).
+Automatic routing prefers a fully healthy Codex comm/API/HID/joystick service
+and otherwise uses connected Input; an explicit owner always wins. Host-only
+bridge methods remain available through Input. Every attach uses the loopback inspector only,
 checks the exact release identity, and closes the inspector afterward. See the
 [live validation record](research/2026-08-03-live-provider-integration-validation.md)
 for reversible mutation and bidirectional handoff evidence.

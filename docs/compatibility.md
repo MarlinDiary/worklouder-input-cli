@@ -30,6 +30,7 @@ claim-boundary, and required-gate inventory is added.
 | Input Companion Bridge | Protocol v1 | Fixture conformance plus every capability negotiated by the released Input overlay live-validated |
 | Companion integration bundle | 0.1.1 | Deterministic exact-inventory tgz, installed exports, and conformance executable verified; attached by the tagged release workflow |
 | Codex Micro firmware | v0.6.0 | Live status/files/export read boundary verified |
+| Codex Micro firmware | v0.6.1 | Live status plus owner-preserving configuration apply/readback/exact-restore and AppSense switching verified; firmware programming remains Input-owned |
 | USB | Observed | Provider writes, exact readback, reconnect portability, rollback, and final single-owner recovery verified |
 | Bluetooth | Observed | Live read boundary verified; configuration mutation uses the same external provider gate |
 
@@ -107,8 +108,11 @@ present, stopped Input, and restored the official Input app bundle with strict
 deep signature verification. See the
 [frozen live validation record](research/2026-08-03-live-provider-integration-validation.md).
 
-On 2026-08-04, the owner-preserving path added automatic current-owner
-detection to device status/files/export/config and cross-authority transactions.
+On 2026-08-04, the owner-preserving path added automatic provider selection to
+device status/files/export/config and cross-authority transactions. A fully
+healthy Codex service takes priority even when Input also reports a discovery
+connection; otherwise connected Input is used. This matches the observed
+Codex-over-Bluetooth plus Input-connected state without causing a handoff.
 Codex-owner multi-file changes use the firmware transaction primitive or stop
 before the first write; idempotency keys are persistently bound to the exact
 operation/baseline/target tuple. The AppSense LaunchAgent keeps one private

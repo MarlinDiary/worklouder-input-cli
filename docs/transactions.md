@@ -12,9 +12,11 @@ configuration authorities used by Codex Micro:
 
 Restore uses the reverse order. WorkLouderCTL delegates every write to the
 installed app's authenticated companion bridge; it does not implement a driver
-or a second device runtime. `--device-owner auto` is the default and preserves
-the exclusive current owner. `--device-owner codex|input` selects an explicit
-route but still does not perform a handoff.
+or a second device runtime. `--device-owner auto` is the default: it prefers a
+fully connected Codex service with live HID/joystick subscriptions, including
+when Input also reports a discovery connection, and otherwise uses connected
+Input. `--device-owner codex|input` selects an explicit route but still does not
+perform a handoff.
 
 ## 1. Create and inspect a plan
 

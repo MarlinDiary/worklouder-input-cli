@@ -225,16 +225,17 @@
         },
         {
           "id": "codex-micro-firmware",
-          "version": "v0.6.0",
-          "state": "read-only",
+          "version": "v0.6.1",
+          "state": "experimental",
           "tiers": [
             4
           ],
           "evidence": [
             "live-status-files-export",
-            "deterministic-sanitized-fixture"
+            "owner-preserving-live-apply-readback-restore",
+            "v0.6.0-deterministic-sanitized-fixture"
           ],
-          "boundary": "Live read boundary; firmware update behavior is verified only through the synthetic delegated authority."
+          "boundary": "Firmware v0.6.1 is live-verified for status, owner-preserving configuration apply/readback/exact restore, and AppSense layer switching; flashing remains delegated to Input. The public firmware DTO fixture remains v0.6.0."
         }
       ],
       "requiredGates": [

@@ -17,8 +17,9 @@ actions, and Input host actions to the currently installed Codex/Input builds.
 
 Provider selection follows this order:
 
-1. detect the exclusive current device owner and preserve it for device
-   status/files/export/configuration and transaction postflight;
+1. prefer a fully healthy Codex device service for
+   status/files/export/configuration and transaction postflight; when Codex is
+   unavailable, use connected Input;
 2. use the running Codex app for Tier 1 through the versioned
    [Codex Companion Bridge](codex-companion-bridge.md);
 3. use the running Input app for Input-only host and operational authorities

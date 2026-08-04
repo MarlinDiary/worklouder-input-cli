@@ -267,20 +267,14 @@ fn detect_current_owner(result: &Value) -> Result<Target> {
         .pointer("/codex/state")
         .and_then(Value::as_object)
         .context("provider status omitted Codex state")?;
-    let input_owns = input.get("discoveryStarted").and_then(Value::as_bool) == Some(true)
+    let input_ready = input.get("discoveryStarted").and_then(Value::as_bool) == Some(true)
         && input.get("startSuppressed").and_then(Value::as_bool) == Some(false)
         && input
             .get("connectedCount")
             .and_then(Value::as_u64)
             .unwrap_or(0)
-            > 0
-        && codex.get("lifecycleState").and_then(Value::as_str) == Some("stopped")
-        && codex.get("startSuppressed").and_then(Value::as_bool) == Some(true)
-        && codex.get("hasComm").and_then(Value::as_bool) == Some(false)
-        && codex.get("hasApi").and_then(Value::as_bool) == Some(false);
-    let codex_owns = input.get("discoveryStarted").and_then(Value::as_bool) == Some(false)
-        && input.get("connectedCount").and_then(Value::as_u64) == Some(0)
-        && codex.get("lifecycleState").and_then(Value::as_str) == Some("started")
+            > 0;
+    let codex_ready = codex.get("lifecycleState").and_then(Value::as_str) == Some("started")
         && codex.get("startSuppressed").and_then(Value::as_bool) == Some(false)
         && codex
             .get("deviceState")
@@ -294,10 +288,16 @@ fn detect_current_owner(result: &Value) -> Result<Target> {
             .get("hasJoystickSubscription")
             .and_then(Value::as_bool)
             == Some(true);
-    match (input_owns, codex_owns) {
-        (true, false) => Ok(Target::Input),
-        (false, true) => Ok(Target::Codex),
-        _ => bail!("device provider ownership was contested or unavailable"),
+    if codex_ready {
+        // Codex can retain a healthy Bluetooth service while Input also reports
+        // a connected discovery entry. Prefer the fully subscribed Codex
+        // service so automatic configuration never tears down Codex merely to
+        // reach Input. Callers can still request --owner input explicitly.
+        Ok(Target::Codex)
+    } else if input_ready {
+        Ok(Target::Input)
+    } else {
+        bail!("no healthy device configuration provider was available")
     }
 }
 
@@ -1022,7 +1022,7 @@ mod tests {
     }
 
     #[test]
-    fn current_owner_detection_rejects_contested_state() {
+    fn current_owner_detection_prefers_a_fully_healthy_codex_service() {
         let codex = serde_json::json!({
             "input": {"state": {
                 "discoveryStarted": false,
@@ -1059,9 +1059,31 @@ mod tests {
         });
         assert_eq!(detect_current_owner(&input).unwrap(), Target::Input);
 
-        let mut contested = codex;
-        contested["input"]["state"]["connectedCount"] = Value::from(1);
-        assert!(detect_current_owner(&contested).is_err());
+        let mut both_report_connected = codex;
+        both_report_connected["input"]["state"]["discoveryStarted"] = Value::from(true);
+        both_report_connected["input"]["state"]["connectedCount"] = Value::from(1);
+        assert_eq!(
+            detect_current_owner(&both_report_connected).unwrap(),
+            Target::Codex
+        );
+
+        let unavailable = serde_json::json!({
+            "input": {"state": {
+                "discoveryStarted": false,
+                "startSuppressed": false,
+                "connectedCount": 0
+            }},
+            "codex": {"state": {
+                "lifecycleState": "stopped",
+                "deviceState": {"status": "disconnected"},
+                "startSuppressed": true,
+                "hasComm": false,
+                "hasApi": false,
+                "hasHidSubscription": false,
+                "hasJoystickSubscription": false
+            }}
+        });
+        assert!(detect_current_owner(&unavailable).is_err());
     }
 
     #[test]

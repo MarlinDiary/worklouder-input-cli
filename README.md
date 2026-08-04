@@ -165,8 +165,8 @@ worklouderctl appsense relay sync
 The relay keeps one authenticated socket open, observes macOS `becameFrontmost`
 events, and forwards the application identity through Codex's existing
 connected device API. Bounded timeout retries keep the same service; transport
-failure triggers one serialized bridge recovery. Codex remains the sole USB
-owner, so application/Codex layer switches keep the same comm/API identities
+failure triggers one serialized bridge recovery. Codex remains the selected
+device runtime, so application/Codex layer switches keep the same comm/API identities
 and HID/joystick subscriptions. `relay status` exposes functional health and
 `relay test` verifies one focus round trip. The same `--owner codex` path gives
 device configuration snapshot/apply/restore immutable backups, persistent

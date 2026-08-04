@@ -65,7 +65,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Rust unit/CLI tests, 47 Node bridge/runtime tests, JSON-contract checks, all
   provider fixtures, and the complete bridge/firmware/reset/recovery/four-
   authority transaction E2E suite pass for this release.
-- The live Codex `26.727.51351` and connected Codex Micro boundary is verified
+- The live Codex `26.727.51351` and Codex Micro firmware `v0.6.1` boundary is verified
   separately in the release verification record with baseline, modified,
   restored, connection-continuity, and AppSense relay health artifacts.
 

@@ -153,7 +153,7 @@ worklouderctl appsense relay sync
 
 Relay 保持一条认证 socket，监听 macOS `becameFrontmost` 事件，并通过 Codex
 当前已连接的设备 API 转发应用 identity。超时会在同一 service 上做有界重试；
-transport 失败才会串行恢复 bridge。Codex 始终是唯一 USB owner，应用层与 Codex
+transport 失败才会串行恢复 bridge。Codex 始终是选定的 device runtime，应用层与 Codex
 层切换时会保留相同的 comm/API identity 与 HID/joystick subscription。
 `relay status` 报告功能健康度，`relay test` 验证一次 focus round trip。
 `--owner codex` 也为设备配置的 snapshot/apply/restore 提供不可变备份、持久
