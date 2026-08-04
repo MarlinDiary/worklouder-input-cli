@@ -14,7 +14,7 @@ export async function installInputLiveOverlay({
   app,
   services,
   deviceKitVersion = SUPPORTED_DEVICE_KIT_VERSION,
-  bridgeVersion = "0.1.0-live-overlay",
+  bridgeVersion = "0.1.1-live-overlay",
   socketPath,
   tokenPath,
 }) {

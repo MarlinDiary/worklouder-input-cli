@@ -4,8 +4,10 @@ WorkLouderCTL is designed as a transaction-safe companion to Work Louder Input.
 The CLI does not treat one cached JSON document as the whole system.
 
 The authority boundary is defined in the [configuration tier model](tier-model.md):
-Tier 1 uses Codex authorities, while Tier 2 and above use Input authorities.
-The CLI provides full configuration coverage across both sides.
+Tier 1 uses Codex authorities; Tier 2 device configuration uses whichever
+Codex/Input provider currently owns the device; Tier 3 and Tier 4 host/runtime
+operations stay delegated to Input. The CLI covers both sides without moving
+the device merely to write Tier 2.
 
 ## Provider strategy
 
@@ -15,15 +17,18 @@ actions, and Input host actions to the currently installed Codex/Input builds.
 
 Provider selection follows this order:
 
-1. use the running Codex app for Tier 1 through the versioned
+1. detect the exclusive current device owner and preserve it for device
+   status/files/export/configuration and transaction postflight;
+2. use the running Codex app for Tier 1 through the versioned
    [Codex Companion Bridge](codex-companion-bridge.md);
-2. use the running Input app through the versioned
+3. use the running Input app for Input-only host and operational authorities
+   through the versioned
    [Input Companion Bridge](companion-bridge.md);
-3. use the exact installed app's bundled device kit where a headless provider
+4. use the exact installed app's bundled device kit where a headless provider
    entry point is verified;
-4. use coordinated file adapters only for state that the app itself persists;
-5. preserve new/unknown fields and expose them through raw inspect/export;
-6. disable typed writes for a changed schema until its adapter fixtures pass.
+5. use coordinated file adapters only for state that the app itself persists;
+6. preserve new/unknown fields and expose them through raw inspect/export;
+7. disable typed writes for a changed schema until its adapter fixtures pass.
 
 This keeps firmware, transport fixes, new device support, and runtime behavior
 with the upstream applications while the CLI owns planning, validation, diff,
@@ -49,9 +54,11 @@ complete six-slot global-state apply/restore with its own revision CAS, backup,
 idempotency, exact readback, restore, and rollback. The cross-language fixture
 verifies `recent -> custom -> recent`, global brightness, auto-off, and voice mode
 apply/readback/restore, every Agent Key assignment type, exact Agent Key revision
-recovery, and exact source SHA recovery. Codex 26.727.51351
-contains the internal handlers but does not yet ship the external listener,
-leaving released-app integration as the next upstream milestone.
+recovery, and exact source SHA recovery. For Codex 26.727.51351 the CLI's
+exact-version/hash-gated installer supplies the external listener and captures
+the existing connected `CodexMicroService`. Device snapshot/apply/restore and
+focus forwarding call that same service, verify unchanged API/comm/connection
+identity, and preserve HID and joystick subscriptions.
 
 ## Implemented Codex runtime recovery path
 
@@ -81,9 +88,10 @@ readback, restore, and automatic rollback after a failed readback. Write
 capabilities appear only when Input injects a verified complete-set
 `configurationWriter`; read-only integrations do not advertise them. The
 repository also packages a one-call Electron main-process integration and a
-read-only release conformance command. Input 0.18.0 does not yet ship this
-server or writer, so released-app integration and hardware rollback remain a
-separate upstream milestone.
+read-only release conformance command. For Input 0.18.0 the CLI's exact-release
+installer supplies this bridge/writer around Input's own connected services;
+changed versions or hashes remain read-only until a matching adapter is
+verified.
 
 ## Implemented direct compatibility path
 
@@ -154,7 +162,8 @@ synchronization, and rollback against the packaged reference providers. A
 released Codex/Input integration supplies live discovery, runtime coordination,
 and the same complete-set writer boundary; it does not introduce a second
 transaction or a direct database/device write route. Physical device effects
-remain provider-owned and require the external evidence listed in the roadmap.
+remain provider-owned. The release boundary records live apply, readback,
+exact restore, and connection continuity independently from fixture coverage.
 
 1. Classify every requested field by tier and authority.
 2. Discover the exact Codex/Input installations, runtimes, and connected device.
@@ -166,7 +175,8 @@ remain provider-owned and require the external evidence listed in the roadmap.
 8. Recheck hashes to detect a concurrent edit.
 9. Coordinate the Codex and/or Input runtime selected by the plan.
 10. Create private immutable backups.
-11. Write changed device files in dependency-safe order.
+11. Write one changed file directly, or require the provider/firmware atomic
+    multi-file transaction before writing any member of a multi-file change.
 12. Read back and compare bytes, decoded JSON, and checksums.
 13. Atomically synchronize Codex settings and/or Input cache/database.
 14. Refresh or reopen affected runtimes and emit one verification record.

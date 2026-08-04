@@ -30,6 +30,26 @@ let failSettingsWrites = Number.parseInt(
 if (!Number.isSafeInteger(failSettingsWrites) || failSettingsWrites < 0) {
   throw new Error("WORKLOUDERCTL_FIXTURE_FAIL_CODEX_SETTINGS_WRITES must be a non-negative integer");
 }
+const fixtureDeviceStatus = { selectedProfileIndex: 0, selectedLayerIndex: 0 };
+const fixtureServiceApi = {
+  api: {
+    async getDeviceStatus() {
+      return structuredClone(fixtureDeviceStatus);
+    },
+    async sendFocusApp() {},
+  },
+};
+const fixtureService = {
+  api: fixtureServiceApi,
+  comm: {},
+  connectionAttemptId: "fixture-connection",
+  lifecycleState: "connected",
+  getState() {
+    return { status: "connected" };
+  },
+  unsubscribeHid() {},
+  unsubscribeJoystick() {},
+};
 
 await persist();
 const request = async (method, params) => {
@@ -54,6 +74,7 @@ const request = async (method, params) => {
 };
 const adapter = createCodexMainAdapter({
   request,
+  deviceServiceProvider: () => [fixtureService],
   settingsReplacer: {
     async replaceSettings(request) {
       if (failSettingsWrites > 0) {

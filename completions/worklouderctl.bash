@@ -1093,7 +1093,7 @@ _worklouderctl() {
             return 0
             ;;
         worklouderctl__appsense__relay)
-            opts="-h -V --runtime-dir --node --help --version --json install status sync remove help"
+            opts="-h -V --runtime-dir --node --help --version --json install status sync test remove help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1171,6 +1171,20 @@ _worklouderctl() {
             return 0
             ;;
         worklouderctl__appsense__relay__sync)
+            opts="-h -V --help --version --json"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__appsense__relay__test)
             opts="-h -V --help --version --json"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -3350,7 +3364,7 @@ _worklouderctl() {
                     return 0
                     ;;
                 --owner)
-                    COMPREPLY=($(compgen -W "input codex" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto input codex" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -3402,7 +3416,7 @@ _worklouderctl() {
                     return 0
                     ;;
                 --owner)
-                    COMPREPLY=($(compgen -W "input codex" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto input codex" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -3428,7 +3442,7 @@ _worklouderctl() {
                     return 0
                     ;;
                 --owner)
-                    COMPREPLY=($(compgen -W "input codex" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "auto input codex" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -3439,7 +3453,7 @@ _worklouderctl() {
             return 0
             ;;
         worklouderctl__device__config__validate)
-            opts="-h -V --input --device --expected-revision --help --version --json"
+            opts="-h -V --input --device --expected-revision --owner --help --version --json"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -3457,6 +3471,10 @@ _worklouderctl() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                --owner)
+                    COMPREPLY=($(compgen -W "auto input codex" -- "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -3465,7 +3483,7 @@ _worklouderctl() {
             return 0
             ;;
         worklouderctl__device__export)
-            opts="-h -V --output --help --version --json"
+            opts="-h -V --output --owner --help --version --json"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -3473,6 +3491,10 @@ _worklouderctl() {
             case "${prev}" in
                 --output)
                     COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --owner)
+                    COMPREPLY=($(compgen -W "auto input codex" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -3483,7 +3505,7 @@ _worklouderctl() {
             return 0
             ;;
         worklouderctl__device__files)
-            opts="-h -V --path --recursive --help --version --json"
+            opts="-h -V --path --recursive --owner --help --version --json"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -3491,6 +3513,10 @@ _worklouderctl() {
             case "${prev}" in
                 --path)
                     COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --owner)
+                    COMPREPLY=($(compgen -W "auto input codex" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -3515,12 +3541,16 @@ _worklouderctl() {
             return 0
             ;;
         worklouderctl__device__status)
-            opts="-h -V --help --version --json"
+            opts="-h -V --owner --help --version --json"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --owner)
+                    COMPREPLY=($(compgen -W "auto input codex" -- "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -6479,7 +6509,7 @@ _worklouderctl() {
             return 0
             ;;
         worklouderctl__transaction__apply)
-            opts="-h -V --plan --backup-dir --receipt --idempotency-key --codex-socket --codex-token --input-socket --input-token --help --version --json"
+            opts="-h -V --plan --backup-dir --receipt --idempotency-key --codex-socket --codex-token --input-socket --input-token --device-owner --help --version --json"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -6515,6 +6545,10 @@ _worklouderctl() {
                     ;;
                 --input-token)
                     COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --device-owner)
+                    COMPREPLY=($(compgen -W "auto input codex" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -6589,7 +6623,7 @@ _worklouderctl() {
             return 0
             ;;
         worklouderctl__transaction__restore)
-            opts="-h -V --apply-receipt --backup-dir --receipt --idempotency-key --codex-socket --codex-token --input-socket --input-token --help --version --json"
+            opts="-h -V --apply-receipt --backup-dir --receipt --idempotency-key --codex-socket --codex-token --input-socket --input-token --device-owner --help --version --json"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -6625,6 +6659,10 @@ _worklouderctl() {
                     ;;
                 --input-token)
                     COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --device-owner)
+                    COMPREPLY=($(compgen -W "auto input codex" -- "${cur}"))
                     return 0
                     ;;
                 *)

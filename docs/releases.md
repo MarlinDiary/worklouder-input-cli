@@ -6,7 +6,7 @@ Bash/Zsh/Fish completions, the license, the README, and a machine-readable
 manifest with the SHA-256 and mode of every file.
 
 The packaging pipeline is complete and fixture-verified. The official
-[`v0.1.0`](https://github.com/MarlinDiary/worklouder-input-cli/releases/tag/v0.1.0)
+[`v0.1.1`](https://github.com/MarlinDiary/worklouder-input-cli/releases/tag/v0.1.1)
 release publishes signed and notarized Apple Silicon and Intel archives. A
 local unsigned or ad-hoc build remains distinct from an official signed release.
 

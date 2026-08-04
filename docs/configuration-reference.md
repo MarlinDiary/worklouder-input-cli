@@ -249,8 +249,9 @@ mutation behaviors pass the isolated cross-language writer fixture; an
 installed Input version must advertise the corresponding capabilities before
 the commands run against a device.
 
-Input 0.18.0 does not yet ship the bridge. The verified direct compatibility
-path remains available as:
+Input 0.18.0 does not natively ship the bridge; the exact-release installer
+supplies it after version/hash verification. The verified read-only direct
+compatibility path remains available as:
 
 ```console
 worklouderctl device --transport direct [--input-mode require-closed|restart] status

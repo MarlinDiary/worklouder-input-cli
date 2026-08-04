@@ -21,7 +21,7 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
-version=${WORKLOUDERCTL_TEST_VERSION:-0.1.0}
+version=${WORKLOUDERCTL_TEST_VERSION:-0.1.1}
 WORKLOUDERCTL_VERSION=$version \
 WORKLOUDERCTL_INSTALL_PREFIX="$tmp/prefix" \
   "$repo_root/install.sh"

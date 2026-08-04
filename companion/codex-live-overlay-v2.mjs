@@ -20,7 +20,7 @@ export async function installCodexLiveOverlay({
   BrowserWindow,
   settingsDefinitions,
   deviceServiceProvider,
-  bridgeVersion = "0.1.0-live-overlay",
+  bridgeVersion = "0.1.1-live-overlay",
   socketPath,
   tokenPath,
   requestTimeoutMs = 15_000,

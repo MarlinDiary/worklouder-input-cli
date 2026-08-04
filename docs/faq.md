@@ -17,8 +17,9 @@ Input 0.18.0's bundled provider. It also generates strict offline candidates
 and runs authenticated Codex/Input apply/readback/restore/rollback transactions
 against isolated reference writers. The exact-release overlays for Codex
 `26.727.51351` and Input `0.18.0` have also completed live provider
-apply/readback/exact-restore transactions. A signed packaged release is the
-remaining distribution milestone.
+apply/readback/exact-restore transactions. Signed, notarized Apple Silicon and
+Intel packages are published through GitHub Releases and the stable Homebrew
+tap.
 
 Run `worklouderctl doctor --strict` to test the current machine rather than
 inferring write support from installed/running apps. The JSON field
@@ -30,14 +31,15 @@ The provider lifecycle is also available through the binary:
 
 ```sh
 worklouderctl provider install codex
-worklouderctl provider handoff input
-worklouderctl provider handoff codex
+worklouderctl provider install input
+worklouderctl provider status
 worklouderctl doctor --strict
 ```
 
-These commands keep Input hidden during ownership changes and preserve the
-Codex/Input runtime boundary; they replace direct use of the repository's Node
-helper entrypoints.
+Device and transaction commands default to `--owner auto`, so they preserve the
+current Codex/Input owner. An explicit `provider handoff` remains available,
+but configuration does not trigger one. These commands replace direct use of
+the repository's Node helper entrypoints.
 
 ## What does full-configuration parity mean?
 

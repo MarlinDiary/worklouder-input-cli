@@ -7,7 +7,7 @@ export async function installInputCompanionBridge({
   app,
   services,
   deviceKitVersion,
-  bridgeVersion = "0.1.0",
+  bridgeVersion = "0.1.1",
   socketPath,
   tokenPath,
 }) {

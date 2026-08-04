@@ -205,16 +205,20 @@ fn inspect_appsense_relay(checks: &mut Vec<Check>) {
         .unwrap_or("unknown");
     checks.push(Check {
         id: "appsense.relay".into(),
-        status: if installed && running && healthy && bridge_available {
+        status: if !installed {
             CheckStatus::Pass
-        } else if installed && running {
-            CheckStatus::Warn
+        } else if running && healthy && bridge_available {
+            CheckStatus::Pass
         } else {
             CheckStatus::Warn
         },
-        summary: format!(
-            "AppSense relay installed={installed} running={running} health={health_status} bridgeAvailable={bridge_available}"
-        ),
+        summary: if installed {
+            format!(
+                "AppSense relay installed={installed} running={running} health={health_status} bridgeAvailable={bridge_available}"
+            )
+        } else {
+            "AppSense relay is not installed (optional)".into()
+        },
     });
 }
 

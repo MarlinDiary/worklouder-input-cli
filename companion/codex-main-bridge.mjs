@@ -45,7 +45,7 @@ export async function startCodexCompanionBridge({
   codexVersion,
   socketPath,
   tokenPath,
-  bridgeVersion = "0.1.0",
+  bridgeVersion = "0.1.1",
   token,
   maxRequestBytes = CODEX_BRIDGE_MAX_REQUEST_BYTES,
   maxResponseBytes = CODEX_BRIDGE_MAX_RESPONSE_BYTES,

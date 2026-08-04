@@ -13,7 +13,7 @@ export async function inspectInputCompanionBridge({
   socketPath = defaultSocketPath(),
   tokenPath = defaultTokenPath(),
   requiredCapabilities = [],
-  clientVersion = "0.1.0",
+  clientVersion = "0.1.1",
 }) {
   await validatePrivatePath(socketPath, "socket");
   await validatePrivatePath(tokenPath, "token");

@@ -6,8 +6,10 @@ verification cover the relevant operations.
 
 ## Current project stage
 
-There is no released binary yet. The versions below are research baselines,
-not a public support guarantee.
+`v0.1.0` is the first signed/notarized public release. `v0.1.1` keeps that
+distribution boundary and adds current-owner routing plus a persistent Codex
+AppSense relay. The versions below are exact verified adapters rather than a
+promise that an unlisted future app build will be writable.
 
 The canonical release-gated form is
 [`spec/compatibility-matrix-v1.json`](../spec/compatibility-matrix-v1.json).
@@ -21,12 +23,12 @@ claim-boundary, and required-gate inventory is added.
 | --- | ---: | --- |
 | Device | Work Louder Codex Micro | Initial target |
 | Host OS | macOS | Initial target |
-| Codex app | 26.727.51351 | Exact-release overlay live-validated for settings and six-slot Agent Key apply/readback/exact restore; upstream-native listener absent |
-| Codex Companion Bridge | Protocol v1 | Fixture conformance plus exact-release overlay and real-provider transaction verified |
+| Codex app | 26.727.51351 | Exact-release overlay live-validated for settings, six-slot Agent Keys, current-owner device configuration, and persistent AppSense focus forwarding without replacing the connected service |
+| Codex Companion Bridge | Protocol v1 | Fixture conformance plus exact-release overlay, persistent authenticated focus client, connection continuity, and real-provider transaction verified |
 | Work Louder Input | 0.17.3 | Deterministic sanitized structural fixture; original installed bundle was superseded |
 | Work Louder Input | 0.18.0 | Exact-release overlay live-validated for device configuration, host settings, live reads, and bidirectional provider handoff |
 | Input Companion Bridge | Protocol v1 | Fixture conformance plus every capability negotiated by the released Input overlay live-validated |
-| Companion integration bundle | 0.1.0 | Deterministic exact-inventory tgz, installed exports, and conformance executable verified; attached by the tagged release workflow |
+| Companion integration bundle | 0.1.1 | Deterministic exact-inventory tgz, installed exports, and conformance executable verified; attached by the tagged release workflow |
 | Codex Micro firmware | v0.6.0 | Live status/files/export read boundary verified |
 | USB | Observed | Provider writes, exact readback, reconnect portability, rollback, and final single-owner recovery verified |
 | Bluetooth | Observed | Live read boundary verified; configuration mutation uses the same external provider gate |
@@ -59,7 +61,7 @@ adapter verifies the app, `app.asar`, HID topology watcher, and Input Monitoring
 permission module hashes before attaching; a changed byte disables this
 contract until new evidence is frozen.
 
-The isolated Codex Companion Bridge v1 fixture has cross-language evidence for
+The Codex Companion Bridge v1 fixture has cross-language evidence for
 authenticated capability negotiation; frozen-definition settings snapshots;
 source-SHA plus canonical-settings CAS; immutable backup; complete explicit-set
 apply; and exact explicit/effective readback. It also verifies all six Agent Key
@@ -69,9 +71,12 @@ rejection, explicit restore, and automatic rollback after corrupt readback. Its
 E2E path proves `recent -> custom -> recent`, brightness `100 -> 37 -> 100`,
 auto-off `3-minutes -> 10-minutes -> 3-minutes`, and voice mode
 `push-to-talk -> realtime -> push-to-talk`; restores the exact Agent Key revision;
-and recovers the exact baseline settings source SHA-256. This is bridge
-transaction evidence; released-Codex mutation begins when Codex installs the
-reference integration and supplies exact settings and Agent Key replacers.
+and recovers the exact baseline settings source SHA-256. The exact-release
+installer materializes the same authenticated bridge in Codex and fails closed
+unless the application version, bundle hashes, service shape, and requested
+capabilities match. The separate device RPC path reuses Codex's connected
+`CodexMicroService`, verifies unchanged service/API/comm identities, and never
+opens a second HID session.
 
 For Input 0.18.0 and Codex Micro firmware v0.6.0,
 `input-bundled-device-kit-read-v1` has live read-only evidence over HID: the CLI
@@ -102,6 +107,16 @@ present, stopped Input, and restored the official Input app bundle with strict
 deep signature verification. See the
 [frozen live validation record](research/2026-08-03-live-provider-integration-validation.md).
 
+On 2026-08-04, the owner-preserving path added automatic current-owner
+detection to device status/files/export/config and cross-authority transactions.
+Codex-owner multi-file changes use the firmware transaction primitive or stop
+before the first write; idempotency keys are persistently bound to the exact
+operation/baseline/target tuple. The AppSense LaunchAgent keeps one private
+authenticated bridge connection, retries device timeouts on the same service,
+and performs one serialized exact-release reinstall only for transport or
+capability failure. `doctor` reports relay process state and functional health
+separately.
+
 The released Input writer did not negotiate optional preset, reset,
 firmware-update, or bootloader-recovery authorities. Those operations therefore
 remain synthetic-provider claims and fail closed against Input `0.18.0`. Input
@@ -131,8 +146,11 @@ Before a mutation, WorkLouderCTL will detect and record:
 - Input cache/database format adapter;
 - every unknown field that must be preserved.
 
-An Input update alone will not silently select the nearest adapter. Exact
-matching or a verified compatibility range is required for writes.
+An Input or Codex update alone will not silently select the nearest adapter.
+Every invocation re-probes the installed version and exact frozen hashes;
+inspection can report an unknown build, while writes require an exact match or
+a newly verified compatibility range. This prevents an upstream update from
+quietly using stale offsets or internal service assumptions.
 
 The Companion Bridge uses capability negotiation rather than assuming
 capabilities from an application version. The current live overlay is
@@ -149,7 +167,8 @@ rollback after a corrupt readback. These are transaction-engine claims; they
 extend only as listed in the separate exact-release live integration boundary
 above. Optional unnegotiated authorities remain fixture-only.
 
-`worklouderctl doctor` therefore reports application health and authenticated
+`worklouderctl doctor` therefore reports application health, AppSense relay
+health, and authenticated
 configuration readiness separately. `configurationReady` requires both bridge
 handshakes and the complete Codex/Input apply-and-restore capability sets.
 Missing endpoints, handshake failures, or incomplete capability negotiation are

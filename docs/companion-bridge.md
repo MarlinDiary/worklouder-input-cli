@@ -1,8 +1,9 @@
 # Input Companion Bridge
 
-The Input Companion Bridge is the primary long-term transport for
-WorkLouderCTL. Input keeps the only live device session. The CLI sends bounded,
-versioned requests to Input instead of loading a second copy of the device kit.
+The Input Companion Bridge is the transport for Input-only host and operational
+authorities and for device configuration while Input is the current owner.
+The CLI sends bounded, versioned requests to the owning app instead of loading
+a second copy of the device kit.
 
 ```text
 worklouderctl
@@ -28,17 +29,19 @@ The frozen machine-readable contract is
 - The CLI negotiates capabilities rather than depending on minified class names
   or fixed `app.asar` offsets.
 
-The bundled-device-kit reader remains a compatibility and recovery path while
-released Input builds do not contain the bridge. It is not the target write
-architecture.
+The bundled-device-kit reader remains a compatibility and recovery path. It is
+not the target write architecture.
 
 ## Installing the exact-release overlays
 
 For the currently frozen Codex and Input releases, the repository contains
-no-restart installers and an explicit device-owner handoff:
+no-restart installers and owner-preserving automatic routing. Handoff is an
+explicit lifecycle operation, not a prerequisite for configuration:
 
 ```sh
 worklouderctl provider install codex
+worklouderctl provider install input
+worklouderctl device config snapshot --owner auto --output before.json
 worklouderctl provider handoff input # Input owns device configuration
 worklouderctl provider handoff codex # Codex owns hardware actions
 worklouderctl provider status
@@ -124,7 +127,7 @@ Tests and nonstandard installations can override discovery with
 Each connection begins with one JSON-RPC request:
 
 ```json
-{"jsonrpc":"2.0","id":"1","method":"bridge.hello","params":{"protocolVersion":1,"token":"TOKEN","client":{"name":"worklouderctl","version":"0.1.0"}}}
+{"jsonrpc":"2.0","id":"1","method":"bridge.hello","params":{"protocolVersion":1,"token":"TOKEN","client":{"name":"worklouderctl","version":"0.1.1"}}}
 ```
 
 Input returns its bridge version, Input version, session ID, and exact

@@ -66,7 +66,7 @@ const companionBridge = await installInputCompanionBridge({
     },
   },
   deviceKitVersion: DEVICE_KIT_VERSION,
-  bridgeVersion: "0.1.0",
+  bridgeVersion: "0.1.1",
 });
 ```
 

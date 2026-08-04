@@ -5,17 +5,23 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1]
+
 ### Added
 
-- `worklouderctl appsense relay install/status/sync/remove`, an event-driven
-  macOS focus relay that keeps Codex as the connected device owner while the
-  firmware applies persisted AppSense layer bindings.
+- `worklouderctl appsense relay install/status/test/sync/remove`, a persistent
+  macOS focus relay with authenticated socket reuse, functional health state,
+  bounded timeout retry, and serialized bridge recovery.
 - Codex-owner device RPC helpers with exact live snapshot comparison, guarded
-  single-file configuration writes, readback, automatic restore, and connection
-  continuity evidence.
-- `device config snapshot/apply/restore --owner codex`, which mutates complete
-  device snapshots through Codex's existing session with immutable backup,
-  revision checking, idempotent exact-state replay, and no provider handoff.
+  atomic configuration writes, readback, automatic restore, persistent
+  idempotency, and connection continuity evidence.
+- Owner-preserving `device status/files/export` and `device config
+  snapshot/validate/apply/restore` commands. `--owner auto` is now the default
+  and routes through the current Codex or Input session without a handoff.
+- `transaction apply/restore --device-owner auto|codex|input`, allowing the
+  device-configuration authority to stay with Codex while Input-only host
+  settings continue through Input.
+- Public `appsense-relay-v1` and `codex-owner-config-v1` JSON Schemas.
 - A checksum-, inventory-, manifest-, signature-, and version-verifying binary
   installer plus a stable `MarlinDiary/tap/worklouderctl` Homebrew distribution
   path with automatic formula publication from tagged releases.
@@ -27,6 +33,18 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - AppSense can now return from an application layer to the Codex layer without
   stopping Codex's device service or handing the USB session to Input.
+- Device configuration no longer disconnects Codex merely to reach the Input
+  writer; status, export, validation, apply, restore, and transaction postflight
+  all use the already-connected owner.
+- AppSense relay timeouts retry the existing Codex service instead of
+  reinstalling the bridge; genuine transport loss performs one serialized
+  self-healing reinstall and leaves a diagnostic health record.
+- Multi-file device changes require the firmware transaction primitive and
+  fail before the first write when it is absent. Failed writes first read back
+  state and skip unnecessary rollback writes when the baseline is intact.
+- Self-contained transaction restore resolves owner routing from the archived
+  private plan, so restore still succeeds after the original plan inputs have
+  been deleted.
 - `config diff` now compares validated files embedded in Input configuration
   snapshots, so differently named `before.json` and `candidate.json` files
   report precise `/keymap.json` and `/smart_actions.json` changes.
@@ -35,6 +53,21 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   assignments and routing customization to the Codex-native command family.
 - The generated Homebrew formula now derives its version from the release URL,
   removing the redundant explicit `version` rejected by `brew audit --strict`.
+
+### Security
+
+- Codex-owned device mutation idempotency bindings persist in a mode-`0700`
+  directory and mode-`0600` atomic registry; a key cannot be reused for a
+  different baseline, target, or operation.
+
+### Verified boundary
+
+- Rust unit/CLI tests, 47 Node bridge/runtime tests, JSON-contract checks, all
+  provider fixtures, and the complete bridge/firmware/reset/recovery/four-
+  authority transaction E2E suite pass for this release.
+- The live Codex `26.727.51351` and connected Codex Micro boundary is verified
+  separately in the release verification record with baseline, modified,
+  restored, connection-continuity, and AppSense relay health artifacts.
 
 ## [0.1.0]
 
@@ -106,4 +139,5 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   behavior.
 
 [Unreleased]: https://github.com/MarlinDiary/worklouder-input-cli/commits/main
+[0.1.1]: https://github.com/MarlinDiary/worklouder-input-cli/releases/tag/v0.1.1
 [0.1.0]: https://github.com/MarlinDiary/worklouder-input-cli/releases/tag/v0.1.0

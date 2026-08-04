@@ -4,56 +4,105 @@
   "releases": [
     {
       "cliVersion": "0.1.0",
-      "publicationState": "prerelease",
-      "hostOs": ["macOS"],
-      "deviceModels": ["codex_micro"],
+      "publicationState": "released",
+      "hostOs": [
+        "macOS"
+      ],
+      "deviceModels": [
+        "codex_micro"
+      ],
       "authorities": [
         {
           "id": "codex-app",
           "version": "26.727.51351",
           "state": "experimental",
-          "tiers": [1],
-          "evidence": ["codex-bridge-fixture", "tier1-offline-candidates", "exact-release-live-overlay", "live-apply-readback-restore"],
+          "tiers": [
+            1
+          ],
+          "evidence": [
+            "codex-bridge-fixture",
+            "tier1-offline-candidates",
+            "exact-release-live-overlay",
+            "live-apply-readback-restore"
+          ],
           "boundary": "Exact-release overlay integration is live-validated for settings and Agent Keys; an upstream-native bridge is not present."
         },
         {
           "id": "codex-companion-bridge",
           "version": "1",
           "state": "experimental",
-          "tiers": [1],
-          "evidence": ["authenticated-cas", "readback", "automatic-rollback"],
+          "tiers": [
+            1
+          ],
+          "evidence": [
+            "authenticated-cas",
+            "readback",
+            "automatic-rollback"
+          ],
           "boundary": "Protocol and reference integration are fixture-verified."
         },
         {
           "id": "input-app",
           "version": "0.17.3",
           "state": "read-only",
-          "tiers": [2, 3, 4],
-          "evidence": ["deterministic-sanitized-fixture"],
+          "tiers": [
+            2,
+            3,
+            4
+          ],
+          "evidence": [
+            "deterministic-sanitized-fixture"
+          ],
           "boundary": "Structural and semantic fixture parsing only."
         },
         {
           "id": "input-app",
           "version": "0.18.0",
           "state": "experimental",
-          "tiers": [2, 3, 4],
-          "evidence": ["deterministic-sanitized-fixture", "live-read", "bridge-transactions", "exact-release-live-overlay", "live-apply-readback-restore", "provider-handoff"],
+          "tiers": [
+            2,
+            3,
+            4
+          ],
+          "evidence": [
+            "deterministic-sanitized-fixture",
+            "live-read",
+            "bridge-transactions",
+            "exact-release-live-overlay",
+            "live-apply-readback-restore",
+            "provider-handoff"
+          ],
           "boundary": "Exact-release overlay integration is live-validated for device configuration and host settings; optional preset, reset, firmware-update, and recovery authorities are absent from the released writer."
         },
         {
           "id": "input-companion-bridge",
           "version": "1",
           "state": "experimental",
-          "tiers": [2, 3, 4],
-          "evidence": ["authenticated-cas", "firmware-delegation", "bootloader-recovery", "input-default-reset", "transaction-rollback"],
+          "tiers": [
+            2,
+            3,
+            4
+          ],
+          "evidence": [
+            "authenticated-cas",
+            "firmware-delegation",
+            "bootloader-recovery",
+            "input-default-reset",
+            "transaction-rollback"
+          ],
           "boundary": "Reference adapter and synthetic end-to-end fixtures are verified; the released Input overlay is live-validated for every negotiated capability."
         },
         {
           "id": "codex-micro-firmware",
           "version": "v0.6.0",
           "state": "read-only",
-          "tiers": [4],
-          "evidence": ["live-status-files-export", "deterministic-sanitized-fixture"],
+          "tiers": [
+            4
+          ],
+          "evidence": [
+            "live-status-files-export",
+            "deterministic-sanitized-fixture"
+          ],
           "boundary": "Live read boundary; firmware update behavior is verified only through the synthetic delegated authority."
         }
       ],
@@ -75,6 +124,139 @@
         "./scripts/test-codex-bridge-e2e.sh",
         "./scripts/test-transaction-e2e.sh",
         "./scripts/test-transaction-rollback-e2e.sh"
+      ]
+    },
+    {
+      "cliVersion": "0.1.1",
+      "publicationState": "released",
+      "hostOs": [
+        "macOS"
+      ],
+      "deviceModels": [
+        "codex_micro"
+      ],
+      "authorities": [
+        {
+          "id": "codex-app",
+          "version": "26.727.51351",
+          "state": "experimental",
+          "tiers": [
+            1
+          ],
+          "evidence": [
+            "codex-bridge-fixture",
+            "tier1-offline-candidates",
+            "exact-release-live-overlay",
+            "live-apply-readback-restore",
+            "owner-preserving-device-rpc",
+            "persistent-focus-relay",
+            "connection-continuity-readback"
+          ],
+          "boundary": "Exact-release overlay integration is live-validated for settings, Agent Keys, owner-preserving device configuration, and persistent AppSense focus forwarding through the existing connected service."
+        },
+        {
+          "id": "codex-companion-bridge",
+          "version": "1",
+          "state": "experimental",
+          "tiers": [
+            1
+          ],
+          "evidence": [
+            "authenticated-cas",
+            "readback",
+            "automatic-rollback",
+            "persistent-authenticated-focus-client",
+            "bounded-transport-recovery",
+            "device-configuration-idempotency"
+          ],
+          "boundary": "Protocol v1, persistent focus relay, current-owner device routing, CAS, readback, connection continuity, and automatic rollback are fixture-verified and exact-release gated."
+        },
+        {
+          "id": "input-app",
+          "version": "0.17.3",
+          "state": "read-only",
+          "tiers": [
+            2,
+            3,
+            4
+          ],
+          "evidence": [
+            "deterministic-sanitized-fixture"
+          ],
+          "boundary": "Structural and semantic fixture parsing only."
+        },
+        {
+          "id": "input-app",
+          "version": "0.18.0",
+          "state": "experimental",
+          "tiers": [
+            2,
+            3,
+            4
+          ],
+          "evidence": [
+            "deterministic-sanitized-fixture",
+            "live-read",
+            "bridge-transactions",
+            "exact-release-live-overlay",
+            "live-apply-readback-restore",
+            "provider-handoff",
+            "owner-preserving-auto-routing"
+          ],
+          "boundary": "Exact-release overlay remains available for device and host configuration; auto routing leaves an existing Codex-owned session untouched and delegates Input-only authorities to Input."
+        },
+        {
+          "id": "input-companion-bridge",
+          "version": "1",
+          "state": "experimental",
+          "tiers": [
+            2,
+            3,
+            4
+          ],
+          "evidence": [
+            "authenticated-cas",
+            "firmware-delegation",
+            "bootloader-recovery",
+            "input-default-reset",
+            "transaction-rollback"
+          ],
+          "boundary": "Reference adapter and synthetic end-to-end fixtures are verified; the released Input overlay is live-validated for every negotiated capability."
+        },
+        {
+          "id": "codex-micro-firmware",
+          "version": "v0.6.0",
+          "state": "read-only",
+          "tiers": [
+            4
+          ],
+          "evidence": [
+            "live-status-files-export",
+            "deterministic-sanitized-fixture"
+          ],
+          "boundary": "Live read boundary; firmware update behavior is verified only through the synthetic delegated authority."
+        }
+      ],
+      "requiredGates": [
+        "cargo test --locked",
+        "npm test --prefix companion",
+        "node --test companion/*.test.mjs scripts/*.test.mjs",
+        "./scripts/test-companion-package.py",
+        "./scripts/verify-json-contracts.py",
+        "./scripts/verify-sanitized-fixtures.sh",
+        "./scripts/verify-compatibility-matrix.sh",
+        "./scripts/extract-release-notes.py CHANGELOG.md 0.1.1",
+        "./scripts/verify-github-actions-pins.py",
+        "./scripts/verify-cli-assets.sh",
+        "./scripts/test-release-packaging.sh",
+        "./scripts/test-bridge-e2e.sh",
+        "./scripts/test-firmware-update-e2e.sh",
+        "./scripts/test-recovery-e2e.sh",
+        "./scripts/test-reset-e2e.sh",
+        "./scripts/test-codex-bridge-e2e.sh",
+        "./scripts/test-transaction-e2e.sh",
+        "./scripts/test-transaction-rollback-e2e.sh",
+        "./scripts/test-doctor-readiness-e2e.sh"
       ]
     }
   ]

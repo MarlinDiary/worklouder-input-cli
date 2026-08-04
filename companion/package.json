@@ -1,6 +1,6 @@
 {
   "name": "@worklouder/input-companion-bridge-reference",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Reference Codex and Work Louder Input Companion Bridge integration kit for WorkLouderCTL",
   "license": "MIT",

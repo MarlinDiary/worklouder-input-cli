@@ -2,7 +2,7 @@
 
 > WorkLouderCTL is an independent, open-source full-configuration CLI for Codex, Work Louder Input, and Codex Micro. It provides configuration-GUI parity with safe inspection, diff, backup, verified apply, synchronization, and rollback for humans, scripts, and AI agents.
 
-Important: configuration parity is implemented for the verified macOS/Codex Micro boundary. The source-built `worklouderctl` binary includes Codex/Input inspection, semantic editors, authenticated provider bridges, complete transactions, live Codex Micro reads, exact-release apply/readback/restore, and provider handoff. Deterministic dual-architecture packaging, signature-state verification, Developer ID notarization, and Homebrew formula generation are implemented. The first signed release awaits project credentials and the `v0.1.0` tag.
+Important: configuration parity is implemented for the verified macOS/Codex Micro boundary. `worklouderctl` includes Codex/Input inspection, semantic editors, authenticated provider bridges, owner-preserving device configuration, complete transactions, a persistent Codex AppSense relay, exact-release apply/readback/restore, and explicit provider lifecycle control. Signed/notarized dual-architecture packages, a verified installer, and the stable Homebrew tap are published; `v0.1.1` adds current-owner routing, persistent relay health/recovery, durable idempotency, and atomic multi-file gating.
 
 ## Core documentation
 
@@ -33,25 +33,25 @@ Important: configuration parity is implemented for the verified macOS/Codex Micr
 
 - Product name: WorkLouderCTL
 - Repository: MarlinDiary/worklouder-input-cli
-- Binary: worklouderctl (currently built from source)
+- Binary: worklouderctl (source, signed release installer, and Homebrew)
 - Product category: full-configuration CLI and command-line configurator
 - Initial device target: Work Louder Codex Micro
 - Initial host target: macOS
 - Product scope: replace Codex and Input configuration GUIs for Codex Micro with complete typed CLI coverage
-- Tier boundary: Tier 1 uses Codex authorities; Tier 2 and above use Work Louder Input authorities; the CLI configures every tier
+- Tier boundary: Tier 1 uses Codex authorities; Tier 2 device configuration preserves the current Codex/Input owner; Tier 3 and Tier 4 host/runtime operations use Work Louder Input
 - Provider strategy: delegate driver, BLE/HID, firmware, and host runtime behavior to the installed Codex/Input versions
 - Non-goal: implementing a replacement hardware driver or firmware protocol
 - Initial research baseline: Codex 26.727.51351, Work Louder Input 0.17.3/0.18.0, and Codex Micro firmware v0.6.0
 - Public fixture boundary: deterministic synthetic Input 0.17.3/0.18.0 configuration snapshots and a firmware v0.6.0 status DTO, with regenerated SHA-256 manifests and sensitive-pattern checks
-- Current maturity: configuration-parity prerelease; exact-release live transactions, provider handoff, deterministic macOS packaging, and fail-closed signed-release automation are implemented; the first signed tag is pending
+- Current maturity: signed/notarized configuration-parity release with exact-release live transactions, current-owner routing, explicit provider handoff, deterministic macOS packaging, and stable Homebrew distribution
 - Current Codex commands: `codex doctor/inspect/export`, `codex bridge inspect`, `codex config snapshot/apply/restore`, six-slot `codex agent-key assignments/snapshot/get/set/clear/apply/restore`, `codex lighting brightness/auto-off get/set`, and `codex voice get/set`
 - Codex Tier 1 candidates: `codex agent-source`, `codex agent-key tap-mode`, `codex command-key`, global lighting, and voice mode provide strict offline get/set/reset with deterministic revisions and source-SHA CAS receipts; six-slot Agent Key candidates preserve untargeted unknown fields and use a separate global-state revision; both the fixture and Codex `26.727.51351` exact-release overlay verify settings and Agent Key apply/readback/restore
 - Input cache command: `input config snapshot` captures `keymap.json` plus optional `smart_actions.json` byte-for-byte, excludes host-only state, and emits a bridge-revision-equivalent semantic snapshot without controlling the Input GUI or device transport
-- Primary device transport: authenticated Input Companion Bridge v1 over a private Unix socket; Rust client, one-call Input-main integration, release conformance command, and cross-language tests are implemented
+- Primary device transport: the authenticated Companion Bridge v1 of the current Codex/Input owner over a private Unix socket; owner detection never performs an implicit handoff
 - Bridge config commands: deterministic byte-exact snapshot/validate plus capability-gated apply/restore with immutable CLI backup, CAS, session idempotency, full readback, and automatic rollback
 - Input recovery commands: `input recovery plan/apply` bind a complete pre-recovery snapshot to Input/device-kit versions, bootloader identity, and Input-selected release; Input owns programming/reconnect, while the CLI enforces exact firmware/config postflight, receipt inspection, and idempotent replay
 - Released Input integration: Input 0.18.0 has no built-in external listener, but its exact-release overlay is live-validated for every negotiated capability; optional preset/reset/update/recovery authorities are absent and fail closed
-- Released Codex integration: Codex 26.727.51351 has no built-in external listener, but its exact-release overlay is live-validated for settings and Agent Key transactions
+- Released Codex integration: Codex 26.727.51351 has no built-in external listener, but its exact-release overlay is live-validated for settings, Agent Keys, device configuration, persistent AppSense focus forwarding, and connection continuity
 - Direct compatibility transport: `device status`, `device files`, and dual-hash atomic `device export` through Input 0.18.0's bundled device kit with `require-closed` or explicit `restart`
 - Safety model: inspect, plan, diff, backup, conflict check, apply, readback, checksum verification, synchronize, rollback
 - Agent model: deterministic JSON over the same transaction engine as the human CLI

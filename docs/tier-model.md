@@ -148,8 +148,9 @@ communication channel. WorkLouderCTL therefore follows these rules:
 2. classify every requested field by tier before generating a plan;
 3. split a cross-tier plan into explicit ordered transactions with one combined
    diff and rollback boundary;
-4. coordinate Codex for Tier 1 and Input for Tier 2 or Tier 3 configuration
-   transactions; keep Codex owner for runtime AppSense focus relay;
+4. coordinate Codex for Tier 1, preserve the current Codex/Input owner for Tier
+   2 device configuration, and use Input for Tier 3 host authorities; keep
+   Codex owner for runtime AppSense focus relay;
 5. preserve unknown fields byte-for-byte in every authority;
 6. refresh/reopen the affected apps and verify settings plus runtime behavior;
 7. leave a runnable rollback record for every mutation.

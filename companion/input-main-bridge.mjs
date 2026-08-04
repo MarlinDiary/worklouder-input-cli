@@ -85,7 +85,7 @@ export async function startInputCompanionBridge({
   inputVersion,
   socketPath,
   tokenPath,
-  bridgeVersion = "0.1.0",
+  bridgeVersion = "0.1.1",
   token,
   maxRequestBytes = DEFAULT_MAX_REQUEST_BYTES,
   maxResponseBytes = DEFAULT_MAX_RESPONSE_BYTES,

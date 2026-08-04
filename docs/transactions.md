@@ -6,13 +6,15 @@ configuration authorities used by Codex Micro:
 | Apply order | Authority | Tier | Runtime owner |
 | ---: | --- | ---: | --- |
 | 1 | Input host settings | 3 | Input |
-| 2 | Input device configuration | 2 | Input |
+| 2 | Device configuration | 2 | Current Codex or Input owner |
 | 3 | Codex Agent Keys | 1 | Codex |
 | 4 | Codex settings | 1 | Codex |
 
 Restore uses the reverse order. WorkLouderCTL delegates every write to the
 installed app's authenticated companion bridge; it does not implement a driver
-or a second device runtime.
+or a second device runtime. `--device-owner auto` is the default and preserves
+the exclusive current owner. `--device-owner codex|input` selects an explicit
+route but still does not perform a handoff.
 
 ## 1. Create and inspect a plan
 
@@ -44,6 +46,7 @@ artifacts, stale live revisions, and mismatched Codex source bytes.
 
 ```console
 worklouderctl --json transaction apply \
+  --device-owner auto \
   --plan plan.json \
   --backup-dir apply-backup \
   --receipt apply-receipt.json \
@@ -61,6 +64,12 @@ runs a second all-authority postflight. If a later provider fails, earlier
 writes are restored in reverse order. A failure still writes a receipt with
 `status: rolled-back` or `status: rollback-failed` before the command exits with
 typed status `6` or `7`. See [exit statuses](exit-statuses.md).
+
+For Codex-owned device configuration, one changed device file uses the existing
+provider write. A change spanning multiple files requires the firmware's
+multi-file transaction primitive; if unavailable, the operation stops before
+the first file write. Persistent idempotency binds each key to the exact
+operation, baseline revision, and target revision.
 
 An exact idempotent retry returns the existing receipt only after revalidating
 the private catalog and current live state. State drift makes the retry fail
@@ -80,6 +89,7 @@ worklouderctl --json transaction apply \
 
 ```console
 worklouderctl --json transaction restore \
+  --device-owner auto \
   --apply-receipt apply-receipt.json \
   --backup-dir restore-backup \
   --receipt restore-receipt.json \

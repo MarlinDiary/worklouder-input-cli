@@ -85,7 +85,7 @@ Promises as failures even when the USB interface still enumerates.
 | Command permission | explicit host command toggle | `input permission command` | fixture plus Input 0.18.0 overlay CAS/apply/readback/exact-restore live-validated |
 | Cheat Sheet | show, hold, hide, toggle assignments | `cheat-sheet` | exact four-token catalog, binding inventory, strict offline bind candidate, and fixture apply/readback/restore verified |
 | Radial menu | ordered sectors, angles, assignment kinds, and resolved Action/Multi Action/Smart Action labels | `radial show`, `layer joystick`, `control set` | no separate persisted settings exist; inspection plus sector/assignment mutation and fixture apply/readback/restore verified; overlay runtime remains Input-owned |
-| AppSense runtime | Input-owned observation plus a persistent Codex-owner focus relay | `appsense test`, `appsense relay` | Input 0.18.0 observation remains available; Codex-owner relay install/status/sync/remove is live-verified with Notion 1→2→Codex 2→1 transitions, unchanged service/API/comm identities, and continuous HID/joystick subscriptions |
+| AppSense runtime | Input-owned observation plus a persistent Codex-owner focus relay | `appsense test`, `appsense relay` | Input 0.18.0 observation remains available; Codex-owner relay install/status/test/sync/remove is live-verified with functional health, bounded retry/recovery, Notion 1→2→Codex 2→1 transitions, unchanged service/API/comm identities, and continuous HID/joystick subscriptions |
 
 ## Tier 4 — Input operations
 

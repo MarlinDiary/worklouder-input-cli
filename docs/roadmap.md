@@ -126,7 +126,8 @@ repository. They are intentionally tracked separately from implementation:
 - optional: a released Codex build adopts the packaged Codex Companion Bridge
   so exact-release overlay installation is no longer required;
 - [x] the project owner provisioned Developer ID/notarization credentials,
-  published and independently verified `v0.1.0`, and promoted the generated
+  published and independently verified `v0.1.0`, prepared the owner-preserving
+  `v0.1.1`, and promoted the generated
   formula to the stable `MarlinDiary/tap` Homebrew tap;
 - [x] official-provider USB mutation, physical-device rollback, reconnect
   portability, bidirectional handoff, and final single-owner recovery evidence

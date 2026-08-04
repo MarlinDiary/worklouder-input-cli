@@ -1,8 +1,9 @@
 # Codex Companion Bridge v1
 
-The Codex Companion Bridge is WorkLouderCTL's stable Tier 1 automation boundary.
-It keeps Codex as the settings, global-state, and runtime authority while giving
-the CLI a versioned, authenticated transaction API.
+The Codex Companion Bridge is WorkLouderCTL's stable Tier 1 and Codex-owned
+device automation boundary. It keeps Codex as the settings, global-state, and
+runtime authority while giving the CLI a versioned, authenticated transaction
+and focus API.
 
 ## Release boundary
 
@@ -12,11 +13,12 @@ The renderer reaches native handlers with `POST vscode://codex/{method}`. The
 inspected release does not publish an external listener. This repository ships
 the reference main-process adapter and integration, not an `app.asar` patch.
 
-The bridge is useful in two environments:
+The bridge runs in two environments:
 
 1. the isolated fixture, which verifies the complete CLI transaction today;
-2. a Codex main process that installs `installCodexCompanionBridge` and supplies
-   an exact settings replacer.
+2. Codex 26.727.51351 after `worklouderctl provider install codex` verifies the
+   exact version/hashes and installs the reference integration without editing
+   `app.asar` or navigating/restarting the GUI.
 
 The adapter advertises mutation capabilities only when the integration supplies
 complete explicit-setting replacement, including removal of keys that are
@@ -54,6 +56,13 @@ one authenticated `bridge.hello` request and negotiates named capabilities.
 | `codex.agentKeys.snapshot` | `codex.agentKeys.snapshot.v1` | read and validate all six custom Agent Key slots |
 | `codex.agentKeys.apply` | `codex.agentKeys.apply.v1` | complete six-slot global-state CAS apply |
 | `codex.agentKeys.restore` | `codex.agentKeys.restore.v1` | complete six-slot global-state CAS restore |
+| `codex.device.focus` | `codex.device.focus.v1` | forward the frontmost application through the existing connected service and verify connection continuity |
+
+The persistent `appsense relay` authenticates once and reuses this socket.
+Device timeouts retry the same service; only transport/capability failure can
+trigger one serialized exact-release bridge reinstall. Relay health is exposed
+by `appsense relay status`, verified once by `appsense relay test`, and included
+in `doctor`.
 
 ## CLI workflow
 

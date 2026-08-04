@@ -7,8 +7,11 @@ artifacts.
 ```console
 worklouderctl --json schema list
 worklouderctl --json schema show agent-execution-v1
+worklouderctl --json schema show appsense-relay-v1
 worklouderctl --json schema show backup-inspection-v1
+worklouderctl --json schema show codex-owner-config-v1
 worklouderctl --json schema show command-envelope-v1
+worklouderctl --json schema show compatibility-matrix-v1
 worklouderctl --json schema show configuration-v1
 worklouderctl --json schema show doctor-report-v1
 worklouderctl --json schema show input-operations-v1
@@ -25,8 +28,11 @@ use JSON Schema Draft 2020-12.
 | Registry name | Contract |
 | --- | --- |
 | `agent-execution-v1` | validation and execution results for shell-free agent calls |
+| `appsense-relay-v1` | persistent Codex-owner focus relay lifecycle and functional health |
 | `backup-inspection-v1` | verified artifact kind, restore availability, and migration requirements |
+| `codex-owner-config-v1` | Codex-owned device snapshot, validation, apply, restore, idempotency, and continuity receipts |
 | `command-envelope-v1` | shell-free `argv`, output mode, and accepted exit statuses |
+| `compatibility-matrix-v1` | per-release application, bridge, firmware, evidence, and required-gate inventory |
 | `configuration-v1` | Codex settings, Codex Agent Keys, Input device configuration, and Input host settings snapshots |
 | `doctor-report-v1` | global provider health, checks, discovered devices, and authenticated configuration readiness |
 | `transaction-v1` | coordinated plan, transaction receipt, and private backup catalog |

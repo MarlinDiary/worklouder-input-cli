@@ -34,7 +34,7 @@ for AppSense switching without transferring device ownership.
 > Configuration parity is implemented for the verified macOS/Codex Micro
 > boundary. Codex `26.727.51351` and Input `0.18.0` have completed real-device
 > apply/readback/exact-restore transactions and bidirectional provider handoff.
-> The official `v0.1.0` release provides signed and notarized Apple Silicon and
+> The official `v0.1.1` release provides signed and notarized Apple Silicon and
 > Intel binaries. Install it from the stable Homebrew tap or with the verified
 > binary installer below.
 
@@ -102,7 +102,7 @@ Install the authenticated provider integrations and verify the machine:
 ```console
 ./target/release/worklouderctl provider install codex
 ./target/release/worklouderctl provider install input
-./target/release/worklouderctl provider handoff codex
+./target/release/worklouderctl provider status
 ./target/release/worklouderctl doctor --strict
 ```
 
@@ -124,9 +124,12 @@ worklouderctl device status
 worklouderctl device files
 ```
 
-### Switch the device owner
+### Preserve or explicitly switch the device owner
 
-Only one provider owns the Codex Micro session at a time:
+`device status/files/export`, `device config snapshot/validate/apply/restore`,
+and coordinated transactions default to `--owner auto`. They detect the current
+owner and use that provider's already-connected session, so configuration no
+longer requires a handoff. An explicit switch remains available when wanted:
 
 ```console
 worklouderctl provider handoff input
@@ -136,7 +139,7 @@ worklouderctl provider handoff codex
 
 Input is launched as a hidden user-scoped provider during handoff. The CLI uses
 private authenticated sockets and validates the returned provider/action
-identity before accepting a result.
+identity before accepting a result. It never performs an implicit handoff.
 
 ### Keep Codex connected during AppSense switching
 
@@ -155,21 +158,25 @@ worklouderctl device config apply --owner codex \
   --expected-revision REVISION
 worklouderctl appsense relay install
 worklouderctl appsense relay status
+worklouderctl appsense relay test
 worklouderctl appsense relay sync
 ```
 
-The relay observes macOS `becameFrontmost` events and forwards the application
-identity through Codex's existing connected device API. Codex remains the sole
-USB owner, so switching between an application layer and the Codex layer does
-not stop its HID or joystick subscriptions. The same `--owner codex` path gives
-device configuration snapshot/apply/restore immutable backups, exact readback,
-automatic rollback, and connection-continuity checks. Use
+The relay keeps one authenticated socket open, observes macOS `becameFrontmost`
+events, and forwards the application identity through Codex's existing
+connected device API. Bounded timeout retries keep the same service; transport
+failure triggers one serialized bridge recovery. Codex remains the sole USB
+owner, so application/Codex layer switches keep the same comm/API identities
+and HID/joystick subscriptions. `relay status` exposes functional health and
+`relay test` verifies one focus round trip. The same `--owner codex` path gives
+device configuration snapshot/apply/restore immutable backups, persistent
+idempotency, exact readback, automatic rollback, atomic multi-file gating, and
+connection-continuity checks. Use
 `worklouderctl appsense relay remove` to remove the LaunchAgent.
 
-### Back up, edit and apply an Input configuration
+### Back up, edit and apply the current device configuration
 
 ```console
-worklouderctl provider handoff input
 worklouderctl device config snapshot --output before.json
 
 worklouderctl profile create \
@@ -184,7 +191,9 @@ worklouderctl device config apply \
 ```
 
 Each semantic editor produces a new candidate file. The source snapshot remains
-unchanged until an explicit transactional apply.
+unchanged until an explicit transactional apply. With the default `--owner
+auto`, this workflow stays on Codex when Codex is connected and stays on Input
+when Input is connected.
 
 ### Configure Codex-native controls
 

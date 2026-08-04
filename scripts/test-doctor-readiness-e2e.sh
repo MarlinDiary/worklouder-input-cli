@@ -114,10 +114,12 @@ assert report["status"] == "pass"
 assert report["configurationReady"] is True
 assert all(provider["installed"] and provider["running"] for provider in report["providers"])
 checks = {check["id"]: check for check in report["checks"]}
-for provider in ("input", "codex"):
+for provider, capability_count in (("input", 4), ("codex", 5)):
     check = checks[f"provider.{provider}.configuration-bridge"]
     assert check["status"] == "pass"
-    assert "all 4 required mutation capabilities" in check["summary"]
+    assert f"all {capability_count} required mutation capabilities" in check["summary"]
+assert checks["appsense.relay"]["status"] == "pass"
+assert "not installed (optional)" in checks["appsense.relay"]["summary"]
 assert all(check["status"] == "pass" for check in report["checks"])
 PY
 
@@ -125,6 +127,7 @@ printf '%s\n' \
   'doctor_provider_health=verified' \
   'doctor_input_authenticated_capabilities=verified' \
   'doctor_codex_authenticated_capabilities=verified' \
+  'doctor_appsense_relay_optional=verified' \
   'doctor_configuration_ready=true' \
   'doctor_strict_exit=0' \
   'doctor_probe_configuration_bytes=preserved'

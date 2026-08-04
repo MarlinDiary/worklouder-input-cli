@@ -31,7 +31,7 @@ macOS 前台应用，从而在不转移设备所有权的情况下执行 AppSens
 > [!NOTE]
 > 当前已在经过验证的 macOS/Codex Micro 边界内实现完整配置覆盖。Codex
 > `26.727.51351` 与 Input `0.18.0` 已通过真实设备写入、读回、精确恢复以及
-> 双向 provider handoff。正式 `v0.1.0` 已提供签名且通过 Apple 公证的 Apple
+> 双向 provider handoff。正式 `v0.1.1` 已提供签名且通过 Apple 公证的 Apple
 > Silicon 与 Intel 二进制；可以通过稳定 Homebrew tap 或下方校验型安装器安装。
 
 ## 功能覆盖
@@ -95,7 +95,7 @@ cargo build --release --locked
 ```console
 ./target/release/worklouderctl provider install codex
 ./target/release/worklouderctl provider install input
-./target/release/worklouderctl provider handoff codex
+./target/release/worklouderctl provider status
 ./target/release/worklouderctl doctor --strict
 ```
 
@@ -116,9 +116,11 @@ worklouderctl device status
 worklouderctl device files
 ```
 
-### 切换设备所有权
+### 保持或显式切换设备所有权
 
-同一时间只有一个 provider 持有 Codex Micro session：
+`device status/files/export`、`device config snapshot/validate/apply/restore`
+以及协调事务默认使用 `--owner auto`。CLI 会识别当前 owner，并复用它已连接的
+session，因此修改配置不再需要 handoff。需要时仍可显式切换：
 
 ```console
 worklouderctl provider handoff input
@@ -127,7 +129,7 @@ worklouderctl provider handoff codex
 ```
 
 Handoff 期间，Input 以隐藏的用户级 provider 运行。CLI 通过私有认证 socket
-通信，并验证返回结果中的 provider 与 action identity。
+通信，并验证返回结果中的 provider 与 action identity；CLI 不会隐式 handoff。
 
 ### AppSense 切层时保持 Codex 连接
 
@@ -145,19 +147,22 @@ worklouderctl device config apply --owner codex \
   --expected-revision REVISION
 worklouderctl appsense relay install
 worklouderctl appsense relay status
+worklouderctl appsense relay test
 worklouderctl appsense relay sync
 ```
 
-Relay 监听 macOS `becameFrontmost` 事件，并通过 Codex 当前已连接的设备 API
-转发应用 identity。Codex 始终是唯一 USB owner，应用层与 Codex 层切换时不会
-停止 HID 或 joystick subscription。`--owner codex` 也为设备配置的
-snapshot/apply/restore 提供不可变备份、精确读回、自动回滚与连接连续性检查。运行
+Relay 保持一条认证 socket，监听 macOS `becameFrontmost` 事件，并通过 Codex
+当前已连接的设备 API 转发应用 identity。超时会在同一 service 上做有界重试；
+transport 失败才会串行恢复 bridge。Codex 始终是唯一 USB owner，应用层与 Codex
+层切换时会保留相同的 comm/API identity 与 HID/joystick subscription。
+`relay status` 报告功能健康度，`relay test` 验证一次 focus round trip。
+`--owner codex` 也为设备配置的 snapshot/apply/restore 提供不可变备份、持久
+幂等、精确读回、自动回滚、多文件原子门控与连接连续性检查。运行
 `worklouderctl appsense relay remove` 可删除 LaunchAgent。
 
-### 备份、修改并应用 Input 配置
+### 备份、修改并应用当前设备配置
 
 ```console
-worklouderctl provider handoff input
 worklouderctl device config snapshot --output before.json
 
 worklouderctl profile create \
@@ -172,6 +177,7 @@ worklouderctl device config apply \
 ```
 
 每个语义编辑命令都会生成新的 candidate 文件。只有显式事务写入才会改变实时配置。
+默认 `--owner auto` 会在 Codex 已连接时保持 Codex，在 Input 已连接时保持 Input。
 
 ### 配置 Codex 原生控制
 
