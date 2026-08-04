@@ -8,6 +8,7 @@ import {
   createFocusForwarder,
   launchAgentProgramArguments,
   relayHealth,
+  runOneShot,
 } from "./codex-focus-relay-core.mjs";
 
 const TOKEN = "0123456789abcdef".repeat(4);
@@ -124,6 +125,19 @@ test("LaunchAgent uses a stable PATH lookup for a bare Node command", () => {
     }),
     ["/opt/runtime/bin/node", "/tmp/relay.mjs", "run"],
   );
+});
+
+test("one-shot relay always closes its persistent bridge client", async () => {
+  let closes = 0;
+  assert.equal(
+    await runOneShot(async () => "complete", () => { closes += 1; }),
+    "complete",
+  );
+  await assert.rejects(
+    runOneShot(async () => { throw new Error("fixture failure"); }, () => { closes += 1; }),
+    /fixture failure/,
+  );
+  assert.equal(closes, 2);
 });
 
 function focusResult(app) {

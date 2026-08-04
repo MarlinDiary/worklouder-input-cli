@@ -9,6 +9,7 @@ import {
   createFocusForwarder,
   launchAgentProgramArguments,
   relayHealth,
+  runOneShot,
 } from "./codex-focus-relay-core.mjs";
 
 const execFilePromise = promisify(execFile);
@@ -43,7 +44,11 @@ if (!["status", "install", "remove", "once", "run"].includes(mode)) {
 if (mode === "run") {
   await runRelay();
 } else if (mode === "once") {
-  console.log(JSON.stringify({ action: "once", relay: await forwardFrontmost() }));
+  const relay = await runOneShot(
+    () => forwardFrontmost(),
+    () => focusForwarder.close(),
+  );
+  console.log(JSON.stringify({ action: "once", relay }));
 } else if (mode === "install") {
   console.log(JSON.stringify(await installRelay()));
 } else if (mode === "remove") {

@@ -235,6 +235,17 @@ export function launchAgentProgramArguments({ nodeCommand, scriptPath }) {
     : ["/usr/bin/env", nodeCommand, scriptPath, "run"];
 }
 
+export async function runOneShot(operation, close) {
+  if (typeof operation !== "function" || typeof close !== "function") {
+    throw new TypeError("one-shot operation and close callbacks are required");
+  }
+  try {
+    return await operation();
+  } finally {
+    close();
+  }
+}
+
 function validateFocusApp(app) {
   if (!app || typeof app !== "object" || Array.isArray(app)) {
     throw new TypeError("focus app must be an object");

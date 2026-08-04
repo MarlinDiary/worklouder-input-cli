@@ -39,6 +39,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - AppSense relay timeouts retry the existing Codex service instead of
   reinstalling the bridge; genuine transport loss performs one serialized
   self-healing reinstall and leaves a diagnostic health record.
+- `appsense relay test` now closes its one-shot persistent bridge client after
+  success or failure, so the verification command exits immediately.
 - Multi-file device changes require the firmware transaction primitive and
   fail before the first write when it is absent. Failed writes first read back
   state and skip unnecessary rollback writes when the baseline is intact.
