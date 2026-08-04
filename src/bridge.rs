@@ -21,6 +21,7 @@ pub const ADAPTER: &str = "input-companion-bridge-v1";
 const PROTOCOL_VERSION: u64 = 1;
 const MAX_TOKEN_BYTES: usize = 4096;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+const CONFIG_MUTATION_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 const FIRMWARE_UPDATE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const CONFIG_SNAPSHOT_KIND: &str = "worklouder-input-config-snapshot";
 const CONFIG_REVISION_ALGORITHM: &str = "sha256:path-u32be-path-bytes-size-u64be-content-v1";
@@ -2363,7 +2364,7 @@ pub fn config_validate(
     input: &Path,
     expected_revision: Option<&str>,
 ) -> Result<ConfigValidation> {
-    let (snapshot, _) = read_config_snapshot(input)?;
+    let (mut snapshot, _) = read_config_snapshot(input)?;
     if let Some(revision) = expected_revision {
         ensure!(
             is_sha256(revision),
@@ -2371,11 +2372,18 @@ pub fn config_validate(
         );
     }
     let mut client = BridgeClient::connect(paths)?;
+    let live_snapshot: Value = client.call(
+        "device.config.snapshot",
+        "device.config.snapshot.v1",
+        json!({ "deviceId": device_id }),
+    )?;
+    let live_metadata = inspect_config_snapshot(&live_snapshot)?;
+    rebind_config_snapshot_device_id(&mut snapshot, &live_metadata.device_id)?;
     let validation: ConfigValidation = client.call(
         "device.config.validate",
         "device.config.validate.v1",
         json!({
-            "deviceId": device_id,
+            "deviceId": live_metadata.device_id,
             "snapshot": snapshot,
             "expectedRevision": expected_revision,
         }),
@@ -2683,10 +2691,11 @@ fn config_mutate(
     expected_input_version: Option<&str>,
 ) -> Result<ConfigMutationReceipt> {
     ensure!(input != backup, "input and backup paths must differ");
-    let (candidate, candidate_metadata) = read_config_snapshot(input)?;
-    // Input assigns a new session-local deviceId after every reconnect. Resolve
-    // the destination from the live provider before applying an older snapshot;
-    // the provider validates the snapshot's stable device descriptor.
+    let (mut candidate, candidate_metadata) = read_config_snapshot(input)?;
+    // Input assigns a new session-local deviceId after every reconnect. Keep
+    // the immutable backup for rollback and the expected revision, but resolve
+    // the mutation destination from a fresh provider snapshot. The provider
+    // validates the candidate's stable device descriptor before writing.
     let backup_receipt = if backup.exists() {
         let (_, metadata) = read_config_snapshot(backup)?;
         if let Some(device_id) = device_id {
@@ -2705,7 +2714,6 @@ fn config_mutate(
     } else {
         config_snapshot(paths, device_id, backup)?
     };
-    let selected_device = backup_receipt.device_id.clone();
     let expected = expected_revision.unwrap_or(&backup_receipt.revision);
     ensure!(
         is_sha256(expected),
@@ -2718,6 +2726,25 @@ fn config_mutate(
         !key.is_empty() && key.len() <= 256 && !key.contains('\0'),
         "idempotency key was invalid"
     );
+    let mut client = BridgeClient::connect(paths)?;
+    if let Some(version) = expected_input_version {
+        ensure!(
+            client.handshake.input_version == version,
+            "Input version differed from the frozen configuration plan"
+        );
+    }
+    let live_snapshot: Value = client.call(
+        "device.config.snapshot",
+        "device.config.snapshot.v1",
+        json!({ "deviceId": device_id }),
+    )?;
+    let live_metadata = inspect_config_snapshot(&live_snapshot)?;
+    ensure!(
+        live_metadata.revision.eq_ignore_ascii_case(expected),
+        "live configuration revision differed from expected revision"
+    );
+    let selected_device = live_metadata.device_id;
+    rebind_config_snapshot_device_id(&mut candidate, &selected_device)?;
     let mut params = json!({
         "deviceId": selected_device,
         "expectedRevision": expected,
@@ -2727,13 +2754,7 @@ fn config_mutate(
         .as_object_mut()
         .context("mutation params were not an object")?
         .insert(payload_field.to_owned(), candidate);
-    let mut client = BridgeClient::connect(paths)?;
-    if let Some(version) = expected_input_version {
-        ensure!(
-            client.handshake.input_version == version,
-            "Input version differed from the frozen configuration plan"
-        );
-    }
+    client.set_timeout(CONFIG_MUTATION_TIMEOUT)?;
     let response: ConfigMutationResponse = client.call(method, capability, params)?;
     validate_mutation_response(
         &response,
@@ -3072,6 +3093,25 @@ fn inspect_config_snapshot(snapshot: &Value) -> Result<ConfigSnapshotMetadata> {
         file_count: files.len(),
         total_bytes,
     })
+}
+
+fn rebind_config_snapshot_device_id(snapshot: &mut Value, device_id: &str) -> Result<()> {
+    ensure!(
+        !device_id.is_empty(),
+        "live configuration snapshot omitted deviceId"
+    );
+    let object = snapshot
+        .as_object_mut()
+        .context("bridge configuration snapshot was not an object")?;
+    let snapshot_device_id = object
+        .get_mut("deviceId")
+        .context("bridge configuration snapshot omitted deviceId")?;
+    ensure!(
+        snapshot_device_id.as_str().is_some(),
+        "bridge configuration snapshot had an invalid deviceId"
+    );
+    *snapshot_device_id = Value::String(device_id.to_owned());
+    Ok(())
 }
 
 fn is_sha256(value: &str) -> bool {
@@ -3464,6 +3504,8 @@ mod tests {
             "capabilities": [
                 "bridge.handshake.v1",
                 "bridge.health.v1",
+                "device.config.snapshot.v1",
+                "device.config.validate.v1",
                 "device.config.restore.v1"
             ]
         })
@@ -3623,7 +3665,7 @@ mod tests {
     }
 
     #[test]
-    fn config_restore_uses_live_backup_device_id_after_reconnect() {
+    fn config_restore_refreshes_the_session_device_id_after_reconnect() {
         let root = PathBuf::from("/tmp").join(format!(
             "wlb-config-reconnect-{}-{}",
             std::process::id(),
@@ -3634,6 +3676,7 @@ mod tests {
         let backup_path = root.join("backup.json");
         let before_revision = "a".repeat(64);
         let target_revision = "b".repeat(64);
+        let live_device_id = "device-session-4".to_owned();
         let snapshot = |device_id: &str, revision: &str| {
             json!({
                 "schemaVersion": 1,
@@ -3657,11 +3700,13 @@ mod tests {
 
         let before_for_handler = before_revision.clone();
         let target_for_handler = target_revision.clone();
+        let live_device_id_for_handler = live_device_id.clone();
         let (paths, server) = fixture(move |method, params| match method {
             "bridge.hello" => config_restore_hello(),
+            "device.config.snapshot" => snapshot(&live_device_id_for_handler, &before_for_handler),
             "device.config.restore" => {
-                assert_eq!(params["deviceId"], "device-session-3");
-                assert_eq!(params["snapshot"]["deviceId"], "device-session-1");
+                assert_eq!(params["deviceId"], live_device_id_for_handler);
+                assert_eq!(params["snapshot"]["deviceId"], live_device_id_for_handler);
                 json!({
                     "schemaVersion": 1,
                     "kind": "worklouder-input-config-mutation",
@@ -3670,7 +3715,7 @@ mod tests {
                     "idempotentReplay": false,
                     "changed": true,
                     "rollbackPerformed": false,
-                    "deviceId": "device-session-3",
+                    "deviceId": live_device_id_for_handler,
                     "beforeRevision": before_for_handler,
                     "afterRevision": target_for_handler,
                     "targetRevision": target_for_handler,
@@ -3689,8 +3734,67 @@ mod tests {
             Some("fixture-reconnect-restore"),
         )
         .unwrap();
-        assert_eq!(receipt.device_id, "device-session-3");
+        assert_eq!(receipt.device_id, live_device_id);
         assert_eq!(receipt.after_revision, target_revision);
+        server.join().unwrap();
+        fs::remove_dir_all(paths.socket.parent().unwrap()).unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn config_validate_refreshes_the_session_device_id_after_reconnect() {
+        let root = PathBuf::from("/tmp").join(format!(
+            "wlb-config-validate-reconnect-{}-{}",
+            std::process::id(),
+            NEXT_TEST.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&root).unwrap();
+        let candidate_path = root.join("candidate.json");
+        let revision = "a".repeat(64);
+        let candidate_revision = "b".repeat(64);
+        let live_device_id = "device-session-4".to_owned();
+        let snapshot = |device_id: &str, revision: &str| {
+            json!({
+                "schemaVersion": 1,
+                "kind": CONFIG_SNAPSHOT_KIND,
+                "revisionAlgorithm": CONFIG_REVISION_ALGORITHM,
+                "revision": revision,
+                "deviceId": device_id,
+                "files": [{ "relativePath": "keymap.json", "size": 2 }]
+            })
+        };
+        fs::write(
+            &candidate_path,
+            serde_json::to_vec(&snapshot("device-session-1", &candidate_revision)).unwrap(),
+        )
+        .unwrap();
+
+        let revision_for_handler = revision.clone();
+        let candidate_for_handler = candidate_revision.clone();
+        let live_device_id_for_handler = live_device_id;
+        let (paths, server) = fixture(move |method, params| match method {
+            "bridge.hello" => config_restore_hello(),
+            "device.config.snapshot" => {
+                snapshot(&live_device_id_for_handler, &revision_for_handler)
+            }
+            "device.config.validate" => {
+                assert_eq!(params["deviceId"], live_device_id_for_handler);
+                assert_eq!(params["snapshot"]["deviceId"], live_device_id_for_handler);
+                json!({
+                    "schemaVersion": 1,
+                    "kind": "worklouder-input-config-validation",
+                    "valid": true,
+                    "revision": candidate_for_handler,
+                    "liveRevision": revision_for_handler,
+                    "fileCount": 1,
+                    "totalBytes": 2
+                })
+            }
+            other => panic!("unexpected method {other}"),
+        });
+        let validation = config_validate(&paths, None, &candidate_path, Some(&revision)).unwrap();
+        assert_eq!(validation.revision, candidate_revision);
+        assert_eq!(validation.live_revision, Some(revision));
         server.join().unwrap();
         fs::remove_dir_all(paths.socket.parent().unwrap()).unwrap();
         fs::remove_dir_all(root).unwrap();
