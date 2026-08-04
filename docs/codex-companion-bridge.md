@@ -62,7 +62,10 @@ The persistent `appsense relay` authenticates once and reuses this socket.
 Device timeouts retry the same service; only transport/capability failure can
 trigger one serialized exact-release bridge reinstall. Relay health is exposed
 by `appsense relay status`, verified once by `appsense relay test`, and included
-in `doctor`.
+in `doctor`. Focus forwarding and Codex-owner configuration acquire the same
+per-user device-operation lock around service API calls. The relay releases
+that lock before any bridge recovery, preserving provider-lock ordering and
+preventing focus events from interleaving with snapshot/apply/restore.
 
 ## CLI workflow
 

@@ -49,6 +49,8 @@ test("persistent Codex bridge client authenticates and forwards focus", async ()
 test("focus forwarder retries device timeouts without reinstalling the bridge", async () => {
   let calls = 0;
   let installs = 0;
+  let locks = 0;
+  let activeLocks = 0;
   const client = {
     async call() {
       calls += 1;
@@ -64,10 +66,21 @@ test("focus forwarder retries device timeouts without reinstalling the bridge", 
     clientFactory: () => client,
     retryDelaysMs: [0, 1, 1],
     sleep: async () => {},
+    withCallLock: async (operation) => {
+      locks += 1;
+      activeLocks += 1;
+      try {
+        return await operation();
+      } finally {
+        activeLocks -= 1;
+      }
+    },
   });
   const forwarded = await forwarder.forward(APP);
   assert.equal(forwarded.retryCount, 2);
   assert.equal(installs, 0);
+  assert.equal(locks, 3);
+  assert.equal(activeLocks, 0);
 });
 
 test("focus forwarder reinstalls once after a transport failure", async () => {

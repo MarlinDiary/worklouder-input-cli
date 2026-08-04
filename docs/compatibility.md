@@ -119,7 +119,9 @@ operation/baseline/target tuple. The AppSense LaunchAgent keeps one private
 authenticated bridge connection, retries device timeouts on the same service,
 and performs one serialized exact-release reinstall only for transport or
 capability failure. `doctor` reports relay process state and functional health
-separately.
+separately. Relay focus and Codex-owner configuration also share a dedicated
+device-operation lock; bridge recovery occurs only after that lock is released,
+so configuration and frontmost-app events cannot race or invert lock order.
 
 The released Input writer did not negotiate optional preset, reset,
 firmware-update, or bootloader-recovery authorities. Those operations therefore

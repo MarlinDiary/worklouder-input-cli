@@ -170,6 +170,7 @@ export function createFocusForwarder({
   clientFactory = (options) => new CodexBridgeClient(options),
   retryDelaysMs = DEFAULT_RETRY_DELAYS_MS,
   sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  withCallLock = async (operation) => operation(),
 }) {
   let client = null;
 
@@ -188,7 +189,9 @@ export function createFocusForwarder({
         if (delay > 0) await sleep(delay);
         try {
           client ??= clientFactory({ socketPath, tokenPath });
-          const result = await client.call("codex.device.focus", { app, expectLayer });
+          const result = await withCallLock(() =>
+            client.call("codex.device.focus", { app, expectLayer }),
+          );
           validateFocusResult(result);
           return { result, retryCount: index, bridgeReinstalled: installAttempted };
         } catch (error) {

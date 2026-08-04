@@ -11,6 +11,7 @@ import {
   relayHealth,
   runOneShot,
 } from "./codex-focus-relay-core.mjs";
+import { acquireProviderLock } from "./provider-lock.mjs";
 
 const execFilePromise = promisify(execFile);
 const LABEL = "dev.worklouderctl.appsense-relay";
@@ -25,11 +26,23 @@ const STATE = join(SUPPORT, "appsense-relay-state.json");
 const SOCKET = join(HOME, "Library/Application Support/Codex/worklouderctl-codex-bridge-v1.sock");
 const TOKEN = join(HOME, "Library/Application Support/Codex/worklouderctl-codex-bridge-v1.token");
 const PROVIDER = fileURLToPath(new URL("./install-codex-live-bridge.mjs", import.meta.url));
+const DEVICE_OPERATION_LOCK = join(SUPPORT, "codex-device-operation.lock");
 const NODE_COMMAND = process.env.WORKLOUDERCTL_RELAY_NODE_COMMAND ?? "node";
 const focusForwarder = createFocusForwarder({
   socketPath: SOCKET,
   tokenPath: TOKEN,
   installBridge: ensureBridgeInstalled,
+  withCallLock: async (operation) => {
+    const lock = await acquireProviderLock({
+      lockPath: DEVICE_OPERATION_LOCK,
+      mode: "codex-focus-relay",
+    });
+    try {
+      return await operation();
+    } finally {
+      await lock.release();
+    }
+  },
 });
 const [mode = "status"] = process.argv.slice(2);
 
@@ -96,7 +109,7 @@ async function runRelay() {
     "+becameFrontmost",
     "forever",
   ], { stdio: ["ignore", "pipe", "pipe"] });
-  listener.stdout.on("data", scheduleForward);
+  listener.stdout.on("data", () => scheduleForward());
   listener.stderr.on("data", (data) => process.stderr.write(data));
   listener.on("error", (error) => {
     process.stderr.write(`${JSON.stringify({ error: errorMessage(error) })}\n`);

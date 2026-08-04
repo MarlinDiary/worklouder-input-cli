@@ -171,7 +171,9 @@ and HID/joystick subscriptions. `relay status` exposes functional health and
 `relay test` verifies one focus round trip. The same `--owner codex` path gives
 device configuration snapshot/apply/restore immutable backups, persistent
 idempotency, exact readback, automatic rollback, atomic multi-file gating, and
-connection-continuity checks. Use
+connection-continuity checks. Relay focus calls and configuration calls share
+a per-user device-operation lock, so a macOS focus event cannot interleave with
+a configuration read or write. Use
 `worklouderctl appsense relay remove` to remove the LaunchAgent.
 
 ### Back up, edit and apply the current device configuration

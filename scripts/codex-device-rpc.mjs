@@ -32,6 +32,7 @@ const CONFIG_FILES = new Set(["keymap.json", "smart_actions.json"]);
 const MAX_CONFIG_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_CONFIG_TOTAL_BYTES = 32 * 1024 * 1024;
 const PROVIDER_LOCK = `${process.env.HOME}/Library/Application Support/worklouderctl/provider-handoff.lock`;
+const DEVICE_OPERATION_LOCK = `${process.env.HOME}/Library/Application Support/worklouderctl/codex-device-operation.lock`;
 
 const [command = "status", ...argv] = process.argv.slice(2);
 const options = parseOptions(argv);
@@ -58,8 +59,13 @@ const providerLock = await acquireProviderLock({
   lockPath: PROVIDER_LOCK,
   mode: `codex-device-${command}`,
 });
+let deviceOperationLock;
 try {
-const result = await withConnectedCodexService(async (client, instances) => {
+  deviceOperationLock = await acquireProviderLock({
+    lockPath: DEVICE_OPERATION_LOCK,
+    mode: `codex-device-${command}`,
+  });
+  const result = await withConnectedCodexService(async (client, instances) => {
   if (command === "status" || command === "snapshot") {
     return callInstances(client, instances, async function (payload) {
       const service = connectedService(this);
@@ -360,15 +366,16 @@ const result = await withConnectedCodexService(async (client, instances) => {
     },
     { app, expectLayer },
   );
-});
+  });
 
-const normalized = command === "snapshot" ? makeSnapshot(result) : result;
-if (options.output != null) {
-  await writeFile(options.output, `${JSON.stringify(normalized, null, 2)}\n`,
-    command === "snapshot" ? { flag: "wx", mode: 0o600 } : undefined);
-}
-console.log(JSON.stringify(normalized, null, 2));
+  const normalized = command === "snapshot" ? makeSnapshot(result) : result;
+  if (options.output != null) {
+    await writeFile(options.output, `${JSON.stringify(normalized, null, 2)}\n`,
+      command === "snapshot" ? { flag: "wx", mode: 0o600 } : undefined);
+  }
+  console.log(JSON.stringify(normalized, null, 2));
 } finally {
+  await deviceOperationLock?.release();
   await providerLock.release();
 }
 
