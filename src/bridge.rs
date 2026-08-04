@@ -2740,8 +2740,11 @@ fn config_mutate(
     )?;
     let live_metadata = inspect_config_snapshot(&live_snapshot)?;
     ensure!(
-        live_metadata.revision.eq_ignore_ascii_case(expected),
-        "live configuration revision differed from expected revision"
+        live_metadata.revision.eq_ignore_ascii_case(expected)
+            || live_metadata
+                .revision
+                .eq_ignore_ascii_case(&candidate_metadata.revision),
+        "live configuration revision differed from both expected and target revisions"
     );
     let selected_device = live_metadata.device_id;
     rebind_config_snapshot_device_id(&mut candidate, &selected_device)?;
@@ -3734,6 +3737,85 @@ mod tests {
             Some("fixture-reconnect-restore"),
         )
         .unwrap();
+        assert_eq!(receipt.device_id, live_device_id);
+        assert_eq!(receipt.after_revision, target_revision);
+        server.join().unwrap();
+        fs::remove_dir_all(paths.socket.parent().unwrap()).unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn config_restore_allows_exact_target_state_for_idempotent_replay() {
+        let root = PathBuf::from("/tmp").join(format!(
+            "wlb-config-replay-{}-{}",
+            std::process::id(),
+            NEXT_TEST.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&root).unwrap();
+        let candidate_path = root.join("candidate.json");
+        let backup_path = root.join("backup.json");
+        let before_revision = "a".repeat(64);
+        let target_revision = "b".repeat(64);
+        let live_device_id = "device-session-5".to_owned();
+        let snapshot = |device_id: &str, revision: &str| {
+            json!({
+                "schemaVersion": 1,
+                "kind": CONFIG_SNAPSHOT_KIND,
+                "revisionAlgorithm": CONFIG_REVISION_ALGORITHM,
+                "revision": revision,
+                "deviceId": device_id,
+                "files": [{ "relativePath": "keymap.json", "size": 2 }]
+            })
+        };
+        fs::write(
+            &candidate_path,
+            serde_json::to_vec(&snapshot("device-session-1", &target_revision)).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            &backup_path,
+            serde_json::to_vec(&snapshot("device-session-3", &before_revision)).unwrap(),
+        )
+        .unwrap();
+
+        let before_for_handler = before_revision.clone();
+        let target_for_handler = target_revision.clone();
+        let live_device_id_for_handler = live_device_id.clone();
+        let (paths, server) = fixture(move |method, params| match method {
+            "bridge.hello" => config_restore_hello(),
+            "device.config.snapshot" => snapshot(&live_device_id_for_handler, &target_for_handler),
+            "device.config.restore" => {
+                assert_eq!(params["expectedRevision"], before_for_handler);
+                assert_eq!(params["deviceId"], live_device_id_for_handler);
+                json!({
+                    "schemaVersion": 1,
+                    "kind": "worklouder-input-config-mutation",
+                    "operation": "restore",
+                    "idempotencyKey": "fixture-reconnect-replay",
+                    "idempotentReplay": true,
+                    "changed": true,
+                    "rollbackPerformed": false,
+                    "deviceId": live_device_id_for_handler,
+                    "beforeRevision": before_for_handler,
+                    "afterRevision": target_for_handler,
+                    "targetRevision": target_for_handler,
+                    "fileCount": 1,
+                    "totalBytes": 2
+                })
+            }
+            other => panic!("unexpected method {other}"),
+        });
+        let receipt = config_restore(
+            &paths,
+            None,
+            &candidate_path,
+            &backup_path,
+            Some(&before_revision),
+            Some("fixture-reconnect-replay"),
+        )
+        .unwrap();
+        assert!(receipt.idempotent_replay);
+        assert!(receipt.changed);
         assert_eq!(receipt.device_id, live_device_id);
         assert_eq!(receipt.after_revision, target_revision);
         server.join().unwrap();
