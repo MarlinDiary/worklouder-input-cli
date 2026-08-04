@@ -1,4 +1,4 @@
-use crate::{bridge, codex_bridge, fsutil};
+use crate::{bridge, codex_bridge, fsutil, provider};
 use serde::Serialize;
 use serde_json::Value;
 use std::env;
@@ -95,6 +95,7 @@ pub fn inspect() -> DoctorReport {
 
     let mut report = inspect_paths(&codex_path, &input_path, &support_root);
     report.configuration_ready = inspect_configuration_bridges(&mut report.checks);
+    inspect_appsense_relay(&mut report.checks);
     report.status = aggregate_status(&report.checks);
     report
 }
@@ -161,7 +162,61 @@ const CODEX_CONFIGURATION_CAPABILITIES: &[&str] = &[
     "codex.settings.restore.v1",
     "codex.agentKeys.apply.v1",
     "codex.agentKeys.restore.v1",
+    "codex.device.focus.v1",
 ];
+
+fn inspect_appsense_relay(checks: &mut Vec<Check>) {
+    let report = match provider::execute_appsense_relay(
+        provider::AppSenseRelayOperation::Status,
+        None,
+        None,
+    ) {
+        Ok(report) => report,
+        Err(error) => {
+            checks.push(Check {
+                id: "appsense.relay".into(),
+                status: CheckStatus::Warn,
+                summary: format!("AppSense relay status probe failed: {error}"),
+            });
+            return;
+        }
+    };
+    let relay = match report.result.get("relay") {
+        Some(relay) => relay,
+        None => {
+            checks.push(Check {
+                id: "appsense.relay".into(),
+                status: CheckStatus::Fail,
+                summary: "AppSense relay status omitted relay state".into(),
+            });
+            return;
+        }
+    };
+    let installed = relay.get("installed").and_then(Value::as_bool) == Some(true);
+    let running = relay.get("running").and_then(Value::as_bool) == Some(true);
+    let healthy = relay.pointer("/health/healthy").and_then(Value::as_bool) == Some(true);
+    let bridge_available = relay
+        .pointer("/health/bridgeAvailable")
+        .and_then(Value::as_bool)
+        == Some(true);
+    let health_status = relay
+        .pointer("/health/status")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    checks.push(Check {
+        id: "appsense.relay".into(),
+        status: if installed && running && healthy && bridge_available {
+            CheckStatus::Pass
+        } else if installed && running {
+            CheckStatus::Warn
+        } else {
+            CheckStatus::Warn
+        },
+        summary: format!(
+            "AppSense relay installed={installed} running={running} health={health_status} bridgeAvailable={bridge_available}"
+        ),
+    });
+}
 
 fn inspect_configuration_bridges(checks: &mut Vec<Check>) -> bool {
     let input_paths = bridge::paths(None, None);

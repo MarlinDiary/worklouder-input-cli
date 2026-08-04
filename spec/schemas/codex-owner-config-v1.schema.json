@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worklouderctl.dev/schemas/codex-owner-config-v1.schema.json",
+  "title": "WorkLouderCTL Codex-owned device configuration result v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "provider", "output", "revision", "fileCount"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-codex-owner-config-snapshot" },
+        "provider": { "const": "codex" },
+        "output": { "type": "string", "minLength": 1 },
+        "revision": { "$ref": "#/$defs/sha256" },
+        "fileCount": { "type": "integer", "minimum": 1 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "provider", "valid", "revision", "liveRevision", "fileCount", "totalBytes"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-codex-owner-config-validation" },
+        "provider": { "const": "codex" },
+        "valid": { "const": true },
+        "revision": { "$ref": "#/$defs/sha256" },
+        "liveRevision": { "$ref": "#/$defs/sha256" },
+        "fileCount": { "type": "integer", "minimum": 1 },
+        "totalBytes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "operation", "provider", "backup", "expectedRevision", "beforeRevision", "afterRevision", "targetRevision", "idempotencyKey", "idempotentReplay", "changed", "connectionContinuous", "providerReceipt"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "worklouderctl-codex-owner-config-mutation" },
+        "operation": { "enum": ["apply", "restore"] },
+        "provider": { "const": "codex" },
+        "backup": { "type": "string", "minLength": 1 },
+        "expectedRevision": { "$ref": "#/$defs/sha256" },
+        "beforeRevision": { "$ref": "#/$defs/sha256" },
+        "afterRevision": { "$ref": "#/$defs/sha256" },
+        "targetRevision": { "$ref": "#/$defs/sha256" },
+        "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "idempotentReplay": { "type": "boolean" },
+        "changed": { "type": "boolean" },
+        "connectionContinuous": { "const": true },
+        "providerReceipt": { "type": "object" }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

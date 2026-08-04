@@ -107,7 +107,7 @@ node "$repo/companion/conformance.mjs" \
 "$bin" --json bridge --socket "$socket" --token "$token" status \
   >"$root/bridge-status.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" status \
+  --bridge-socket "$socket" --bridge-token "$token" status --owner input \
   >"$root/device-status.json"
 "$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
   permissions --device fixture-device >"$root/input-permissions.json"
@@ -145,15 +145,15 @@ if [ "$appsense_mismatch_status" -ne 5 ]; then
   exit 1
 fi
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" files --recursive \
+  --bridge-socket "$socket" --bridge-token "$token" files --owner input --recursive \
   >"$root/device-files.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" export \
+  --bridge-socket "$socket" --bridge-token "$token" export --owner input \
   --output "$export_dir" >"$root/device-export.json"
 "$bin" --json config validate "$export_dir" \
   >"$root/export-validation.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+  --bridge-socket "$socket" --bridge-token "$token" config snapshot --owner input \
   --output "$config_snapshot" >"$root/config-snapshot-receipt.json"
 "$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
   permission command snapshot --output "$host_settings_snapshot" \
@@ -239,6 +239,7 @@ cp "$host_settings_enabled" "$root/input-transaction-plan-inputs/host-candidate.
 "$bin" --json transaction show --input "$root/input-transaction-plan.json" \
   >"$root/input-transaction-plan-show.json"
 "$bin" --json transaction apply \
+  --device-owner input \
   --plan "$root/input-transaction-plan.json" \
   --backup-dir "$root/input-transaction-backup" \
   --receipt "$root/input-transaction-apply.json" \
@@ -246,7 +247,7 @@ cp "$host_settings_enabled" "$root/input-transaction-plan-inputs/host-candidate.
   --input-socket "$socket" --input-token "$token" \
   >"$root/input-transaction-apply-stdout.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+  --bridge-socket "$socket" --bridge-token "$token" config snapshot --owner input \
   --output "$root/input-transaction-post-config.json" \
   >"$root/input-transaction-post-config-receipt.json"
 "$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
@@ -255,6 +256,7 @@ cp "$host_settings_enabled" "$root/input-transaction-plan-inputs/host-candidate.
   >"$root/input-transaction-post-host-receipt.json"
 rm -rf "$root/input-transaction-plan-inputs" "$root/input-transaction-plan.json"
 "$bin" --json transaction restore \
+  --device-owner input \
   --apply-receipt "$root/input-transaction-apply.json" \
   --backup-dir "$root/input-transaction-restore-backup" \
   --receipt "$root/input-transaction-restore.json" \
@@ -262,7 +264,7 @@ rm -rf "$root/input-transaction-plan-inputs" "$root/input-transaction-plan.json"
   --input-socket "$socket" --input-token "$token" \
   >"$root/input-transaction-restore-stdout.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+  --bridge-socket "$socket" --bridge-token "$token" config snapshot --owner input \
   --output "$root/input-transaction-restored-config.json" \
   >"$root/input-transaction-restored-config-receipt.json"
 "$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
@@ -270,26 +272,26 @@ rm -rf "$root/input-transaction-plan-inputs" "$root/input-transaction-plan.json"
   --output "$root/input-transaction-restored-host.json" \
   >"$root/input-transaction-restored-host-receipt.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config validate \
+  --bridge-socket "$socket" --bridge-token "$token" config validate --owner input \
   --input "$preset_installed_snapshot" --expected-revision "$revision" \
   >"$root/preset-config-validation.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config apply \
+  --bridge-socket "$socket" --bridge-token "$token" config apply --owner input \
   --input "$preset_installed_snapshot" --backup "$root/preset-pre-apply.json" \
   --expected-revision "$revision" --idempotency-key preset-e2e-apply-1 \
   >"$root/preset-config-apply.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+  --bridge-socket "$socket" --bridge-token "$token" config snapshot --owner input \
   --output "$root/preset-post-apply.json" \
   >"$root/preset-post-apply-receipt.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config restore \
+  --bridge-socket "$socket" --bridge-token "$token" config restore --owner input \
   --input "$config_snapshot" --backup "$root/preset-pre-restore.json" \
   --expected-revision "$preset_candidate_revision" \
   --idempotency-key preset-e2e-restore-1 \
   >"$root/preset-config-restore.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+  --bridge-socket "$socket" --bridge-token "$token" config snapshot --owner input \
   --output "$root/preset-post-restore.json" \
   >"$root/preset-post-restore-receipt.json"
 "$bin" --json profile list --input "$config_snapshot" \
@@ -459,25 +461,25 @@ rm -rf "$root/input-transaction-plan-inputs" "$root/input-transaction-plan.json"
 "$bin" --json smart-action delete --input "$smart_bound_snapshot" --id 1 \
   --output "$smart_deleted_snapshot" >"$root/smart-delete.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config validate \
+  --bridge-socket "$socket" --bridge-token "$token" config validate --owner input \
   --input "$config_snapshot" --expected-revision "$revision" \
   >"$root/config-bridge-validation.json"
 candidate_revision=$(python3 -c \
   'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' \
   "$cheat_bound_snapshot")
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config apply \
+  --bridge-socket "$socket" --bridge-token "$token" config apply --owner input \
   --input "$cheat_bound_snapshot" --backup "$root/pre-apply.json" \
   --expected-revision "$revision" --idempotency-key e2e-apply-1 \
   >"$root/config-apply.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config apply \
+  --bridge-socket "$socket" --bridge-token "$token" config apply --owner input \
   --input "$cheat_bound_snapshot" --backup "$root/pre-apply.json" \
   --expected-revision "$revision" --idempotency-key e2e-apply-1 \
   >"$root/config-apply-replay.json"
 set +e
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config apply \
+  --bridge-socket "$socket" --bridge-token "$token" config apply --owner input \
   --input "$cheat_bound_snapshot" --backup "$root/stale-attempt-backup.json" \
   --expected-revision "$revision" --idempotency-key e2e-apply-stale \
   >"$root/config-apply-stale.json" 2>"$root/config-apply-stale.err"
@@ -486,15 +488,15 @@ set -e
 [ "$stale_status" -ne 0 ]
 printf '%s\n' "$stale_status" >"$root/config-apply-stale.status"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+  --bridge-socket "$socket" --bridge-token "$token" config snapshot --owner input \
   --output "$root/post-apply.json" >"$root/post-apply-receipt.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config restore \
+  --bridge-socket "$socket" --bridge-token "$token" config restore --owner input \
   --input "$config_snapshot" --backup "$root/pre-restore.json" \
   --expected-revision "$candidate_revision" --idempotency-key e2e-restore-1 \
   >"$root/config-restore.json"
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+  --bridge-socket "$socket" --bridge-token "$token" config snapshot --owner input \
   --output "$root/post-restore.json" >"$root/post-restore-receipt.json"
 
 python3 - "$root" <<'PY'

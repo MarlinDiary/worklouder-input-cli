@@ -46,7 +46,7 @@ node "$repo/companion/conformance.mjs" \
   --require device.config.apply.v1 >"$root/conformance.json"
 
 "$bin" --json device --transport bridge --bridge-socket "$socket" \
-  --bridge-token "$token" config snapshot --output "$root/before.json" \
+  --bridge-token "$token" config snapshot --owner input --output "$root/before.json" \
   >"$root/before-stdout.json"
 "$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
   recovery plan --backup "$root/before.json" --plan "$root/plan.json" \
@@ -65,7 +65,7 @@ node "$repo/companion/conformance.mjs" \
 "$bin" --json backup inspect --input "$root/apply.json" \
   >"$root/apply-inspection.json"
 "$bin" --json device --transport bridge --bridge-socket "$socket" \
-  --bridge-token "$token" config snapshot --output "$root/after.json" \
+  --bridge-token "$token" config snapshot --owner input --output "$root/after.json" \
   >"$root/after-stdout.json"
 
 python3 - "$root" <<'PY'

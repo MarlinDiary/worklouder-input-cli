@@ -1,3 +1,4 @@
+use crate::{device, fsutil, semantic};
 use anyhow::{bail, ensure, Context, Result};
 use serde::Serialize;
 use serde_json::Value;
@@ -10,6 +11,9 @@ use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const RUNTIME_VERSION: u64 = 1;
+const CODEX_PROVIDER_VERSION: &str = "26.727.51351";
+const CODEX_DEVICE_KIT_VERSION: &str = "0.1.28";
+const CODEX_DEVICE_ADAPTER: &str = "codex-connected-device-session-v1";
 const MAX_STDOUT_BYTES: usize = 2 * 1024 * 1024;
 const MAX_STDERR_BYTES: usize = 256 * 1024;
 static NEXT_STAGING_ID: AtomicU64 = AtomicU64::new(0);
@@ -34,6 +38,10 @@ const ASSETS: &[(&str, &[u8])] = &[
     (
         "scripts/codex-device-rpc.mjs",
         include_bytes!("../scripts/codex-device-rpc.mjs"),
+    ),
+    (
+        "scripts/codex-device-idempotency.mjs",
+        include_bytes!("../scripts/codex-device-idempotency.mjs"),
     ),
     (
         "scripts/codex-focus-relay.mjs",
@@ -153,6 +161,7 @@ pub enum AppSenseRelayOperation {
     Install,
     Status,
     Sync,
+    Test,
     Remove,
 }
 
@@ -162,13 +171,14 @@ impl AppSenseRelayOperation {
             Self::Install => "install",
             Self::Status => "status",
             Self::Sync => "sync",
+            Self::Test => "test",
             Self::Remove => "remove",
         }
     }
 
     fn helper_action(self) -> &'static str {
         match self {
-            Self::Sync => "once",
+            Self::Sync | Self::Test => "once",
             _ => self.name(),
         }
     }
@@ -230,6 +240,67 @@ pub struct CodexDeviceMutationReceipt {
     pub provider_receipt: Value,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexDeviceValidationReceipt {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub provider: &'static str,
+    pub valid: bool,
+    pub revision: String,
+    pub live_revision: String,
+    pub file_count: usize,
+    pub total_bytes: u64,
+}
+
+pub fn current_device_owner() -> Result<Target> {
+    let report = execute(Operation::Status(None), None, None)?;
+    detect_current_owner(&report.result)
+}
+
+fn detect_current_owner(result: &Value) -> Result<Target> {
+    let input = result
+        .pointer("/input/state")
+        .and_then(Value::as_object)
+        .context("provider status omitted Input state")?;
+    let codex = result
+        .pointer("/codex/state")
+        .and_then(Value::as_object)
+        .context("provider status omitted Codex state")?;
+    let input_owns = input.get("discoveryStarted").and_then(Value::as_bool) == Some(true)
+        && input.get("startSuppressed").and_then(Value::as_bool) == Some(false)
+        && input
+            .get("connectedCount")
+            .and_then(Value::as_u64)
+            .unwrap_or(0)
+            > 0
+        && codex.get("lifecycleState").and_then(Value::as_str) == Some("stopped")
+        && codex.get("startSuppressed").and_then(Value::as_bool) == Some(true)
+        && codex.get("hasComm").and_then(Value::as_bool) == Some(false)
+        && codex.get("hasApi").and_then(Value::as_bool) == Some(false);
+    let codex_owns = input.get("discoveryStarted").and_then(Value::as_bool) == Some(false)
+        && input.get("connectedCount").and_then(Value::as_u64) == Some(0)
+        && codex.get("lifecycleState").and_then(Value::as_str) == Some("started")
+        && codex.get("startSuppressed").and_then(Value::as_bool) == Some(false)
+        && codex
+            .get("deviceState")
+            .and_then(|state| state.get("status"))
+            .and_then(Value::as_str)
+            == Some("connected")
+        && codex.get("hasComm").and_then(Value::as_bool) == Some(true)
+        && codex.get("hasApi").and_then(Value::as_bool) == Some(true)
+        && codex.get("hasHidSubscription").and_then(Value::as_bool) == Some(true)
+        && codex
+            .get("hasJoystickSubscription")
+            .and_then(Value::as_bool)
+            == Some(true);
+    match (input_owns, codex_owns) {
+        (true, false) => Ok(Target::Input),
+        (false, true) => Ok(Target::Codex),
+        _ => bail!("device provider ownership was contested or unavailable"),
+    }
+}
+
 pub fn codex_device_snapshot(output: &Path) -> Result<CodexDeviceSnapshotReceipt> {
     ensure!(
         !output.exists(),
@@ -270,6 +341,237 @@ pub fn codex_device_snapshot(output: &Path) -> Result<CodexDeviceSnapshotReceipt
     })
 }
 
+pub fn codex_device_validate(
+    input: &Path,
+    expected_revision: Option<&str>,
+) -> Result<CodexDeviceValidationReceipt> {
+    let validation = semantic::validate_snapshot(input)?;
+    if let Some(expected) = expected_revision {
+        ensure!(
+            is_sha256(expected),
+            "expected revision must be a SHA-256 digest"
+        );
+    }
+    let live = execute_codex_device_helper(&["snapshot".into()])?;
+    let live_revision = snapshot_revision(&live)?.to_owned();
+    if let Some(expected) = expected_revision {
+        ensure!(
+            expected.eq_ignore_ascii_case(&live_revision),
+            "live Codex-owned device revision did not match expected revision"
+        );
+    }
+    Ok(CodexDeviceValidationReceipt {
+        schema_version: 1,
+        kind: "worklouderctl-codex-owner-config-validation",
+        provider: "codex",
+        valid: validation.valid,
+        revision: validation.revision,
+        live_revision,
+        file_count: validation.file_count,
+        total_bytes: validation.total_bytes,
+    })
+}
+
+pub fn codex_device_status() -> Result<device::StatusReport> {
+    let remote = execute_codex_device_helper(&["status".into()])?;
+    let status: device::DeviceStatus = serde_json::from_value(
+        remote
+            .get("deviceStatus")
+            .cloned()
+            .context("Codex device status omitted deviceStatus")?,
+    )
+    .context("Codex device status was invalid")?;
+    let transport = remote
+        .pointer("/service/deviceState/transport")
+        .and_then(Value::as_str)
+        .unwrap_or("hid");
+    Ok(device::StatusReport {
+        schema_version: device::EXPORT_SCHEMA_VERSION,
+        kind: "worklouderctl-device-status".into(),
+        adapter: CODEX_DEVICE_ADAPTER.into(),
+        input_app_version: CODEX_PROVIDER_VERSION.into(),
+        device_kit_version: CODEX_DEVICE_KIT_VERSION.into(),
+        device: codex_device_info(transport),
+        status,
+        warnings: Vec::new(),
+    })
+}
+
+pub fn codex_device_files(path: Option<&str>, recursive: bool) -> Result<device::FileListReport> {
+    if let Some(path) = path {
+        device::safe_relative_path(path)?;
+    }
+    let snapshot = execute_codex_device_helper(&["snapshot".into()])?;
+    let status: device::DeviceStatus = serde_json::from_value(
+        snapshot
+            .get("status")
+            .cloned()
+            .context("Codex device snapshot omitted status")?,
+    )?;
+    let info: device::DeviceInfo = serde_json::from_value(
+        snapshot
+            .get("device")
+            .cloned()
+            .context("Codex device snapshot omitted device")?,
+    )?;
+    let mut files = codex_file_records(&snapshot)?
+        .into_iter()
+        .filter(|record| match path {
+            None => recursive || !record.0.contains('/'),
+            Some(prefix) => {
+                record.0 == prefix || (recursive && record.0.starts_with(&format!("{prefix}/")))
+            }
+        })
+        .map(
+            |(relative_path, size, device_checksum_sha1, _, _)| device::LiveFileSummary {
+                relative_path,
+                size,
+                device_checksum_sha1: Some(device_checksum_sha1),
+            },
+        )
+        .collect::<Vec<_>>();
+    files.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    Ok(device::FileListReport {
+        schema_version: device::EXPORT_SCHEMA_VERSION,
+        kind: "worklouderctl-device-files".into(),
+        adapter: CODEX_DEVICE_ADAPTER.into(),
+        input_app_version: CODEX_PROVIDER_VERSION.into(),
+        device_kit_version: snapshot
+            .get("deviceKitVersion")
+            .and_then(Value::as_str)
+            .unwrap_or(CODEX_DEVICE_KIT_VERSION)
+            .into(),
+        device: info,
+        status,
+        files,
+        warnings: Vec::new(),
+    })
+}
+
+pub fn codex_device_export(output: &Path) -> Result<device::ExportResult> {
+    ensure!(
+        !output.exists(),
+        "export destination already exists: {}",
+        output.display()
+    );
+    let snapshot = execute_codex_device_helper(&["snapshot".into()])?;
+    let staging = device::staging_path(output)?;
+    fs::create_dir_all(&staging)?;
+    fs::set_permissions(&staging, fs::Permissions::from_mode(0o700))?;
+    let result = (|| -> Result<device::ExportResult> {
+        let mut records = Vec::new();
+        for (relative_path, size, sha1, sha256, bytes) in codex_file_records(&snapshot)? {
+            let relative = device::safe_relative_path(&relative_path)?;
+            let destination = staging.join(relative);
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let mut file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&destination)?;
+            file.set_permissions(fs::Permissions::from_mode(0o600))?;
+            file.write_all(&bytes)?;
+            file.sync_all()?;
+            records.push(device::ExportFileRecord {
+                relative_path,
+                size,
+                device_checksum_sha1: sha1,
+                sha256,
+            });
+        }
+        records.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+        let manifest = device::ExportManifest {
+            schema_version: device::EXPORT_SCHEMA_VERSION,
+            kind: device::EXPORT_KIND.into(),
+            adapter: CODEX_DEVICE_ADAPTER.into(),
+            input_app_version: CODEX_PROVIDER_VERSION.into(),
+            device_kit_version: snapshot
+                .get("deviceKitVersion")
+                .and_then(Value::as_str)
+                .unwrap_or(CODEX_DEVICE_KIT_VERSION)
+                .into(),
+            device: serde_json::from_value(
+                snapshot
+                    .get("device")
+                    .cloned()
+                    .context("Codex device snapshot omitted device")?,
+            )?,
+            status: serde_json::from_value(
+                snapshot
+                    .get("status")
+                    .cloned()
+                    .context("Codex device snapshot omitted status")?,
+            )?,
+            files: records,
+            warnings: Vec::new(),
+        };
+        device::publish_snapshot(&staging, output, &manifest)?;
+        Ok(device::ExportResult {
+            output: output.to_path_buf(),
+            manifest,
+        })
+    })();
+    if result.is_err() && staging.exists() {
+        let _ = fs::remove_dir_all(&staging);
+    }
+    result
+}
+
+fn codex_device_info(transport: &str) -> device::DeviceInfo {
+    device::DeviceInfo {
+        device_pid: "33632".into(),
+        device_type: "codex_micro".into(),
+        layout_type: "universal".into(),
+        connection_type: "hid".into(),
+        is_usb_connection: transport == "usb",
+    }
+}
+
+fn codex_file_records(snapshot: &Value) -> Result<Vec<(String, u64, String, String, Vec<u8>)>> {
+    let files = snapshot
+        .get("files")
+        .and_then(Value::as_array)
+        .context("Codex device snapshot omitted files")?;
+    files
+        .iter()
+        .map(|file| {
+            let relative_path = file
+                .get("relativePath")
+                .and_then(Value::as_str)
+                .context("Codex device file omitted relativePath")?
+                .to_owned();
+            device::safe_relative_path(&relative_path)?;
+            let bytes = semantic::decode_base64(
+                file.get("dataBase64")
+                    .and_then(Value::as_str)
+                    .context("Codex device file omitted dataBase64")?,
+            )?;
+            let size = file
+                .get("size")
+                .and_then(Value::as_u64)
+                .context("Codex device file omitted size")?;
+            let sha1 = file
+                .get("deviceChecksumSha1")
+                .and_then(Value::as_str)
+                .context("Codex device file omitted SHA-1")?
+                .to_owned();
+            let sha256 = file
+                .get("sha256")
+                .and_then(Value::as_str)
+                .context("Codex device file omitted SHA-256")?
+                .to_owned();
+            ensure!(
+                size == bytes.len() as u64
+                    && fsutil::sha1_bytes(&bytes)? == sha1
+                    && fsutil::sha256_bytes(&bytes)? == sha256,
+                "Codex device file digest readback differed for {relative_path}"
+            );
+            Ok((relative_path, size, sha1, sha256, bytes))
+        })
+        .collect()
+}
+
 pub fn codex_device_mutate(
     operation: CodexDeviceMutation,
     input: &Path,
@@ -305,6 +607,10 @@ pub fn codex_device_mutate(
     );
     let result = execute_codex_device_helper(&[
         "apply".into(),
+        "--operation".into(),
+        operation.as_str().into(),
+        "--idempotency-key".into(),
+        key.clone(),
         "--baseline".into(),
         backup.as_os_str().to_string_lossy().into_owned(),
         "--input".into(),
@@ -426,10 +732,7 @@ pub fn execute_appsense_relay(
     let output = Command::new(&node)
         .arg(&helper)
         .arg(operation.helper_action())
-        .env(
-            "WORKLOUDERCTL_RELAY_NODE_COMMAND",
-            node.as_os_str(),
-        )
+        .env("WORKLOUDERCTL_RELAY_NODE_COMMAND", node.as_os_str())
         .output()
         .with_context(|| {
             format!(
@@ -719,6 +1022,49 @@ mod tests {
     }
 
     #[test]
+    fn current_owner_detection_rejects_contested_state() {
+        let codex = serde_json::json!({
+            "input": {"state": {
+                "discoveryStarted": false,
+                "startSuppressed": false,
+                "connectedCount": 0
+            }},
+            "codex": {"state": {
+                "lifecycleState": "started",
+                "deviceState": {"status": "connected"},
+                "startSuppressed": false,
+                "hasComm": true,
+                "hasApi": true,
+                "hasHidSubscription": true,
+                "hasJoystickSubscription": true
+            }}
+        });
+        assert_eq!(detect_current_owner(&codex).unwrap(), Target::Codex);
+
+        let input = serde_json::json!({
+            "input": {"state": {
+                "discoveryStarted": true,
+                "startSuppressed": false,
+                "connectedCount": 1
+            }},
+            "codex": {"state": {
+                "lifecycleState": "stopped",
+                "deviceState": {"status": "disconnected"},
+                "startSuppressed": true,
+                "hasComm": false,
+                "hasApi": false,
+                "hasHidSubscription": false,
+                "hasJoystickSubscription": false
+            }}
+        });
+        assert_eq!(detect_current_owner(&input).unwrap(), Target::Input);
+
+        let mut contested = codex;
+        contested["input"]["state"]["connectedCount"] = Value::from(1);
+        assert!(detect_current_owner(&contested).is_err());
+    }
+
+    #[test]
     fn helper_invocations_preserve_the_existing_runtime_contract() {
         let root = Path::new("/runtime");
         assert_eq!(
@@ -743,6 +1089,7 @@ mod tests {
             (AppSenseRelayOperation::Install, "install", "install"),
             (AppSenseRelayOperation::Status, "status", "status"),
             (AppSenseRelayOperation::Sync, "sync", "once"),
+            (AppSenseRelayOperation::Test, "test", "once"),
             (AppSenseRelayOperation::Remove, "remove", "remove"),
         ] {
             assert_eq!(operation.name(), public);

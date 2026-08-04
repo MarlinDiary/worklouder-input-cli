@@ -276,7 +276,9 @@ fn schemas_are_discoverable_and_machine_readable() {
         names,
         vec![
             "agent-execution-v1",
+            "appsense-relay-v1",
             "backup-inspection-v1",
+            "codex-owner-config-v1",
             "command-envelope-v1",
             "compatibility-matrix-v1",
             "configuration-v1",
@@ -356,6 +358,15 @@ fn transaction_help_exposes_cross_authority_plan_workflow() {
     ] {
         assert!(stdout.contains(authority));
     }
+
+    let apply = binary()
+        .args(["transaction", "apply", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(apply.stdout).unwrap();
+    assert!(apply.status.success());
+    assert!(stdout.contains("--device-owner <DEVICE_OWNER>"));
+    assert!(stdout.contains("auto"));
 }
 
 #[test]
@@ -527,7 +538,7 @@ fn appsense_help_exposes_codex_owner_focus_relay() {
     let stdout = String::from_utf8(relay.stdout).unwrap();
     assert!(relay.status.success());
     assert!(stdout.contains("Keep Codex as device owner"));
-    for command in ["install", "status", "sync", "remove"] {
+    for command in ["install", "status", "sync", "test", "remove"] {
         assert!(stdout.contains(command));
     }
 }
@@ -1699,8 +1710,25 @@ fn device_help_exposes_live_read_workflow() {
     let apply_stdout = String::from_utf8(apply.stdout).unwrap();
     assert!(apply.status.success());
     assert!(apply_stdout.contains("--owner <OWNER>"));
+    assert!(apply_stdout.contains("auto"));
     assert!(apply_stdout.contains("input"));
     assert!(apply_stdout.contains("codex"));
+
+    let validate = binary()
+        .args(["device", "config", "validate", "--help"])
+        .output()
+        .unwrap();
+    let validate_stdout = String::from_utf8(validate.stdout).unwrap();
+    assert!(validate.status.success());
+    assert!(validate_stdout.contains("--owner <OWNER>"));
+
+    let status = binary()
+        .args(["device", "status", "--help"])
+        .output()
+        .unwrap();
+    let status_stdout = String::from_utf8(status.stdout).unwrap();
+    assert!(status.status.success());
+    assert!(status_stdout.contains("--owner <OWNER>"));
 }
 
 #[test]

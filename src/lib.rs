@@ -307,7 +307,14 @@ fn run_transaction(command: TransactionCommand, json: bool, mut out: impl Write)
             codex_token,
             input_socket,
             input_token,
+            device_owner,
         } => {
+            let needs_device_owner = transaction::read_plan(&plan)?
+                .authorities
+                .iter()
+                .any(|authority| authority.id == "input-config");
+            let input_config_owner =
+                resolve_transaction_device_owner(device_owner, needs_device_owner)?;
             let result = transaction::apply_transaction(
                 &plan,
                 &backup_dir,
@@ -315,6 +322,7 @@ fn run_transaction(command: TransactionCommand, json: bool, mut out: impl Write)
                 &transaction::RuntimePaths {
                     codex: codex_bridge::paths(codex_socket, codex_token),
                     input: bridge::paths(input_socket, input_token),
+                    input_config_owner,
                 },
                 &idempotency_key,
             )?;
@@ -339,7 +347,15 @@ fn run_transaction(command: TransactionCommand, json: bool, mut out: impl Write)
             codex_token,
             input_socket,
             input_token,
+            device_owner,
         } => {
+            let (_, _, archived_plan) = transaction::verify_receipt_artifacts(&apply_receipt)?;
+            let needs_device_owner = archived_plan
+                .authorities
+                .iter()
+                .any(|authority| authority.id == "input-config");
+            let input_config_owner =
+                resolve_transaction_device_owner(device_owner, needs_device_owner)?;
             let result = transaction::restore_transaction(
                 &apply_receipt,
                 &backup_dir,
@@ -347,6 +363,7 @@ fn run_transaction(command: TransactionCommand, json: bool, mut out: impl Write)
                 &transaction::RuntimePaths {
                     codex: codex_bridge::paths(codex_socket, codex_token),
                     input: bridge::paths(input_socket, input_token),
+                    input_config_owner,
                 },
                 &idempotency_key,
             )?;
@@ -364,6 +381,20 @@ fn run_transaction(command: TransactionCommand, json: bool, mut out: impl Write)
         }
     }
     Ok(())
+}
+
+fn resolve_transaction_device_owner(
+    owner: DeviceConfigOwner,
+    needed: bool,
+) -> Result<provider::Target> {
+    if !needed && owner == DeviceConfigOwner::Auto {
+        return Ok(provider::Target::Input);
+    }
+    match resolve_device_config_owner(owner)? {
+        DeviceConfigOwner::Input => Ok(provider::Target::Input),
+        DeviceConfigOwner::Codex => Ok(provider::Target::Codex),
+        DeviceConfigOwner::Auto => unreachable!("auto owner must be resolved"),
+    }
 }
 
 fn run_preset(command: PresetCommand, json: bool, mut out: impl Write) -> Result<()> {
@@ -1024,6 +1055,7 @@ fn run_appsense(command: AppSenseCommand, json: bool, mut out: impl Write) -> Re
                 AppSenseRelayCommand::Install => provider::AppSenseRelayOperation::Install,
                 AppSenseRelayCommand::Status => provider::AppSenseRelayOperation::Status,
                 AppSenseRelayCommand::Sync => provider::AppSenseRelayOperation::Sync,
+                AppSenseRelayCommand::Test => provider::AppSenseRelayOperation::Test,
                 AppSenseRelayCommand::Remove => provider::AppSenseRelayOperation::Remove,
             };
             let report = provider::execute_appsense_relay(operation, runtime_dir, node)?;
@@ -2016,11 +2048,17 @@ fn run_device(
         DeviceTransport::Auto => bridge::is_discoverable(&bridge_paths),
     };
     match command {
-        DeviceCommand::Status => {
-            let report = if use_bridge {
-                bridge::status(&bridge_paths)?
-            } else {
-                device::status(&app, options.input_mode)?
+        DeviceCommand::Status { owner } => {
+            let report = match resolve_device_config_owner(owner)? {
+                DeviceConfigOwner::Codex => provider::codex_device_status()?,
+                DeviceConfigOwner::Input => {
+                    if use_bridge {
+                        bridge::status(&bridge_paths)?
+                    } else {
+                        device::status(&app, options.input_mode)?
+                    }
+                }
+                DeviceConfigOwner::Auto => unreachable!("auto owner must be resolved"),
             };
             if json {
                 write_json(&mut out, &report)?;
@@ -2053,11 +2091,23 @@ fn run_device(
                 }
             }
         }
-        DeviceCommand::Files { path, recursive } => {
-            let report = if use_bridge {
-                bridge::files(&bridge_paths, path.as_deref(), recursive)?
-            } else {
-                device::files(&app, options.input_mode, path.as_deref(), recursive)?
+        DeviceCommand::Files {
+            path,
+            recursive,
+            owner,
+        } => {
+            let report = match resolve_device_config_owner(owner)? {
+                DeviceConfigOwner::Codex => {
+                    provider::codex_device_files(path.as_deref(), recursive)?
+                }
+                DeviceConfigOwner::Input => {
+                    if use_bridge {
+                        bridge::files(&bridge_paths, path.as_deref(), recursive)?
+                    } else {
+                        device::files(&app, options.input_mode, path.as_deref(), recursive)?
+                    }
+                }
+                DeviceConfigOwner::Auto => unreachable!("auto owner must be resolved"),
             };
             if json {
                 write_json(&mut out, &report)?;
@@ -2077,11 +2127,17 @@ fn run_device(
                 }
             }
         }
-        DeviceCommand::Export { output } => {
-            let result = if use_bridge {
-                bridge::export(&bridge_paths, &output)?
-            } else {
-                device::export(&app, options.input_mode, &output)?
+        DeviceCommand::Export { output, owner } => {
+            let result = match resolve_device_config_owner(owner)? {
+                DeviceConfigOwner::Codex => provider::codex_device_export(&output)?,
+                DeviceConfigOwner::Input => {
+                    if use_bridge {
+                        bridge::export(&bridge_paths, &output)?
+                    } else {
+                        device::export(&app, options.input_mode, &output)?
+                    }
+                }
+                DeviceConfigOwner::Auto => unreachable!("auto owner must be resolved"),
             };
             if json {
                 write_json(&mut out, &result)?;
@@ -2115,6 +2171,7 @@ fn run_device(
                 device,
                 owner,
             } => {
+                let owner = resolve_device_config_owner(owner)?;
                 if owner == DeviceConfigOwner::Codex {
                     anyhow::ensure!(
                         device.is_none(),
@@ -2155,7 +2212,29 @@ fn run_device(
                 input,
                 device,
                 expected_revision,
+                owner,
             } => {
+                let owner = resolve_device_config_owner(owner)?;
+                if owner == DeviceConfigOwner::Codex {
+                    anyhow::ensure!(
+                        device.is_none(),
+                        "--device is only valid with --owner input"
+                    );
+                    let result =
+                        provider::codex_device_validate(&input, expected_revision.as_deref())?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "Configuration snapshot is valid ({} file(s), {} bytes)",
+                            result.file_count, result.total_bytes
+                        )?;
+                        writeln!(out, "revision={}", result.revision)?;
+                        writeln!(out, "liveRevision={}", result.live_revision)?;
+                    }
+                    return Ok(());
+                }
                 anyhow::ensure!(
                     use_bridge,
                     "device config validate requires the Input Companion Bridge transport"
@@ -2188,6 +2267,7 @@ fn run_device(
                 idempotency_key,
                 owner,
             } => {
+                let owner = resolve_device_config_owner(owner)?;
                 if owner == DeviceConfigOwner::Codex {
                     anyhow::ensure!(
                         device.is_none(),
@@ -2233,6 +2313,7 @@ fn run_device(
                 idempotency_key,
                 owner,
             } => {
+                let owner = resolve_device_config_owner(owner)?;
                 if owner == DeviceConfigOwner::Codex {
                     anyhow::ensure!(
                         device.is_none(),
@@ -2273,6 +2354,16 @@ fn run_device(
         },
     }
     Ok(())
+}
+
+fn resolve_device_config_owner(owner: DeviceConfigOwner) -> Result<DeviceConfigOwner> {
+    match owner {
+        DeviceConfigOwner::Auto => match provider::current_device_owner()? {
+            provider::Target::Codex => Ok(DeviceConfigOwner::Codex),
+            provider::Target::Input => Ok(DeviceConfigOwner::Input),
+        },
+        selected => Ok(selected),
+    }
 }
 
 fn write_mutation_result(

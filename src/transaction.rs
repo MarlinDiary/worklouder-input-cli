@@ -1,4 +1,4 @@
-use crate::{bridge, codex, codex_agent_keys, codex_bridge, config, fsutil, semantic};
+use crate::{bridge, codex, codex_agent_keys, codex_bridge, config, fsutil, provider, semantic};
 use anyhow::{bail, ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -73,6 +73,7 @@ pub struct PlanReceipt {
 pub struct RuntimePaths {
     pub codex: codex_bridge::CodexBridgePaths,
     pub input: bridge::BridgePaths,
+    pub input_config_owner: provider::Target,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -795,14 +796,23 @@ fn snapshot_live(
                 source_sha256: None,
             }
         }
-        "input-config" => {
-            let receipt =
-                bridge::config_snapshot(&runtime.input, item.device_id.as_deref(), output)?;
-            LiveSnapshot {
-                revision: receipt.revision,
-                source_sha256: None,
+        "input-config" => match runtime.input_config_owner {
+            provider::Target::Input => {
+                let receipt =
+                    bridge::config_snapshot(&runtime.input, item.device_id.as_deref(), output)?;
+                LiveSnapshot {
+                    revision: receipt.revision,
+                    source_sha256: None,
+                }
             }
-        }
+            provider::Target::Codex => {
+                let receipt = provider::codex_device_snapshot(output)?;
+                LiveSnapshot {
+                    revision: receipt.revision,
+                    source_sha256: None,
+                }
+            }
+        },
         "input-host-settings" => {
             let receipt = bridge::host_settings_snapshot(&runtime.input, output)?;
             LiveSnapshot {
@@ -879,17 +889,30 @@ fn apply_one(
             )?;
             mutation_from_agent_keys(item, "apply", receipt)
         }
-        "input-config" => {
-            let receipt = bridge::config_apply(
-                &runtime.input,
-                item.device_id.as_deref(),
-                &catalog.candidate,
-                &catalog.baseline,
-                Some(&item.before_revision),
-                Some(idempotency_key),
-            )?;
-            mutation_from_input_config(item, "apply", receipt)
-        }
+        "input-config" => match runtime.input_config_owner {
+            provider::Target::Input => {
+                let receipt = bridge::config_apply(
+                    &runtime.input,
+                    item.device_id.as_deref(),
+                    &catalog.candidate,
+                    &catalog.baseline,
+                    Some(&item.before_revision),
+                    Some(idempotency_key),
+                )?;
+                mutation_from_input_config(item, "apply", receipt)
+            }
+            provider::Target::Codex => mutation_from_codex_device(
+                item,
+                "apply",
+                provider::codex_device_mutate(
+                    provider::CodexDeviceMutation::Apply,
+                    &catalog.candidate,
+                    &catalog.baseline,
+                    Some(&item.before_revision),
+                    Some(idempotency_key),
+                )?,
+            ),
+        },
         "input-host-settings" => {
             let receipt = bridge::host_settings_apply(
                 &runtime.input,
@@ -942,16 +965,33 @@ fn restore_one(
             mutation_from_agent_keys(item, "restore", receipt)
         }
         "input-config" => {
-            let receipt = bridge::config_restore(
-                &runtime.input,
-                item.device_id.as_deref(),
-                &catalog.baseline,
-                current_backup,
-                Some(&applied.after_revision),
-                Some(idempotency_key),
-            )?;
+            let result = match runtime.input_config_owner {
+                provider::Target::Input => mutation_from_input_config(
+                    item,
+                    "restore",
+                    bridge::config_restore(
+                        &runtime.input,
+                        item.device_id.as_deref(),
+                        &catalog.baseline,
+                        current_backup,
+                        Some(&applied.after_revision),
+                        Some(idempotency_key),
+                    )?,
+                ),
+                provider::Target::Codex => mutation_from_codex_device(
+                    item,
+                    "restore",
+                    provider::codex_device_mutate(
+                        provider::CodexDeviceMutation::Restore,
+                        &catalog.baseline,
+                        current_backup,
+                        Some(&applied.after_revision),
+                        Some(idempotency_key),
+                    )?,
+                ),
+            };
             fs::set_permissions(current_backup, fs::Permissions::from_mode(0o600))?;
-            mutation_from_input_config(item, "restore", receipt)
+            result
         }
         "input-host-settings" => {
             let receipt = bridge::host_settings_restore(
@@ -1006,6 +1046,23 @@ fn mutation_from_input_config(
     item: &AuthorityPlan,
     operation: &str,
     receipt: bridge::ConfigMutationReceipt,
+) -> Result<AuthorityMutationReceipt> {
+    Ok(AuthorityMutationReceipt {
+        id: item.id.clone(),
+        operation: operation.into(),
+        changed: receipt.changed,
+        before_revision: receipt.before_revision.clone(),
+        after_revision: receipt.after_revision.clone(),
+        target_revision: receipt.target_revision.clone(),
+        backup: receipt.backup.clone(),
+        provider_receipt: serde_json::to_value(receipt)?,
+    })
+}
+
+fn mutation_from_codex_device(
+    item: &AuthorityPlan,
+    operation: &str,
+    receipt: provider::CodexDeviceMutationReceipt,
 ) -> Result<AuthorityMutationReceipt> {
     Ok(AuthorityMutationReceipt {
         id: item.id.clone(),

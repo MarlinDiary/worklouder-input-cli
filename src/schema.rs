@@ -3,8 +3,10 @@ use serde::Serialize;
 use serde_json::Value;
 
 const AGENT_EXECUTION: &str = include_str!("../spec/schemas/agent-execution-v1.schema.json");
+const APPSENSE_RELAY: &str = include_str!("../spec/schemas/appsense-relay-v1.schema.json");
 const BACKUP_INSPECTION: &str = include_str!("../spec/schemas/backup-inspection-v1.schema.json");
 const COMMAND_ENVELOPE: &str = include_str!("../spec/schemas/command-envelope-v1.schema.json");
+const CODEX_OWNER_CONFIG: &str = include_str!("../spec/schemas/codex-owner-config-v1.schema.json");
 const COMPATIBILITY_MATRIX: &str =
     include_str!("../spec/schemas/compatibility-matrix-v1.schema.json");
 const CONFIGURATION: &str = include_str!("../spec/schemas/configuration-v1.schema.json");
@@ -39,11 +41,27 @@ const ENTRIES: &[SchemaEntry] = &[
     },
     SchemaEntry {
         summary: SchemaSummary {
+            name: "appsense-relay-v1",
+            id: "https://worklouderctl.dev/schemas/appsense-relay-v1.schema.json",
+            description: "Persistent Codex-owner AppSense relay lifecycle and health",
+        },
+        source: APPSENSE_RELAY,
+    },
+    SchemaEntry {
+        summary: SchemaSummary {
             name: "backup-inspection-v1",
             id: "https://worklouderctl.dev/schemas/backup-inspection-v1.schema.json",
             description: "Verified backup inventory and migration requirements",
         },
         source: BACKUP_INSPECTION,
+    },
+    SchemaEntry {
+        summary: SchemaSummary {
+            name: "codex-owner-config-v1",
+            id: "https://worklouderctl.dev/schemas/codex-owner-config-v1.schema.json",
+            description: "Codex-owned device snapshot, validation, and mutation receipts",
+        },
+        source: CODEX_OWNER_CONFIG,
     },
     SchemaEntry {
         summary: SchemaSummary {
@@ -154,7 +172,7 @@ mod tests {
     #[test]
     fn registry_is_sorted_and_every_document_reopens() {
         let summaries = list();
-        assert_eq!(summaries.len(), 11);
+        assert_eq!(summaries.len(), 13);
         let names = summaries
             .iter()
             .map(|summary| summary.name)

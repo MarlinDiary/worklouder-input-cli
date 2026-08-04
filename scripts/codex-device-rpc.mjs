@@ -13,6 +13,7 @@ import {
   waitForInspectorPortRelease,
 } from "./live-bridge-cdp.mjs";
 import { acquireProviderLock } from "./provider-lock.mjs";
+import { bindCodexDeviceIdempotency } from "./codex-device-idempotency.mjs";
 
 const CODEX_EXECUTABLE = "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT";
 const CODEX_PLIST = "/Applications/ChatGPT.app/Contents/Info.plist";
@@ -60,20 +61,22 @@ const providerLock = await acquireProviderLock({
 try {
 const result = await withConnectedCodexService(async (client, instances) => {
   if (command === "status" || command === "snapshot") {
-    return callInstances(client, instances, async function () {
+    return callInstances(client, instances, async function (payload) {
       const service = connectedService(this);
       const api = service.api.api;
       const files = [];
-      for (const entry of await api.getFileList({ recursive: true })) {
-        const relativePath = entry?.path ?? entry?.name;
-        if (relativePath == null) continue;
-        const data = await api.readFileChunked(relativePath);
-        if (data == null) throw new Error(`failed to read ${relativePath}`);
-        files.push({
-          relativePath,
-          size: data.length,
-          dataBase64: Buffer.from(data).toString("base64"),
-        });
+      if (payload.includeFiles) {
+        for (const entry of await api.getFileList({ recursive: true })) {
+          const relativePath = entry?.path ?? entry?.name;
+          if (relativePath == null) continue;
+          const data = await api.readFileChunked(relativePath);
+          if (data == null) throw new Error(`failed to read ${relativePath}`);
+          files.push({
+            relativePath,
+            size: data.length,
+            dataBase64: Buffer.from(data).toString("base64"),
+          });
+        }
       }
       return {
         service: serviceState(service),
@@ -102,7 +105,7 @@ const result = await withConnectedCodexService(async (client, instances) => {
           hasJoystickSubscription: service.unsubscribeJoystick != null,
         };
       }
-    });
+    }, { includeFiles: command === "snapshot" });
   }
 
   if (command === "apply") {
@@ -111,7 +114,13 @@ const result = await withConnectedCodexService(async (client, instances) => {
     const expected = snapshotFiles(baseline);
     const desired = snapshotFiles(candidate);
     assertSamePaths(expected, desired);
-    return callInstances(
+    const idempotency = await bindCodexDeviceIdempotency({
+      key: options["idempotency-key"] ?? `codex-device-${candidate.revision}`,
+      operation: options.operation ?? "apply",
+      baselineRevision: baseline.revision,
+      targetRevision: candidate.revision,
+    });
+    const mutation = await callInstances(
       client,
       instances,
       async function (payload) {
@@ -164,10 +173,19 @@ const result = await withConnectedCodexService(async (client, instances) => {
             const restore = payload.expected.filter((file) =>
               changed.some((entry) => entry.relativePath === file.relativePath),
             );
-            await writeFiles(api, restore);
-            const restored = await readFiles(api, payload.expected);
-            assertHashes("automatic rollback", restored, payload.expected);
-            rollback = { restored: true, files: restored };
+            const failedState = await readFiles(api, restore);
+            if (hashesMatch(failedState, restore)) {
+              rollback = {
+                restored: true,
+                notRequired: true,
+                files: failedState,
+              };
+            } else {
+              await writeFiles(api, restore);
+              const restored = await readFiles(api, payload.expected);
+              assertHashes("automatic rollback", restored, payload.expected);
+              rollback = { restored: true, notRequired: false, files: restored };
+            }
           } catch (rollbackError) {
             rollback = { restored: false, error: errorMessage(rollbackError) };
           }
@@ -243,14 +261,9 @@ const result = await withConnectedCodexService(async (client, instances) => {
           }
           const transactionId = await api.beginMultifileWrite();
           if (transactionId == null) {
-            for (const file of files) {
-              const ok = await api.writeFileChunked(
-                file.relativePath,
-                Buffer.from(file.dataBase64, "base64"),
-              );
-              if (ok !== true) throw new Error(`failed to write ${file.relativePath}`);
-            }
-            return;
+            throw new Error(
+              "device firmware does not provide atomic multi-file writes",
+            );
           }
           for (const file of files) {
             const ok = await api.writeFileChunked(
@@ -281,6 +294,7 @@ const result = await withConnectedCodexService(async (client, instances) => {
       },
       { expected, desired },
     );
+    return { ...mutation, idempotency };
   }
 
   const app = {

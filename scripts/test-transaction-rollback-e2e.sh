@@ -34,7 +34,7 @@ done
 
 bin=$repo/target/debug/worklouderctl
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+  --bridge-socket "$socket" --bridge-token "$token" config snapshot --owner input \
   --output "$root/config-baseline.json" >"$root/config-baseline-receipt.json"
 "$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
   permission command snapshot --output "$root/host-baseline.json" \
@@ -53,6 +53,7 @@ bin=$repo/target/debug/worklouderctl
 
 set +e
 "$bin" --json transaction apply \
+  --device-owner input \
   --plan "$root/plan.json" --backup-dir "$root/apply-backup" \
   --receipt "$root/apply-receipt.json" \
   --idempotency-key transaction-injected-post-write \
@@ -66,7 +67,7 @@ if [ "$apply_status" -ne 6 ]; then
 fi
 
 "$bin" --json device --transport bridge \
-  --bridge-socket "$socket" --bridge-token "$token" config snapshot \
+  --bridge-socket "$socket" --bridge-token "$token" config snapshot --owner input \
   --output "$root/config-after.json" >"$root/config-after-receipt.json"
 "$bin" --json input --bridge-socket "$socket" --bridge-token "$token" \
   permission command snapshot --output "$root/host-after.json" \

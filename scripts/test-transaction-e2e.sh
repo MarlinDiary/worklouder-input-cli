@@ -67,10 +67,10 @@ run_case() {
   wait_for_bridge "$codex_socket" "$codex_token" "$root/codex-server.log"
 
   "$BIN" --json device --transport bridge \
-    --bridge-socket "$input_socket" --bridge-token "$input_token" status \
+    --bridge-socket "$input_socket" --bridge-token "$input_token" status --owner input \
     >"$root/device-baseline.json"
   "$BIN" --json device --transport bridge \
-    --bridge-socket "$input_socket" --bridge-token "$input_token" config snapshot \
+    --bridge-socket "$input_socket" --bridge-token "$input_token" config snapshot --owner input \
     --output "$root/input-base.json" >"$root/input-base-receipt.json"
   "$BIN" --json profile create --input "$root/input-base.json" \
     --name "Transaction Profile $label" --output "$root/input-profile.json" \
@@ -148,7 +148,7 @@ run_case() {
   "$BIN" --json transaction show --input "$root/plan.json" >"$root/plan-show.json"
 
   set +e
-  "$BIN" --json transaction apply --plan "$root/plan.json" \
+  "$BIN" --json transaction apply --device-owner input --plan "$root/plan.json" \
     --backup-dir "$root/apply-backup" --receipt "$root/apply.json" \
     --idempotency-key "four-authority-$label-apply" \
     --input-socket "$input_socket" --input-token "$input_token" \
@@ -158,7 +158,7 @@ run_case() {
   set -e
 
   "$BIN" --json device --transport bridge \
-    --bridge-socket "$input_socket" --bridge-token "$input_token" config snapshot \
+    --bridge-socket "$input_socket" --bridge-token "$input_token" config snapshot --owner input \
     --output "$root/input-post-apply.json" >"$root/input-post-apply-receipt.json"
   "$BIN" --json input --bridge-socket "$input_socket" --bridge-token "$input_token" \
     permission command snapshot --output "$root/host-post-apply.json" \
@@ -198,7 +198,7 @@ run_case() {
 
   if [[ "$fail_settings_writes" == 0 ]]; then
     [[ "$apply_status" == 0 ]]
-    "$BIN" --json transaction apply --plan "$root/plan.json" \
+    "$BIN" --json transaction apply --device-owner input --plan "$root/plan.json" \
       --backup-dir "$root/apply-backup" --receipt "$root/apply.json" \
       --idempotency-key "four-authority-$label-apply" \
       --input-socket "$input_socket" --input-token "$input_token" \
@@ -218,7 +218,7 @@ run_case() {
       --expected-revision "$host_candidate_revision" \
       --idempotency-key "four-authority-$label-retry-drift" \
       >"$root/retry-drift.json"
-    if "$BIN" --json transaction apply --plan "$root/plan.json" \
+    if "$BIN" --json transaction apply --device-owner input --plan "$root/plan.json" \
       --backup-dir "$root/apply-backup" --receipt "$root/apply.json" \
       --idempotency-key "four-authority-$label-apply" \
       --input-socket "$input_socket" --input-token "$input_token" \
@@ -233,20 +233,20 @@ run_case() {
       --expected-revision "$host_base_revision" \
       --idempotency-key "four-authority-$label-retry-reset" \
       >"$root/retry-reset.json"
-    "$BIN" --json transaction restore --apply-receipt "$root/apply.json" \
+    "$BIN" --json transaction restore --device-owner input --apply-receipt "$root/apply.json" \
       --backup-dir "$root/restore-backup" --receipt "$root/restore.json" \
       --idempotency-key "four-authority-$label-restore" \
       --input-socket "$input_socket" --input-token "$input_token" \
       --codex-socket "$codex_socket" --codex-token "$codex_token" \
       >"$root/restore-stdout.json"
-    "$BIN" --json transaction restore --apply-receipt "$root/apply.json" \
+    "$BIN" --json transaction restore --device-owner input --apply-receipt "$root/apply.json" \
       --backup-dir "$root/restore-backup" --receipt "$root/restore.json" \
       --idempotency-key "four-authority-$label-restore" \
       --input-socket "$input_socket" --input-token "$input_token" \
       --codex-socket "$codex_socket" --codex-token "$codex_token" \
       >"$root/restore-retry.json"
     "$BIN" --json device --transport bridge \
-      --bridge-socket "$input_socket" --bridge-token "$input_token" config snapshot \
+      --bridge-socket "$input_socket" --bridge-token "$input_token" config snapshot --owner input \
       --output "$root/input-restored.json" >"$root/input-restored-receipt.json"
     "$BIN" --json input --bridge-socket "$input_socket" --bridge-token "$input_token" \
       permission command snapshot --output "$root/host-restored.json" \

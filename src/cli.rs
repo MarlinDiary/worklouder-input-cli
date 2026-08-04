@@ -615,7 +615,11 @@ pub enum InputConfigCommand {
 #[derive(Debug, Subcommand)]
 pub enum DeviceCommand {
     /// Read firmware, active profile/layer, and power state from the device.
-    Status,
+    Status {
+        /// Preserve the current provider, or select Input/Codex explicitly.
+        #[clap(long, value_enum, default_value = "auto")]
+        owner: DeviceConfigOwner,
+    },
 
     /// List files on the live device filesystem without changing them.
     Files {
@@ -626,6 +630,10 @@ pub enum DeviceCommand {
         /// Include files in nested directories.
         #[clap(long)]
         recursive: bool,
+
+        /// Preserve the current provider, or select Input/Codex explicitly.
+        #[clap(long, value_enum, default_value = "auto")]
+        owner: DeviceConfigOwner,
     },
 
     /// Export exact live device files into a verified atomic bundle.
@@ -633,6 +641,10 @@ pub enum DeviceCommand {
         /// Destination directory. It must not already exist.
         #[clap(long, value_parser)]
         output: PathBuf,
+
+        /// Preserve the current provider, or select Input/Codex explicitly.
+        #[clap(long, value_enum, default_value = "auto")]
+        owner: DeviceConfigOwner,
     },
 
     /// Snapshot, validate, apply, or restore complete device configuration.
@@ -655,7 +667,7 @@ pub enum DeviceConfigCommand {
         device: Option<String>,
 
         /// Use Input's bridge or Codex's already-connected device session.
-        #[clap(long, value_enum, default_value = "input")]
+        #[clap(long, value_enum, default_value = "auto")]
         owner: DeviceConfigOwner,
     },
 
@@ -672,6 +684,10 @@ pub enum DeviceConfigCommand {
         /// Require the live device to have this exact revision.
         #[clap(long)]
         expected_revision: Option<String>,
+
+        /// Preserve the currently connected provider, or select one explicitly.
+        #[clap(long, value_enum, default_value = "auto")]
+        owner: DeviceConfigOwner,
     },
 
     /// Apply a complete snapshot with backup, CAS, readback, and rollback.
@@ -697,7 +713,7 @@ pub enum DeviceConfigCommand {
         idempotency_key: Option<String>,
 
         /// Use Input's bridge or keep Codex as the connected device owner.
-        #[clap(long, value_enum, default_value = "input")]
+        #[clap(long, value_enum, default_value = "auto")]
         owner: DeviceConfigOwner,
     },
 
@@ -724,13 +740,14 @@ pub enum DeviceConfigCommand {
         idempotency_key: Option<String>,
 
         /// Use Input's bridge or keep Codex as the connected device owner.
-        #[clap(long, value_enum, default_value = "input")]
+        #[clap(long, value_enum, default_value = "auto")]
         owner: DeviceConfigOwner,
     },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
 pub enum DeviceConfigOwner {
+    Auto,
     Input,
     Codex,
 }
@@ -1475,6 +1492,9 @@ pub enum TransactionCommand {
         input_socket: Option<PathBuf>,
         #[clap(long, value_parser)]
         input_token: Option<PathBuf>,
+        /// Preserve the current device owner for input-config mutations.
+        #[clap(long, value_enum, default_value = "auto")]
+        device_owner: DeviceConfigOwner,
     },
 
     /// Restore every authority from an apply receipt with global preflight and roll-forward.
@@ -1495,6 +1515,9 @@ pub enum TransactionCommand {
         input_socket: Option<PathBuf>,
         #[clap(long, value_parser)]
         input_token: Option<PathBuf>,
+        /// Preserve the current device owner for input-config mutations.
+        #[clap(long, value_enum, default_value = "auto")]
+        device_owner: DeviceConfigOwner,
     },
 }
 
@@ -2034,6 +2057,8 @@ pub enum AppSenseRelayCommand {
     Status,
     /// Forward the current frontmost application once.
     Sync,
+    /// Run one bridge-backed focus round trip and verify connection continuity.
+    Test,
     /// Stop and remove the persistent focus relay.
     Remove,
 }

@@ -64,15 +64,15 @@ candidate_revision=$(python3 -c \
 "$bin" --json backup inspect --input "$root/apply.json" \
   >"$root/apply-inspection.json"
 "$bin" --json device --transport bridge --bridge-socket "$socket" \
-  --bridge-token "$token" config snapshot --output "$root/post-reset.json" \
+  --bridge-token "$token" config snapshot --owner input --output "$root/post-reset.json" \
   >"$root/post-reset-stdout.json"
 
 "$bin" --json device --transport bridge --bridge-socket "$socket" \
-  --bridge-token "$token" config restore --input "$root/source.json" \
+  --bridge-token "$token" config restore --owner input --input "$root/source.json" \
   --backup "$root/pre-restore.json" --expected-revision "$candidate_revision" \
   --idempotency-key reset-rollback-1 >"$root/restore.json"
 "$bin" --json device --transport bridge --bridge-socket "$socket" \
-  --bridge-token "$token" config snapshot --output "$root/restored.json" \
+  --bridge-token "$token" config snapshot --owner input --output "$root/restored.json" \
   >"$root/restored-stdout.json"
 
 python3 - "$root" <<'PY'

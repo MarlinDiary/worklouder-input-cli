@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worklouderctl.dev/schemas/appsense-relay-v1.schema.json",
+  "title": "WorkLouderCTL AppSense relay result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "runtimeVersion", "operation", "delegated", "result"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "worklouderctl-appsense-relay" },
+    "runtimeVersion": { "const": 1 },
+    "operation": { "enum": ["install", "status", "sync", "test", "remove"] },
+    "delegated": { "const": true },
+    "result": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": { "enum": ["install", "status", "once", "remove"] },
+        "relay": {
+          "type": "object",
+          "properties": {
+            "installed": { "type": "boolean" },
+            "running": { "type": "boolean" },
+            "health": {
+              "type": "object",
+              "required": ["status", "healthy", "bridgeAvailable"],
+              "properties": {
+                "status": { "enum": ["not-installed", "stopped", "starting", "degraded", "healthy"] },
+                "healthy": { "type": "boolean" },
+                "bridgeAvailable": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -98,6 +98,7 @@ cp "$ROOT/agent-candidate.json" "$ROOT/codex-transaction-plan-inputs/agent-candi
 "$BIN" --json transaction show --input "$ROOT/codex-transaction-plan.json" \
   >"$ROOT/codex-transaction-plan-show.json"
 "$BIN" --json transaction apply \
+  --device-owner input \
   --plan "$ROOT/codex-transaction-plan.json" \
   --backup-dir "$ROOT/codex-transaction-backup" \
   --receipt "$ROOT/codex-transaction-apply.json" \
@@ -112,6 +113,7 @@ cp "$ROOT/agent-candidate.json" "$ROOT/codex-transaction-plan-inputs/agent-candi
   >"$ROOT/codex-transaction-post-agent-receipt.json"
 rm -rf "$ROOT/codex-transaction-plan-inputs" "$ROOT/codex-transaction-plan.json"
 "$BIN" --json transaction restore \
+  --device-owner input \
   --apply-receipt "$ROOT/codex-transaction-apply.json" \
   --backup-dir "$ROOT/codex-transaction-restore-backup" \
   --receipt "$ROOT/codex-transaction-restore.json" \

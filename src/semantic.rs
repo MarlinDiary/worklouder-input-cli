@@ -807,6 +807,33 @@ struct SemanticSnapshot {
     revision: String,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotValidation {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub valid: bool,
+    pub revision: String,
+    pub file_count: usize,
+    pub total_bytes: u64,
+}
+
+pub fn validate_snapshot(input: &Path) -> Result<SnapshotValidation> {
+    let snapshot = SemanticSnapshot::read(input)?;
+    Ok(SnapshotValidation {
+        schema_version: 1,
+        kind: "worklouderctl-device-config-validation",
+        valid: true,
+        revision: snapshot.revision,
+        file_count: snapshot.file_bytes.len(),
+        total_bytes: snapshot.file_bytes.iter().try_fold(0_u64, |total, bytes| {
+            total
+                .checked_add(bytes.len() as u64)
+                .context("configuration snapshot total size overflowed")
+        })?,
+    })
+}
+
 pub(crate) struct SnapshotAuthority {
     pub device_id: String,
     pub revision: String,
@@ -7122,7 +7149,7 @@ fn is_digest(value: &str, length: usize) -> bool {
     value.len() == length && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-fn decode_base64(value: &str) -> Result<Vec<u8>> {
+pub(crate) fn decode_base64(value: &str) -> Result<Vec<u8>> {
     let input = value.as_bytes();
     ensure!(
         input.len() % 4 == 0,
