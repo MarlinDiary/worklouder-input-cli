@@ -8,6 +8,7 @@ import {
   inspectorTargetForProcess,
   plistValue,
   sha256File,
+  unwrapRemoteResult,
   waitForInspectorPortRelease,
 } from "./live-bridge-cdp.mjs";
 
@@ -18,6 +19,8 @@ const ASAR = `${APP}/Contents/Resources/app.asar`;
 const EXPECTED_VERSION = "26.727.51351";
 const EXPECTED_ASAR_SHA256 =
   "a529edd72e10b08931c0d695b5e3e6a0be7f51874610dafc04f578436ab7d74d";
+const CODEX_MAIN = `${APP}/Contents/Resources/app.asar/.vite/build/src-CLstCQVF.js`;
+const DEVICE_SERVICE_MODULE = "./service-4uQDVZZZ.js";
 const PORT = 9229;
 
 const action = process.argv.includes("--remove") ? "remove" : "install";
@@ -45,20 +48,26 @@ const { target } = await inspectorTargetForProcess({
 });
 
 const client = await InspectorClient.connect(target.webSocketDebuggerUrl);
+const objectGroup = "worklouderctl-codex-live-bridge-install";
 try {
   assertEqual(await client.evaluate("process.execPath"), EXECUTABLE, "inspector process executable");
   if (action === "remove") {
-    const result = await client.evaluate(`(async()=>{const current=globalThis.__worklouderctlCodexBridge;if(!current)return {removed:false};await current.stop();delete globalThis.__worklouderctlCodexBridge;return {removed:true}})()`);
+    const result = await client.evaluate(`(async()=>{const current=globalThis.__worklouderctlCodexBridge;if(!current){delete globalThis.__worklouderctlCodexDeviceServices;return {removed:false}}await current.stop();delete globalThis.__worklouderctlCodexBridge;delete globalThis.__worklouderctlCodexDeviceServices;return {removed:true}})()`);
     console.log(JSON.stringify({ provider: "codex", action, ...result }, null, 2));
   } else {
+    const serviceCount = await captureDeviceServices(client, objectGroup);
+    if (!Number.isInteger(serviceCount) || serviceCount < 1) {
+      throw new Error("Codex device service instances were unavailable");
+    }
     const modulePath = fileURLToPath(
       new URL("../companion/codex-live-overlay-v2.mjs", import.meta.url),
     );
-    const expression = `(async()=>{const require=process.getBuiltinModule("module").createRequire("/tmp/worklouderctl-codex-live.cjs");const {app,BrowserWindow}=require("electron");const overlayPath=${JSON.stringify(modulePath)};const overlay=require(overlayPath);if(!Number.isInteger(overlay.CODEX_LIVE_OVERLAY_REVISION))throw new Error("Codex overlay revision missing");const current=globalThis.__worklouderctlCodexBridge;if(current?.overlayRevision===overlay.CODEX_LIVE_OVERLAY_REVISION)return {installed:true,idempotent:true,overlayRevision:current.overlayRevision,socketPath:current.socketPath,tokenPath:current.tokenPath};if(current){await current.stop();delete globalThis.__worklouderctlCodexBridge}const path=require("node:path");const settingsModule=require(path.join(app.getAppPath(),".vite/build/src-CLstCQVF.js"));const bridge=await overlay.installCodexLiveOverlay({app,BrowserWindow,settingsDefinitions:settingsModule.Li});globalThis.__worklouderctlCodexBridge=bridge;return {installed:true,idempotent:false,overlayRevision:bridge.overlayRevision,version:app.getVersion(),socketPath:bridge.socketPath,tokenPath:bridge.tokenPath}})()`;
+    const expression = `(async()=>{const require=process.getBuiltinModule("module").createRequire("/tmp/worklouderctl-codex-live.cjs");const {app,BrowserWindow}=require("electron");const overlayPath=${JSON.stringify(modulePath)};const overlay=require(overlayPath);if(!Number.isInteger(overlay.CODEX_LIVE_OVERLAY_REVISION))throw new Error("Codex overlay revision missing");const current=globalThis.__worklouderctlCodexBridge;if(current?.overlayRevision===overlay.CODEX_LIVE_OVERLAY_REVISION&&current.capabilities?.includes("codex.device.focus.v1"))return {installed:true,idempotent:true,overlayRevision:current.overlayRevision,socketPath:current.socketPath,tokenPath:current.tokenPath,deviceServiceCount:globalThis.__worklouderctlCodexDeviceServices?.length??0};if(current){await current.stop();delete globalThis.__worklouderctlCodexBridge}const path=require("node:path");const settingsModule=require(path.join(app.getAppPath(),".vite/build/src-CLstCQVF.js"));const deviceServiceProvider=()=>globalThis.__worklouderctlCodexDeviceServices;const bridge=await overlay.installCodexLiveOverlay({app,BrowserWindow,settingsDefinitions:settingsModule.Li,deviceServiceProvider});globalThis.__worklouderctlCodexBridge=bridge;return {installed:true,idempotent:false,overlayRevision:bridge.overlayRevision,version:app.getVersion(),socketPath:bridge.socketPath,tokenPath:bridge.tokenPath,deviceServiceCount:globalThis.__worklouderctlCodexDeviceServices?.length??0}})()`;
     const result = await client.evaluate(expression);
     console.log(JSON.stringify({ provider: "codex", action, ...result }, null, 2));
   }
 } finally {
+  await client.command("Runtime.releaseObjectGroup", { objectGroup }).catch(() => null);
   const closeScheduled = await client
     .evaluate(
       `(()=>{const inspector=process.getBuiltinModule("inspector");process.once("SIGUSR1",()=>inspector.open(${PORT},"127.0.0.1",false));setTimeout(()=>inspector.close(),250);return true})()`,
@@ -68,4 +77,29 @@ try {
   if (closeScheduled) {
     await waitForInspectorPortRelease(PORT);
   }
+}
+
+async function captureDeviceServices(client, objectGroup) {
+  const evaluated = await client.command("Runtime.evaluate", {
+    expression:
+      `(()=>{const require=process.getBuiltinModule('module').createRequire(${JSON.stringify(CODEX_MAIN)});` +
+      `return require(${JSON.stringify(DEVICE_SERVICE_MODULE)}).CodexMicroService.prototype})()`,
+    objectGroup,
+  });
+  const prototype = evaluated.result.objectId;
+  if (prototype == null) throw new Error("Codex service prototype missing");
+  const queried = await client.command("Runtime.queryObjects", {
+    prototypeObjectId: prototype,
+    objectGroup,
+  });
+  const instances = queried.objects.objectId;
+  if (instances == null) throw new Error("Codex service instances missing");
+  const called = await client.command("Runtime.callFunctionOn", {
+    objectId: instances,
+    functionDeclaration:
+      "function(){globalThis.__worklouderctlCodexDeviceServices=this;return this.length}",
+    returnByValue: true,
+    objectGroup,
+  });
+  return unwrapRemoteResult(called);
 }

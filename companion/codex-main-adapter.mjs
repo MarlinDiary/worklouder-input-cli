@@ -20,6 +20,7 @@ export function createCodexMainAdapter({
   request,
   settingsReplacer,
   agentKeysWriter,
+  deviceServiceProvider,
   readSettingsSource = (path) => readFile(path),
 }) {
   if (typeof request !== "function") throw new TypeError("request is required");
@@ -37,6 +38,12 @@ export function createCodexMainAdapter({
     (!agentKeysWriter || typeof agentKeysWriter.replaceAssignments !== "function")
   ) {
     throw new TypeError("agentKeysWriter.replaceAssignments is required");
+  }
+  if (
+    deviceServiceProvider !== undefined &&
+    typeof deviceServiceProvider !== "function"
+  ) {
+    throw new TypeError("deviceServiceProvider must be a function");
   }
   const settingsIdempotencyCache = new Map();
   const agentKeysIdempotencyCache = new Map();
@@ -268,6 +275,62 @@ export function createCodexMainAdapter({
     }
   };
 
+  const focusDevice = async ({ app, expectLayer = null }) => {
+    validateFocusApp(app);
+    if (expectLayer !== null && !Number.isInteger(expectLayer)) {
+      throw new CodexBridgeError(-32602, "expectLayer must be an integer or null");
+    }
+    const services = deviceServiceProvider();
+    if (!Array.isArray(services)) {
+      throw new CodexBridgeError(-32008, "Codex device services were unavailable");
+    }
+    const service = services.find(
+      (value) =>
+        value?.api?.api &&
+        value?.comm &&
+        value.getState?.().status === "connected",
+    );
+    if (!service) {
+      throw new CodexBridgeError(-32008, "connected Codex device service was unavailable");
+    }
+    const serviceApi = service.api;
+    const comm = service.comm;
+    const connectionAttemptId = service.connectionAttemptId;
+    const beforeStatus = await serviceApi.api.getDeviceStatus();
+    await serviceApi.api.sendFocusApp(structuredClone(app));
+    let afterStatus = await serviceApi.api.getDeviceStatus();
+    const deadline = Date.now() + 2_000;
+    while (
+      expectLayer !== null &&
+      afterStatus.selectedLayerIndex !== expectLayer &&
+      Date.now() < deadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      afterStatus = await serviceApi.api.getDeviceStatus();
+    }
+    if (expectLayer !== null && afterStatus.selectedLayerIndex !== expectLayer) {
+      throw new CodexBridgeError(
+        -32008,
+        `expected layer ${expectLayer}, observed ${afterStatus.selectedLayerIndex}`,
+      );
+    }
+    return {
+      operation: "focus",
+      app: structuredClone(app),
+      beforeStatus,
+      afterStatus,
+      continuity: {
+        sameServiceApi: service.api === serviceApi,
+        sameComm: service.comm === comm,
+        sameConnectionAttempt: service.connectionAttemptId === connectionAttemptId,
+        lifecycleState: service.lifecycleState,
+        deviceState: service.getState(),
+        hasHidSubscription: service.unsubscribeHid != null,
+        hasJoystickSubscription: service.unsubscribeJoystick != null,
+      },
+    };
+  };
+
   const adapter = { snapshotSettings, snapshotAgentKeys };
   if (settingsReplacer) {
     adapter.applySettings = (params) => runMutation({ ...params, operation: "apply" });
@@ -277,7 +340,19 @@ export function createCodexMainAdapter({
     adapter.applyAgentKeys = (params) => runAgentKeysMutation({ ...params, operation: "apply" });
     adapter.restoreAgentKeys = (params) => runAgentKeysMutation({ ...params, operation: "restore" });
   }
+  if (deviceServiceProvider) adapter.focusDevice = focusDevice;
   return adapter;
+}
+
+function validateFocusApp(app) {
+  if (!app || typeof app !== "object" || Array.isArray(app)) {
+    throw new CodexBridgeError(-32602, "focus app must be an object");
+  }
+  for (const key of ["appName", "process", "path"]) {
+    if (typeof app[key] !== "string" || app[key].length === 0 || app[key].length > 4096) {
+      throw new CodexBridgeError(-32602, `focus app ${key} was invalid`);
+    }
+  }
 }
 
 export function settingsRevision(settings) {

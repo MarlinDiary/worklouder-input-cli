@@ -40,6 +40,10 @@ const ASSETS: &[(&str, &[u8])] = &[
         include_bytes!("../scripts/codex-focus-relay.mjs"),
     ),
     (
+        "scripts/codex-focus-relay-core.mjs",
+        include_bytes!("../scripts/codex-focus-relay-core.mjs"),
+    ),
+    (
         "scripts/install-input-live-bridge.mjs",
         include_bytes!("../scripts/install-input-live-bridge.mjs"),
     ),
@@ -422,6 +426,10 @@ pub fn execute_appsense_relay(
     let output = Command::new(&node)
         .arg(&helper)
         .arg(operation.helper_action())
+        .env(
+            "WORKLOUDERCTL_RELAY_NODE_COMMAND",
+            node.as_os_str(),
+        )
         .output()
         .with_context(|| {
             format!(

@@ -94,6 +94,47 @@ test("Codex adapter snapshots settings and validates all Agent Key assignment ty
   assert.equal(keys.globalStateRevision, agentKeysRevision(keys.assignments));
 });
 
+test("Codex adapter forwards focus through the connected service without replacing it", async () => {
+  const state = testState();
+  const serviceApi = {
+    api: {
+      async getDeviceStatus() {
+        return { selectedLayerIndex: state.layer, firmwareVersion: "fixture" };
+      },
+      async sendFocusApp(app) {
+        state.focusApp = structuredClone(app);
+        state.layer = app.process === "notion.id" ? 2 : 1;
+      },
+    },
+  };
+  const comm = { marker: "comm" };
+  const service = {
+    api: serviceApi,
+    comm,
+    lifecycleState: "started",
+    connectionAttemptId: 7,
+    unsubscribeHid() {},
+    unsubscribeJoystick() {},
+    getState() { return { status: "connected", transport: "usb" }; },
+  };
+  const adapter = createCodexMainAdapter({
+    request: makeRequest(state),
+    readSettingsSource: async () => state.source,
+    deviceServiceProvider: () => [service],
+  });
+  const app = {
+    appName: "Notion",
+    process: "notion.id",
+    path: "/Applications/Notion.app",
+  };
+  const result = await adapter.focusDevice({ app, expectLayer: 2 });
+  assert.deepEqual(state.focusApp, app);
+  assert.equal(result.afterStatus.selectedLayerIndex, 2);
+  assert.equal(result.continuity.sameServiceApi, true);
+  assert.equal(result.continuity.sameComm, true);
+  assert.equal(result.continuity.sameConnectionAttempt, true);
+});
+
 test("Codex adapter applies, replays, rejects stale CAS, and restores Agent Keys", async () => {
   const state = testState();
   const adapter = testAdapter(state);
@@ -252,6 +293,8 @@ function testState() {
     },
     source: Buffer.from(JSON.stringify(settings)),
     assignments: null,
+    layer: 1,
+    focusApp: null,
   };
 }
 

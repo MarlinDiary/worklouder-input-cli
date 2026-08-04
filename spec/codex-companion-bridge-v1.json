@@ -53,7 +53,8 @@
     "codex.settings.restore": "codex.settings.restore.v1",
     "codex.agentKeys.snapshot": "codex.agentKeys.snapshot.v1",
     "codex.agentKeys.apply": "codex.agentKeys.apply.v1",
-    "codex.agentKeys.restore": "codex.agentKeys.restore.v1"
+    "codex.agentKeys.restore": "codex.agentKeys.restore.v1",
+    "codex.device.focus": "codex.device.focus.v1"
   },
   "settingsSnapshot": {
     "kind": "worklouderctl-codex-settings-snapshot",
@@ -159,6 +160,17 @@
       "restore pre-mutation assignments after any readback failure"
     ],
     "capabilityGate": "apply/restore are advertised only when the integration supplies an exact global-state writer"
+  },
+  "deviceFocus": {
+    "capability": "codex.device.focus.v1",
+    "authority": "running Codex CodexMicroService",
+    "sequence": [
+      "serialize on Codex main-process queue",
+      "capture connected service identity and status",
+      "forward appName, process, and path through sendFocusApp",
+      "read back device status and optional expected layer",
+      "verify the same API, comm, and connection attempt remain active"
+    ]
   },
   "limits": {
     "tokenBytes": 4096,

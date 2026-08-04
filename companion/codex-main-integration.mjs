@@ -7,6 +7,7 @@ export async function installCodexCompanionBridge({
   request,
   settingsReplacer,
   agentKeysWriter,
+  deviceServiceProvider,
   bridgeVersion,
   socketPath,
   tokenPath,
@@ -18,7 +19,12 @@ export async function installCodexCompanionBridge({
     throw new TypeError("Electron app lifecycle methods are required");
   }
   const userData = app.getPath("userData");
-  const adapter = createCodexMainAdapter({ request, settingsReplacer, agentKeysWriter });
+  const adapter = createCodexMainAdapter({
+    request,
+    settingsReplacer,
+    agentKeysWriter,
+    deviceServiceProvider,
+  });
   const bridge = await startCodexCompanionBridge({
     adapter,
     codexVersion: app.getVersion(),

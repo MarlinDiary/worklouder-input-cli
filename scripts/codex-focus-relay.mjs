@@ -5,6 +5,11 @@ import { access, chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import {
+  createFocusForwarder,
+  launchAgentProgramArguments,
+  relayHealth,
+} from "./codex-focus-relay-core.mjs";
 
 const execFilePromise = promisify(execFile);
 const LABEL = "dev.worklouderctl.appsense-relay";
@@ -16,7 +21,15 @@ const PLIST = join(HOME, "Library/LaunchAgents", `${LABEL}.plist`);
 const LOG = join(SUPPORT, "appsense-relay.log");
 const ERROR_LOG = join(SUPPORT, "appsense-relay.error.log");
 const STATE = join(SUPPORT, "appsense-relay-state.json");
-const RPC = fileURLToPath(new URL("./codex-device-rpc.mjs", import.meta.url));
+const SOCKET = join(HOME, "Library/Application Support/Codex/worklouderctl-codex-bridge-v1.sock");
+const TOKEN = join(HOME, "Library/Application Support/Codex/worklouderctl-codex-bridge-v1.token");
+const PROVIDER = fileURLToPath(new URL("./provider-handoff.mjs", import.meta.url));
+const NODE_COMMAND = process.env.WORKLOUDERCTL_RELAY_NODE_COMMAND ?? "node";
+const focusForwarder = createFocusForwarder({
+  socketPath: SOCKET,
+  tokenPath: TOKEN,
+  installBridge: ensureBridgeInstalled,
+});
 const [mode = "status"] = process.argv.slice(2);
 
 if (process.argv.includes("--help")) {
@@ -43,7 +56,7 @@ async function runRelay() {
   let currentIdentity = null;
   let pending = Promise.resolve();
   let timer = null;
-  const scheduleForward = () => {
+  const scheduleForward = (delayMs = 75) => {
     if (timer != null) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = null;
@@ -52,17 +65,24 @@ async function runRelay() {
           const app = await frontmostApp();
           const identity = JSON.stringify(app);
           if (identity === currentIdentity) return;
-          const result = await forwardApp(app);
+          const forwarded = await forwardApp(app);
           currentIdentity = identity;
-          await writeRelayState({ at: new Date().toISOString(), app, result });
+          await writeRelayState({
+            at: new Date().toISOString(),
+            app,
+            result: forwarded.result,
+            retryCount: forwarded.retryCount,
+            bridgeReinstalled: forwarded.bridgeReinstalled,
+          });
         })
         .catch(async (error) => {
           await writeRelayState({
             at: new Date().toISOString(),
             error: errorMessage(error),
           }).catch(() => null);
+          scheduleForward(5_000);
         });
-    }, 75);
+    }, delayMs);
   };
 
   scheduleForward();
@@ -83,12 +103,14 @@ async function runRelay() {
   const code = await new Promise((resolve) => listener.once("exit", resolve));
   if (timer != null) clearTimeout(timer);
   await pending;
+  focusForwarder.close();
   if (code !== 0 && process.exitCode == null) process.exitCode = code ?? 1;
 }
 
 async function installRelay() {
   await mkdir(dirname(PLIST), { recursive: true, mode: 0o700 });
   await mkdir(SUPPORT, { recursive: true, mode: 0o700 });
+  await ensureBridgeInstalled();
   const plist = launchAgentPlist();
   await writeFile(PLIST, plist, { mode: 0o600 });
   await chmod(PLIST, 0o600);
@@ -123,10 +145,18 @@ async function relayStatus() {
   let running = false;
   let detail = null;
   let lastEvent = null;
+  let bridgeAvailable = true;
   try {
     lastEvent = JSON.parse(await readFile(STATE, "utf8"));
   } catch {
     lastEvent = null;
+  }
+  for (const path of [SOCKET, TOKEN]) {
+    try {
+      await access(path);
+    } catch {
+      bridgeAvailable = false;
+    }
   }
   try {
     const { stdout } = await execFilePromise("/bin/launchctl", [
@@ -139,6 +169,7 @@ async function relayStatus() {
   } catch {
     running = false;
   }
+  const health = relayHealth({ running, installed, lastEvent });
   return {
     action: "status",
     relay: {
@@ -151,6 +182,14 @@ async function relayStatus() {
       state: STATE,
       detail,
       lastEvent,
+      health: {
+        ...health,
+        bridgeAvailable,
+      },
+      runtime: {
+        nodeCommand: NODE_COMMAND,
+        script: fileURLToPath(import.meta.url),
+      },
     },
   };
 }
@@ -168,7 +207,16 @@ async function waitForRunning(expected) {
 
 async function forwardFrontmost() {
   const app = await frontmostApp();
-  return { app, result: await forwardApp(app) };
+  const forwarded = await forwardApp(app);
+  const state = {
+    at: new Date().toISOString(),
+    app,
+    result: forwarded.result,
+    retryCount: forwarded.retryCount,
+    bridgeReinstalled: forwarded.bridgeReinstalled,
+  };
+  await writeRelayState(state);
+  return state;
 }
 
 async function frontmostApp() {
@@ -191,17 +239,19 @@ async function frontmostApp() {
 }
 
 async function forwardApp(app) {
+  return focusForwarder.forward(app);
+}
+
+async function ensureBridgeInstalled() {
   const { stdout } = await execFilePromise(process.execPath, [
-    RPC,
-    "focus",
-    "--name",
-    app.appName,
-    "--process",
-    app.process,
-    "--path",
-    app.path,
+    PROVIDER,
+    "install-codex",
   ], { maxBuffer: 2 * 1024 * 1024 });
-  return JSON.parse(stdout);
+  const result = JSON.parse(stdout);
+  if (result?.provider !== "codex" || result?.action !== "install") {
+    throw new Error("Codex bridge installer returned an invalid result");
+  }
+  return result;
 }
 
 async function writeRelayState(value) {
@@ -210,9 +260,13 @@ async function writeRelayState(value) {
 }
 
 function launchAgentPlist() {
-  const argumentsXml = [process.execPath, fileURLToPath(import.meta.url), "run"]
+  const argumentsXml = launchAgentProgramArguments({
+    nodeCommand: NODE_COMMAND,
+    scriptPath: fileURLToPath(import.meta.url),
+  })
     .map((value) => `      <string>${xmlEscape(value)}</string>`)
     .join("\n");
+  const path = process.env.PATH ?? "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -226,6 +280,11 @@ ${argumentsXml}
     <key>KeepAlive</key><true/>
     <key>ProcessType</key><string>Interactive</string>
     <key>LimitLoadToSessionType</key><string>Aqua</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PATH</key><string>${xmlEscape(path)}</string>
+      <key>WORKLOUDERCTL_RELAY_NODE_COMMAND</key><string>${xmlEscape(NODE_COMMAND)}</string>
+    </dict>
     <key>StandardOutPath</key><string>${xmlEscape(LOG)}</string>
     <key>StandardErrorPath</key><string>${xmlEscape(ERROR_LOG)}</string>
   </dict>

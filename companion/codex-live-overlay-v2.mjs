@@ -1,7 +1,7 @@
 import { installCodexCompanionBridge } from "./codex-main-integration.mjs";
 
 export const SUPPORTED_CODEX_VERSION = "26.727.51351";
-export const CODEX_LIVE_OVERLAY_REVISION = 2;
+export const CODEX_LIVE_OVERLAY_REVISION = 3;
 export const CODEX_MICRO_SETTING_KEYS = Object.freeze([
   "codex-micro-agent-source",
   "codex-micro-single-tap-agent-keys",
@@ -19,6 +19,7 @@ export async function installCodexLiveOverlay({
   app,
   BrowserWindow,
   settingsDefinitions,
+  deviceServiceProvider,
   bridgeVersion = "0.1.0-live-overlay",
   socketPath,
   tokenPath,
@@ -51,6 +52,7 @@ export async function installCodexLiveOverlay({
         await request("set-global-state", { key, value: assignments });
       },
     },
+    deviceServiceProvider,
   });
   return { ...bridge, overlayRevision: CODEX_LIVE_OVERLAY_REVISION };
 }

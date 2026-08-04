@@ -21,6 +21,7 @@ const METHOD_DEFINITIONS = new Map([
   ["codex.agentKeys.snapshot", ["codex.agentKeys.snapshot.v1", "snapshotAgentKeys"]],
   ["codex.agentKeys.apply", ["codex.agentKeys.apply.v1", "applyAgentKeys"]],
   ["codex.agentKeys.restore", ["codex.agentKeys.restore.v1", "restoreAgentKeys"]],
+  ["codex.device.focus", ["codex.device.focus.v1", "focusDevice"]],
 ]);
 
 const MUTATION_METHODS = new Set([
