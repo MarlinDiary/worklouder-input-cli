@@ -11,6 +11,7 @@ import {
   unwrapRemoteResult,
   waitForInspectorPortRelease,
 } from "./live-bridge-cdp.mjs";
+import { acquireProviderLock } from "./provider-lock.mjs";
 
 const APP = "/Applications/ChatGPT.app";
 const EXECUTABLE = `${APP}/Contents/MacOS/ChatGPT`;
@@ -22,6 +23,7 @@ const EXPECTED_ASAR_SHA256 =
 const CODEX_MAIN = `${APP}/Contents/Resources/app.asar/.vite/build/src-CLstCQVF.js`;
 const DEVICE_SERVICE_MODULE = "./service-4uQDVZZZ.js";
 const PORT = 9229;
+const PROVIDER_LOCK = `${process.env.HOME}/Library/Application Support/worklouderctl/provider-handoff.lock`;
 
 const action = process.argv.includes("--remove") ? "remove" : "install";
 if (process.argv.includes("--help")) {
@@ -37,6 +39,11 @@ assertEqual(
 );
 assertEqual(await sha256File(ASAR), EXPECTED_ASAR_SHA256, "Codex app.asar SHA-256");
 
+const providerLock = await acquireProviderLock({
+  lockPath: PROVIDER_LOCK,
+  mode: `install-codex-live-bridge-${action}`,
+});
+try {
 const pids = await exactProcessIds(EXECUTABLE);
 if (pids.length !== 1) {
   throw new Error(`expected one running Codex main process, detected ${pids.length}`);
@@ -77,6 +84,9 @@ try {
   if (closeScheduled) {
     await waitForInspectorPortRelease(PORT);
   }
+}
+} finally {
+  await providerLock.release();
 }
 
 async function captureDeviceServices(client, objectGroup) {

@@ -23,7 +23,7 @@ const ERROR_LOG = join(SUPPORT, "appsense-relay.error.log");
 const STATE = join(SUPPORT, "appsense-relay-state.json");
 const SOCKET = join(HOME, "Library/Application Support/Codex/worklouderctl-codex-bridge-v1.sock");
 const TOKEN = join(HOME, "Library/Application Support/Codex/worklouderctl-codex-bridge-v1.token");
-const PROVIDER = fileURLToPath(new URL("./provider-handoff.mjs", import.meta.url));
+const PROVIDER = fileURLToPath(new URL("./install-codex-live-bridge.mjs", import.meta.url));
 const NODE_COMMAND = process.env.WORKLOUDERCTL_RELAY_NODE_COMMAND ?? "node";
 const focusForwarder = createFocusForwarder({
   socketPath: SOCKET,
@@ -245,7 +245,6 @@ async function forwardApp(app) {
 async function ensureBridgeInstalled() {
   const { stdout } = await execFilePromise(process.execPath, [
     PROVIDER,
-    "install-codex",
   ], { maxBuffer: 2 * 1024 * 1024 });
   const result = JSON.parse(stdout);
   if (result?.provider !== "codex" || result?.action !== "install") {
