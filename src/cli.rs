@@ -635,7 +635,7 @@ pub enum DeviceCommand {
         output: PathBuf,
     },
 
-    /// Snapshot or validate configuration through Input's live session.
+    /// Snapshot, validate, apply, or restore complete device configuration.
     Config {
         #[clap(subcommand)]
         command: DeviceConfigCommand,
@@ -653,6 +653,10 @@ pub enum DeviceConfigCommand {
         /// Select a connected device ID; defaults to the single Codex Micro.
         #[clap(long)]
         device: Option<String>,
+
+        /// Use Input's bridge or Codex's already-connected device session.
+        #[clap(long, value_enum, default_value = "input")]
+        owner: DeviceConfigOwner,
     },
 
     /// Validate a snapshot and optionally compare it with the live revision.
@@ -691,6 +695,10 @@ pub enum DeviceConfigCommand {
         /// Stable retry key; reuse it only with the exact same mutation.
         #[clap(long)]
         idempotency_key: Option<String>,
+
+        /// Use Input's bridge or keep Codex as the connected device owner.
+        #[clap(long, value_enum, default_value = "input")]
+        owner: DeviceConfigOwner,
     },
 
     /// Restore a complete snapshot with a new pre-restore backup.
@@ -714,7 +722,17 @@ pub enum DeviceConfigCommand {
         /// Stable retry key; reuse it only with the exact same mutation.
         #[clap(long)]
         idempotency_key: Option<String>,
+
+        /// Use Input's bridge or keep Codex as the connected device owner.
+        #[clap(long, value_enum, default_value = "input")]
+        owner: DeviceConfigOwner,
     },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
+pub enum DeviceConfigOwner {
+    Input,
+    Codex,
 }
 
 #[derive(Debug, Subcommand)]
@@ -1994,6 +2012,30 @@ pub enum AppSenseCommand {
         #[clap(long, default_value_t = 250)]
         poll_ms: u64,
     },
+
+    /// Keep Codex as device owner while forwarding macOS focus changes.
+    Relay {
+        /// Override the private directory used for the embedded relay runtime.
+        #[clap(long, value_parser)]
+        runtime_dir: Option<PathBuf>,
+        /// Override the Node.js executable used by the relay runtime.
+        #[clap(long, value_parser)]
+        node: Option<PathBuf>,
+        #[clap(subcommand)]
+        command: AppSenseRelayCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AppSenseRelayCommand {
+    /// Install and start the persistent event-driven macOS focus relay.
+    Install,
+    /// Inspect whether the relay is installed and running.
+    Status,
+    /// Forward the current frontmost application once.
+    Sync,
+    /// Stop and remove the persistent focus relay.
+    Remove,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]

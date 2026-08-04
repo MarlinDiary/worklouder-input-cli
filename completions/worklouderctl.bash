@@ -228,6 +228,9 @@ _worklouderctl() {
             recovery)
                 cmd+="__recovery"
                 ;;
+            relay)
+                cmd+="__relay"
+                ;;
             release)
                 cmd+="__release"
                 ;;
@@ -269,6 +272,9 @@ _worklouderctl() {
                 ;;
             status)
                 cmd+="__status"
+                ;;
+            sync)
+                cmd+="__sync"
                 ;;
             tap-mode)
                 cmd+="__tap__mode"
@@ -999,7 +1005,7 @@ _worklouderctl() {
             return 0
             ;;
         worklouderctl__appsense)
-            opts="-h -V --help --version --json list show link set unlink test help"
+            opts="-h -V --help --version --json list show link set unlink test relay help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1079,6 +1085,98 @@ _worklouderctl() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__appsense__relay)
+            opts="-h -V --runtime-dir --node --help --version --json install status sync remove help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --runtime-dir)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --node)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__appsense__relay__help)
+            opts="--json <SUBCOMMAND>..."
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__appsense__relay__install)
+            opts="-h -V --help --version --json"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__appsense__relay__remove)
+            opts="-h -V --help --version --json"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__appsense__relay__status)
+            opts="-h -V --help --version --json"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        worklouderctl__appsense__relay__sync)
+            opts="-h -V --help --version --json"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
                 *)
                     COMPREPLY=()
                     ;;
@@ -3225,7 +3323,7 @@ _worklouderctl() {
             return 0
             ;;
         worklouderctl__device__config__apply)
-            opts="-h -V --input --backup --device --expected-revision --idempotency-key --help --version --json"
+            opts="-h -V --input --backup --device --expected-revision --idempotency-key --owner --help --version --json"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -3249,6 +3347,10 @@ _worklouderctl() {
                     ;;
                 --idempotency-key)
                     COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --owner)
+                    COMPREPLY=($(compgen -W "input codex" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -3273,7 +3375,7 @@ _worklouderctl() {
             return 0
             ;;
         worklouderctl__device__config__restore)
-            opts="-h -V --input --backup --device --expected-revision --idempotency-key --help --version --json"
+            opts="-h -V --input --backup --device --expected-revision --idempotency-key --owner --help --version --json"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -3299,6 +3401,10 @@ _worklouderctl() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                --owner)
+                    COMPREPLY=($(compgen -W "input codex" -- "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -3307,7 +3413,7 @@ _worklouderctl() {
             return 0
             ;;
         worklouderctl__device__config__snapshot)
-            opts="-h -V --output --device --help --version --json"
+            opts="-h -V --output --device --owner --help --version --json"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -3319,6 +3425,10 @@ _worklouderctl() {
                     ;;
                 --device)
                     COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --owner)
+                    COMPREPLY=($(compgen -W "input codex" -- "${cur}"))
                     return 0
                     ;;
                 *)

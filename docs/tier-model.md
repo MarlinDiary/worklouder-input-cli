@@ -99,7 +99,7 @@ write is incomplete from the companion CLI's perspective.
 
 ## Tier 3 — Input host automations
 
-Tier 3 needs Input running on the computer:
+Tier 3 host actions normally need Input running on the computer:
 
 - Smart Actions: text, command, URL, and application launch;
 - focused-application observation used by AppSense;
@@ -107,6 +107,13 @@ Tier 3 needs Input running on the computer:
 - radial-menu presentation and selection;
 - host permission for command-running Smart Actions;
 - other model-specific host widgets and media or wallpaper services.
+
+AppSense has an additional Codex-owner execution path. `appsense relay` listens
+for macOS frontmost-application events and forwards the same application
+identity through Codex's already-connected vendor API. The device performs the
+persisted linked-application lookup and layer switch while Codex retains the
+physical session. Smart Actions, Cheat Sheet, and other Input host actions
+remain Input-owned.
 
 These features combine device references with desktop behavior. Verification
 must therefore test the emitted device event and the host-side result.
@@ -141,7 +148,8 @@ communication channel. WorkLouderCTL therefore follows these rules:
 2. classify every requested field by tier before generating a plan;
 3. split a cross-tier plan into explicit ordered transactions with one combined
    diff and rollback boundary;
-4. coordinate Codex for Tier 1 and Input for Tier 2 or Tier 3 transactions;
+4. coordinate Codex for Tier 1 and Input for Tier 2 or Tier 3 configuration
+   transactions; keep Codex owner for runtime AppSense focus relay;
 5. preserve unknown fields byte-for-byte in every authority;
 6. refresh/reopen the affected apps and verify settings plus runtime behavior;
 7. leave a runnable rollback record for every mutation.

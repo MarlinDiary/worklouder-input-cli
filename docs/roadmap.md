@@ -72,6 +72,7 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Action group metadata, ordered member CRUD, and Input orphan cascade
 - [x] Multi Action field CRUD, timing, groups, and reference cascade
 - [x] Linked-app/AppSense list/show/link/update/unlink candidates and fixture transaction
+- [x] Persistent macOS AppSense focus relay through Codex ownership with live Notion/Codex layer round-trip and connection-continuity evidence
 - [x] Smart Action typed CRUD, groups, physical bindings, and delete cascade candidates
 - [x] Input host command permission snapshot/candidate/apply/restore transaction
 - [x] Cheat Sheet show/hold/hide/toggle catalog and binding candidates

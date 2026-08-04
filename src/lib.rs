@@ -23,23 +23,24 @@ use anyhow::Result;
 use clap::CommandFactory;
 use cli::{
     ActionCommand, ActionEventCommand, ActionGroupCommand, ActionGroupMemberCommand, AgentCommand,
-    AppSenseCommand, BackupCommand, BridgeCommand, CapabilityCommand, CheatSheetBehavior,
-    CheatSheetCommand, Cli, CodexAgentKeyCommand, CodexAgentSource, CodexAgentSourceCommand,
-    CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand, CodexCommand,
-    CodexCommandKeyCommand, CodexConfigCommand, CodexDialCommand, CodexDialGesture,
+    AppSenseCommand, AppSenseRelayCommand, BackupCommand, BridgeCommand, CapabilityCommand,
+    CheatSheetBehavior, CheatSheetCommand, Cli, CodexAgentKeyCommand, CodexAgentSource,
+    CodexAgentSourceCommand, CodexAgentTapMode, CodexAgentTapModeCommand, CodexBridgeCommand,
+    CodexCommand, CodexCommandKeyCommand, CodexConfigCommand, CodexDialCommand, CodexDialGesture,
     CodexDialGestureCommand, CodexDialMode, CodexDialModeCommand, CodexJoystickCommand,
     CodexJoystickDirection, CodexLightingAutoOff, CodexLightingAutoOffCommand,
     CodexLightingBrightnessCommand, CodexLightingCommand, CodexResetCommand, CodexRuntimeCommand,
     CodexVoiceCommand, CodexVoiceMode, Command, CompatibilityCommand, CompletionShell,
-    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceTransport,
-    InputCommand, InputCommandPermissionCommand, InputCommandPermissionValue, InputConfigCommand,
-    InputFirmwareCommand, InputLogsCommand, InputPermissionCommand, InputPresetCommand,
-    InputRecoveryCommand, InputResetCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
-    LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect,
-    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
-    PresetCommand, ProfileCommand, ProviderCommand, ProviderTarget, RadialCommand, SchemaCommand,
-    SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
-    SmartActionType as CliSmartActionType, TierCommand, TransactionCommand,
+    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceConfigOwner,
+    DeviceTransport, InputCommand, InputCommandPermissionCommand, InputCommandPermissionValue,
+    InputConfigCommand, InputFirmwareCommand, InputLogsCommand, InputPermissionCommand,
+    InputPresetCommand, InputRecoveryCommand, InputResetCommand, LayerCommand,
+    LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand, LayerJoystickSectorCommand,
+    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
+    MultiActionGroupCommand, MultiActionGroupMemberCommand, PresetCommand, ProfileCommand,
+    ProviderCommand, ProviderTarget, RadialCommand, SchemaCommand, SmartActionCommand,
+    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
+    TierCommand, TransactionCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -1012,6 +1013,26 @@ fn run_appsense(command: AppSenseCommand, json: bool, mut out: impl Write) -> Re
                         .map(|value| value.to_string())
                         .unwrap_or_default(),
                 )?;
+            }
+        }
+        AppSenseCommand::Relay {
+            runtime_dir,
+            node,
+            command,
+        } => {
+            let operation = match command {
+                AppSenseRelayCommand::Install => provider::AppSenseRelayOperation::Install,
+                AppSenseRelayCommand::Status => provider::AppSenseRelayOperation::Status,
+                AppSenseRelayCommand::Sync => provider::AppSenseRelayOperation::Sync,
+                AppSenseRelayCommand::Remove => provider::AppSenseRelayOperation::Remove,
+            };
+            let report = provider::execute_appsense_relay(operation, runtime_dir, node)?;
+            if json {
+                write_json(&mut out, &report)?;
+            } else {
+                writeln!(out, "operation={}", report.operation)?;
+                writeln!(out, "delegated={}", report.delegated)?;
+                writeln!(out, "result={}", serde_json::to_string(&report.result)?)?;
             }
         }
     }
@@ -2088,88 +2109,168 @@ fn run_device(
                 }
             }
         }
-        DeviceCommand::Config { command } => {
-            anyhow::ensure!(
-                use_bridge,
-                "device config commands require the Input Companion Bridge transport"
-            );
-            match command {
-                DeviceConfigCommand::Snapshot { output, device } => {
-                    let result =
-                        bridge::config_snapshot(&bridge_paths, device.as_deref(), &output)?;
+        DeviceCommand::Config { command } => match command {
+            DeviceConfigCommand::Snapshot {
+                output,
+                device,
+                owner,
+            } => {
+                if owner == DeviceConfigOwner::Codex {
+                    anyhow::ensure!(
+                        device.is_none(),
+                        "--device is only valid with --owner input"
+                    );
+                    let result = provider::codex_device_snapshot(&output)?;
                     if json {
                         write_json(&mut out, &result)?;
                     } else {
                         writeln!(
                             out,
-                            "Saved {} configuration file(s) to {}",
+                            "Saved {} Codex-owned configuration file(s) to {}",
                             result.file_count,
                             result.output.display()
                         )?;
                         writeln!(out, "revision={}", result.revision)?;
                     }
+                    return Ok(());
                 }
-                DeviceConfigCommand::Validate {
-                    input,
-                    device,
-                    expected_revision,
-                } => {
-                    let result = bridge::config_validate(
-                        &bridge_paths,
-                        device.as_deref(),
+                anyhow::ensure!(
+                        use_bridge,
+                        "Input-owned device config commands require the Input Companion Bridge transport"
+                    );
+                let result = bridge::config_snapshot(&bridge_paths, device.as_deref(), &output)?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "Saved {} configuration file(s) to {}",
+                        result.file_count,
+                        result.output.display()
+                    )?;
+                    writeln!(out, "revision={}", result.revision)?;
+                }
+            }
+            DeviceConfigCommand::Validate {
+                input,
+                device,
+                expected_revision,
+            } => {
+                anyhow::ensure!(
+                    use_bridge,
+                    "device config validate requires the Input Companion Bridge transport"
+                );
+                let result = bridge::config_validate(
+                    &bridge_paths,
+                    device.as_deref(),
+                    &input,
+                    expected_revision.as_deref(),
+                )?;
+                if json {
+                    write_json(&mut out, &result)?;
+                } else {
+                    writeln!(
+                        out,
+                        "Configuration snapshot is valid ({} file(s), {} bytes)",
+                        result.file_count, result.total_bytes
+                    )?;
+                    writeln!(out, "revision={}", result.revision)?;
+                    if let Some(live_revision) = result.live_revision {
+                        writeln!(out, "liveRevision={live_revision}")?;
+                    }
+                }
+            }
+            DeviceConfigCommand::Apply {
+                input,
+                backup,
+                device,
+                expected_revision,
+                idempotency_key,
+                owner,
+            } => {
+                if owner == DeviceConfigOwner::Codex {
+                    anyhow::ensure!(
+                        device.is_none(),
+                        "--device is only valid with --owner input"
+                    );
+                    let result = provider::codex_device_mutate(
+                        provider::CodexDeviceMutation::Apply,
                         &input,
+                        &backup,
                         expected_revision.as_deref(),
+                        idempotency_key.as_deref(),
                     )?;
                     if json {
                         write_json(&mut out, &result)?;
                     } else {
-                        writeln!(
-                            out,
-                            "Configuration snapshot is valid ({} file(s), {} bytes)",
-                            result.file_count, result.total_bytes
-                        )?;
-                        writeln!(out, "revision={}", result.revision)?;
-                        if let Some(live_revision) = result.live_revision {
-                            writeln!(out, "liveRevision={live_revision}")?;
-                        }
+                        writeln!(out, "Applied Codex-owned device configuration")?;
+                        writeln!(out, "backup={}", result.backup.display())?;
+                        writeln!(out, "beforeRevision={}", result.before_revision)?;
+                        writeln!(out, "afterRevision={}", result.after_revision)?;
+                        writeln!(out, "changed={}", result.changed)?;
                     }
+                    return Ok(());
                 }
-                DeviceConfigCommand::Apply {
-                    input,
-                    backup,
-                    device,
-                    expected_revision,
-                    idempotency_key,
-                } => {
-                    let result = bridge::config_apply(
-                        &bridge_paths,
-                        device.as_deref(),
-                        &input,
-                        &backup,
-                        expected_revision.as_deref(),
-                        idempotency_key.as_deref(),
-                    )?;
-                    write_mutation_result(result, json, &mut out)?;
-                }
-                DeviceConfigCommand::Restore {
-                    input,
-                    backup,
-                    device,
-                    expected_revision,
-                    idempotency_key,
-                } => {
-                    let result = bridge::config_restore(
-                        &bridge_paths,
-                        device.as_deref(),
-                        &input,
-                        &backup,
-                        expected_revision.as_deref(),
-                        idempotency_key.as_deref(),
-                    )?;
-                    write_mutation_result(result, json, &mut out)?;
-                }
+                anyhow::ensure!(
+                        use_bridge,
+                        "Input-owned device config commands require the Input Companion Bridge transport"
+                    );
+                let result = bridge::config_apply(
+                    &bridge_paths,
+                    device.as_deref(),
+                    &input,
+                    &backup,
+                    expected_revision.as_deref(),
+                    idempotency_key.as_deref(),
+                )?;
+                write_mutation_result(result, json, &mut out)?;
             }
-        }
+            DeviceConfigCommand::Restore {
+                input,
+                backup,
+                device,
+                expected_revision,
+                idempotency_key,
+                owner,
+            } => {
+                if owner == DeviceConfigOwner::Codex {
+                    anyhow::ensure!(
+                        device.is_none(),
+                        "--device is only valid with --owner input"
+                    );
+                    let result = provider::codex_device_mutate(
+                        provider::CodexDeviceMutation::Restore,
+                        &input,
+                        &backup,
+                        expected_revision.as_deref(),
+                        idempotency_key.as_deref(),
+                    )?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(out, "Restored Codex-owned device configuration")?;
+                        writeln!(out, "backup={}", result.backup.display())?;
+                        writeln!(out, "beforeRevision={}", result.before_revision)?;
+                        writeln!(out, "afterRevision={}", result.after_revision)?;
+                        writeln!(out, "changed={}", result.changed)?;
+                    }
+                    return Ok(());
+                }
+                anyhow::ensure!(
+                        use_bridge,
+                        "Input-owned device config commands require the Input Companion Bridge transport"
+                    );
+                let result = bridge::config_restore(
+                    &bridge_paths,
+                    device.as_deref(),
+                    &input,
+                    &backup,
+                    expected_revision.as_deref(),
+                    idempotency_key.as_deref(),
+                )?;
+                write_mutation_result(result, json, &mut out)?;
+            }
+        },
     }
     Ok(())
 }

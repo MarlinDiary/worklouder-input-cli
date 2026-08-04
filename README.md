@@ -26,9 +26,9 @@ configuration tiers: Codex-native controls, device layouts, Input host actions,
 and delegated device operations.
 
 Codex and Input remain the runtime providers for HID/BLE transport, firmware,
-AppSense, Smart Actions, and Codex-aware behavior. WorkLouderCTL adds the
-repeatable configuration layer: inspect, plan, diff, apply, verify, and roll
-back.
+Smart Actions, and Codex-aware behavior. WorkLouderCTL adds the repeatable
+configuration layer and can relay macOS focus through Codex's connected runtime
+for AppSense switching without transferring device ownership.
 
 > [!NOTE]
 > Configuration parity is implemented for the verified macOS/Codex Micro
@@ -137,6 +137,34 @@ worklouderctl provider handoff codex
 Input is launched as a hidden user-scoped provider during handoff. The CLI uses
 private authenticated sockets and validates the returned provider/action
 identity before accepting a result.
+
+### Keep Codex connected during AppSense switching
+
+Bind applications to layers in the device configuration, then install the
+event-driven focus relay:
+
+```console
+worklouderctl provider handoff codex
+worklouderctl device config snapshot --owner codex --output before.json
+worklouderctl appsense link \
+  --input before.json --profile 0 --layer 1 \
+  --name Notion --process notion.id --path /Applications/Notion.app \
+  --output candidate.json
+worklouderctl device config apply --owner codex \
+  --input candidate.json --backup pre-apply.json \
+  --expected-revision REVISION
+worklouderctl appsense relay install
+worklouderctl appsense relay status
+worklouderctl appsense relay sync
+```
+
+The relay observes macOS `becameFrontmost` events and forwards the application
+identity through Codex's existing connected device API. Codex remains the sole
+USB owner, so switching between an application layer and the Codex layer does
+not stop its HID or joystick subscriptions. The same `--owner codex` path gives
+device configuration snapshot/apply/restore immutable backups, exact readback,
+automatic rollback, and connection-continuity checks. Use
+`worklouderctl appsense relay remove` to remove the LaunchAgent.
 
 ### Back up, edit and apply an Input configuration
 

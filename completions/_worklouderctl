@@ -1735,6 +1735,7 @@ _arguments "${_arguments_options[@]}" \
 _arguments "${_arguments_options[@]}" \
 '*--output=[Destination JSON file. It must not already exist]:OUTPUT:_files' \
 '--device=[Select a connected device ID; defaults to the single Codex Micro]:DEVICE: ' \
+'--owner=[Use Input'\''s bridge or Codex'\''s already-connected device session]:OWNER:(input codex)' \
 '-h[Print help information]' \
 '--help[Print help information]' \
 '-V[Print version information]' \
@@ -1761,6 +1762,7 @@ _arguments "${_arguments_options[@]}" \
 '--device=[Select a connected device ID; defaults to the candidate device]:DEVICE: ' \
 '--expected-revision=[Require the live device to have this revision before the write]:EXPECTED_REVISION: ' \
 '--idempotency-key=[Stable retry key; reuse it only with the exact same mutation]:IDEMPOTENCY_KEY: ' \
+'--owner=[Use Input'\''s bridge or keep Codex as the connected device owner]:OWNER:(input codex)' \
 '-h[Print help information]' \
 '--help[Print help information]' \
 '-V[Print version information]' \
@@ -1775,6 +1777,7 @@ _arguments "${_arguments_options[@]}" \
 '--device=[Select a connected device ID; defaults to the snapshot device]:DEVICE: ' \
 '--expected-revision=[Require the live device to have this revision before the write]:EXPECTED_REVISION: ' \
 '--idempotency-key=[Stable retry key; reuse it only with the exact same mutation]:IDEMPOTENCY_KEY: ' \
+'--owner=[Use Input'\''s bridge or keep Codex as the connected device owner]:OWNER:(input codex)' \
 '-h[Print help information]' \
 '--help[Print help information]' \
 '-V[Print version information]' \
@@ -3751,6 +3754,71 @@ _arguments "${_arguments_options[@]}" \
 '--json[Emit machine-readable JSON when the command supports it]' \
 && ret=0
 ;;
+(relay)
+_arguments "${_arguments_options[@]}" \
+'*--runtime-dir=[Override the private directory used for the embedded relay runtime]:RUNTIME_DIR:_files' \
+'*--node=[Override the Node.js executable used by the relay runtime]:NODE:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__appsense__relay_commands" \
+"*::: :->relay" \
+&& ret=0
+
+    case $state in
+    (relay)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-appsense-relay-command-$line[1]:"
+        case $line[1] in
+            (install)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(sync)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (help)
 _arguments "${_arguments_options[@]}" \
 '--json[Emit machine-readable JSON when the command supports it]' \
@@ -3936,6 +4004,7 @@ _worklouderctl__appsense_commands() {
 'set:Update linked-application label or detection identity' \
 'unlink:Remove one layer binding and its now-unreferenced application record' \
 'test:Observe Input'\''s focus forwarding and wait for an optional device layer state' \
+'relay:Keep Codex as device owner while forwarding macOS focus changes' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'worklouderctl appsense commands' commands "$@"
@@ -4254,7 +4323,7 @@ _worklouderctl__device_commands() {
 'status:Read firmware, active profile/layer, and power state from the device' \
 'files:List files on the live device filesystem without changing them' \
 'export:Export exact live device files into a verified atomic bundle' \
-'config:Snapshot or validate configuration through Input'\''s live session' \
+'config:Snapshot, validate, apply, or restore complete device configuration' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'worklouderctl device commands' commands "$@"
@@ -4487,6 +4556,11 @@ _worklouderctl__agent__help_commands() {
 _worklouderctl__appsense__help_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl appsense help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__appsense__relay__help_commands] )) ||
+_worklouderctl__appsense__relay__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl appsense relay help commands' commands "$@"
 }
 (( $+functions[_worklouderctl__backup__help_commands] )) ||
 _worklouderctl__backup__help_commands() {
@@ -4794,6 +4868,11 @@ _worklouderctl__codex__inspect_commands() {
 _worklouderctl__input__inspect_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl input inspect commands' commands "$@"
+}
+(( $+functions[_worklouderctl__appsense__relay__install_commands] )) ||
+_worklouderctl__appsense__relay__install_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl appsense relay install commands' commands "$@"
 }
 (( $+functions[_worklouderctl__preset__install_commands] )) ||
 _worklouderctl__preset__install_commands() {
@@ -5149,6 +5228,17 @@ _worklouderctl__input__recovery_commands() {
     )
     _describe -t commands 'worklouderctl input recovery commands' commands "$@"
 }
+(( $+functions[_worklouderctl__appsense__relay_commands] )) ||
+_worklouderctl__appsense__relay_commands() {
+    local commands; commands=(
+'install:Install and start the persistent event-driven macOS focus relay' \
+'status:Inspect whether the relay is installed and running' \
+'sync:Forward the current frontmost application once' \
+'remove:Stop and remove the persistent focus relay' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl appsense relay commands' commands "$@"
+}
 (( $+functions[_worklouderctl__provider__release_commands] )) ||
 _worklouderctl__provider__release_commands() {
     local commands; commands=()
@@ -5158,6 +5248,11 @@ _worklouderctl__provider__release_commands() {
 _worklouderctl__action__group__member__remove_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl action group member remove commands' commands "$@"
+}
+(( $+functions[_worklouderctl__appsense__relay__remove_commands] )) ||
+_worklouderctl__appsense__relay__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl appsense relay remove commands' commands "$@"
 }
 (( $+functions[_worklouderctl__multi-action__group__member__remove_commands] )) ||
 _worklouderctl__multi-action__group__member__remove_commands() {
@@ -5501,6 +5596,11 @@ _worklouderctl__input__preset__snapshot_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl input preset snapshot commands' commands "$@"
 }
+(( $+functions[_worklouderctl__appsense__relay__status_commands] )) ||
+_worklouderctl__appsense__relay__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl appsense relay status commands' commands "$@"
+}
 (( $+functions[_worklouderctl__bridge__status_commands] )) ||
 _worklouderctl__bridge__status_commands() {
     local commands; commands=()
@@ -5520,6 +5620,11 @@ _worklouderctl__device__status_commands() {
 _worklouderctl__provider__status_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl provider status commands' commands "$@"
+}
+(( $+functions[_worklouderctl__appsense__relay__sync_commands] )) ||
+_worklouderctl__appsense__relay__sync_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl appsense relay sync commands' commands "$@"
 }
 (( $+functions[_worklouderctl__codex__agent-key__tap-mode_commands] )) ||
 _worklouderctl__codex__agent-key__tap-mode_commands() {

@@ -24,9 +24,9 @@ WorkLouderCTL 使用类型化命令行接口替代 **Codex** 与 **Work Louder I
 中的 Codex Micro 配置流程。它覆盖四个配置层级：Codex 原生控制、设备布局、
 Input 主机动作，以及由 Input 执行的设备操作。
 
-Codex 和 Input 继续负责 HID/BLE、固件、AppSense、Smart Actions 与 Codex
-原生运行时行为。WorkLouderCTL 提供可复现的配置层：读取、计划、对比、写入、
-验证和回滚。
+Codex 和 Input 继续负责 HID/BLE、固件、Smart Actions 与 Codex 原生运行时
+行为。WorkLouderCTL 提供可复现的配置层，并可通过 Codex 已连接的运行时转发
+macOS 前台应用，从而在不转移设备所有权的情况下执行 AppSense 切层。
 
 > [!NOTE]
 > 当前已在经过验证的 macOS/Codex Micro 边界内实现完整配置覆盖。Codex
@@ -128,6 +128,31 @@ worklouderctl provider handoff codex
 
 Handoff 期间，Input 以隐藏的用户级 provider 运行。CLI 通过私有认证 socket
 通信，并验证返回结果中的 provider 与 action identity。
+
+### AppSense 切层时保持 Codex 连接
+
+先在设备配置中把应用绑定到 Layer，再安装事件驱动的前台应用 relay：
+
+```console
+worklouderctl provider handoff codex
+worklouderctl device config snapshot --owner codex --output before.json
+worklouderctl appsense link \
+  --input before.json --profile 0 --layer 1 \
+  --name Notion --process notion.id --path /Applications/Notion.app \
+  --output candidate.json
+worklouderctl device config apply --owner codex \
+  --input candidate.json --backup pre-apply.json \
+  --expected-revision REVISION
+worklouderctl appsense relay install
+worklouderctl appsense relay status
+worklouderctl appsense relay sync
+```
+
+Relay 监听 macOS `becameFrontmost` 事件，并通过 Codex 当前已连接的设备 API
+转发应用 identity。Codex 始终是唯一 USB owner，应用层与 Codex 层切换时不会
+停止 HID 或 joystick subscription。`--owner codex` 也为设备配置的
+snapshot/apply/restore 提供不可变备份、精确读回、自动回滚与连接连续性检查。运行
+`worklouderctl appsense relay remove` 可删除 LaunchAgent。
 
 ### 备份、修改并应用 Input 配置
 

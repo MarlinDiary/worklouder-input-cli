@@ -7,6 +7,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `worklouderctl appsense relay install/status/sync/remove`, an event-driven
+  macOS focus relay that keeps Codex as the connected device owner while the
+  firmware applies persisted AppSense layer bindings.
+- Codex-owner device RPC helpers with exact live snapshot comparison, guarded
+  single-file configuration writes, readback, automatic restore, and connection
+  continuity evidence.
+- `device config snapshot/apply/restore --owner codex`, which mutates complete
+  device snapshots through Codex's existing session with immutable backup,
+  revision checking, idempotent exact-state replay, and no provider handoff.
 - A checksum-, inventory-, manifest-, signature-, and version-verifying binary
   installer plus a stable `MarlinDiary/tap/worklouderctl` Homebrew distribution
   path with automatic formula publication from tagged releases.
@@ -16,6 +25,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- AppSense can now return from an application layer to the Codex layer without
+  stopping Codex's device service or handing the USB session to Input.
 - `config diff` now compares validated files embedded in Input configuration
   snapshots, so differently named `before.json` and `candidate.json` files
   report precise `/keymap.json` and `/smart_actions.json` changes.

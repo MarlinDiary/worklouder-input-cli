@@ -49,9 +49,10 @@ their GUIs.
 ## Does WorkLouderCTL replace Codex and Work Louder Input?
 
 It replaces their Codex Micro configuration workflows. Codex still executes
-Codex-aware commands and task lighting; Input still executes AppSense, Smart
-Actions, Cheat Sheet, transport, firmware updates, and other host behavior.
-The project does not replace those runtimes or the hardware driver.
+Codex-aware commands and task lighting; Input still executes Smart Actions,
+Cheat Sheet, transport, firmware updates, and other host behavior. AppSense can
+use Input's runtime or the CLI's Codex-owner macOS focus relay. The project does
+not replace those runtimes or the hardware driver.
 
 ## Why not build a new driver?
 

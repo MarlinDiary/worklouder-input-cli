@@ -32,6 +32,14 @@ const ASSETS: &[(&str, &[u8])] = &[
         include_bytes!("../scripts/provider-lock.mjs"),
     ),
     (
+        "scripts/codex-device-rpc.mjs",
+        include_bytes!("../scripts/codex-device-rpc.mjs"),
+    ),
+    (
+        "scripts/codex-focus-relay.mjs",
+        include_bytes!("../scripts/codex-focus-relay.mjs"),
+    ),
+    (
         "scripts/install-input-live-bridge.mjs",
         include_bytes!("../scripts/install-input-live-bridge.mjs"),
     ),
@@ -134,6 +142,328 @@ pub struct ProviderReport {
     pub provider: Option<&'static str>,
     pub delegated: bool,
     pub result: Value,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AppSenseRelayOperation {
+    Install,
+    Status,
+    Sync,
+    Remove,
+}
+
+impl AppSenseRelayOperation {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Install => "install",
+            Self::Status => "status",
+            Self::Sync => "sync",
+            Self::Remove => "remove",
+        }
+    }
+
+    fn helper_action(self) -> &'static str {
+        match self {
+            Self::Sync => "once",
+            _ => self.name(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSenseRelayReport {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub runtime_version: u64,
+    pub operation: &'static str,
+    pub delegated: bool,
+    pub result: Value,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CodexDeviceMutation {
+    Apply,
+    Restore,
+}
+
+impl CodexDeviceMutation {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Apply => "apply",
+            Self::Restore => "restore",
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexDeviceSnapshotReceipt {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub provider: &'static str,
+    pub output: PathBuf,
+    pub revision: String,
+    pub file_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexDeviceMutationReceipt {
+    pub schema_version: u64,
+    pub kind: &'static str,
+    pub operation: &'static str,
+    pub provider: &'static str,
+    pub backup: PathBuf,
+    pub expected_revision: String,
+    pub before_revision: String,
+    pub after_revision: String,
+    pub target_revision: String,
+    pub idempotency_key: String,
+    pub idempotent_replay: bool,
+    pub changed: bool,
+    pub connection_continuous: bool,
+    pub provider_receipt: Value,
+}
+
+pub fn codex_device_snapshot(output: &Path) -> Result<CodexDeviceSnapshotReceipt> {
+    ensure!(
+        !output.exists(),
+        "Codex device snapshot destination already exists: {}",
+        output.display()
+    );
+    if let Some(parent) = output.parent().filter(|path| !path.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create snapshot parent {}", parent.display()))?;
+    }
+    let result = execute_codex_device_helper(&[
+        "snapshot".into(),
+        "--output".into(),
+        output.as_os_str().to_string_lossy().into_owned(),
+    ])?;
+    let reopened: Value = serde_json::from_slice(
+        &fs::read(output)
+            .with_context(|| format!("failed to reopen Codex snapshot {}", output.display()))?,
+    )
+    .with_context(|| format!("invalid Codex snapshot at {}", output.display()))?;
+    ensure!(
+        reopened == result,
+        "Codex snapshot stdout and reopened artifact differed"
+    );
+    let revision = snapshot_revision(&reopened)?.to_owned();
+    let file_count = reopened
+        .get("files")
+        .and_then(Value::as_array)
+        .context("Codex snapshot omitted files")?
+        .len();
+    Ok(CodexDeviceSnapshotReceipt {
+        schema_version: 1,
+        kind: "worklouderctl-codex-owner-config-snapshot",
+        provider: "codex",
+        output: output.to_path_buf(),
+        revision,
+        file_count,
+    })
+}
+
+pub fn codex_device_mutate(
+    operation: CodexDeviceMutation,
+    input: &Path,
+    backup: &Path,
+    expected_revision: Option<&str>,
+    idempotency_key: Option<&str>,
+) -> Result<CodexDeviceMutationReceipt> {
+    ensure!(input != backup, "input and backup paths must differ");
+    let candidate: Value = serde_json::from_slice(
+        &fs::read(input).with_context(|| format!("failed to read {}", input.display()))?,
+    )
+    .with_context(|| format!("invalid device candidate at {}", input.display()))?;
+    let target_revision = snapshot_revision(&candidate)?.to_owned();
+    if !backup.exists() {
+        codex_device_snapshot(backup)?;
+    }
+    let baseline: Value = serde_json::from_slice(
+        &fs::read(backup).with_context(|| format!("failed to read {}", backup.display()))?,
+    )
+    .with_context(|| format!("invalid device backup at {}", backup.display()))?;
+    let backup_revision = snapshot_revision(&baseline)?.to_owned();
+    let expected = expected_revision.unwrap_or(&backup_revision);
+    ensure!(
+        is_sha256(expected) && expected.eq_ignore_ascii_case(&backup_revision),
+        "Codex device backup revision did not match expected revision"
+    );
+    let key = idempotency_key
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("codex-device-{}-{target_revision}", operation.as_str()));
+    ensure!(
+        !key.is_empty() && key.len() <= 256 && !key.contains('\0'),
+        "idempotency key was invalid"
+    );
+    let result = execute_codex_device_helper(&[
+        "apply".into(),
+        "--baseline".into(),
+        backup.as_os_str().to_string_lossy().into_owned(),
+        "--input".into(),
+        input.as_os_str().to_string_lossy().into_owned(),
+    ])?;
+    let idempotent_replay = result
+        .get("idempotentReplay")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let changed = result
+        .get("changedPaths")
+        .and_then(Value::as_array)
+        .map(|paths| !paths.is_empty())
+        .unwrap_or(false);
+    let continuity = result
+        .get("continuity")
+        .and_then(Value::as_object)
+        .context("Codex device mutation omitted continuity evidence")?;
+    let connection_continuous = ["sameServiceApi", "sameComm", "sameConnectionAttempt"]
+        .iter()
+        .all(|key| continuity.get(*key).and_then(Value::as_bool) == Some(true))
+        && continuity.get("lifecycleState").and_then(Value::as_str) == Some("started")
+        && continuity
+            .get("deviceState")
+            .and_then(|state| state.get("status"))
+            .and_then(Value::as_str)
+            == Some("connected");
+    ensure!(
+        connection_continuous,
+        "Codex device mutation did not preserve the connected service"
+    );
+    Ok(CodexDeviceMutationReceipt {
+        schema_version: 1,
+        kind: "worklouderctl-codex-owner-config-mutation",
+        operation: operation.as_str(),
+        provider: "codex",
+        backup: backup.to_path_buf(),
+        expected_revision: expected.to_owned(),
+        before_revision: if idempotent_replay {
+            target_revision.clone()
+        } else {
+            backup_revision
+        },
+        after_revision: target_revision.clone(),
+        target_revision,
+        idempotency_key: key,
+        idempotent_replay,
+        changed,
+        connection_continuous,
+        provider_receipt: result,
+    })
+}
+
+fn execute_codex_device_helper(arguments: &[String]) -> Result<Value> {
+    let root = materialize(None)?;
+    let node = env::var_os("WORKLOUDERCTL_NODE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("node"));
+    let helper = root.join("scripts/codex-device-rpc.mjs");
+    let output = Command::new(&node)
+        .arg(&helper)
+        .args(arguments)
+        .output()
+        .with_context(|| {
+            format!(
+                "Codex device helper was unavailable: failed to start Node.js runtime {}",
+                node.display()
+            )
+        })?;
+    ensure!(
+        output.stdout.len() <= MAX_STDOUT_BYTES,
+        "Codex device helper stdout exceeded 2 MiB"
+    );
+    ensure!(
+        output.stderr.len() <= MAX_STDERR_BYTES,
+        "Codex device helper stderr exceeded 256 KiB"
+    );
+    if !output.status.success() {
+        bail!(
+            "Codex device helper failed with status {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    serde_json::from_slice(&output.stdout).context("Codex device helper returned invalid JSON")
+}
+
+fn snapshot_revision(snapshot: &Value) -> Result<&str> {
+    ensure!(
+        snapshot.get("schemaVersion").and_then(Value::as_u64) == Some(1)
+            && snapshot.get("kind").and_then(Value::as_str)
+                == Some("worklouder-input-config-snapshot")
+            && snapshot.get("revisionAlgorithm").and_then(Value::as_str)
+                == Some("sha256:path-u32be-path-bytes-size-u64be-content-v1"),
+        "device snapshot header was invalid"
+    );
+    let revision = snapshot
+        .get("revision")
+        .and_then(Value::as_str)
+        .context("device snapshot omitted revision")?;
+    ensure!(is_sha256(revision), "device snapshot revision was invalid");
+    Ok(revision)
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+pub fn execute_appsense_relay(
+    operation: AppSenseRelayOperation,
+    runtime_dir: Option<PathBuf>,
+    node: Option<PathBuf>,
+) -> Result<AppSenseRelayReport> {
+    let root = materialize(runtime_dir)?;
+    let node = node
+        .or_else(|| env::var_os("WORKLOUDERCTL_NODE").map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("node"));
+    let helper = root.join("scripts/codex-focus-relay.mjs");
+    let output = Command::new(&node)
+        .arg(&helper)
+        .arg(operation.helper_action())
+        .output()
+        .with_context(|| {
+            format!(
+                "AppSense relay was unavailable: failed to start Node.js runtime {}",
+                node.display()
+            )
+        })?;
+    ensure!(
+        output.stdout.len() <= MAX_STDOUT_BYTES,
+        "AppSense relay helper stdout exceeded 2 MiB"
+    );
+    ensure!(
+        output.stderr.len() <= MAX_STDERR_BYTES,
+        "AppSense relay helper stderr exceeded 256 KiB"
+    );
+    if !output.status.success() {
+        bail!(
+            "AppSense relay helper {} failed with status {}: {}",
+            operation.name(),
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    let result: Value = serde_json::from_slice(&output.stdout)
+        .context("AppSense relay helper returned invalid JSON")?;
+    let action = result
+        .as_object()
+        .and_then(|object| object.get("action"))
+        .and_then(Value::as_str)
+        .context("AppSense relay helper JSON omitted action")?;
+    ensure!(
+        action == operation.helper_action(),
+        "AppSense relay helper action did not match requested operation"
+    );
+    Ok(AppSenseRelayReport {
+        schema_version: 1,
+        kind: "worklouderctl-appsense-relay",
+        runtime_version: RUNTIME_VERSION,
+        operation: operation.name(),
+        delegated: true,
+        result,
+    })
 }
 
 pub fn execute(
@@ -397,6 +727,19 @@ mod tests {
                 Vec::<String>::new()
             )
         );
+    }
+
+    #[test]
+    fn appsense_relay_operations_bind_public_and_helper_actions() {
+        for (operation, public, helper) in [
+            (AppSenseRelayOperation::Install, "install", "install"),
+            (AppSenseRelayOperation::Status, "status", "status"),
+            (AppSenseRelayOperation::Sync, "sync", "once"),
+            (AppSenseRelayOperation::Remove, "remove", "remove"),
+        ] {
+            assert_eq!(operation.name(), public);
+            assert_eq!(operation.helper_action(), helper);
+        }
     }
 
     #[test]

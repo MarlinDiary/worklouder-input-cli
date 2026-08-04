@@ -519,6 +519,20 @@ fn semantic_help_exposes_offline_candidate_workflow() {
 }
 
 #[test]
+fn appsense_help_exposes_codex_owner_focus_relay() {
+    let relay = binary()
+        .args(["appsense", "relay", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(relay.stdout).unwrap();
+    assert!(relay.status.success());
+    assert!(stdout.contains("Keep Codex as device owner"));
+    for command in ["install", "status", "sync", "remove"] {
+        assert!(stdout.contains(command));
+    }
+}
+
+#[test]
 fn zsh_completion_is_generated_end_to_end() {
     let output = binary().args(["completion", "zsh"]).output().unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
@@ -1677,6 +1691,16 @@ fn device_help_exposes_live_read_workflow() {
     assert!(config_stdout.contains("validate"));
     assert!(config_stdout.contains("apply"));
     assert!(config_stdout.contains("restore"));
+
+    let apply = binary()
+        .args(["device", "config", "apply", "--help"])
+        .output()
+        .unwrap();
+    let apply_stdout = String::from_utf8(apply.stdout).unwrap();
+    assert!(apply.status.success());
+    assert!(apply_stdout.contains("--owner <OWNER>"));
+    assert!(apply_stdout.contains("input"));
+    assert!(apply_stdout.contains("codex"));
 }
 
 #[test]

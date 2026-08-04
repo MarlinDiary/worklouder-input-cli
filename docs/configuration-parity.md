@@ -72,9 +72,9 @@ Promises as failures even when the USB interface still enumerates.
 | Joystick sectors | RADIAL mode, two-sector seed, 2–8 sector add/delete, exact angle rebalance, and targets | `layer joystick`, `control list/show/set` | candidate-verified against frozen Input 0.18.0 behavior; cache hashes remain unchanged |
 | Backlight | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
 | Underglow | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
-| AppSense links | list/show, application identity, link, update, unlink | `appsense` | candidate and current-cache schema verified; fixture apply/readback/restore verified; live focus transition tracked separately |
+| AppSense links | list/show, application identity, link, update, unlink | `appsense` | candidate and current-cache schema verified; fixture apply/readback/restore verified; Notion layer 2 and Codex layer 1 live transition verified on device |
 | Presets | merged catalog snapshot, Input-equivalent filters, metadata, preview, Action/Multi Action/group remap and layer install | `input preset snapshot`, `preset list/show/preview/install` | all 17 hash-pinned bundled defaults candidate-verified; fixture transaction verified; optional preset authority is absent from the Input 0.18.0 overlay |
-| Full object | cache capture, export, snapshot, validate, diff, apply, restore | `input config snapshot`, `device export`, `device config snapshot/validate/apply/restore` | byte-exact/revision-equivalent cache adapter plus exact-release overlay apply/readback/exact-restore and reconnect portability live-validated |
+| Full object | cache capture, export, snapshot, validate, diff, apply, restore | `input config snapshot`, `device export`, `device config snapshot/validate/apply/restore` | Input overlay path plus `--owner codex` snapshot/apply/restore live-validated; Codex-owner restore→apply round-trip preserved the same service/API/comm identities and HID/joystick subscriptions |
 
 ## Tier 3 — Input host configuration
 
@@ -85,7 +85,7 @@ Promises as failures even when the USB interface still enumerates.
 | Command permission | explicit host command toggle | `input permission command` | fixture plus Input 0.18.0 overlay CAS/apply/readback/exact-restore live-validated |
 | Cheat Sheet | show, hold, hide, toggle assignments | `cheat-sheet` | exact four-token catalog, binding inventory, strict offline bind candidate, and fixture apply/readback/restore verified |
 | Radial menu | ordered sectors, angles, assignment kinds, and resolved Action/Multi Action/Smart Action labels | `radial show`, `layer joystick`, `control set` | no separate persisted settings exist; inspection plus sector/assignment mutation and fixture apply/readback/restore verified; overlay runtime remains Input-owned |
-| AppSense runtime | focus collector, last-forwarded identity, registered device, and raw selected profile/layer transition | `appsense test` | exact Input 0.18.0 service/RPC path hash-pinned; fixtures verified and one matching released-overlay sample observed without changing focus |
+| AppSense runtime | Input-owned observation plus a persistent Codex-owner focus relay | `appsense test`, `appsense relay` | Input 0.18.0 observation remains available; Codex-owner relay install/status/sync/remove is live-verified with Notion 1→2→Codex 2→1 transitions, unchanged service/API/comm identities, and continuous HID/joystick subscriptions |
 
 ## Tier 4 — Input operations
 
