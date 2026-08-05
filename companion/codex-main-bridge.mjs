@@ -22,6 +22,8 @@ const METHOD_DEFINITIONS = new Map([
   ["codex.agentKeys.apply", ["codex.agentKeys.apply.v1", "applyAgentKeys"]],
   ["codex.agentKeys.restore", ["codex.agentKeys.restore.v1", "restoreAgentKeys"]],
   ["codex.device.focus", ["codex.device.focus.v1", "focusDevice"]],
+  ["codex.runtime.status", ["codex.runtime.status.v1", "runtimeStatus"]],
+  ["codex.runtime.recover", ["codex.runtime.recover.v1", "recoverRuntime"]],
 ]);
 
 const MUTATION_METHODS = new Set([
@@ -29,6 +31,7 @@ const MUTATION_METHODS = new Set([
   "codex.settings.restore",
   "codex.agentKeys.apply",
   "codex.agentKeys.restore",
+  "codex.runtime.recover",
 ]);
 
 export class CodexBridgeError extends Error {
@@ -275,6 +278,19 @@ function validateHello(params, expectedToken) {
 }
 
 function validateMutationParams(method, params) {
+  if (method === "codex.runtime.recover") {
+    if (
+      !Number.isInteger(params.timeoutMs) ||
+      params.timeoutMs < 1_000 ||
+      params.timeoutMs > 25_000
+    ) {
+      throw new CodexBridgeError(
+        -32602,
+        "runtime timeoutMs must be an integer from 1000 through 25000",
+      );
+    }
+    return;
+  }
   if (method.startsWith("codex.agentKeys.")) {
     validateAgentKeysMutationParams(params);
     return;

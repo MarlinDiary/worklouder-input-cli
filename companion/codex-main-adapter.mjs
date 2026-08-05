@@ -331,6 +331,161 @@ export function createCodexMainAdapter({
     };
   };
 
+  const runtimeState = () => {
+    const services = deviceServiceProvider();
+    if (!Array.isArray(services)) {
+      throw new CodexBridgeError(-32008, "Codex device services were unavailable");
+    }
+    const candidates = services.filter(
+      (value) =>
+        value &&
+        typeof value.start === "function" &&
+        typeof value.stop === "function" &&
+        typeof value.getState === "function",
+    );
+    const service = candidates
+      .map((value, index) => {
+        let deviceStatus = "unknown";
+        try {
+          deviceStatus = value.getState()?.status ?? "unknown";
+        } catch {
+          // A stale released instance remains a lower-scored candidate.
+        }
+        const score =
+          (value.lifecycleState === "started" ? 32 : 0) +
+          (deviceStatus === "connected" ? 16 : 0) +
+          (value.comm != null ? 8 : 0) +
+          (value.api != null ? 4 : 0) +
+          (value.unsubscribeHid != null ? 2 : 0) +
+          (value.unsubscribeJoystick != null ? 1 : 0);
+        return { value, index, score };
+      })
+      .sort((left, right) => right.score - left.score || right.index - left.index)[0]
+      ?.value;
+    if (!service) {
+      throw new CodexBridgeError(-32008, "Codex Micro service instance was unavailable");
+    }
+    const state = {
+      lifecycleState: String(service.lifecycleState ?? "unknown"),
+      deviceState: structuredClone(service.getState()),
+      hasComm: service.comm != null,
+      hasApi: service.api != null,
+      hasConnectPromise: service.connectPromise != null,
+      hasTopologyPromise: service.topologyReconciliationPromise != null,
+      topologyReconciliationPending:
+        service.topologyReconciliationPending === true,
+      topologySettleRetryIndex: Number.isInteger(service.topologySettleRetryIndex)
+        ? service.topologySettleRetryIndex
+        : 0,
+      hasHidSubscription: service.unsubscribeHid != null,
+      hasJoystickSubscription: service.unsubscribeJoystick != null,
+      connectedDevicePortPath:
+        typeof service.connectedDevicePortPath === "string"
+          ? service.connectedDevicePortPath
+          : null,
+      connectionAttemptId: Number.isInteger(service.connectionAttemptId)
+        ? service.connectionAttemptId
+        : 0,
+    };
+    return { service, state };
+  };
+
+  const runtimeHealthy = (state) =>
+    state.lifecycleState === "started" &&
+    state.deviceState?.status === "connected" &&
+    state.hasComm &&
+    state.hasApi &&
+    !state.hasConnectPromise &&
+    !state.hasTopologyPromise &&
+    state.hasHidSubscription &&
+    state.hasJoystickSubscription;
+
+  const runtimeStatus = async () => ({
+    operation: "status",
+    state: runtimeState().state,
+  });
+
+  const recoverRuntime = async ({ timeoutMs = 15_000 } = {}) => {
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 25_000) {
+      throw new CodexBridgeError(
+        -32602,
+        "runtime timeoutMs must be an integer from 1000 through 25000",
+      );
+    }
+    const { service, state: before } = runtimeState();
+    if (runtimeHealthy(before)) {
+      return {
+        operation: "recover",
+        changed: false,
+        recovered: true,
+        before,
+        after: before,
+      };
+    }
+
+    const delay = (milliseconds) =>
+      new Promise((resolve) => setTimeout(resolve, milliseconds));
+    const originalStartKey = "__worklouderctlOriginalStart";
+    if (typeof service[originalStartKey] === "function") {
+      service.start = service[originalStartKey];
+      delete service[originalStartKey];
+      delete service.__worklouderctlStartSuppressed;
+    }
+    const previousComm = service.comm;
+    const stopping = Promise.resolve()
+      .then(() => service.stop())
+      .catch(() => null);
+    const stopSettled = await Promise.race([
+      stopping.then(() => true),
+      delay(5_000).then(() => false),
+    ]);
+    if (!stopSettled && previousComm != null) {
+      await Promise.race([
+        Promise.resolve(previousComm.disconnect?.()).catch(() => null),
+        delay(5_000),
+      ]);
+      await Promise.race([stopping, delay(5_000)]);
+    }
+    // Let the native HID/BLE cleanup from the released stop path settle before
+    // opening a new communication object. The provider handoff uses the same
+    // boundary to avoid reusing a closing device handle.
+    await delay(750);
+    service.connectPromise = null;
+    service.connectionCleanupPromise = null;
+    service.topologyReconciliationPromise = null;
+    service.topologyReconciliationPending = false;
+    service.lightingWritePromise = Promise.resolve();
+
+    const originalApplyLighting = service.applyLighting;
+    const originalRefreshBatteryStatus = service.refreshBatteryStatus;
+    service.applyLighting = async () => true;
+    service.refreshBatteryStatus = async () => {};
+    try {
+      service.start();
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const current = runtimeState().state;
+        if (runtimeHealthy(current)) {
+          return {
+            operation: "recover",
+            changed: true,
+            recovered: true,
+            before,
+            after: current,
+          };
+        }
+        await delay(100);
+      }
+      throw new CodexBridgeError(-32008, "Codex Micro runtime recovery timed out", {
+        before,
+        after: runtimeState().state,
+      });
+    } finally {
+      service.applyLighting = originalApplyLighting;
+      service.refreshBatteryStatus = originalRefreshBatteryStatus;
+    }
+  };
+
   const adapter = { snapshotSettings, snapshotAgentKeys };
   if (settingsReplacer) {
     adapter.applySettings = (params) => runMutation({ ...params, operation: "apply" });
@@ -340,7 +495,11 @@ export function createCodexMainAdapter({
     adapter.applyAgentKeys = (params) => runAgentKeysMutation({ ...params, operation: "apply" });
     adapter.restoreAgentKeys = (params) => runAgentKeysMutation({ ...params, operation: "restore" });
   }
-  if (deviceServiceProvider) adapter.focusDevice = focusDevice;
+  if (deviceServiceProvider) {
+    adapter.focusDevice = focusDevice;
+    adapter.runtimeStatus = runtimeStatus;
+    adapter.recoverRuntime = recoverRuntime;
+  }
   return adapter;
 }
 

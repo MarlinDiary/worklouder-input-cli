@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "worklouderctl-codex-agent-keys-contract",
-  "contractAppVersion": "26.727.51351",
+  "contractAppVersion": "26.730.61309",
   "authority": "codex-global-state",
   "globalStateKey": "codex-micro-custom-agent-assignments",
   "snapshotKind": "worklouderctl-codex-agent-keys-snapshot",
@@ -26,18 +26,31 @@
   },
   "assignmentTypes": {
     "thread": {
-      "required": ["hostId", "threadKey", "title"]
+      "required": [
+        "hostId",
+        "threadKey",
+        "title"
+      ]
     },
     "command": {
-      "required": ["type", "commandId"],
+      "required": [
+        "type",
+        "commandId"
+      ],
       "type": "command"
     },
     "skill": {
-      "required": ["type", "skillName", "skillPath"],
+      "required": [
+        "type",
+        "skillName",
+        "skillPath"
+      ],
       "type": "skill"
     },
     "keycap": {
-      "required": ["keycapId"]
+      "required": [
+        "keycapId"
+      ]
     },
     "empty": null
   },

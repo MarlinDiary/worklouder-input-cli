@@ -11,7 +11,7 @@ if (!socketPath || !tokenPath) {
   process.exit(2);
 }
 const here = dirname(fileURLToPath(import.meta.url));
-const contract = JSON.parse(await readFile(resolve(here, "../spec/codex-settings-26.727.51351.json"), "utf8"));
+const contract = JSON.parse(await readFile(resolve(here, "../spec/codex-settings-26.730.61309.json"), "utf8"));
 const sourcePath = join(dirname(socketPath), "codex-fixture-config.toml");
 let settings = Object.fromEntries(Object.entries(contract.definitions).map(([key, definition]) => [key, structuredClone(definition.default)]));
 let effectiveSettings = structuredClone(settings);

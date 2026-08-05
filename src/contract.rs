@@ -82,7 +82,17 @@ mod tests {
             contract.tier(1).unwrap().adapter.as_deref(),
             Some("codex-settings-bridge")
         );
-        assert_eq!(contract.capabilities(None).unwrap().len(), 28);
+        let capabilities = contract.capabilities(None).unwrap();
+        assert_eq!(capabilities.len(), 31);
+        assert!(capabilities
+            .iter()
+            .any(|entry| entry.capability == "separate-microphone-keys"));
+        assert!(capabilities
+            .iter()
+            .any(|entry| entry.capability == "runtime-health"));
+        assert!(capabilities
+            .iter()
+            .any(|entry| entry.capability == "runtime-recovery"));
     }
 
     #[test]

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "kind": "worklouderctl-codex-companion-bridge-contract",
   "protocolVersion": 1,
-  "contractAppVersion": "26.727.51351",
+  "contractAppVersion": "26.730.61309",
   "authority": [
     "codex-settings",
     "codex-global-state",
@@ -12,7 +12,7 @@
     "appBundle": "/Applications/ChatGPT.app",
     "bundleIdentifier": "com.openai.codex",
     "asarRelativePath": "Contents/Resources/app.asar",
-    "asarSha256": "a529edd72e10b08931c0d695b5e3e6a0be7f51874610dafc04f578436ab7d74d",
+    "asarSha256": "9de942a9a058fca20b78d171032e0fe65ccb1063868f175ff7eb4e159efc2c38",
     "nativeHandlers": [
       "settings-read",
       "settings-write",
@@ -54,7 +54,9 @@
     "codex.agentKeys.snapshot": "codex.agentKeys.snapshot.v1",
     "codex.agentKeys.apply": "codex.agentKeys.apply.v1",
     "codex.agentKeys.restore": "codex.agentKeys.restore.v1",
-    "codex.device.focus": "codex.device.focus.v1"
+    "codex.device.focus": "codex.device.focus.v1",
+    "codex.runtime.status": "codex.runtime.status.v1",
+    "codex.runtime.recover": "codex.runtime.recover.v1"
   },
   "settingsSnapshot": {
     "kind": "worklouderctl-codex-settings-snapshot",
@@ -172,6 +174,27 @@
       "verify the same API, comm, and connection attempt remain active"
     ]
   },
+  "runtime": {
+    "authority": "running Codex CodexMicroService",
+    "transport": "persistent authenticated Unix socket after exact-release bootstrap",
+    "statusSequence": [
+      "serialize on Codex main-process queue",
+      "capture the live service without replacing it",
+      "read device, control-plane, Promise, and subscription state",
+      "return exact state without opening an inspector or signaling the process"
+    ],
+    "recoverySequence": [
+      "capture the pre-recovery service state",
+      "bounded stop with stale-comm cleanup",
+      "restart the released service with startup-only lighting and battery bypass",
+      "restore the original released methods",
+      "require connected state, settled Promises, and HID plus joystick subscriptions"
+    ],
+    "timeoutSeconds": {
+      "minimum": 1,
+      "maximum": 25
+    }
+  },
   "limits": {
     "tokenBytes": 4096,
     "requestBytes": 16777216,
@@ -180,9 +203,10 @@
   },
   "boundary": {
     "shipsDriver": false,
-    "implementsCodexRuntime": false,
+    "implementsCodexRuntime": true,
     "editsChromiumLevelDb": false,
     "editsAppAsar": false,
-    "integrationOwner": "running Codex main process"
+    "integrationOwner": "running Codex main process",
+    "runtimeImplementation": "delegates to the existing exact-release CodexMicroService"
   }
 }

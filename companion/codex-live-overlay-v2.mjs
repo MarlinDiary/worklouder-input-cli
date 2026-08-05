@@ -1,7 +1,7 @@
 import { installCodexCompanionBridge } from "./codex-main-integration.mjs";
 
 export const SUPPORTED_CODEX_VERSION = "26.730.61309";
-export const CODEX_LIVE_OVERLAY_REVISION = 4;
+export const CODEX_LIVE_OVERLAY_REVISION = 10;
 export const CODEX_MICRO_SETTING_KEYS = Object.freeze([
   "codex-micro-agent-source",
   "codex-micro-single-tap-agent-keys",

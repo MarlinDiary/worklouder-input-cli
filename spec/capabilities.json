@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "schemaVersion": 2,
-  "researchSnapshot": "2026-08-04",
+  "researchSnapshot": "2026-08-05",
   "productGoal": "full-configuration-parity",
   "targetConfigurationGuisOptional": true,
   "providerStrategy": "delegate-to-installed-codex-and-input",
@@ -11,7 +11,7 @@
   "target": {
     "device": "Codex Micro",
     "host": "macOS",
-    "codexApp": "26.727.51351",
+    "codexApp": "26.730.61309",
     "inputApp": "0.18.0",
     "firmware": "v0.6.1"
   },
@@ -31,10 +31,13 @@
         "agent-keys",
         "command-keys",
         "voice-button",
+        "separate-microphone-keys",
         "codex-dial",
         "codex-joystick",
         "task-status-lighting",
-        "global-lighting"
+        "global-lighting",
+        "runtime-health",
+        "runtime-recovery"
       ]
     },
     {
@@ -48,7 +51,7 @@
         "current-device-owner"
       ],
       "dependsOnInput": false,
-      "runtimeDependency": "current-codex-or-input-device-owner",
+      "runtimeDependency": "input-configuration-authority-with-owner-restore",
       "initialCliMode": "transactional",
       "capabilities": [
         "profiles",

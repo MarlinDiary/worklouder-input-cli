@@ -206,6 +206,24 @@ pub fn inspect(paths: &CodexBridgePaths) -> Result<CodexBridgeInspection> {
     })
 }
 
+pub fn runtime_status(paths: &CodexBridgePaths) -> Result<Value> {
+    let mut client = Client::connect(paths)?;
+    client.call("codex.runtime.status", "codex.runtime.status.v1", json!({}))
+}
+
+pub fn runtime_recover(paths: &CodexBridgePaths, timeout: Duration) -> Result<Value> {
+    ensure!(
+        (Duration::from_secs(1)..=Duration::from_secs(25)).contains(&timeout),
+        "runtime recovery timeout must be from 1 through 25 seconds"
+    );
+    let mut client = Client::connect(paths)?;
+    client.call(
+        "codex.runtime.recover",
+        "codex.runtime.recover.v1",
+        json!({"timeoutMs": timeout.as_millis() as u64}),
+    )
+}
+
 pub fn settings_snapshot(
     paths: &CodexBridgePaths,
     output: &Path,

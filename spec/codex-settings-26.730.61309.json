@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "kind": "worklouderctl-codex-settings-contract",
+  "appVersion": "26.730.61309",
+  "appBundle": {
+    "defaultPath": "/Applications/ChatGPT.app",
+    "asarRelativePath": "Contents/Resources/app.asar",
+    "asarSha256": "9de942a9a058fca20b78d171032e0fe65ccb1063868f175ff7eb4e159efc2c38"
+  },
+  "bridge": {
+    "uriTemplate": "vscode://codex/{method}",
+    "readMethod": "settings-read",
+    "readResultFields": [
+      "filePath",
+      "settings",
+      "effectiveSettings",
+      "definitions"
+    ],
+    "writeMethod": "settings-write",
+    "writeParameter": "settings",
+    "writeResultFields": [
+      "settings",
+      "effectiveSettings"
+    ]
+  },
+  "storage": {
+    "adapter": "codex-config-toml-read-v1",
+    "defaultPath": "$CODEX_HOME/config.toml",
+    "defaultCodexHome": "~/.codex",
+    "table": "desktop",
+    "keyPrefix": "codex-micro-",
+    "mode": "read-only"
+  },
+  "definitions": {
+    "codex-micro-agent-source": {
+      "type": "string",
+      "enum": [
+        "pinned",
+        "recent",
+        "priority",
+        "custom"
+      ],
+      "default": "recent"
+    },
+    "codex-micro-single-tap-agent-keys": {
+      "type": "boolean",
+      "default": false
+    },
+    "codex-micro-layout": {
+      "type": "object",
+      "default": {
+        "version": 1,
+        "slots": {
+          "ACT06": {
+            "keycapId": "FAST"
+          },
+          "ACT07": {
+            "keycapId": "APPR"
+          },
+          "ACT08": {
+            "keycapId": "REJ"
+          },
+          "ACT09": {
+            "keycapId": "SPLIT"
+          },
+          "ACT10": {
+            "keycapId": "MIC1"
+          },
+          "ACT11": {
+            "keycapId": "EMPT1"
+          },
+          "ACT10_ACT11": {
+            "keycapId": "MIC"
+          },
+          "ACT12": {
+            "keycapId": "CODEX"
+          }
+        },
+        "analogStick": {
+          "up": {
+            "type": "command",
+            "commandId": "composer.togglePlanMode"
+          },
+          "right": {
+            "type": "command",
+            "commandId": "navigateForward"
+          },
+          "down": {
+            "type": "command",
+            "commandId": "toggleSidebar"
+          },
+          "left": {
+            "type": "command",
+            "commandId": "navigateBack"
+          }
+        },
+        "encoder": {
+          "left": null,
+          "right": null,
+          "click": null,
+          "longPress": null
+        },
+        "encoderMode": "composer-navigation",
+        "voiceButtonMode": "push-to-talk",
+        "separateMicrophoneKeys": false
+      }
+    },
+    "codex-micro-lighting-brightness": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 100
+    },
+    "codex-micro-lighting-auto-off": {
+      "type": "string",
+      "enum": [
+        "off",
+        "30-seconds",
+        "1-minute",
+        "3-minutes",
+        "10-minutes",
+        "30-minutes",
+        "1-hour"
+      ],
+      "default": "3-minutes"
+    }
+  },
+  "layout": {
+    "version": 1,
+    "slots": [
+      "ACT06",
+      "ACT07",
+      "ACT08",
+      "ACT09",
+      "ACT10",
+      "ACT11",
+      "ACT10_ACT11",
+      "ACT12"
+    ],
+    "keycaps": [
+      "FAST",
+      "APPR",
+      "REJ",
+      "SPLIT",
+      "MIC",
+      "MIC1",
+      "CODEX",
+      "BUG",
+      "OAI",
+      "TERM",
+      "DWN",
+      "DEL",
+      "NEW",
+      "NAV",
+      "MAGIC",
+      "DIFF",
+      "PLAY",
+      "GIT",
+      "BRCH",
+      "BRANCH",
+      "MRG",
+      "PR",
+      "PAINT",
+      "LAB",
+      "PARTY",
+      "TIME",
+      "MIND+",
+      "MIND-",
+      "EMPT1",
+      "EMPT2",
+      "EMPT3",
+      "EMPT4",
+      "SETUP",
+      "FOLD",
+      "UPL",
+      "APPS",
+      "YOLO",
+      "YEET",
+      "EMPT5"
+    ],
+    "encoderModes": [
+      "composer-navigation",
+      "reasoning",
+      "conversation-scroll",
+      "custom"
+    ],
+    "encoderGestures": [
+      "left",
+      "right",
+      "click",
+      "longPress"
+    ],
+    "analogDirections": [
+      "up",
+      "right",
+      "down",
+      "left"
+    ],
+    "voiceButtonModes": [
+      "push-to-talk",
+      "realtime"
+    ],
+    "actionTypes": {
+      "command": {
+        "required": [
+          "type",
+          "commandId"
+        ]
+      },
+      "skill": {
+        "required": [
+          "type",
+          "skillName",
+          "skillPath"
+        ]
+      }
+    }
+  }
+}

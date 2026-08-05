@@ -91,6 +91,25 @@ const ASSETS: &[(&str, &[u8])] = &[
         "companion/codex-main-bridge.mjs",
         include_bytes!("../companion/codex-main-bridge.mjs"),
     ),
+    // Codex main-process ESM modules remain cached for the lifetime of the app.
+    // Publish each live-overlay revision under a fresh module root so an
+    // in-place CLI upgrade cannot silently execute the previous adapter.
+    (
+        "companion-codex-v10/codex-live-overlay-v2.mjs",
+        include_bytes!("../companion/codex-live-overlay-v2.mjs"),
+    ),
+    (
+        "companion-codex-v10/codex-main-integration.mjs",
+        include_bytes!("../companion/codex-main-integration.mjs"),
+    ),
+    (
+        "companion-codex-v10/codex-main-adapter.mjs",
+        include_bytes!("../companion/codex-main-adapter.mjs"),
+    ),
+    (
+        "companion-codex-v10/codex-main-bridge.mjs",
+        include_bytes!("../companion/codex-main-bridge.mjs"),
+    ),
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -255,7 +274,54 @@ pub struct CodexDeviceValidationReceipt {
 
 pub fn current_device_owner() -> Result<Target> {
     let report = execute(Operation::Status(None), None, None)?;
-    detect_current_owner(&report.result)
+    match detect_current_owner(&report.result) {
+        Ok(owner) => Ok(owner),
+        Err(initial_error) => {
+            if !repairable_codex_owner(&report.result) {
+                return Err(initial_error);
+            }
+            let acquired = execute(Operation::Acquire(Target::Codex), None, None)
+                .context("failed to RPC-verify the connected Codex provider")?;
+            ensure!(
+                acquired
+                    .result
+                    .get("state")
+                    .map(codex_state_ready)
+                    .unwrap_or(false),
+                "Codex provider acquisition did not return a healthy RPC-verified state"
+            );
+            Ok(Target::Codex)
+        }
+    }
+}
+
+fn repairable_codex_owner(result: &Value) -> bool {
+    result
+        .pointer("/codex/state")
+        .map(codex_state_structurally_ready)
+        .unwrap_or(false)
+}
+
+fn codex_state_structurally_ready(state: &Value) -> bool {
+    state.get("lifecycleState").and_then(Value::as_str) == Some("started")
+        && state.get("startSuppressed").and_then(Value::as_bool) == Some(false)
+        && state
+            .get("deviceState")
+            .and_then(|device| device.get("status"))
+            .and_then(Value::as_str)
+            == Some("connected")
+        && state.get("hasComm").and_then(Value::as_bool) == Some(true)
+        && state.get("hasApi").and_then(Value::as_bool) == Some(true)
+        && state.get("hasHidSubscription").and_then(Value::as_bool) == Some(true)
+        && state
+            .get("hasJoystickSubscription")
+            .and_then(Value::as_bool)
+            == Some(true)
+}
+
+fn codex_state_ready(state: &Value) -> bool {
+    codex_state_structurally_ready(state)
+        && state.get("rpcVerified").and_then(Value::as_bool) == Some(true)
 }
 
 pub fn with_input_configuration<T>(
@@ -944,9 +1010,22 @@ fn materialize(override_root: Option<PathBuf>) -> Result<PathBuf> {
 
 fn default_runtime_root() -> Result<PathBuf> {
     let home = env::var_os("HOME").context("HOME is required for provider runtime discovery")?;
+    let mut manifest = Vec::new();
+    for (relative, bytes) in ASSETS {
+        manifest.extend_from_slice(relative.as_bytes());
+        manifest.push(0);
+        manifest.extend_from_slice(bytes.len().to_string().as_bytes());
+        manifest.push(0);
+        manifest.extend_from_slice(bytes);
+        manifest.push(0xff);
+    }
+    let digest = fsutil::sha256_bytes(&manifest)?;
     Ok(PathBuf::from(home)
         .join("Library/Application Support/worklouderctl")
-        .join(format!("provider-runtime-v{RUNTIME_VERSION}")))
+        .join(format!(
+            "provider-runtime-v{RUNTIME_VERSION}-{}",
+            &digest[..16]
+        )))
 }
 
 fn create_private_dir(path: &Path) -> Result<()> {
@@ -1068,6 +1147,13 @@ mod tests {
             }}
         });
         assert_eq!(detect_current_owner(&codex).unwrap(), Target::Codex);
+        let mut needs_rpc_verification = codex.clone();
+        needs_rpc_verification["codex"]["state"]["rpcVerified"] = Value::from(false);
+        assert!(detect_current_owner(&needs_rpc_verification).is_err());
+        assert!(repairable_codex_owner(&needs_rpc_verification));
+        assert!(!codex_state_ready(
+            &needs_rpc_verification["codex"]["state"]
+        ));
 
         let input = serde_json::json!({
             "input": {"state": {

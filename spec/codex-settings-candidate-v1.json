@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "worklouderctl-codex-settings-candidate-contract",
-  "contractAppVersion": "26.727.51351",
+  "contractAppVersion": "26.730.61309",
   "authority": "codex-settings",
   "inputKind": "worklouderctl-codex-settings-snapshot",
   "outputKind": "worklouderctl-codex-settings-snapshot",
@@ -26,7 +26,12 @@
   "operations": {
     "agentSourceGet": {
       "command": "codex agent-source get --input SNAPSHOT.json",
-      "values": ["pinned", "recent", "priority", "custom"]
+      "values": [
+        "pinned",
+        "recent",
+        "priority",
+        "custom"
+      ]
     },
     "agentSourceSet": {
       "command": "codex agent-source set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
@@ -128,6 +133,18 @@
     "voiceSet": {
       "command": "codex voice set --input SNAPSHOT.json VALUE --output CANDIDATE.json",
       "changedPath": "/settings/codex-micro-layout/voiceButtonMode"
+    },
+    "separateMicrophoneKeysGet": {
+      "command": "codex voice separate-keys get --input SNAPSHOT.json"
+    },
+    "separateMicrophoneKeysSet": {
+      "command": "codex voice separate-keys set --input SNAPSHOT.json ENABLED --output CANDIDATE.json",
+      "changedPath": "/settings/codex-micro-layout/separateMicrophoneKeys"
+    },
+    "separateMicrophoneKeysReset": {
+      "command": "codex voice separate-keys reset --input SNAPSHOT.json --output CANDIDATE.json",
+      "value": false,
+      "changedPath": "/settings/codex-micro-layout/separateMicrophoneKeys"
     }
   },
   "commandKeySlots": [
@@ -135,6 +152,8 @@
     "ACT07",
     "ACT08",
     "ACT09",
+    "ACT10",
+    "ACT11",
     "ACT10_ACT11",
     "ACT12"
   ],

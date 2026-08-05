@@ -20,6 +20,12 @@ test("Codex bridge authenticates, gates mutations, and dispatches snapshots", as
       async snapshotSettings() {
         return { marker: "settings-from-codex-session" };
       },
+      async runtimeStatus() {
+        return { operation: "status", state: { marker: "runtime-from-codex-session" } };
+      },
+      async recoverRuntime({ timeoutMs }) {
+        return { operation: "recover", recovered: true, timeoutMs };
+      },
     },
     codexVersion: "26.727.51351-test",
     socketPath: root + "/bridge.sock",
@@ -38,10 +44,19 @@ test("Codex bridge authenticates, gates mutations, and dispatches snapshots", as
     });
     assert.equal(hello.result.codexVersion, "26.727.51351-test");
     assert.ok(hello.result.capabilities.includes("codex.settings.snapshot.v1"));
+    assert.ok(hello.result.capabilities.includes("codex.runtime.status.v1"));
+    assert.ok(hello.result.capabilities.includes("codex.runtime.recover.v1"));
     assert.ok(!hello.result.capabilities.includes("codex.settings.apply.v1"));
     assert.ok(!hello.result.capabilities.includes("codex.agentKeys.apply.v1"));
     const snapshot = await client.request("codex.settings.snapshot", {});
     assert.equal(snapshot.result.marker, "settings-from-codex-session");
+    const runtime = await client.request("codex.runtime.status", {});
+    assert.equal(runtime.result.state.marker, "runtime-from-codex-session");
+    const recovery = await client.request("codex.runtime.recover", { timeoutMs: 1_000 });
+    assert.equal(recovery.result.recovered, true);
+    assert.equal(recovery.result.timeoutMs, 1_000);
+    const invalidRecovery = await client.request("codex.runtime.recover", { timeoutMs: 999 });
+    assert.equal(invalidRecovery.error.code, -32602);
     const mutation = await client.request("codex.settings.apply", mutationParams({}));
     assert.equal(mutation.error.code, -32003);
     client.close();
@@ -133,6 +148,83 @@ test("Codex adapter forwards focus through the connected service without replaci
   assert.equal(result.continuity.sameServiceApi, true);
   assert.equal(result.continuity.sameComm, true);
   assert.equal(result.continuity.sameConnectionAttempt, true);
+});
+
+test("Codex adapter reports and recovers runtime health without a process signal", async () => {
+  let connected = false;
+  const service = {
+    lifecycleState: "stopped",
+    comm: null,
+    api: null,
+    connectPromise: null,
+    topologyReconciliationPromise: null,
+    topologyReconciliationPending: false,
+    topologySettleRetryIndex: 0,
+    unsubscribeHid: null,
+    unsubscribeJoystick: null,
+    connectedDevicePortPath: null,
+    connectionAttemptId: 4,
+    lightingWritePromise: Promise.resolve(),
+    applyLighting: async () => true,
+    refreshBatteryStatus: async () => {},
+    getState() {
+      return {
+        status: connected ? "connected" : "detected",
+        transport: connected ? "bluetooth" : null,
+        model: "codex-micro",
+        error: null,
+        battery: null,
+      };
+    },
+    async stop() {
+      connected = false;
+      this.lifecycleState = "stopped";
+      this.comm = null;
+      this.api = null;
+      this.unsubscribeHid = null;
+      this.unsubscribeJoystick = null;
+    },
+    start() {
+      connected = true;
+      this.lifecycleState = "started";
+      this.comm = { disconnect: async () => {} };
+      this.api = { api: {} };
+      this.unsubscribeHid = () => {};
+      this.unsubscribeJoystick = () => {};
+      this.connectionAttemptId += 1;
+    },
+  };
+  const services = [service];
+  const adapter = createCodexMainAdapter({
+    request: makeRequest(testState()),
+    readSettingsSource: async () => Buffer.from("fixture"),
+    deviceServiceProvider: () => services,
+  });
+
+  const before = await adapter.runtimeStatus({});
+  assert.equal(before.operation, "status");
+  assert.equal(before.state.deviceState.status, "detected");
+  const recovery = await adapter.recoverRuntime({ timeoutMs: 1_000 });
+  assert.equal(recovery.operation, "recover");
+  assert.equal(recovery.changed, true);
+  assert.equal(recovery.recovered, true);
+  assert.equal(recovery.after.deviceState.status, "connected");
+  assert.equal(recovery.after.hasHidSubscription, true);
+  assert.equal(recovery.after.hasJoystickSubscription, true);
+  const noop = await adapter.recoverRuntime({ timeoutMs: 1_000 });
+  assert.equal(noop.changed, false);
+  services.unshift({
+    ...service,
+    lifecycleState: "stopped",
+    comm: null,
+    api: null,
+    unsubscribeHid: null,
+    unsubscribeJoystick: null,
+    getState() { return { status: "connected", transport: "bluetooth" }; },
+  });
+  const selected = await adapter.runtimeStatus({});
+  assert.equal(selected.state.lifecycleState, "started");
+  assert.equal(selected.state.hasHidSubscription, true);
 });
 
 test("Codex adapter applies, replays, rejects stale CAS, and restores Agent Keys", async () => {

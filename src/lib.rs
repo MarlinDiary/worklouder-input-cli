@@ -30,17 +30,17 @@ use cli::{
     CodexDialGestureCommand, CodexDialMode, CodexDialModeCommand, CodexJoystickCommand,
     CodexJoystickDirection, CodexLightingAutoOff, CodexLightingAutoOffCommand,
     CodexLightingBrightnessCommand, CodexLightingCommand, CodexResetCommand, CodexRuntimeCommand,
-    CodexVoiceCommand, CodexVoiceMode, Command, CompatibilityCommand, CompletionShell,
-    ConfigCommand, ControlCommand, DeviceCommand, DeviceConfigCommand, DeviceConfigOwner,
-    DeviceTransport, InputCommand, InputCommandPermissionCommand, InputCommandPermissionValue,
-    InputConfigCommand, InputFirmwareCommand, InputLogsCommand, InputPermissionCommand,
-    InputPresetCommand, InputRecoveryCommand, InputResetCommand, LayerCommand,
-    LayerJoystickCommand, LayerJoystickMode, LayerJoystickModeCommand, LayerJoystickSectorCommand,
-    LayerLightingCommand, LightingEffect, LightingZone, MultiActionCommand,
-    MultiActionGroupCommand, MultiActionGroupMemberCommand, PresetCommand, ProfileCommand,
-    ProviderCommand, ProviderTarget, RadialCommand, SchemaCommand, SmartActionCommand,
-    SmartActionGroupCommand, SmartActionGroupMemberCommand, SmartActionType as CliSmartActionType,
-    TierCommand, TransactionCommand,
+    CodexSeparateMicrophoneKeysCommand, CodexVoiceCommand, CodexVoiceMode, Command,
+    CompatibilityCommand, CompletionShell, ConfigCommand, ControlCommand, DeviceCommand,
+    DeviceConfigCommand, DeviceConfigOwner, DeviceTransport, InputCommand,
+    InputCommandPermissionCommand, InputCommandPermissionValue, InputConfigCommand,
+    InputFirmwareCommand, InputLogsCommand, InputPermissionCommand, InputPresetCommand,
+    InputRecoveryCommand, InputResetCommand, LayerCommand, LayerJoystickCommand, LayerJoystickMode,
+    LayerJoystickModeCommand, LayerJoystickSectorCommand, LayerLightingCommand, LightingEffect,
+    LightingZone, MultiActionCommand, MultiActionGroupCommand, MultiActionGroupMemberCommand,
+    PresetCommand, ProfileCommand, ProviderCommand, ProviderTarget, RadialCommand, SchemaCommand,
+    SmartActionCommand, SmartActionGroupCommand, SmartActionGroupMemberCommand,
+    SmartActionType as CliSmartActionType, TierCommand, TransactionCommand,
 };
 use serde::Serialize;
 use std::io::Write;
@@ -3070,6 +3070,37 @@ fn run_codex(command: CodexCommand, json: bool, mut out: impl Write) -> Result<(
                 json,
                 &mut out,
             )?,
+            CodexVoiceCommand::SeparateKeys { command } => match command {
+                CodexSeparateMicrophoneKeysCommand::Get { input } => {
+                    let result = codex::separate_microphone_keys_get(&input)?;
+                    if json {
+                        write_json(&mut out, &result)?;
+                    } else {
+                        writeln!(
+                            out,
+                            "separate-microphone-keys={}\tinherited={}",
+                            result.value, result.inherited
+                        )?;
+                        writeln!(out, "revision={}", result.revision)?;
+                    }
+                }
+                CodexSeparateMicrophoneKeysCommand::Set {
+                    input,
+                    value,
+                    output,
+                } => write_codex_candidate_result(
+                    codex::separate_microphone_keys_set(&input, value, &output)?,
+                    json,
+                    &mut out,
+                )?,
+                CodexSeparateMicrophoneKeysCommand::Reset { input, output } => {
+                    write_codex_candidate_result(
+                        codex::separate_microphone_keys_reset(&input, &output)?,
+                        json,
+                        &mut out,
+                    )?
+                }
+            },
         },
     }
     Ok(())

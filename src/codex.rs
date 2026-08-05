@@ -12,7 +12,7 @@ pub const SNAPSHOT_KIND: &str = "worklouderctl-codex-settings-snapshot";
 pub const SNAPSHOT_SCHEMA_VERSION: u8 = 1;
 pub const CANDIDATE_KIND: &str = "worklouderctl-codex-settings-candidate";
 pub const REVISION_ALGORITHM: &str = "codex-settings-revision-v1";
-const CONTRACT_JSON: &str = include_str!("../spec/codex-settings-26.727.51351.json");
+const CONTRACT_JSON: &str = include_str!("../spec/codex-settings-26.730.61309.json");
 const REVISION_PREFIX: &[u8] = b"worklouder-codex-settings-revision-v1\0";
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -147,6 +147,16 @@ pub struct VoiceModeView {
     pub kind: &'static str,
     pub revision: String,
     pub value: String,
+    pub inherited: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeparateMicrophoneKeysView {
+    pub schema_version: u8,
+    pub kind: &'static str,
+    pub revision: String,
+    pub value: bool,
     pub inherited: bool,
 }
 
@@ -707,6 +717,74 @@ pub fn voice_mode_set(input: &Path, value: &str, output: &Path) -> Result<Candid
         before_revision,
         changed
             .then(|| "/settings/codex-micro-layout/voiceButtonMode".into())
+            .into_iter()
+            .collect(),
+    )
+}
+
+pub fn separate_microphone_keys_get(input: &Path) -> Result<SeparateMicrophoneKeysView> {
+    let snapshot = read_snapshot(input)?;
+    let field = "separateMicrophoneKeys";
+    let value = effective_layout(&snapshot)?
+        .get(field)
+        .and_then(Value::as_bool)
+        .context("effective layout.separateMicrophoneKeys was missing")?;
+    let inherited = snapshot
+        .settings
+        .get("codex-micro-layout")
+        .and_then(Value::as_object)
+        .map_or(true, |layout| !layout.contains_key(field));
+    Ok(SeparateMicrophoneKeysView {
+        schema_version: 1,
+        kind: "worklouderctl-codex-separate-microphone-keys",
+        revision: settings_revision(&snapshot.settings)?,
+        value,
+        inherited,
+    })
+}
+
+pub fn separate_microphone_keys_set(
+    input: &Path,
+    value: bool,
+    output: &Path,
+) -> Result<CandidateReceipt> {
+    separate_microphone_keys_candidate(input, value, output, "codex-separate-microphone-keys-set")
+}
+
+pub fn separate_microphone_keys_reset(input: &Path, output: &Path) -> Result<CandidateReceipt> {
+    separate_microphone_keys_candidate(input, false, output, "codex-separate-microphone-keys-reset")
+}
+
+fn separate_microphone_keys_candidate(
+    input: &Path,
+    value: bool,
+    output: &Path,
+    operation: &'static str,
+) -> Result<CandidateReceipt> {
+    let mut snapshot = read_snapshot(input)?;
+    let contract = load_contract()?;
+    let before_revision = settings_revision(&snapshot.settings)?;
+    let mut layout = effective_layout(&snapshot)?.clone();
+    let current = layout
+        .get("separateMicrophoneKeys")
+        .and_then(Value::as_bool)
+        .context("effective layout.separateMicrophoneKeys was missing")?;
+    let changed = current != value;
+    if changed {
+        layout.insert("separateMicrophoneKeys".into(), Value::Bool(value));
+        validate_layout(&Value::Object(layout.clone()), &contract.layout)?;
+        snapshot
+            .settings
+            .insert("codex-micro-layout".into(), Value::Object(layout));
+        refresh_effective_settings(&mut snapshot, &contract)?;
+    }
+    publish_candidate(
+        snapshot,
+        output,
+        operation,
+        before_revision,
+        changed
+            .then(|| "/settings/codex-micro-layout/separateMicrophoneKeys".into())
             .into_iter()
             .collect(),
     )
@@ -1582,7 +1660,13 @@ fn normalize_layout_effective(default: &Value, explicit: &Value) -> Value {
         Some(value) => value,
         None => return explicit.clone(),
     };
-    for field in ["analogStick", "encoder", "encoderMode", "voiceButtonMode"] {
+    for field in [
+        "analogStick",
+        "encoder",
+        "encoderMode",
+        "voiceButtonMode",
+        "separateMicrophoneKeys",
+    ] {
         if !normalized.contains_key(field) {
             if let Some(value) = default_object.get(field) {
                 normalized.insert(field.into(), value.clone());
@@ -1797,6 +1881,13 @@ fn validate_layout(value: &Value, contract: &LayoutContract) -> Result<()> {
         &contract.voice_button_modes,
         "layout",
     )?;
+    ensure!(
+        layout
+            .get("separateMicrophoneKeys")
+            .and_then(Value::as_bool)
+            .is_some(),
+        "layout.separateMicrophoneKeys must be a boolean"
+    );
     Ok(())
 }
 
@@ -2097,6 +2188,8 @@ mod tests {
         let config = root.join("config.toml");
         let snapshot_path = root.join("snapshot.json");
         let realtime_path = root.join("realtime.json");
+        let separate_path = root.join("separate.json");
+        let combined_path = root.join("combined.json");
         fs::write(&config, b"[desktop]\ncodex-micro-future = \"preserved\"\n").unwrap();
         let source_sha = fsutil::sha256(&config).unwrap();
         let mut snapshot = export(&config, &root.join("missing.app"), &snapshot_path).unwrap();
@@ -2144,6 +2237,25 @@ mod tests {
         assert_eq!(reopened.source_sha256, source_sha);
         assert_eq!(fsutil::sha256(&config).unwrap(), source_sha);
 
+        let separate_before = separate_microphone_keys_get(&realtime_path).unwrap();
+        assert!(!separate_before.value);
+        assert!(!separate_before.inherited);
+        let separate = separate_microphone_keys_set(&realtime_path, true, &separate_path).unwrap();
+        assert!(separate.changed);
+        assert_eq!(
+            separate.changed_paths,
+            vec!["/settings/codex-micro-layout/separateMicrophoneKeys"]
+        );
+        assert!(separate_microphone_keys_get(&separate_path).unwrap().value);
+        let reset = separate_microphone_keys_reset(&separate_path, &combined_path).unwrap();
+        assert!(reset.changed);
+        assert!(!separate_microphone_keys_get(&combined_path).unwrap().value);
+        assert_eq!(
+            read_snapshot(&combined_path).unwrap().settings["codex-micro-layout"]
+                ["futureVoiceMetadata"]["preserved"],
+            true
+        );
+
         let invalid_path = root.join("invalid.json");
         let invalid = voice_mode_set(&realtime_path, "telephone", &invalid_path).unwrap_err();
         assert!(invalid
@@ -2154,6 +2266,7 @@ mod tests {
         let default_config = root.join("default.toml");
         let default_snapshot = root.join("default-snapshot.json");
         let default_noop = root.join("default-noop.json");
+        let default_separate_noop = root.join("default-separate-noop.json");
         fs::write(&default_config, b"[desktop]\n").unwrap();
         export(
             &default_config,
@@ -2167,6 +2280,16 @@ mod tests {
         let noop = voice_mode_set(&default_snapshot, "push-to-talk", &default_noop).unwrap();
         assert!(!noop.changed);
         assert!(!read_snapshot(&default_noop)
+            .unwrap()
+            .settings
+            .contains_key("codex-micro-layout"));
+        let default_separate = separate_microphone_keys_get(&default_noop).unwrap();
+        assert!(!default_separate.value);
+        assert!(default_separate.inherited);
+        let separate_noop =
+            separate_microphone_keys_reset(&default_noop, &default_separate_noop).unwrap();
+        assert!(!separate_noop.changed);
+        assert!(!read_snapshot(&default_separate_noop)
             .unwrap()
             .settings
             .contains_key("codex-micro-layout"));

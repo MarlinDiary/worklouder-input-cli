@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "appVersion": "26.730.61309",
+  "appAsarSha256": "9de942a9a058fca20b78d171032e0fe65ccb1063868f175ff7eb4e159efc2c38",
+  "hidTopologyWatcherSha256": "cb2d0fb23979dc294d6a7af851cc5ec8a5d8fb94ba739be18f379563f485709d",
+  "inputMonitoringPermissionSha256": "763545649698c9d535291cbea8f4daf4354b3fe6db9eba3f41d7f14a1d831109",
+  "processExecutable": "Contents/MacOS/ChatGPT",
+  "mainChunk": ".vite/build/src-Bn_6ASpg.js",
+  "serviceChunk": "./service-D-Jqk1B5.js",
+  "serviceExport": "CodexMicroService",
+  "inputExecutable": "Contents/MacOS/input",
+  "healthyState": {
+    "lifecycleState": "started",
+    "deviceStatus": "connected",
+    "requiresComm": true,
+    "requiresApi": true,
+    "requiresSettledConnectPromise": true,
+    "requiresSettledTopologyPromise": true,
+    "requiresHidSubscription": true,
+    "requiresJoystickSubscription": true
+  },
+  "runtimeTransport": "codex-companion-bridge-v1"
+}

@@ -436,7 +436,7 @@ _arguments "${_arguments_options[@]}" \
 ;;
 (recover)
 _arguments "${_arguments_options[@]}" \
-'--timeout-seconds=[Maximum seconds to wait for connected HID and joystick subscriptions]:TIMEOUT_SECONDS: ' \
+'*--timeout-seconds=[Maximum seconds to wait for connected HID and joystick subscriptions]:TIMEOUT_SECONDS: ' \
 '-h[Print help information]' \
 '--help[Print help information]' \
 '-V[Print version information]' \
@@ -734,7 +734,7 @@ _arguments "${_arguments_options[@]}" \
 '-V[Print version information]' \
 '--version[Print version information]' \
 '--json[Emit machine-readable JSON when the command supports it]' \
-':slot -- Logical slot\: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12:' \
+':slot -- Logical slot\: ACT06-ACT12, including ACT10/ACT11 and ACT10_ACT11:' \
 && ret=0
 ;;
 (set)
@@ -751,7 +751,7 @@ _arguments "${_arguments_options[@]}" \
 '-V[Print version information]' \
 '--version[Print version information]' \
 '--json[Emit machine-readable JSON when the command supports it]' \
-':slot -- Logical slot\: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12:' \
+':slot -- Logical slot\: ACT06-ACT12, including ACT10/ACT11 and ACT10_ACT11:' \
 && ret=0
 ;;
 (reset)
@@ -763,7 +763,7 @@ _arguments "${_arguments_options[@]}" \
 '-V[Print version information]' \
 '--version[Print version information]' \
 '--json[Emit machine-readable JSON when the command supports it]' \
-':slot -- Logical slot\: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12:' \
+':slot -- Logical slot\: ACT06-ACT12, including ACT10/ACT11 and ACT10_ACT11:' \
 && ret=0
 ;;
 (help)
@@ -1183,6 +1183,66 @@ _arguments "${_arguments_options[@]}" \
 '--json[Emit machine-readable JSON when the command supports it]' \
 ':value:(push-to-talk realtime)' \
 && ret=0
+;;
+(separate-keys)
+_arguments "${_arguments_options[@]}" \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+":: :_worklouderctl__codex__voice__separate-keys_commands" \
+"*::: :->separate-keys" \
+&& ret=0
+
+    case $state in
+    (separate-keys)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:worklouderctl-codex-voice-separate-keys-command-$line[1]:"
+        case $line[1] in
+            (get)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'::value:' \
+&& ret=0
+;;
+(reset)
+_arguments "${_arguments_options[@]}" \
+'*--input=[]:INPUT:_files' \
+'*--output=[]:OUTPUT:_files' \
+'-h[Print help information]' \
+'--help[Print help information]' \
+'-V[Print version information]' \
+'--version[Print version information]' \
+'--json[Emit machine-readable JSON when the command supports it]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" \
+'--json[Emit machine-readable JSON when the command supports it]' \
+'*::subcommand -- The subcommand whose help message to display:' \
+&& ret=0
+;;
+        esac
+    ;;
+esac
 ;;
 (help)
 _arguments "${_arguments_options[@]}" \
@@ -1686,7 +1746,7 @@ restart\:"Gracefully quit Input for the read, then reopen it afterward"))' \
         case $line[1] in
             (status)
 _arguments "${_arguments_options[@]}" \
-'--owner=[Preserve the current provider, or select Input/Codex explicitly]:OWNER:(auto input codex)' \
+'--owner=[Use Input authority, then restore the current or selected provider]:OWNER:(auto input codex)' \
 '-h[Print help information]' \
 '--help[Print help information]' \
 '-V[Print version information]' \
@@ -1697,7 +1757,7 @@ _arguments "${_arguments_options[@]}" \
 (files)
 _arguments "${_arguments_options[@]}" \
 '--path=[List a specific device filesystem path]:PATH: ' \
-'--owner=[Preserve the current provider, or select Input/Codex explicitly]:OWNER:(auto input codex)' \
+'--owner=[Use Input authority, then restore the current or selected provider]:OWNER:(auto input codex)' \
 '--recursive[Include files in nested directories]' \
 '-h[Print help information]' \
 '--help[Print help information]' \
@@ -1709,7 +1769,7 @@ _arguments "${_arguments_options[@]}" \
 (export)
 _arguments "${_arguments_options[@]}" \
 '*--output=[Destination directory. It must not already exist]:OUTPUT:_files' \
-'--owner=[Preserve the current provider, or select Input/Codex explicitly]:OWNER:(auto input codex)' \
+'--owner=[Use Input authority, then restore the current or selected provider]:OWNER:(auto input codex)' \
 '-h[Print help information]' \
 '--help[Print help information]' \
 '-V[Print version information]' \
@@ -1738,7 +1798,7 @@ _arguments "${_arguments_options[@]}" \
 _arguments "${_arguments_options[@]}" \
 '*--output=[Destination JSON file. It must not already exist]:OUTPUT:_files' \
 '--device=[Select a connected device ID; defaults to the single Codex Micro]:DEVICE: ' \
-'--owner=[Use Input'\''s bridge or Codex'\''s already-connected device session]:OWNER:(auto input codex)' \
+'--owner=[Use Input'\''s bridge, then restore the current or selected provider]:OWNER:(auto input codex)' \
 '-h[Print help information]' \
 '--help[Print help information]' \
 '-V[Print version information]' \
@@ -1751,7 +1811,7 @@ _arguments "${_arguments_options[@]}" \
 '*--input=[Snapshot JSON produced by `device config snapshot`]:INPUT:_files' \
 '--device=[Select a connected device ID; defaults to the snapshot device]:DEVICE: ' \
 '--expected-revision=[Require the live device to have this exact revision]:EXPECTED_REVISION: ' \
-'--owner=[Preserve the currently connected provider, or select one explicitly]:OWNER:(auto input codex)' \
+'--owner=[Use Input'\''s bridge, then restore the current or selected provider]:OWNER:(auto input codex)' \
 '-h[Print help information]' \
 '--help[Print help information]' \
 '-V[Print version information]' \
@@ -1766,7 +1826,7 @@ _arguments "${_arguments_options[@]}" \
 '--device=[Select a connected device ID; defaults to the candidate device]:DEVICE: ' \
 '--expected-revision=[Require the live device to have this revision before the write]:EXPECTED_REVISION: ' \
 '--idempotency-key=[Stable retry key; reuse it only with the exact same mutation]:IDEMPOTENCY_KEY: ' \
-'--owner=[Use Input'\''s bridge or keep Codex as the connected device owner]:OWNER:(auto input codex)' \
+'--owner=[Use Input'\''s bridge and optionally restore Codex afterward]:OWNER:(auto input codex)' \
 '-h[Print help information]' \
 '--help[Print help information]' \
 '-V[Print version information]' \
@@ -1781,7 +1841,7 @@ _arguments "${_arguments_options[@]}" \
 '--device=[Select a connected device ID; defaults to the snapshot device]:DEVICE: ' \
 '--expected-revision=[Require the live device to have this revision before the write]:EXPECTED_REVISION: ' \
 '--idempotency-key=[Stable retry key; reuse it only with the exact same mutation]:IDEMPOTENCY_KEY: ' \
-'--owner=[Use Input'\''s bridge or keep Codex as the connected device owner]:OWNER:(auto input codex)' \
+'--owner=[Use Input'\''s bridge and optionally restore Codex afterward]:OWNER:(auto input codex)' \
 '-h[Print help information]' \
 '--help[Print help information]' \
 '-V[Print version information]' \
@@ -2090,7 +2150,7 @@ _arguments "${_arguments_options[@]}" \
 '*--codex-token=[]:CODEX_TOKEN:_files' \
 '*--input-socket=[]:INPUT_SOCKET:_files' \
 '*--input-token=[]:INPUT_TOKEN:_files' \
-'--device-owner=[Preserve the current device owner for input-config mutations]:DEVICE_OWNER:(auto input codex)' \
+'--device-owner=[Restore the current or selected owner after input-config mutations]:DEVICE_OWNER:(auto input codex)' \
 '-h[Print help information]' \
 '--help[Print help information]' \
 '-V[Print version information]' \
@@ -2108,7 +2168,7 @@ _arguments "${_arguments_options[@]}" \
 '*--codex-token=[]:CODEX_TOKEN:_files' \
 '*--input-socket=[]:INPUT_SOCKET:_files' \
 '*--input-token=[]:INPUT_TOKEN:_files' \
-'--device-owner=[Preserve the current device owner for input-config mutations]:DEVICE_OWNER:(auto input codex)' \
+'--device-owner=[Restore the current or selected owner after input-config mutations]:DEVICE_OWNER:(auto input codex)' \
 '-h[Print help information]' \
 '--help[Print help information]' \
 '-V[Print version information]' \
@@ -4493,6 +4553,11 @@ _worklouderctl__codex__voice__get_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl codex voice get commands' commands "$@"
 }
+(( $+functions[_worklouderctl__codex__voice__separate-keys__get_commands] )) ||
+_worklouderctl__codex__voice__separate-keys__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex voice separate-keys get commands' commands "$@"
+}
 (( $+functions[_worklouderctl__input__permission__command__get_commands] )) ||
 _worklouderctl__input__permission__command__get_commands() {
     local commands; commands=()
@@ -4681,6 +4746,11 @@ _worklouderctl__codex__runtime__help_commands() {
 _worklouderctl__codex__voice__help_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl codex voice help commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__voice__separate-keys__help_commands] )) ||
+_worklouderctl__codex__voice__separate-keys__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex voice separate-keys help commands' commands "$@"
 }
 (( $+functions[_worklouderctl__compatibility__help_commands] )) ||
 _worklouderctl__compatibility__help_commands() {
@@ -5313,6 +5383,11 @@ _worklouderctl__codex__reset_commands() {
     )
     _describe -t commands 'worklouderctl codex reset commands' commands "$@"
 }
+(( $+functions[_worklouderctl__codex__voice__separate-keys__reset_commands] )) ||
+_worklouderctl__codex__voice__separate-keys__reset_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex voice separate-keys reset commands' commands "$@"
+}
 (( $+functions[_worklouderctl__input__reset_commands] )) ||
 _worklouderctl__input__reset_commands() {
     local commands; commands=(
@@ -5379,6 +5454,16 @@ _worklouderctl__profile__select_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl profile select commands' commands "$@"
 }
+(( $+functions[_worklouderctl__codex__voice__separate-keys_commands] )) ||
+_worklouderctl__codex__voice__separate-keys_commands() {
+    local commands; commands=(
+'get:Read whether ACT10 and ACT11 are independent microphone keys' \
+'set:Write an offline candidate enabling or disabling independent keys' \
+'reset:Restore the exact installed-build default (`false`)' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'worklouderctl codex voice separate-keys commands' commands "$@"
+}
 (( $+functions[_worklouderctl__action__event__set_commands] )) ||
 _worklouderctl__action__event__set_commands() {
     local commands; commands=()
@@ -5438,6 +5523,11 @@ _worklouderctl__codex__lighting__auto-off__set_commands() {
 _worklouderctl__codex__lighting__brightness__set_commands() {
     local commands; commands=()
     _describe -t commands 'worklouderctl codex lighting brightness set commands' commands "$@"
+}
+(( $+functions[_worklouderctl__codex__voice__separate-keys__set_commands] )) ||
+_worklouderctl__codex__voice__separate-keys__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'worklouderctl codex voice separate-keys set commands' commands "$@"
 }
 (( $+functions[_worklouderctl__codex__voice__set_commands] )) ||
 _worklouderctl__codex__voice__set_commands() {
@@ -5721,6 +5811,7 @@ _worklouderctl__codex__voice_commands() {
     local commands; commands=(
 'get:Read the effective voice-button behavior' \
 'set:Write an offline candidate with a new voice-button behavior' \
+'separate-keys:Inspect or edit the independent ACT10/ACT11 microphone-key layout' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'worklouderctl codex voice commands' commands "$@"

@@ -616,7 +616,7 @@ pub enum InputConfigCommand {
 pub enum DeviceCommand {
     /// Read firmware, active profile/layer, and power state from the device.
     Status {
-        /// Preserve the current provider, or select Input/Codex explicitly.
+        /// Use Input authority, then restore the current or selected provider.
         #[clap(long, value_enum, default_value = "auto")]
         owner: DeviceConfigOwner,
     },
@@ -631,7 +631,7 @@ pub enum DeviceCommand {
         #[clap(long)]
         recursive: bool,
 
-        /// Preserve the current provider, or select Input/Codex explicitly.
+        /// Use Input authority, then restore the current or selected provider.
         #[clap(long, value_enum, default_value = "auto")]
         owner: DeviceConfigOwner,
     },
@@ -642,7 +642,7 @@ pub enum DeviceCommand {
         #[clap(long, value_parser)]
         output: PathBuf,
 
-        /// Preserve the current provider, or select Input/Codex explicitly.
+        /// Use Input authority, then restore the current or selected provider.
         #[clap(long, value_enum, default_value = "auto")]
         owner: DeviceConfigOwner,
     },
@@ -666,7 +666,7 @@ pub enum DeviceConfigCommand {
         #[clap(long)]
         device: Option<String>,
 
-        /// Use Input's bridge or Codex's already-connected device session.
+        /// Use Input's bridge, then restore the current or selected provider.
         #[clap(long, value_enum, default_value = "auto")]
         owner: DeviceConfigOwner,
     },
@@ -685,7 +685,7 @@ pub enum DeviceConfigCommand {
         #[clap(long)]
         expected_revision: Option<String>,
 
-        /// Preserve the currently connected provider, or select one explicitly.
+        /// Use Input's bridge, then restore the current or selected provider.
         #[clap(long, value_enum, default_value = "auto")]
         owner: DeviceConfigOwner,
     },
@@ -712,7 +712,7 @@ pub enum DeviceConfigCommand {
         #[clap(long)]
         idempotency_key: Option<String>,
 
-        /// Use Input's bridge or keep Codex as the connected device owner.
+        /// Use Input's bridge and optionally restore Codex afterward.
         #[clap(long, value_enum, default_value = "auto")]
         owner: DeviceConfigOwner,
     },
@@ -739,7 +739,7 @@ pub enum DeviceConfigCommand {
         #[clap(long)]
         idempotency_key: Option<String>,
 
-        /// Use Input's bridge or keep Codex as the connected device owner.
+        /// Use Input's bridge and optionally restore Codex afterward.
         #[clap(long, value_enum, default_value = "auto")]
         owner: DeviceConfigOwner,
     },
@@ -921,7 +921,7 @@ pub enum CodexRuntimeCommand {
     /// Restart only a stuck CodexMicroService with automatic Input coordination.
     Recover {
         /// Maximum seconds to wait for connected HID and joystick subscriptions.
-        #[clap(long, default_value = "15")]
+        #[clap(long, default_value = "15", value_parser = clap::value_parser!(u64).range(1..=25))]
         timeout_seconds: u64,
     },
 }
@@ -1195,7 +1195,7 @@ pub enum CodexCommandKeyCommand {
     Get {
         #[clap(long, value_parser)]
         input: PathBuf,
-        /// Logical slot: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12.
+        /// Logical slot: ACT06-ACT12, including ACT10/ACT11 and ACT10_ACT11.
         slot: String,
     },
 
@@ -1203,7 +1203,7 @@ pub enum CodexCommandKeyCommand {
     Set {
         #[clap(long, value_parser)]
         input: PathBuf,
-        /// Logical slot: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12.
+        /// Logical slot: ACT06-ACT12, including ACT10/ACT11 and ACT10_ACT11.
         slot: String,
         /// Optional frozen keycap identifier.
         #[clap(long)]
@@ -1228,7 +1228,7 @@ pub enum CodexCommandKeyCommand {
     Reset {
         #[clap(long, value_parser)]
         input: PathBuf,
-        /// Logical slot: ACT06, ACT07, ACT08, ACT09, ACT10_ACT11, or ACT12.
+        /// Logical slot: ACT06-ACT12, including ACT10/ACT11 and ACT10_ACT11.
         slot: String,
         #[clap(long, value_parser)]
         output: PathBuf,
@@ -1492,7 +1492,7 @@ pub enum TransactionCommand {
         input_socket: Option<PathBuf>,
         #[clap(long, value_parser)]
         input_token: Option<PathBuf>,
-        /// Preserve the current device owner for input-config mutations.
+        /// Restore the current or selected owner after input-config mutations.
         #[clap(long, value_enum, default_value = "auto")]
         device_owner: DeviceConfigOwner,
     },
@@ -1515,7 +1515,7 @@ pub enum TransactionCommand {
         input_socket: Option<PathBuf>,
         #[clap(long, value_parser)]
         input_token: Option<PathBuf>,
-        /// Preserve the current device owner for input-config mutations.
+        /// Restore the current or selected owner after input-config mutations.
         #[clap(long, value_enum, default_value = "auto")]
         device_owner: DeviceConfigOwner,
     },
@@ -1616,6 +1616,41 @@ pub enum CodexVoiceCommand {
 
         #[clap(value_enum)]
         value: CodexVoiceMode,
+
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Inspect or edit the independent ACT10/ACT11 microphone-key layout.
+    SeparateKeys {
+        #[clap(subcommand)]
+        command: CodexSeparateMicrophoneKeysCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CodexSeparateMicrophoneKeysCommand {
+    /// Read whether ACT10 and ACT11 are independent microphone keys.
+    Get {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+    },
+
+    /// Write an offline candidate enabling or disabling independent keys.
+    Set {
+        #[clap(long, value_parser)]
+        input: PathBuf,
+
+        value: bool,
+
+        #[clap(long, value_parser)]
+        output: PathBuf,
+    },
+
+    /// Restore the exact installed-build default (`false`).
+    Reset {
+        #[clap(long, value_parser)]
+        input: PathBuf,
 
         #[clap(long, value_parser)]
         output: PathBuf,

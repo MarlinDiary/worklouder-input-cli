@@ -1242,6 +1242,15 @@ fn codex_help_exposes_snapshot_and_candidate_workflow() {
     assert!(voice.status.success());
     assert!(voice_stdout.contains("push-to-talk"));
     assert!(voice_stdout.contains("realtime"));
+    let separate_keys = binary()
+        .args(["codex", "voice", "separate-keys", "--help"])
+        .output()
+        .unwrap();
+    let separate_keys_stdout = String::from_utf8(separate_keys.stdout).unwrap();
+    assert!(separate_keys.status.success());
+    assert!(separate_keys_stdout.contains("get"));
+    assert!(separate_keys_stdout.contains("set"));
+    assert!(separate_keys_stdout.contains("reset"));
 
     let joystick = binary()
         .args(["codex", "joystick", "--help"])
