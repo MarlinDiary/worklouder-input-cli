@@ -205,9 +205,7 @@ fn inspect_appsense_relay(checks: &mut Vec<Check>) {
         .unwrap_or("unknown");
     checks.push(Check {
         id: "appsense.relay".into(),
-        status: if !installed {
-            CheckStatus::Pass
-        } else if running && healthy && bridge_available {
+        status: if !installed || (running && healthy && bridge_available) {
             CheckStatus::Pass
         } else {
             CheckStatus::Warn

@@ -620,7 +620,9 @@ fn codex_device_info(transport: &str) -> device::DeviceInfo {
     }
 }
 
-fn codex_file_records(snapshot: &Value) -> Result<Vec<(String, u64, String, String, Vec<u8>)>> {
+type CodexFileRecord = (String, u64, String, String, Vec<u8>);
+
+fn codex_file_records(snapshot: &Value) -> Result<Vec<CodexFileRecord>> {
     let files = snapshot
         .get("files")
         .and_then(Value::as_array)
