@@ -17,11 +17,11 @@ const APP = "/Applications/ChatGPT.app";
 const EXECUTABLE = `${APP}/Contents/MacOS/ChatGPT`;
 const PLIST = `${APP}/Contents/Info.plist`;
 const ASAR = `${APP}/Contents/Resources/app.asar`;
-const EXPECTED_VERSION = "26.727.51351";
+const EXPECTED_VERSION = "26.730.61309";
 const EXPECTED_ASAR_SHA256 =
-  "a529edd72e10b08931c0d695b5e3e6a0be7f51874610dafc04f578436ab7d74d";
-const CODEX_MAIN = `${APP}/Contents/Resources/app.asar/.vite/build/src-CLstCQVF.js`;
-const DEVICE_SERVICE_MODULE = "./service-4uQDVZZZ.js";
+  "9de942a9a058fca20b78d171032e0fe65ccb1063868f175ff7eb4e159efc2c38";
+const CODEX_MAIN = `${APP}/Contents/Resources/app.asar/.vite/build/src-Bn_6ASpg.js`;
+const DEVICE_SERVICE_MODULE = "./service-D-Jqk1B5.js";
 const PORT = 9229;
 const PROVIDER_LOCK = `${process.env.HOME}/Library/Application Support/worklouderctl/provider-handoff.lock`;
 
@@ -69,7 +69,7 @@ try {
     const modulePath = fileURLToPath(
       new URL("../companion/codex-live-overlay-v2.mjs", import.meta.url),
     );
-    const expression = `(async()=>{const require=process.getBuiltinModule("module").createRequire("/tmp/worklouderctl-codex-live.cjs");const {app,BrowserWindow}=require("electron");const overlayPath=${JSON.stringify(modulePath)};const overlay=require(overlayPath);if(!Number.isInteger(overlay.CODEX_LIVE_OVERLAY_REVISION))throw new Error("Codex overlay revision missing");const current=globalThis.__worklouderctlCodexBridge;if(current?.overlayRevision===overlay.CODEX_LIVE_OVERLAY_REVISION&&current.capabilities?.includes("codex.device.focus.v1"))return {installed:true,idempotent:true,overlayRevision:current.overlayRevision,socketPath:current.socketPath,tokenPath:current.tokenPath,deviceServiceCount:globalThis.__worklouderctlCodexDeviceServices?.length??0};if(current){await current.stop();delete globalThis.__worklouderctlCodexBridge}const path=require("node:path");const settingsModule=require(path.join(app.getAppPath(),".vite/build/src-CLstCQVF.js"));const deviceServiceProvider=()=>globalThis.__worklouderctlCodexDeviceServices;const bridge=await overlay.installCodexLiveOverlay({app,BrowserWindow,settingsDefinitions:settingsModule.Li,deviceServiceProvider});globalThis.__worklouderctlCodexBridge=bridge;return {installed:true,idempotent:false,overlayRevision:bridge.overlayRevision,version:app.getVersion(),socketPath:bridge.socketPath,tokenPath:bridge.tokenPath,deviceServiceCount:globalThis.__worklouderctlCodexDeviceServices?.length??0}})()`;
+    const expression = `(async()=>{const require=process.getBuiltinModule("module").createRequire("/tmp/worklouderctl-codex-live.cjs");const {app,BrowserWindow}=require("electron");const overlayPath=${JSON.stringify(modulePath)};const overlay=require(overlayPath);if(!Number.isInteger(overlay.CODEX_LIVE_OVERLAY_REVISION))throw new Error("Codex overlay revision missing");const current=globalThis.__worklouderctlCodexBridge;if(current?.overlayRevision===overlay.CODEX_LIVE_OVERLAY_REVISION&&current.capabilities?.includes("codex.device.focus.v1"))return {installed:true,idempotent:true,overlayRevision:current.overlayRevision,socketPath:current.socketPath,tokenPath:current.tokenPath,deviceServiceCount:globalThis.__worklouderctlCodexDeviceServices?.length??0};if(current){await current.stop();delete globalThis.__worklouderctlCodexBridge}const path=require("node:path");const settingsModule=require(path.join(app.getAppPath(),".vite/build/src-Bn_6ASpg.js"));const deviceServiceProvider=()=>globalThis.__worklouderctlCodexDeviceServices;const bridge=await overlay.installCodexLiveOverlay({app,BrowserWindow,settingsDefinitions:settingsModule.Oi,deviceServiceProvider});globalThis.__worklouderctlCodexBridge=bridge;return {installed:true,idempotent:false,overlayRevision:bridge.overlayRevision,version:app.getVersion(),socketPath:bridge.socketPath,tokenPath:bridge.tokenPath,deviceServiceCount:globalThis.__worklouderctlCodexDeviceServices?.length??0}})()`;
     const result = await client.evaluate(expression);
     console.log(JSON.stringify({ provider: "codex", action, ...result }, null, 2));
   }

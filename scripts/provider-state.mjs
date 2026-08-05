@@ -4,6 +4,7 @@ export function inputOwnsDevice(state) {
   return (
     input.discoveryStarted === true &&
     input.startSuppressed === false &&
+    input.rpcVerified === true &&
     input.connectedCount > 0 &&
     codex.lifecycleState === "stopped" &&
     codex.startSuppressed === true &&
@@ -21,6 +22,7 @@ export function codexOwnsDevice(state) {
     codex.lifecycleState === "started" &&
     codex.startSuppressed === false &&
     codex.deviceState.status === "connected" &&
+    codex.rpcVerified === true &&
     codex.hasComm === true &&
     codex.hasApi === true &&
     codex.hasHidSubscription === true &&

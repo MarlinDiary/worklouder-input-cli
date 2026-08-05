@@ -16,6 +16,7 @@ function fixture() {
         discoveryStarted: false,
         polling: false,
         startSuppressed: false,
+        rpcVerified: false,
         connectedCount: 0,
       },
     },
@@ -25,6 +26,7 @@ function fixture() {
         lifecycleState: "started",
         deviceState: { status: "connected" },
         startSuppressed: false,
+        rpcVerified: true,
         hasComm: true,
         hasApi: true,
         hasHidSubscription: true,
@@ -46,6 +48,7 @@ test("rejects partial Codex acquisition", () => {
     "hasApi",
     "hasHidSubscription",
     "hasJoystickSubscription",
+    "rpcVerified",
   ]) {
     const state = fixture();
     state.codex.state[field] = false;
@@ -61,12 +64,14 @@ test("detects an exclusive Input owner", () => {
     discoveryStarted: true,
     polling: true,
     startSuppressed: false,
+    rpcVerified: true,
     connectedCount: 1,
   });
   Object.assign(state.codex.state, {
     lifecycleState: "stopped",
     deviceState: { status: "disconnected" },
     startSuppressed: true,
+    rpcVerified: false,
     hasComm: false,
     hasApi: false,
     hasHidSubscription: false,
@@ -91,6 +96,7 @@ test("does not call a contested or ownerless state exclusive", () => {
     lifecycleState: "stopped",
     deviceState: { status: "disconnected" },
     startSuppressed: true,
+    rpcVerified: false,
     hasComm: false,
     hasApi: false,
     hasHidSubscription: false,

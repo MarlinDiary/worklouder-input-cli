@@ -390,10 +390,10 @@ fn resolve_transaction_device_owner(
     if !needed && owner == DeviceConfigOwner::Auto {
         return Ok(provider::Target::Input);
     }
-    match resolve_device_config_owner(owner)? {
+    match owner {
         DeviceConfigOwner::Input => Ok(provider::Target::Input),
         DeviceConfigOwner::Codex => Ok(provider::Target::Codex),
-        DeviceConfigOwner::Auto => unreachable!("auto owner must be resolved"),
+        DeviceConfigOwner::Auto => provider::current_device_owner(),
     }
 }
 
@@ -2049,17 +2049,15 @@ fn run_device(
     };
     match command {
         DeviceCommand::Status { owner } => {
-            let report = match resolve_device_config_owner(owner)? {
-                DeviceConfigOwner::Codex => provider::codex_device_status()?,
-                DeviceConfigOwner::Input => {
-                    if use_bridge {
-                        bridge::status(&bridge_paths)?
-                    } else {
-                        device::status(&app, options.input_mode)?
-                    }
+            ensure_managed_transport(owner, options.transport)?;
+            let bridge_authority = owner != DeviceConfigOwner::Input || use_bridge;
+            let report = with_input_device_authority(owner, || {
+                if bridge_authority {
+                    bridge::status(&bridge_paths)
+                } else {
+                    device::status(&app, options.input_mode)
                 }
-                DeviceConfigOwner::Auto => unreachable!("auto owner must be resolved"),
-            };
+            })?;
             if json {
                 write_json(&mut out, &report)?;
             } else {
@@ -2096,19 +2094,15 @@ fn run_device(
             recursive,
             owner,
         } => {
-            let report = match resolve_device_config_owner(owner)? {
-                DeviceConfigOwner::Codex => {
-                    provider::codex_device_files(path.as_deref(), recursive)?
+            ensure_managed_transport(owner, options.transport)?;
+            let bridge_authority = owner != DeviceConfigOwner::Input || use_bridge;
+            let report = with_input_device_authority(owner, || {
+                if bridge_authority {
+                    bridge::files(&bridge_paths, path.as_deref(), recursive)
+                } else {
+                    device::files(&app, options.input_mode, path.as_deref(), recursive)
                 }
-                DeviceConfigOwner::Input => {
-                    if use_bridge {
-                        bridge::files(&bridge_paths, path.as_deref(), recursive)?
-                    } else {
-                        device::files(&app, options.input_mode, path.as_deref(), recursive)?
-                    }
-                }
-                DeviceConfigOwner::Auto => unreachable!("auto owner must be resolved"),
-            };
+            })?;
             if json {
                 write_json(&mut out, &report)?;
             } else {
@@ -2128,17 +2122,15 @@ fn run_device(
             }
         }
         DeviceCommand::Export { output, owner } => {
-            let result = match resolve_device_config_owner(owner)? {
-                DeviceConfigOwner::Codex => provider::codex_device_export(&output)?,
-                DeviceConfigOwner::Input => {
-                    if use_bridge {
-                        bridge::export(&bridge_paths, &output)?
-                    } else {
-                        device::export(&app, options.input_mode, &output)?
-                    }
+            ensure_managed_transport(owner, options.transport)?;
+            let bridge_authority = owner != DeviceConfigOwner::Input || use_bridge;
+            let result = with_input_device_authority(owner, || {
+                if bridge_authority {
+                    bridge::export(&bridge_paths, &output)
+                } else {
+                    device::export(&app, options.input_mode, &output)
                 }
-                DeviceConfigOwner::Auto => unreachable!("auto owner must be resolved"),
-            };
+            })?;
             if json {
                 write_json(&mut out, &result)?;
             } else {
@@ -2171,31 +2163,14 @@ fn run_device(
                 device,
                 owner,
             } => {
-                let owner = resolve_device_config_owner(owner)?;
-                if owner == DeviceConfigOwner::Codex {
-                    anyhow::ensure!(
-                        device.is_none(),
-                        "--device is only valid with --owner input"
-                    );
-                    let result = provider::codex_device_snapshot(&output)?;
-                    if json {
-                        write_json(&mut out, &result)?;
-                    } else {
-                        writeln!(
-                            out,
-                            "Saved {} Codex-owned configuration file(s) to {}",
-                            result.file_count,
-                            result.output.display()
-                        )?;
-                        writeln!(out, "revision={}", result.revision)?;
-                    }
-                    return Ok(());
-                }
+                ensure_managed_transport(owner, options.transport)?;
                 anyhow::ensure!(
-                        use_bridge,
-                        "Input-owned device config commands require the Input Companion Bridge transport"
-                    );
-                let result = bridge::config_snapshot(&bridge_paths, device.as_deref(), &output)?;
+                    owner != DeviceConfigOwner::Input || use_bridge,
+                    "Input-owned device config commands require the Input Companion Bridge transport"
+                );
+                let result = with_input_device_authority(owner, || {
+                    bridge::config_snapshot(&bridge_paths, device.as_deref(), &output)
+                })?;
                 if json {
                     write_json(&mut out, &result)?;
                 } else {
@@ -2214,37 +2189,19 @@ fn run_device(
                 expected_revision,
                 owner,
             } => {
-                let owner = resolve_device_config_owner(owner)?;
-                if owner == DeviceConfigOwner::Codex {
-                    anyhow::ensure!(
-                        device.is_none(),
-                        "--device is only valid with --owner input"
-                    );
-                    let result =
-                        provider::codex_device_validate(&input, expected_revision.as_deref())?;
-                    if json {
-                        write_json(&mut out, &result)?;
-                    } else {
-                        writeln!(
-                            out,
-                            "Configuration snapshot is valid ({} file(s), {} bytes)",
-                            result.file_count, result.total_bytes
-                        )?;
-                        writeln!(out, "revision={}", result.revision)?;
-                        writeln!(out, "liveRevision={}", result.live_revision)?;
-                    }
-                    return Ok(());
-                }
+                ensure_managed_transport(owner, options.transport)?;
                 anyhow::ensure!(
-                    use_bridge,
+                    owner != DeviceConfigOwner::Input || use_bridge,
                     "device config validate requires the Input Companion Bridge transport"
                 );
-                let result = bridge::config_validate(
-                    &bridge_paths,
-                    device.as_deref(),
-                    &input,
-                    expected_revision.as_deref(),
-                )?;
+                let result = with_input_device_authority(owner, || {
+                    bridge::config_validate(
+                        &bridge_paths,
+                        device.as_deref(),
+                        &input,
+                        expected_revision.as_deref(),
+                    )
+                })?;
                 if json {
                     write_json(&mut out, &result)?;
                 } else {
@@ -2267,42 +2224,21 @@ fn run_device(
                 idempotency_key,
                 owner,
             } => {
-                let owner = resolve_device_config_owner(owner)?;
-                if owner == DeviceConfigOwner::Codex {
-                    anyhow::ensure!(
-                        device.is_none(),
-                        "--device is only valid with --owner input"
-                    );
-                    let result = provider::codex_device_mutate(
-                        provider::CodexDeviceMutation::Apply,
+                ensure_managed_transport(owner, options.transport)?;
+                anyhow::ensure!(
+                    owner != DeviceConfigOwner::Input || use_bridge,
+                    "Input-owned device config commands require the Input Companion Bridge transport"
+                );
+                let result = with_input_device_authority(owner, || {
+                    bridge::config_apply(
+                        &bridge_paths,
+                        device.as_deref(),
                         &input,
                         &backup,
                         expected_revision.as_deref(),
                         idempotency_key.as_deref(),
-                    )?;
-                    if json {
-                        write_json(&mut out, &result)?;
-                    } else {
-                        writeln!(out, "Applied Codex-owned device configuration")?;
-                        writeln!(out, "backup={}", result.backup.display())?;
-                        writeln!(out, "beforeRevision={}", result.before_revision)?;
-                        writeln!(out, "afterRevision={}", result.after_revision)?;
-                        writeln!(out, "changed={}", result.changed)?;
-                    }
-                    return Ok(());
-                }
-                anyhow::ensure!(
-                        use_bridge,
-                        "Input-owned device config commands require the Input Companion Bridge transport"
-                    );
-                let result = bridge::config_apply(
-                    &bridge_paths,
-                    device.as_deref(),
-                    &input,
-                    &backup,
-                    expected_revision.as_deref(),
-                    idempotency_key.as_deref(),
-                )?;
+                    )
+                })?;
                 write_mutation_result(result, json, &mut out)?;
             }
             DeviceConfigCommand::Restore {
@@ -2313,42 +2249,21 @@ fn run_device(
                 idempotency_key,
                 owner,
             } => {
-                let owner = resolve_device_config_owner(owner)?;
-                if owner == DeviceConfigOwner::Codex {
-                    anyhow::ensure!(
-                        device.is_none(),
-                        "--device is only valid with --owner input"
-                    );
-                    let result = provider::codex_device_mutate(
-                        provider::CodexDeviceMutation::Restore,
+                ensure_managed_transport(owner, options.transport)?;
+                anyhow::ensure!(
+                    owner != DeviceConfigOwner::Input || use_bridge,
+                    "Input-owned device config commands require the Input Companion Bridge transport"
+                );
+                let result = with_input_device_authority(owner, || {
+                    bridge::config_restore(
+                        &bridge_paths,
+                        device.as_deref(),
                         &input,
                         &backup,
                         expected_revision.as_deref(),
                         idempotency_key.as_deref(),
-                    )?;
-                    if json {
-                        write_json(&mut out, &result)?;
-                    } else {
-                        writeln!(out, "Restored Codex-owned device configuration")?;
-                        writeln!(out, "backup={}", result.backup.display())?;
-                        writeln!(out, "beforeRevision={}", result.before_revision)?;
-                        writeln!(out, "afterRevision={}", result.after_revision)?;
-                        writeln!(out, "changed={}", result.changed)?;
-                    }
-                    return Ok(());
-                }
-                anyhow::ensure!(
-                        use_bridge,
-                        "Input-owned device config commands require the Input Companion Bridge transport"
-                    );
-                let result = bridge::config_restore(
-                    &bridge_paths,
-                    device.as_deref(),
-                    &input,
-                    &backup,
-                    expected_revision.as_deref(),
-                    idempotency_key.as_deref(),
-                )?;
+                    )
+                })?;
                 write_mutation_result(result, json, &mut out)?;
             }
         },
@@ -2356,14 +2271,30 @@ fn run_device(
     Ok(())
 }
 
-fn resolve_device_config_owner(owner: DeviceConfigOwner) -> Result<DeviceConfigOwner> {
+fn with_input_device_authority<T>(
+    owner: DeviceConfigOwner,
+    operation: impl FnOnce() -> Result<T>,
+) -> Result<T> {
     match owner {
+        DeviceConfigOwner::Input => operation(),
+        DeviceConfigOwner::Codex => {
+            provider::with_input_configuration(provider::Target::Codex, operation)
+        }
         DeviceConfigOwner::Auto => match provider::current_device_owner()? {
-            provider::Target::Codex => Ok(DeviceConfigOwner::Codex),
-            provider::Target::Input => Ok(DeviceConfigOwner::Input),
+            provider::Target::Input => operation(),
+            provider::Target::Codex => {
+                provider::with_input_configuration(provider::Target::Codex, operation)
+            }
         },
-        selected => Ok(selected),
     }
+}
+
+fn ensure_managed_transport(owner: DeviceConfigOwner, transport: DeviceTransport) -> Result<()> {
+    anyhow::ensure!(
+        transport != DeviceTransport::Direct || owner == DeviceConfigOwner::Input,
+        "--transport direct requires --owner input; automatic/Codex ownership uses the authenticated Input bridge and restores Codex afterward"
+    );
+    Ok(())
 }
 
 fn write_mutation_result(

@@ -11,8 +11,8 @@ use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const RUNTIME_VERSION: u64 = 1;
-const CODEX_PROVIDER_VERSION: &str = "26.727.51351";
-const CODEX_DEVICE_KIT_VERSION: &str = "0.1.28";
+const CODEX_PROVIDER_VERSION: &str = "26.730.61309";
+const CODEX_DEVICE_KIT_VERSION: &str = "0.1.23";
 const CODEX_DEVICE_ADAPTER: &str = "codex-connected-device-session-v1";
 const MAX_STDOUT_BYTES: usize = 2 * 1024 * 1024;
 const MAX_STDERR_BYTES: usize = 256 * 1024;
@@ -258,6 +258,30 @@ pub fn current_device_owner() -> Result<Target> {
     detect_current_owner(&report.result)
 }
 
+pub fn with_input_configuration<T>(
+    restore_owner: Target,
+    operation: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    execute(Operation::Handoff(Target::Input), None, None)
+        .context("failed to acquire Input configuration authority")?;
+    let operation_result = operation();
+    let restore_result = if restore_owner == Target::Codex {
+        execute(Operation::Handoff(Target::Codex), None, None)
+            .map(|_| ())
+            .context("failed to restore Codex device ownership")
+    } else {
+        Ok(())
+    };
+    match (operation_result, restore_result) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(error), Ok(())) => Err(error),
+        (Ok(_), Err(restore_error)) => Err(restore_error),
+        (Err(error), Err(restore_error)) => {
+            Err(error.context(format!("provider restore also failed: {restore_error:#}")))
+        }
+    }
+}
+
 fn detect_current_owner(result: &Value) -> Result<Target> {
     let input = result
         .pointer("/input/state")
@@ -269,6 +293,7 @@ fn detect_current_owner(result: &Value) -> Result<Target> {
         .context("provider status omitted Codex state")?;
     let input_ready = input.get("discoveryStarted").and_then(Value::as_bool) == Some(true)
         && input.get("startSuppressed").and_then(Value::as_bool) == Some(false)
+        && input.get("rpcVerified").and_then(Value::as_bool) == Some(true)
         && input
             .get("connectedCount")
             .and_then(Value::as_u64)
@@ -276,6 +301,7 @@ fn detect_current_owner(result: &Value) -> Result<Target> {
             > 0;
     let codex_ready = codex.get("lifecycleState").and_then(Value::as_str) == Some("started")
         && codex.get("startSuppressed").and_then(Value::as_bool) == Some(false)
+        && codex.get("rpcVerified").and_then(Value::as_bool) == Some(true)
         && codex
             .get("deviceState")
             .and_then(|state| state.get("status"))
@@ -1027,12 +1053,14 @@ mod tests {
             "input": {"state": {
                 "discoveryStarted": false,
                 "startSuppressed": false,
+                "rpcVerified": false,
                 "connectedCount": 0
             }},
             "codex": {"state": {
                 "lifecycleState": "started",
                 "deviceState": {"status": "connected"},
                 "startSuppressed": false,
+                "rpcVerified": true,
                 "hasComm": true,
                 "hasApi": true,
                 "hasHidSubscription": true,
@@ -1045,12 +1073,14 @@ mod tests {
             "input": {"state": {
                 "discoveryStarted": true,
                 "startSuppressed": false,
+                "rpcVerified": true,
                 "connectedCount": 1
             }},
             "codex": {"state": {
                 "lifecycleState": "stopped",
                 "deviceState": {"status": "disconnected"},
                 "startSuppressed": true,
+                "rpcVerified": false,
                 "hasComm": false,
                 "hasApi": false,
                 "hasHidSubscription": false,
@@ -1071,12 +1101,14 @@ mod tests {
             "input": {"state": {
                 "discoveryStarted": false,
                 "startSuppressed": false,
+                "rpcVerified": false,
                 "connectedCount": 0
             }},
             "codex": {"state": {
                 "lifecycleState": "stopped",
                 "deviceState": {"status": "disconnected"},
                 "startSuppressed": true,
+                "rpcVerified": false,
                 "hasComm": false,
                 "hasApi": false,
                 "hasHidSubscription": false,

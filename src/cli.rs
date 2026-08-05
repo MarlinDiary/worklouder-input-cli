@@ -758,7 +758,7 @@ pub enum BridgeCommand {
     Status,
 }
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
 pub enum DeviceTransport {
     /// Prefer the bridge when its socket and token exist, otherwise use direct.
     Auto,

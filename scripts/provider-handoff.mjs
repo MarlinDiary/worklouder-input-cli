@@ -21,7 +21,7 @@ import { acquireProviderLock } from "./provider-lock.mjs";
 const INPUT_EXECUTABLE = "/Applications/input.app/Contents/MacOS/input";
 const CODEX_EXECUTABLE = "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT";
 const CODEX_MAIN =
-  "/Applications/ChatGPT.app/Contents/Resources/app.asar/.vite/build/main-dcXtv3U5.js";
+  "/Applications/ChatGPT.app/Contents/Resources/app.asar/.vite/build/src-Bn_6ASpg.js";
 const INPUT_INSTALLER = fileURLToPath(
   new URL("./install-input-live-bridge.mjs", import.meta.url),
 );
@@ -95,11 +95,9 @@ if (mode === "status-input") {
   if (codexOwnsDevice(before)) {
     result = currentOwnerResult("codex", before);
   } else {
-    const released = before.input.available
-      ? await inputAction("release")
-      : before.input.state.processRunning
-        ? await quiesceInputProvider()
-        : missingInputAction("release");
+    const released = before.input.state.processRunning
+      ? await stopInputProvider()
+      : missingInputAction("release");
     try {
       const acquired = await codexAction("acquire");
       result = {
@@ -169,8 +167,8 @@ async function inputAction(action) {
       // Keep the asynchronous discovery transition rooted in the remote
       // process until Runtime.evaluate finishes awaiting it.
       return await client.evaluate(
-        `(globalThis.__worklouderctlHandoffPromise=(async()=>{const capture=globalThis.__worklouderctlInputCapture;if(!capture?.services)throw new Error("Input live bridge capture missing");const services=capture.services,search=services.searchDevicesService,manager=services.devicesCommManager,originalKey="__worklouderctlOriginalStart",suppressedKey="__worklouderctlStartSuppressed";const suppressStart=()=>{if(typeof search[originalKey]!=="function")search[originalKey]=search.start;search.start=function(){search[suppressedKey]=(search[suppressedKey]??0)+1}};const restoreStart=()=>{if(typeof search[originalKey]==="function"){search.start=search[originalKey];delete search[originalKey]}delete search[suppressedKey]};const state=()=>{const devices=manager.getDevices();return {processRunning:true,discoveryStarted:search.started===true,polling:search.pollInterval!=null,startSuppressed:typeof search[originalKey]==="function",suppressedStartCount:search[suppressedKey]??0,deviceCount:devices.length,connectedCount:devices.filter(device=>device.isConnected()).length}};const action=${JSON.stringify(action)},initial=state(),connected=value=>value.connectedCount>0&&value.discoveryStarted&&!value.startSuppressed,released=value=>value.connectedCount===0&&!value.discoveryStarted&&value.startSuppressed;if(action==="status")return {action,available:true,state:initial};if(action==="release"&&released(initial))return {action,available:true,idempotent:true,state:initial};if(action==="await-connected"&&connected(initial))return {action:"acquire",available:true,idempotent:true,restarted:true,state:initial};if(action==="release"){suppressStart();search.dispose();manager.disconnectAllDevices();search.cachedDevices=[];search.cachedBootloaderDevices=[]}else if(action==="await-connected"){restoreStart()}else throw new Error("unsupported Input provider action: "+action);const deadline=Date.now()+20000;while(Date.now()<deadline){const current=state();if((action==="release"&&released(current))||(action==="await-connected"&&connected(current)))return {action:action==="await-connected"?"acquire":action,available:true,idempotent:false,restarted:action==="await-connected",state:current};await new Promise(resolve=>setTimeout(resolve,100))}throw new Error("Input provider transition timed out: "+JSON.stringify(state()))})())`,
-        { timeout: 25_000 },
+        `(globalThis.__worklouderctlHandoffPromise=(${inputLifecycleOperation.toString()})(${JSON.stringify({ action })}))`,
+        { timeout: 55_000 },
       );
     } finally {
       await client
@@ -178,6 +176,120 @@ async function inputAction(action) {
         .catch(() => false);
     }
   });
+}
+
+async function inputLifecycleOperation({ action }) {
+  const capture = globalThis.__worklouderctlInputCapture;
+  if (!capture?.services) throw new Error("Input live bridge capture missing");
+  const services = capture.services;
+  const search = services.searchDevicesService;
+  const manager = services.devicesCommManager;
+  const originalKey = "__worklouderctlOriginalStart";
+  const suppressedKey = "__worklouderctlStartSuppressed";
+  const verifiedKey = "__worklouderctlRpcVerified";
+  const suppressStart = () => {
+    if (typeof search[originalKey] !== "function") {
+      search[originalKey] = search.start;
+    }
+    search.start = function () {
+      search[suppressedKey] = (search[suppressedKey] ?? 0) + 1;
+    };
+  };
+  const restoreStart = () => {
+    if (typeof search[originalKey] === "function") {
+      search.start = search[originalKey];
+      delete search[originalKey];
+    }
+    delete search[suppressedKey];
+  };
+  const state = () => {
+    const devices = manager.getDevices();
+    return {
+      processRunning: true,
+      discoveryStarted: search.started === true,
+      polling: search.pollInterval != null,
+      startSuppressed: typeof search[originalKey] === "function",
+      suppressedStartCount: search[suppressedKey] ?? 0,
+      rpcVerified: search[verifiedKey] === true,
+      deviceCount: devices.length,
+      connectedCount: devices.filter((device) => device.isConnected()).length,
+    };
+  };
+  const structurallyConnected = (value) =>
+    value.connectedCount > 0 &&
+    value.discoveryStarted &&
+    !value.startSuppressed;
+  const connected = (value) => structurallyConnected(value) && value.rpcVerified;
+  const released = (value) =>
+    value.connectedCount === 0 &&
+    !value.discoveryStarted &&
+    value.startSuppressed;
+  const initial = state();
+  if (action === "status") return { action, available: true, state: initial };
+  if (action === "release" && released(initial)) {
+    return { action, available: true, idempotent: true, state: initial };
+  }
+  if (action === "await-connected" && connected(initial)) {
+    return {
+      action: "acquire",
+      available: true,
+      idempotent: true,
+      restarted: true,
+      state: initial,
+    };
+  }
+  if (action === "release") {
+    delete search[verifiedKey];
+    suppressStart();
+    search.dispose();
+    manager.disconnectAllDevices();
+    search.cachedDevices = [];
+    search.cachedBootloaderDevices = [];
+  } else if (action === "await-connected") {
+    delete search[verifiedKey];
+    restoreStart();
+  } else {
+    throw new Error(`unsupported Input provider action: ${action}`);
+  }
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    const current = state();
+    if (action === "release" && released(current)) {
+      return {
+        action,
+        available: true,
+        idempotent: false,
+        restarted: false,
+        state: current,
+      };
+    }
+    if (action === "await-connected" && structurallyConnected(current)) {
+      const device = manager
+        .getDevices()
+        .find((candidate) => candidate.isConnected());
+      if (device?.rpcService == null) {
+        throw new Error("Input connected device omitted rpcService");
+      }
+      const status = await device.rpcService.getDeviceStatus();
+      search[verifiedKey] = true;
+      return {
+        action: "acquire",
+        available: true,
+        idempotent: false,
+        restarted: true,
+        rpcProbe: {
+          succeeded: true,
+          operation: "getDeviceStatus",
+          firmwareVersion: status?.firmwareVersion ?? null,
+          selectedProfileIndex: status?.selectedProfileIndex ?? null,
+          selectedLayerIndex: status?.selectedLayerIndex ?? null,
+        },
+        state: state(),
+      };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Input provider transition timed out: ${JSON.stringify(state())}`);
 }
 
 async function inputStatus() {
@@ -344,10 +456,41 @@ async function quiesceInputProvider(timeoutMs = 10_000) {
   return { ...missingInputAction("release"), rollbackWaitMs: timeoutMs };
 }
 
+async function stopInputProvider() {
+  const before = await inputStatus();
+  const released = before.available
+    ? await inputAction("release")
+    : missingInputAction("release");
+  await execFilePromise("launchctl", ["remove", INPUT_LAUNCH_LABEL]).catch(
+    () => null,
+  );
+  const terminatedProcessIds = await terminateExactProcess(INPUT_EXECUTABLE);
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    if ((await exactProcessIds(INPUT_EXECUTABLE)).length === 0) {
+      return {
+        ...released,
+        processTerminated: true,
+        terminatedProcessIds,
+        state: {
+          ...released.state,
+          processRunning: false,
+          discoveryStarted: false,
+          polling: false,
+          deviceCount: 0,
+          connectedCount: 0,
+        },
+      };
+    }
+    await sleep(100);
+  }
+  throw new Error("Input provider process did not terminate during Codex handoff");
+}
+
 async function codexAction(action) {
   return withInspector(CODEX_EXECUTABLE, async (client) => {
     const evaluated = await client.command("Runtime.evaluate", {
-      expression: `(()=>{const require=process.getBuiltinModule("module").createRequire(${JSON.stringify(CODEX_MAIN)});return require("./service-4uQDVZZZ.js").CodexMicroService.prototype})()`,
+      expression: `(()=>{const require=process.getBuiltinModule("module").createRequire(${JSON.stringify(CODEX_MAIN)});return require("./service-D-Jqk1B5.js").CodexMicroService.prototype})()`,
       objectGroup: "worklouderctl-provider-handoff",
     });
     const prototype = evaluated.result.objectId;
@@ -358,10 +501,11 @@ async function codexAction(action) {
     });
     const instances = queried.objects.objectId;
     if (!instances) throw new Error("Codex Micro instance query failed");
-    const functionDeclaration = `async function(){const service=this.find(value=>value&&typeof value.start==="function"&&typeof value.stop==="function"&&typeof value.getState==="function");if(!service)throw new Error("Codex Micro service instance missing");const originalKey="__worklouderctlOriginalStart",suppressedKey="__worklouderctlStartSuppressed";const suppressStart=()=>{if(typeof service[originalKey]!=="function")service[originalKey]=service.start;service.start=function(){service[suppressedKey]=(service[suppressedKey]??0)+1}};const restoreStart=()=>{if(typeof service[originalKey]==="function"){service.start=service[originalKey];delete service[originalKey]}delete service[suppressedKey]};const state=()=>({lifecycleState:service.lifecycleState,deviceState:service.getState(),startSuppressed:typeof service[originalKey]==="function",suppressedStartCount:service[suppressedKey]??0,hasComm:service.comm!=null,hasApi:service.api!=null,hasHidSubscription:service.unsubscribeHid!=null,hasJoystickSubscription:service.unsubscribeJoystick!=null});const action=${JSON.stringify(action)},initial=state(),released=value=>value.lifecycleState==="stopped"&&value.startSuppressed&&!value.hasComm&&!value.hasApi,acquired=value=>value.lifecycleState==="started"&&!value.startSuppressed&&value.deviceState.status==="connected"&&value.hasComm&&value.hasApi&&value.hasHidSubscription&&value.hasJoystickSubscription;if(action==="status")return {action,state:initial};if((action==="release"&&released(initial))||(action==="acquire"&&acquired(initial)))return {action,idempotent:true,state:initial};if(action==="release"){suppressStart();await service.stop()}else if(action==="acquire"){restoreStart();service.start()}const deadline=Date.now()+20000;while(Date.now()<deadline){const current=state();if((action==="release"&&released(current))||(action==="acquire"&&acquired(current)))return {action,idempotent:false,state:current};await new Promise(resolve=>setTimeout(resolve,100))}throw new Error("Codex provider transition timed out: "+JSON.stringify(state()))}`;
+    const functionDeclaration = providerLifecycleOperation.toString();
     const called = await client.command("Runtime.callFunctionOn", {
       objectId: instances,
       functionDeclaration,
+      arguments: [{ value: { action } }],
       returnByValue: true,
       awaitPromise: true,
       objectGroup: "worklouderctl-provider-handoff",
@@ -372,6 +516,176 @@ async function codexAction(action) {
     });
     return result;
   });
+}
+
+async function providerLifecycleOperation({ action }) {
+  const service = this.find(
+    (value) =>
+      value &&
+      typeof value.start === "function" &&
+      typeof value.stop === "function" &&
+      typeof value.getState === "function",
+  );
+  if (!service) throw new Error("Codex Micro service instance missing");
+
+  const originalKey = "__worklouderctlOriginalStart";
+  const suppressedKey = "__worklouderctlStartSuppressed";
+  const verifiedKey = "__worklouderctlRpcVerified";
+  const delay = (milliseconds) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds));
+  const suppressStart = () => {
+    if (typeof service[originalKey] !== "function") {
+      service[originalKey] = service.start;
+    }
+    service.start = function () {
+      service[suppressedKey] = (service[suppressedKey] ?? 0) + 1;
+    };
+  };
+  const restoreStart = () => {
+    if (typeof service[originalKey] === "function") {
+      service.start = service[originalKey];
+      delete service[originalKey];
+    }
+    delete service[suppressedKey];
+  };
+  const state = () => ({
+    lifecycleState: service.lifecycleState,
+    deviceState: service.getState(),
+    startSuppressed: typeof service[originalKey] === "function",
+    suppressedStartCount: service[suppressedKey] ?? 0,
+    rpcVerified: service[verifiedKey] === true,
+    hasComm: service.comm != null,
+    hasApi: service.api != null,
+    hasHidSubscription: service.unsubscribeHid != null,
+    hasJoystickSubscription: service.unsubscribeJoystick != null,
+  });
+  const released = (value) =>
+    value.lifecycleState === "stopped" &&
+    value.startSuppressed &&
+    !value.hasComm &&
+    !value.hasApi;
+  const connected = (value) =>
+    value.lifecycleState === "started" &&
+    !value.startSuppressed &&
+    value.deviceState.status === "connected" &&
+    value.hasComm &&
+    value.hasApi &&
+    value.hasHidSubscription &&
+    value.hasJoystickSubscription;
+  const acquired = (value) => connected(value) && value.rpcVerified;
+  const boundedStop = async () => {
+    const previousComm = service.comm;
+    delete service[verifiedKey];
+    let stopResult = null;
+    const stopping = Promise.resolve()
+      .then(() => service.stop())
+      .then(
+        () => ({ settled: true, error: null }),
+        (error) => ({ settled: true, error: String(error) }),
+      );
+    stopResult = await Promise.race([
+      stopping,
+      delay(5_000).then(() => ({ settled: false, error: null })),
+    ]);
+    let forcedCommDisconnect = false;
+    if (!stopResult.settled && previousComm != null) {
+      forcedCommDisconnect = true;
+      await Promise.race([
+        Promise.resolve(previousComm.disconnect()).catch(() => null),
+        delay(5_000),
+      ]);
+      stopResult = await Promise.race([
+        stopping,
+        delay(5_000).then(() => ({ settled: false, error: null })),
+      ]);
+    }
+    if (!stopResult.settled) {
+      service.connectPromise = null;
+      service.connectionCleanupPromise = null;
+      service.topologyReconciliationPromise = null;
+      service.lightingWritePromise = Promise.resolve();
+    }
+    return {
+      stopSettled: stopResult.settled,
+      stopError: stopResult.error,
+      forcedCommDisconnect,
+    };
+  };
+
+  const initial = state();
+  if (action === "status") return { action, state: initial };
+  if (action === "release" && released(initial)) {
+    return { action, idempotent: true, state: initial };
+  }
+  if (action === "acquire" && acquired(initial)) {
+    return { action, idempotent: true, state: initial };
+  }
+
+  let stopRecovery = null;
+  let restoreStartup = () => {};
+  try {
+    if (action === "release") {
+      suppressStart();
+      stopRecovery = await boundedStop();
+    } else if (action === "acquire") {
+      restoreStart();
+      if (
+        service.lifecycleState !== "stopped" ||
+        service.comm != null ||
+        service.api != null
+      ) {
+        stopRecovery = await boundedStop();
+        await delay(750);
+      }
+      const originalApplyLighting = service.applyLighting;
+      const originalRefreshBatteryStatus = service.refreshBatteryStatus;
+      service.applyLighting = async () => true;
+      service.refreshBatteryStatus = async () => {};
+      restoreStartup = () => {
+        service.applyLighting = originalApplyLighting;
+        service.refreshBatteryStatus = originalRefreshBatteryStatus;
+      };
+      service.start();
+    } else {
+      throw new Error(`unsupported Codex provider action: ${action}`);
+    }
+
+    const deadline = Date.now() + 45_000;
+    while (Date.now() < deadline) {
+      const current = state();
+      if (action === "release" && released(current)) {
+        return {
+          action,
+          idempotent: false,
+          stopRecovery,
+          state: current,
+        };
+      }
+      if (action === "acquire" && connected(current)) {
+        const files = await service.api.api.getFileList({ recursive: false });
+        service[verifiedKey] = true;
+        const verified = state();
+        return {
+          action,
+          idempotent: false,
+          startupRpcBypassed: true,
+          stopRecovery,
+          rpcProbe: {
+            succeeded: true,
+            operation: "getFileList",
+            fileCount: Array.isArray(files) ? files.length : null,
+          },
+          state: verified,
+        };
+      }
+      await delay(100);
+    }
+    throw new Error(
+      `Codex provider transition timed out: ${JSON.stringify(state())}`,
+    );
+  } finally {
+    restoreStartup();
+  }
 }
 
 async function withInspector(executable, operation) {

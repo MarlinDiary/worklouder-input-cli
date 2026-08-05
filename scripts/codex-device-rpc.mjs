@@ -19,13 +19,13 @@ const CODEX_EXECUTABLE = "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT";
 const CODEX_PLIST = "/Applications/ChatGPT.app/Contents/Info.plist";
 const CODEX_ASAR = "/Applications/ChatGPT.app/Contents/Resources/app.asar";
 const CODEX_MAIN =
-  "/Applications/ChatGPT.app/Contents/Resources/app.asar/.vite/build/src-CLstCQVF.js";
-const EXPECTED_CODEX_VERSION = "26.727.51351";
+  "/Applications/ChatGPT.app/Contents/Resources/app.asar/.vite/build/src-Bn_6ASpg.js";
+const EXPECTED_CODEX_VERSION = "26.730.61309";
 const EXPECTED_ASAR_SHA256 =
-  "a529edd72e10b08931c0d695b5e3e6a0be7f51874610dafc04f578436ab7d74d";
-const SERVICE_MODULE = "./service-4uQDVZZZ.js";
+  "9de942a9a058fca20b78d171032e0fe65ccb1063868f175ff7eb4e159efc2c38";
+const SERVICE_MODULE = "./service-D-Jqk1B5.js";
 const PORT = 9229;
-const DEVICE_KIT_VERSION = "0.1.28";
+const DEVICE_KIT_VERSION = "0.1.23";
 const CONFIG_REVISION_ALGORITHM =
   "sha256:path-u32be-path-bytes-size-u64be-content-v1";
 const CONFIG_FILES = new Set(["keymap.json", "smart_actions.json"]);
