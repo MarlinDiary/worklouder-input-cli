@@ -7,8 +7,9 @@ verification cover the relevant operations.
 ## Current project stage
 
 `v0.1.0` is the first signed/notarized public release. `v0.1.1` keeps that
-distribution boundary and adds current-owner routing plus a persistent Codex
-AppSense relay. The versions below are exact verified adapters rather than a
+distribution boundary and adds RPC-health-gated provider leases, Codex
+`26.730.61309`, independent microphone keys, and a persistent Codex AppSense
+relay. The versions below are exact verified adapters rather than a
 promise that an unlisted future app build will be writable.
 
 The canonical release-gated form is
@@ -23,14 +24,14 @@ claim-boundary, and required-gate inventory is added.
 | --- | ---: | --- |
 | Device | Work Louder Codex Micro | Initial target |
 | Host OS | macOS | Initial target |
-| Codex app | 26.727.51351 | Exact-release overlay live-validated for settings, six-slot Agent Keys, current-owner device configuration, and persistent AppSense focus forwarding without replacing the connected service |
-| Codex Companion Bridge | Protocol v1 | Fixture conformance plus exact-release overlay, persistent authenticated focus client, connection continuity, and real-provider transaction verified |
+| Codex app | 26.730.61309 | Exact-release overlay for settings, six Agent Keys, eight logical Command Key slots, provider lifecycle, and persistent AppSense focus forwarding |
+| Codex Companion Bridge | Protocol v1 | Fixture conformance plus exact-release overlay, persistent authenticated focus client, and current-schema transaction coverage |
 | Work Louder Input | 0.17.3 | Deterministic sanitized structural fixture; original installed bundle was superseded |
 | Work Louder Input | 0.18.0 | Exact-release overlay live-validated for device configuration, host settings, live reads, and bidirectional provider handoff |
 | Input Companion Bridge | Protocol v1 | Fixture conformance plus every capability negotiated by the released Input overlay live-validated |
 | Companion integration bundle | 0.1.1 | Deterministic exact-inventory tgz, installed exports, and conformance executable verified; attached by the tagged release workflow |
 | Codex Micro firmware | v0.6.0 | Live status/files/export read boundary verified |
-| Codex Micro firmware | v0.6.1 | Live status plus owner-preserving configuration apply/readback/exact-restore and AppSense switching verified; firmware programming remains Input-owned |
+| Codex Micro firmware | v0.6.1 | Input-authoritative configuration and AppSense switching boundary; firmware programming remains Input-owned |
 | USB | Observed | Provider writes, exact readback, reconnect portability, rollback, and final single-owner recovery verified |
 | Bluetooth | Observed | Live read boundary verified; configuration mutation uses the same external provider gate |
 
@@ -44,23 +45,29 @@ SHA-256, both Input snapshots pass structural and semantic CLI parsing, and a
 sensitive-pattern scan gates the checked-in files. The fixtures are synthetic
 minimum schemas rather than copies of observed user configuration.
 
-For Codex 26.727.51351, `codex-config-toml-read-v1` has live read-only evidence:
+For Codex 26.730.61309, `codex-config-toml-read-v1` freezes the five Codex Micro
+settings plus the new `ACT10`, `ACT11`, `MIC1`, and
+`separateMicrophoneKeys` layout fields. The earlier 26.727.51351 audit supplied
+the original live read-only evidence:
 the five explicit Codex Micro settings validated, inherited layout defaults
 were reconstructed, an atomic typed snapshot was reopened, and the source
-`config.toml` SHA-256 was identical before and after. This claim does not cover
-Codex settings mutation. Static inspection found the internal `settings-read`,
+`config.toml` SHA-256 was identical before and after. Static inspection found
+the internal `settings-read`,
 `settings-write`, `get-global-state`, and `set-global-state` handlers, while the
 released build did not expose an external listener.
 
-The same exact Codex build has a separate runtime-health boundary. A captured
+The separate runtime-health boundary is now hash-pinned to 26.730.61309. The
+earlier captured
 `WRITE_FAILED` transition left the device enumerated and settings intact while
 the service retained stale connection/topology Promises and lost both
 `v.oai.hid` and `v.oai.rad` subscriptions. A service-only restart performed
 while Input was paused restored `connected`, battery readback, both
 subscriptions, and the Codex layer without restarting either window. The CLI
 adapter verifies the app, `app.asar`, HID topology watcher, and Input Monitoring
-permission module hashes before attaching; a changed byte disables this
-contract until new evidence is frozen.
+permission module hashes before using the persistent runtime bridge; a changed
+byte disables this contract until new evidence is frozen. Live 26.730.61309
+recovery completed in the same process and three subsequent status reads were
+healthy without reopening an inspector.
 
 The Codex Companion Bridge v1 fixture has cross-language evidence for
 authenticated capability negotiation; frozen-definition settings snapshots;
@@ -108,20 +115,22 @@ present, stopped Input, and restored the official Input app bundle with strict
 deep signature verification. See the
 [frozen live validation record](research/2026-08-03-live-provider-integration-validation.md).
 
-On 2026-08-04, the owner-preserving path added automatic provider selection to
-device status/files/export/config and cross-authority transactions. A fully
-healthy Codex service takes priority even when Input also reports a discovery
-connection; otherwise connected Input is used. This matches the observed
-Codex-over-Bluetooth plus Input-connected state without causing a handoff.
-Codex-owner multi-file changes use the firmware transaction primitive or stop
-before the first write; idempotency keys are persistently bound to the exact
-operation/baseline/target tuple. The AppSense LaunchAgent keeps one private
+On 2026-08-05, the device configuration path was corrected to keep Input as the
+byte authority. Automatic and `--owner codex` commands take a serialized Input
+lease, require a successful `device.status` RPC rather than trusting connection
+counters, and restore Codex after success or failure. Codex acquisition likewise
+requires connected comm/API, both HID subscriptions, and a bounded RPC probe.
+This prevents `detected` and stale native handles from being reported as ready.
+Multi-file changes use the firmware transaction primitive or stop before the
+first write; idempotency keys remain bound to the exact operation/baseline/target
+tuple. The AppSense LaunchAgent keeps one private
 authenticated bridge connection, retries device timeouts on the same service,
 and performs one serialized exact-release reinstall only for transport or
 capability failure. `doctor` reports relay process state and functional health
-separately. Relay focus and Codex-owner configuration also share a dedicated
-device-operation lock; bridge recovery occurs only after that lock is released,
-so configuration and frontmost-app events cannot race or invert lock order.
+separately. Relay focus and device configuration share serialized provider and
+device-operation locks; bridge recovery occurs only after those locks are
+released, so configuration and frontmost-app events cannot race or invert lock
+order.
 
 The released Input writer did not negotiate optional preset, reset,
 firmware-update, or bootloader-recovery authorities. Those operations therefore

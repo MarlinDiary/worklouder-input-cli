@@ -28,8 +28,8 @@ Tier 1 covers controls whose meaning is implemented by Codex rather than a
 generic keyboard shortcut:
 
 - six Agent Keys (`AG00`–`AG05`) and their task assignments;
-- six Command Key slots (`ACT06`, `ACT07`, `ACT08`, `ACT09`,
-  `ACT10_ACT11`, `ACT12`);
+- eight logical Command Key slots (`ACT06`, `ACT07`, `ACT08`, `ACT09`, `ACT10`,
+  `ACT11`, `ACT10_ACT11`, `ACT12`), with combined/independent microphone mode;
 - Codex commands and skills assigned to command keys, the dial, or joystick;
 - Agent Key source ordering and single-tap behavior;
 - voice-button behavior;

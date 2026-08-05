@@ -51,8 +51,11 @@ worklouderctl provider release codex # release Codex before starting Input
 ```
 
 These commands materialize the same checked-in exact-release helpers from the
-binary into `~/Library/Application Support/worklouderctl/provider-runtime-v1`
-with directory mode `0700` and file mode `0600`. `--runtime-dir` and `--node`
+binary into a content-addressed
+`~/Library/Application Support/worklouderctl/provider-runtime-v1-DIGEST`
+directory with mode `0700` and files with mode `0600`. Each Codex live-overlay
+revision also has a distinct module root, so an in-place CLI update cannot reuse
+Electron's previous ESM module cache. `--runtime-dir` and `--node`
 provide explicit test/runtime overrides; `WORKLOUDERCTL_PROVIDER_RUNTIME` and
 `WORKLOUDERCTL_NODE` are their environment equivalents. The CLI invokes Node
 directly without a shell and rejects non-JSON, oversized, wrong-action, or
@@ -62,8 +65,10 @@ The two applications can stay open and may both report a connection (for
 example, Codex over Bluetooth while Input discovery also sees the device).
 Automatic routing prefers a fully healthy Codex comm/API/HID/joystick service
 and otherwise uses connected Input; an explicit owner always wins. Host-only
-bridge methods remain available through Input. Every attach uses the loopback inspector only,
-checks the exact release identity, and closes the inspector afterward. See the
+bridge methods remain available through Input. Initial bridge installation uses
+a loopback inspector, checks the exact release identity, and closes it
+afterward. Runtime status/recovery and normal bridge operations then use the
+persistent authenticated socket without a process signal. See the
 [live validation record](research/2026-08-03-live-provider-integration-validation.md)
 for reversible mutation and bidirectional handoff evidence.
 

@@ -4,10 +4,9 @@ WorkLouderCTL is designed as a transaction-safe companion to Work Louder Input.
 The CLI does not treat one cached JSON document as the whole system.
 
 The authority boundary is defined in the [configuration tier model](tier-model.md):
-Tier 1 uses Codex authorities; Tier 2 device configuration uses whichever
-Codex/Input provider currently owns the device; Tier 3 and Tier 4 host/runtime
-operations stay delegated to Input. The CLI covers both sides without moving
-the device merely to write Tier 2.
+Tier 1 uses Codex authorities; Tier 2 device bytes use Input under a bounded
+provider lease and restore the requested final owner; Tier 3 and Tier 4
+host/runtime operations stay delegated to Input.
 
 ## Provider strategy
 
@@ -17,19 +16,20 @@ actions, and Input host actions to the currently installed Codex/Input builds.
 
 Provider selection follows this order:
 
-1. prefer a fully healthy Codex device service for
-   status/files/export/configuration and transaction postflight; when Codex is
-   unavailable, use connected Input;
-2. use the running Codex app for Tier 1 through the versioned
+1. record the current RPC-verified owner and use Input as the device-byte
+   authority for status/files/export/configuration and transaction postflight;
+2. restore a pre-existing Codex owner and require comm/API plus HID/joystick
+   subscriptions and a bounded RPC probe;
+3. use the running Codex app for Tier 1 through the versioned
    [Codex Companion Bridge](codex-companion-bridge.md);
-3. use the running Input app for Input-only host and operational authorities
+4. use the running Input app for Input-only host and operational authorities
    through the versioned
    [Input Companion Bridge](companion-bridge.md);
-4. use the exact installed app's bundled device kit where a headless provider
+5. use the exact installed app's bundled device kit where a headless provider
    entry point is verified;
-5. use coordinated file adapters only for state that the app itself persists;
-6. preserve new/unknown fields and expose them through raw inspect/export;
-7. disable typed writes for a changed schema until its adapter fixtures pass.
+6. use coordinated file adapters only for state that the app itself persists;
+7. preserve new/unknown fields and expose them through raw inspect/export;
+8. disable typed writes for a changed schema until its adapter fixtures pass.
 
 This keeps firmware, transport fixes, new device support, and runtime behavior
 with the upstream applications while the CLI owns planning, validation, diff,
@@ -55,25 +55,24 @@ complete six-slot global-state apply/restore with its own revision CAS, backup,
 idempotency, exact readback, restore, and rollback. The cross-language fixture
 verifies `recent -> custom -> recent`, global brightness, auto-off, and voice mode
 apply/readback/restore, every Agent Key assignment type, exact Agent Key revision
-recovery, and exact source SHA recovery. For Codex 26.727.51351 the CLI's
+recovery, and exact source SHA recovery. For Codex 26.730.61309 the CLI's
 exact-version/hash-gated installer supplies the external listener and captures
-the existing connected `CodexMicroService`. Device snapshot/apply/restore and
-focus forwarding call that same service, verify unchanged API/comm/connection
-identity, and preserve HID and joystick subscriptions.
+the existing connected `CodexMicroService`. Tier 1 settings and focus forwarding
+stay in Codex. Device bytes use Input's authoritative bridge under a serialized
+lease, then restore a fully subscribed and RPC-probed Codex service.
 
 ## Implemented Codex runtime recovery path
 
-`codex-node-inspector-runtime-v1` is a narrow released-app compatibility path
-for liveness, separate from the settings bridge. It verifies the exact Codex
-26.727.51351 app and native-module hashes, opens a loopback-only Node inspector,
-and locates the one live `CodexMicroService` by its frozen prototype. Status
-requires a connected device, live comm/API, settled reconnect/topology
-Promises, and HID plus joystick subscriptions. Recovery pauses Input without
-closing its window, invalidates only the stale service attempt, invokes the
-released service's stop/start path, resumes Input after full readback, and
-checks a post-resume stability window. The CLI closes an inspector it opened
-and re-arms one-shot `SIGUSR1` attachment for the next invocation. It never
-patches the app or replaces the Work Louder device kit.
+`codex-companion-runtime-v1` is a persistent bridge capability for liveness,
+sharing the authenticated Codex main-process socket used by Tier 1. It verifies
+the exact Codex 26.730.61309 app and native-module hashes and reads the captured
+`CodexMicroService` without opening a per-command inspector or sending a process
+signal. Status requires a connected device, live comm/API, settled
+reconnect/topology Promises, and HID plus joystick subscriptions. Recovery
+pauses Input when it is running, invalidates only the stale service attempt,
+invokes the released service's bounded stop/start path, resumes Input after full
+readback, and checks a post-resume stability window. It never patches the app or
+replaces the Work Louder device kit.
 
 ## Implemented Input Companion Bridge path
 

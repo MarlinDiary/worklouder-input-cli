@@ -16,8 +16,8 @@ Codex settings, Input cache state, and live Codex Micro status/files through
 Input 0.18.0's bundled provider. It also generates strict offline candidates
 and runs authenticated Codex/Input apply/readback/restore/rollback transactions
 against isolated reference writers. The exact-release overlays for Codex
-`26.727.51351` and Input `0.18.0` have also completed live provider
-apply/readback/exact-restore transactions. Signed, notarized Apple Silicon and
+`26.730.61309` and Input `0.18.0` are version/hash gated, and provider
+acquisition requires a real RPC response. Signed, notarized Apple Silicon and
 Intel packages are published through GitHub Releases and the stable Homebrew
 tap.
 
@@ -36,10 +36,10 @@ worklouderctl provider status
 worklouderctl doctor --strict
 ```
 
-Device and transaction commands default to `--owner auto`, so they preserve the
-current Codex/Input owner. An explicit `provider handoff` remains available,
-but configuration does not trigger one. These commands replace direct use of
-the repository's Node helper entrypoints.
+Device and transaction commands default to `--owner auto`. When Codex is the
+owner, device configuration takes a serialized Input lease and restores Codex
+after success or failure. An explicit `provider handoff` remains available.
+These commands replace direct use of the repository's Node helper entrypoints.
 
 ## What does full-configuration parity mean?
 
@@ -66,8 +66,8 @@ evolution.
 
 ## Which target is currently verified?
 
-Work Louder Codex Micro on macOS is the verified target. Codex 26.727.51351 and
-Input 0.18.0 completed the live provider transaction boundary; Input
+Work Louder Codex Micro on macOS is the verified target. Codex 26.730.61309 and
+Input 0.18.0 are the current exact-release adapters; Input
 0.17.3/0.18.0 and Codex Micro firmware v0.6.0 remain the sanitized fixture
 boundary. New versions enter capability discovery before writes are enabled.
 
@@ -147,7 +147,8 @@ readback, restore, and rollback over a private authenticated Unix socket. The
 current Codex release contains the internal handlers but does not ship the
 external listener. The version- and hash-gated live overlay installs the same
 contract without focusing the GUI; settings and Agent Keys have completed live
-apply/readback/exact-restore transactions on Codex `26.727.51351`.
+apply/readback/exact-restore transactions on the earlier Codex boundary; the
+current schema and overlay are pinned to Codex `26.730.61309`.
 
 ## Does it support Smart Actions?
 

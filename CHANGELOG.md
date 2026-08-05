@@ -12,15 +12,18 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `worklouderctl appsense relay install/status/test/sync/remove`, a persistent
   macOS focus relay with authenticated socket reuse, functional health state,
   bounded timeout retry, and serialized bridge recovery.
-- Codex-owner device RPC helpers with exact live snapshot comparison, guarded
-  atomic configuration writes, readback, automatic restore, persistent
-  idempotency, and connection continuity evidence.
+- Serialized provider leases with RPC health receipts, guarded configuration
+  writes, readback, automatic restore, and persistent idempotency.
+- Codex `26.730.61309` exact-release contracts, including independent ACT10 and
+  ACT11 microphone keys and `codex voice separate-keys get/set/reset`.
+- Persistent `codex.runtime.status.v1` and `codex.runtime.recover.v1` bridge
+  capabilities replace per-command process-signal inspection; provider assets
+  are content addressed and Codex ESM overlays use revisioned module roots.
 - Owner-preserving `device status/files/export` and `device config
-  snapshot/validate/apply/restore` commands. `--owner auto` is now the default
-  and routes through the current Codex or Input session without a handoff.
-- `transaction apply/restore --device-owner auto|codex|input`, allowing the
-  device-configuration authority to stay with Codex while Input-only host
-  settings continue through Input.
+  snapshot/validate/apply/restore` commands. `--owner auto` now leases Input's
+  authoritative configuration session and restores a pre-existing Codex owner.
+- `transaction apply/restore --device-owner auto|codex|input`, allowing Input
+  to perform device configuration while restoring the requested final owner.
 - Public `appsense-relay-v1` and `codex-owner-config-v1` JSON Schemas.
 - A checksum-, inventory-, manifest-, signature-, and version-verifying binary
   installer plus a stable `MarlinDiary/tap/worklouderctl` Homebrew distribution
@@ -33,17 +36,26 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - AppSense can now return from an application layer to the Codex layer without
   stopping Codex's device service or handing the USB session to Input.
-- Device configuration no longer disconnects Codex merely to reach the Input
-  writer; status, export, validation, apply, restore, and transaction postflight
-  all use the already-connected owner.
+- Device configuration now treats Input as the byte-authoritative provider and
+  restores Codex automatically after status, export, validation, apply, restore,
+  or any failed Input acquisition.
+- Provider acquisition requires a real RPC response in addition to connection
+  counters and subscriptions, preventing a `detected` or stale native handle
+  from being reported as ready.
+- Codex auto-updates fail closed on the pinned app/hash/chunk contract; the
+  provider runtime is now adapted to `26.730.61309` and its new microphone-key
+  layout without changing the installed application bundle.
+- Repeated Codex runtime checks keep the GUI PID stable. A live
+  `connection-failed` service recovered to `connected` and passed three
+  consecutive subscription-health readbacks through the persistent bridge.
 - AppSense relay timeouts retry the existing Codex service instead of
   reinstalling the bridge; genuine transport loss performs one serialized
   self-healing reinstall and leaves a diagnostic health record.
 - `appsense relay test` now closes its one-shot persistent bridge client after
   success or failure, so the verification command exits immediately.
-- AppSense focus forwarding and Codex-owner configuration now share a
-  per-user device-operation lock, preventing frontmost-app events from racing
-  snapshot/apply/restore calls; `lsappinfo` event payloads are no longer
+- AppSense focus forwarding and provider configuration now use serialized
+  per-user locks, preventing frontmost-app events from racing provider leases;
+  `lsappinfo` event payloads are no longer
   misinterpreted as timer delays.
 - Multi-file device changes require the firmware transaction primitive and
   fail before the first write when it is absent. Failed writes first read back
@@ -62,18 +74,19 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
-- Codex-owned device mutation idempotency bindings persist in a mode-`0700`
+- Device mutation idempotency bindings persist in a mode-`0700`
   directory and mode-`0600` atomic registry; a key cannot be reused for a
   different baseline, target, or operation.
 
 ### Verified boundary
 
-- Rust unit/CLI tests, 47 Node bridge/runtime tests, JSON-contract checks, all
+- Rust unit/CLI tests, 49 Node bridge/runtime tests, JSON-contract checks, all
   provider fixtures, and the complete bridge/firmware/reset/recovery/four-
   authority transaction E2E suite pass for this release.
-- The live Codex `26.727.51351` and Codex Micro firmware `v0.6.1` boundary is verified
-  separately in the release verification record with baseline, modified,
-  restored, connection-continuity, and AppSense relay health artifacts.
+- Codex `26.730.61309` static release identity, settings schema, runtime chunks,
+  subscribed provider recovery, RPC health gates, and automatic rollback to
+  Codex are verified separately in the release verification record. The device
+  configuration writer remains Input `0.18.0`.
 
 ## [0.1.0]
 

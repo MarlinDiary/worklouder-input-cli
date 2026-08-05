@@ -1,13 +1,13 @@
 # Codex Companion Bridge v1
 
-The Codex Companion Bridge is WorkLouderCTL's stable Tier 1 and Codex-owned
-device automation boundary. It keeps Codex as the settings, global-state, and
-runtime authority while giving the CLI a versioned, authenticated transaction
-and focus API.
+The Codex Companion Bridge is WorkLouderCTL's stable Tier 1 runtime boundary. It
+keeps Codex as the settings, global-state, and focus authority. Device
+configuration bytes remain Input-owned and use a separate bounded provider
+lease.
 
 ## Release boundary
 
-Static inspection of Codex 26.727.51351 found the native handlers
+Static inspection of Codex 26.730.61309 found the native handlers
 `settings-read`, `settings-write`, `get-global-state`, and `set-global-state`.
 The renderer reaches native handlers with `POST vscode://codex/{method}`. The
 inspected release does not publish an external listener. This repository ships
@@ -16,7 +16,7 @@ the reference main-process adapter and integration, not an `app.asar` patch.
 The bridge runs in two environments:
 
 1. the isolated fixture, which verifies the complete CLI transaction today;
-2. Codex 26.727.51351 after `worklouderctl provider install codex` verifies the
+2. Codex 26.730.61309 after `worklouderctl provider install codex` verifies the
    exact version/hashes and installs the reference integration without editing
    `app.asar` or navigating/restarting the GUI.
 
@@ -57,20 +57,23 @@ one authenticated `bridge.hello` request and negotiates named capabilities.
 | `codex.agentKeys.apply` | `codex.agentKeys.apply.v1` | complete six-slot global-state CAS apply |
 | `codex.agentKeys.restore` | `codex.agentKeys.restore.v1` | complete six-slot global-state CAS restore |
 | `codex.device.focus` | `codex.device.focus.v1` | forward the frontmost application through the existing connected service and verify connection continuity |
+| `codex.runtime.status` | `codex.runtime.status.v1` | read exact service, control-plane, Promise, and subscription health without a process signal |
+| `codex.runtime.recover` | `codex.runtime.recover.v1` | bounded service-only recovery with exact before/after state |
 
 The persistent `appsense relay` authenticates once and reuses this socket.
 Device timeouts retry the same service; only transport/capability failure can
 trigger one serialized exact-release bridge reinstall. Relay health is exposed
 by `appsense relay status`, verified once by `appsense relay test`, and included
-in `doctor`. Focus forwarding and Codex-owner configuration acquire the same
-per-user device-operation lock around service API calls. The relay releases
-that lock before any bridge recovery, preserving provider-lock ordering and
-preventing focus events from interleaving with snapshot/apply/restore.
+in `doctor`. Focus forwarding and provider handoff use serialized per-user
+locks. The relay releases its device-operation lock before bridge recovery,
+preserving lock ordering while Input owns configuration reads and writes.
 
 ## CLI workflow
 
 ```console
 worklouderctl codex bridge inspect
+worklouderctl codex runtime status
+worklouderctl codex runtime recover --timeout-seconds 25
 worklouderctl codex config snapshot --output before.json
 worklouderctl codex agent-source set \
   --input before.json custom --output candidate.json

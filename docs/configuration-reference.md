@@ -366,7 +366,8 @@ A layer is protected when any layout assignment begins with `KV_OAI_`. The
 protected layer stays at position zero and is excluded from duplicate, delete,
 move-to/from-zero, per-layer lighting edits, and Input `control set` writes.
 `control list` and `control show` remain available for inspection. Configure
-its six Agent Keys, six Command Key slots, voice key, dial, and joystick through
+its six Agent Keys, eight logical Command Key slots, combined/independent
+microphone keys, dial, and joystick through
 the `codex` command family; `codex reset layout` is the Codex GUI Reset layout
 equivalent. New normal layers use the frozen Codex Micro empty layout and copy
 the last layer's lighting when present. Duplicate performs a deep copy with a

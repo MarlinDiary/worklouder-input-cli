@@ -9,6 +9,8 @@ The roadmap prioritizes evidence and configuration safety over command count.
 - [x] Compatibility and architecture policies
 - [x] Tier 1 Codex / Tier 2+ Input authority contract
 - [x] Codex 26.727.51351 and Input 0.18.0 feature inventory
+- [x] Codex 26.730.61309 automatic-update adaptation, separate microphone keys,
+  native hashes, service chunks, and RPC-health-gated provider recovery
 - [x] Baseline checksums and reconnect verification record
 - [x] Machine-readable capability registry
 - [x] Full Codex + Input configuration parity contract
@@ -42,12 +44,13 @@ The roadmap prioritizes evidence and configuration safety over command count.
 
 ## M2 — Codex-native configuration
 
-- [x] Exact Codex 26.727.51351 read contract and settings-schema adapter
+- [x] Exact Codex 26.730.61309 read contract and settings-schema adapter
 - [x] `settings-read` and `settings-write` bridge client/reference integration
 - [x] Agent source and single-tap behavior offline candidates
 - [x] Six Agent Key task/command/Skill/keycap assignment snapshot and validation
 - [x] Six Agent Key offline get/set/clear plus bridge apply/restore transaction
-- [x] Six Command Key slots get/set/reset offline candidates
+- [x] Eight logical Command Key slots get/set/reset offline candidates
+- [x] Combined/independent microphone keys get/set/reset offline candidates
 - [x] voice mode
 - [x] dial modes and command/Skill/empty custom gestures
 - [x] joystick directions and command/Skill/empty candidates

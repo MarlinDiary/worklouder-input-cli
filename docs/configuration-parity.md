@@ -26,8 +26,9 @@ parity contract.
 | Agent source | pinned, recent, priority, custom | `codex agent-source get/set` | strict candidate plus bridge `recent -> custom -> recent` apply/readback/restore fixture verified |
 | Agent Keys | `AG00`–`AG05`, task/command/keycap/Skill/empty | `codex agent-key snapshot/get/set/clear/apply/restore` | strict candidate, all assignment types, CAS, idempotency, stale rejection, exact readback, restore, and rollback fixture verified |
 | Agent tap behavior | single-tap focus toggle | `codex agent-key tap-mode get/set` | strict offline candidate verified; generic complete-settings bridge transaction verified |
-| Command Keys | six logical slots, command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; generic complete-settings bridge transaction verified |
+| Command Keys | eight logical slots (`ACT06`–`ACT12`, including combined `ACT10_ACT11`), command/Skill/keycap/reset | `codex command-key get/set/reset` | strict offline candidate and reset verified; 26.730.61309 adds independent ACT10/ACT11 slots and `MIC1` |
 | Voice button | push-to-talk, Voice Chat | `codex voice get/set` | strict offline candidate plus `push-to-talk -> realtime -> push-to-talk` bridge apply/readback/restore fixture verified |
+| Microphone key layout | combined or independent ACT10/ACT11 | `codex voice separate-keys get/set/reset` | exact 26.730.61309 default/schema plus strict candidate, reset, preservation, and no-op verification |
 | Dial mode | composer, reasoning, scroll, custom | `codex dial mode get/set` | strict candidate verified; mode changes preserve custom gesture mappings |
 | Dial gestures | left, right, click, long press | `codex dial gesture get/set/clear` | command/Skill/empty custom-mode candidates, one-leaf paths, preservation, and source immutability verified |
 | Joystick | up, right, down, left command/Skill/empty | `codex joystick get/set/clear` | strict candidate verified; one-leaf paths, default inheritance, no-op detection, preservation, and source immutability verified |
@@ -35,11 +36,11 @@ parity contract.
 | Lighting auto-off | off, 30s, 1m, 3m, 10m, 30m, 1h | `codex lighting auto-off get/set` | strict offline candidate plus `3-minutes -> 10-minutes -> 3-minutes` bridge apply/readback/restore fixture verified |
 | Layout reset | installed-build default layout | `codex reset layout` | exact whole-layout candidate, inherited no-op, sibling preservation, source immutability, and released call-path evidence verified |
 | Full object | export, validate, diff, apply, restore | `codex config snapshot/diff/apply/restore` | fixture plus exact-release overlay snapshot/CAS/apply/readback/exact-restore live-validated |
-| Runtime health | connected control plane, settled reconnect, HID/joystick subscriptions | `codex runtime status/recover` | exact 26.727.51351 bundle contract, live failed-state capture and service-only recovery verified; CDP transport and CLI surface regression verified |
+| Runtime health | connected control plane, settled reconnect, HID/joystick subscriptions | `codex runtime status/recover`, `provider status/handoff` | exact 26.730.61309 bundle/native hash contract; live connected subscription recovery and RPC-gated ownership verified |
 
 ### Tier 1 adapter
 
-Codex 26.727.51351 exposes `settings-read`, `settings-write`, and global-state
+Codex 26.730.61309 exposes `settings-read`, `settings-write`, and global-state
 handlers via the native `vscode://codex/` bridge. The reference Codex Companion
 Bridge delegates to those handlers, freezes the settings and Agent Key schemas,
 and advertises writes only with injected complete explicit-setting replacement.
@@ -51,12 +52,14 @@ hash-gated live overlay installs the same contract without focusing the GUI;
 settings and Agent Keys completed real-provider apply/readback/exact-restore
 transactions.
 
-The separate `codex-node-inspector-runtime-v1` adapter covers runtime health,
+The persistent `codex-companion-runtime-v1` capability covers runtime health,
 not configuration mutation. It is pinned to the exact app version plus
-`app.asar` and native permission/topology module hashes. Recovery coordinates
-with the running Input process, restarts only the released `CodexMicroService`,
-and treats missing HID or joystick subscriptions and never-settled reconnect
-Promises as failures even when the USB interface still enumerates.
+`app.asar` and native permission/topology module hashes. After initial bridge
+installation it reads and recovers through the authenticated socket without a
+process signal. Recovery coordinates with the running Input process, restarts
+only the released `CodexMicroService`, and treats missing HID or joystick
+subscriptions and never-settled reconnect Promises as failures even when the
+device still enumerates.
 
 ## Tier 2 — Input device configuration
 
@@ -74,7 +77,7 @@ Promises as failures even when the USB interface still enumerates.
 | Underglow | effect, brightness, speed, magic, color, apply-to-all | `layer lighting` | candidate-verified; fixture apply/readback/restore verified |
 | AppSense links | list/show, application identity, link, update, unlink | `appsense` | candidate and current-cache schema verified; fixture apply/readback/restore verified; Notion layer 2 and Codex layer 1 live transition verified on device |
 | Presets | merged catalog snapshot, Input-equivalent filters, metadata, preview, Action/Multi Action/group remap and layer install | `input preset snapshot`, `preset list/show/preview/install` | all 17 hash-pinned bundled defaults candidate-verified; fixture transaction verified; optional preset authority is absent from the Input 0.18.0 overlay |
-| Full object | cache capture, export, snapshot, validate, diff, apply, restore | `input config snapshot`, `device export`, `device config snapshot/validate/apply/restore` | Input overlay path plus `--owner codex` snapshot/apply/restore live-validated; Codex-owner restore→apply round-trip preserved the same service/API/comm identities and HID/joystick subscriptions |
+| Full object | cache capture, export, snapshot, validate, diff, apply, restore | `input config snapshot`, `device export`, `device config snapshot/validate/apply/restore` | Input overlay is byte-authoritative; auto/Codex routing takes an RPC-health-gated Input lease and restores Codex after success or failure |
 
 ## Tier 3 — Input host configuration
 

@@ -30,15 +30,16 @@ macOS 前台应用，从而在不转移设备所有权的情况下执行 AppSens
 
 > [!NOTE]
 > 当前已在经过验证的 macOS/Codex Micro 边界内实现完整配置覆盖。Codex
-> `26.727.51351` 与 Input `0.18.0` 已通过真实设备写入、读回、精确恢复以及
-> 双向 provider handoff。正式 `v0.1.1` 已提供签名且通过 Apple 公证的 Apple
+> `26.730.61309` 与 Input `0.18.0` 均采用精确版本门控；provider acquisition
+> 必须先通过真实 RPC probe，Input 配置 lease 失败时会自动恢复具备完整订阅的
+> Codex runtime。正式 `v0.1.1` 已提供签名且通过 Apple 公证的 Apple
 > Silicon 与 Intel 二进制；可以通过稳定 Homebrew tap 或下方校验型安装器安装。
 
 ## 功能覆盖
 
 | 范围 | 能力 |
 | --- | --- |
-| **Codex 配置** | Agent source、六个 Agent Keys、六个 Command Keys、点击行为、语音模式、旋钮、摇杆、全局灯光、布局重置、运行时诊断与恢复 |
+| **Codex 配置** | Agent source、六个 Agent Keys、八个逻辑 Command Key slot（包括独立 ACT10/ACT11 麦克风键）、点击行为、语音模式、旋钮、摇杆、全局灯光、布局重置、运行时诊断与恢复 |
 | **Input 设备配置** | Profile、六层 Layer、按键矩阵、Encoder、径向摇杆、Actions、Multi Actions、分组、Preset、背光、底光和 Layer 元数据 |
 | **Input 主机配置** | Smart Actions、Smart Action 分组、AppSense 链接与运行时检查、Cheat Sheet、Radial Menu 检查和 Command 权限 |
 | **Input 设备操作** | 设备与固件状态、权限、脱敏日志、固件计划，以及委托给 Input 的升级、重置和恢复流程 |
@@ -116,11 +117,12 @@ worklouderctl device status
 worklouderctl device files
 ```
 
-### 保持或显式切换设备所有权
+### 由 Input 配置设备，同时恢复原来的 Codex owner
 
 `device status/files/export`、`device config snapshot/validate/apply/restore`
-以及协调事务默认使用 `--owner auto`。CLI 会识别当前 owner，并复用它已连接的
-session，因此修改配置不再需要 handoff。需要时仍可显式切换：
+以及协调事务默认使用 `--owner auto`。Codex 继续作为前台 runtime；CLI 会为
+设备配置字节取得一个有界、认证的 Input configuration lease，完成后恢复 Codex。
+两端 acquisition 都必须通过真实 RPC probe。需要时仍可显式切换：
 
 ```console
 worklouderctl provider handoff input
@@ -129,7 +131,8 @@ worklouderctl provider handoff codex
 ```
 
 Handoff 期间，Input 以隐藏的用户级 provider 运行。CLI 通过私有认证 socket
-通信，并验证返回结果中的 provider 与 action identity；CLI 不会隐式 handoff。
+通信，并验证返回结果中的 provider 与 action identity。自动配置 handoff 会串行
+执行，不激活任何 GUI，并在失败时回滚到 Codex。
 
 ### AppSense 切层时保持 Codex 连接
 
@@ -157,7 +160,7 @@ transport 失败才会串行恢复 bridge。Codex 始终是选定的 device runt
 层切换时会保留相同的 comm/API identity 与 HID/joystick subscription。
 `relay status` 报告功能健康度，`relay test` 验证一次 focus round trip。
 `--owner codex` 也为设备配置的 snapshot/apply/restore 提供不可变备份、持久
-幂等、精确读回、自动回滚、多文件原子门控与连接连续性检查。运行
+幂等、精确读回、自动回滚、多文件原子门控与自动 Codex reacquisition。运行
 `worklouderctl appsense relay remove` 可删除 LaunchAgent。
 
 ### 备份、修改并应用当前设备配置
@@ -177,7 +180,8 @@ worklouderctl device config apply \
 ```
 
 每个语义编辑命令都会生成新的 candidate 文件。只有显式事务写入才会改变实时配置。
-默认 `--owner auto` 会在 Codex 已连接时保持 Codex，在 Input 已连接时保持 Input。
+默认 `--owner auto` 会临时由 Input 完成设备写入，并在读回验证后恢复原来的 Codex
+owner。
 
 ### 配置 Codex 原生控制
 
@@ -277,7 +281,7 @@ CLI 会保留未知字段；凭据与 snapshot 分离；socket/token 使用私�
 | --- | --- |
 | 平台 | macOS；Apple Silicon 与 Intel 打包 |
 | 设备 | Work Louder Codex Micro USB |
-| Codex | `26.727.51351` 精确版本 overlay |
+| Codex | `26.730.61309` 精确版本 overlay |
 | Work Louder Input | `0.18.0` 精确版本 overlay；`0.17.3` 脱敏 schema fixture |
 | Rust | MSRV `1.61`；current stable CI |
 | Node.js | `>=22` provider runtime；`>=18` Companion conformance runtime |

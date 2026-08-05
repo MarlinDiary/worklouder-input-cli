@@ -32,8 +32,9 @@ for AppSense switching without transferring device ownership.
 
 > [!NOTE]
 > Configuration parity is implemented for the verified macOS/Codex Micro
-> boundary. Codex `26.727.51351` and Input `0.18.0` have completed real-device
-> apply/readback/exact-restore transactions and bidirectional provider handoff.
+> boundary. Codex `26.730.61309` and Input `0.18.0` are exact-release gated;
+> provider acquisition now requires a real RPC probe, and any failed Input
+> configuration lease automatically restores the subscribed Codex runtime.
 > The official `v0.1.1` release provides signed and notarized Apple Silicon and
 > Intel binaries. Install it from the stable Homebrew tap or with the verified
 > binary installer below.
@@ -42,7 +43,7 @@ for AppSense switching without transferring device ownership.
 
 | Area | Capabilities |
 | --- | --- |
-| **Codex configuration** | Agent source, six Agent Keys, six Command Keys, tap behavior, voice mode, dial, joystick, global lighting, layout reset, runtime health and recovery |
+| **Codex configuration** | Agent source, six Agent Keys, eight logical Command Key slots (including independent ACT10/ACT11 microphone keys), tap behavior, voice mode, dial, joystick, global lighting, layout reset, runtime health and recovery |
 | **Input device configuration** | Profiles, six layers, key matrix, encoder, radial joystick, Actions, Multi Actions, groups, presets, backlight, underglow and layer metadata |
 | **Input host configuration** | Smart Actions, Smart Action groups, AppSense links/runtime checks, Cheat Sheet, radial-menu inspection and command permission |
 | **Input operations** | Device/firmware status, permissions, sanitized logs, firmware plans and delegated update/reset/recovery workflows |
@@ -124,12 +125,14 @@ worklouderctl device status
 worklouderctl device files
 ```
 
-### Preserve or explicitly switch the device owner
+### Preserve the device owner while Input performs device configuration
 
 `device status/files/export`, `device config snapshot/validate/apply/restore`,
-and coordinated transactions default to `--owner auto`. They detect the current
-owner and use that provider's already-connected session, so configuration no
-longer requires a handoff. An explicit switch remains available when wanted:
+and coordinated transactions default to `--owner auto`. Codex remains the
+front-facing runtime, while the CLI obtains a bounded, authenticated Input
+configuration lease for device bytes and restores Codex afterward. Both
+acquisitions must pass a real RPC probe before a command proceeds. An explicit
+switch remains available when wanted:
 
 ```console
 worklouderctl provider handoff input
@@ -139,7 +142,8 @@ worklouderctl provider handoff codex
 
 Input is launched as a hidden user-scoped provider during handoff. The CLI uses
 private authenticated sockets and validates the returned provider/action
-identity before accepting a result. It never performs an implicit handoff.
+identity before accepting a result. Automatic configuration handoff is
+serialized, does not activate either GUI, and rolls back to Codex on failure.
 
 ### Keep Codex connected during AppSense switching
 
@@ -171,7 +175,7 @@ and HID/joystick subscriptions. `relay status` exposes functional health and
 `relay test` verifies one focus round trip. The same `--owner codex` path gives
 device configuration snapshot/apply/restore immutable backups, persistent
 idempotency, exact readback, automatic rollback, atomic multi-file gating, and
-connection-continuity checks. Relay focus calls and configuration calls share
+automatic Codex reacquisition. Relay focus calls and configuration calls share
 a per-user device-operation lock, so a macOS focus event cannot interleave with
 a configuration read or write. Use
 `worklouderctl appsense relay remove` to remove the LaunchAgent.
@@ -194,8 +198,8 @@ worklouderctl device config apply \
 
 Each semantic editor produces a new candidate file. The source snapshot remains
 unchanged until an explicit transactional apply. With the default `--owner
-auto`, this workflow stays on Codex when Codex is connected and stays on Input
-when Input is connected.
+auto`, the CLI leases Input for the device write and restores a pre-existing
+Codex owner after verified readback.
 
 ### Configure Codex-native controls
 
@@ -300,7 +304,7 @@ publication.
 | --- | --- |
 | Platform | macOS, Apple Silicon and Intel packaging |
 | Device | Work Louder Codex Micro over USB |
-| Codex | `26.727.51351` exact-release overlay |
+| Codex | `26.730.61309` exact-release overlay |
 | Work Louder Input | `0.18.0` exact-release overlay; `0.17.3` sanitized schema fixture |
 | Rust | MSRV `1.61`; current stable CI |
 | Node.js | `>=22` provider runtime; `>=18` Companion conformance runtime |
